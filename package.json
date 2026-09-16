@@ -9,6 +9,7 @@
     "lint": "eslint",
     "sync:pull": "npx tsx scripts/syncPull.ts",
     "sync:reset": "npx tsx scripts/syncReset.ts",
+    "s3:init": "npx tsx scripts/s3Init.ts",
     "prisma:migrate": "pnpm exec prisma migrate dev",
     "prisma:generate": "pnpm exec prisma generate"
   },

@@ -8,6 +8,7 @@ interface DataState {
 interface DataActions {
   actions: {
     handleBoxes: () => void;
+    refreshBoxes: () => Promise<void>;
   }
 }
 
@@ -21,7 +22,11 @@ export const useData = create<DataState & DataActions>((set, get) => ({
         const response = await getBoxes()
         set(() => ({ boxes: response }))
       }
-    }
+    },
+    refreshBoxes: async () => {
+      const response = await getBoxes()
+      set(() => ({ boxes: response }))
+    },
 
   }
 }))

@@ -4,6 +4,7 @@ import { useOrder, useOrderActions } from "@/store/orderSlice";
 import { usePackageActions } from "@/store/packageSlice";
 import { LuRuler, LuWeight } from "react-icons/lu";
 import { useTranslations } from "next-intl";
+import Link from "next/link";
 
 const PackageAdd = () => {
   const t = useTranslations('orderPacking')
@@ -28,6 +29,15 @@ const PackageAdd = () => {
           clearSelectedPackage();
         }} className="btn btn-xl btn-secondary">{t('cancel')}</button>
       </div>
+
+      {boxes.length === 0 && (
+        <div className="flex flex-col items-center gap-4 py-12 text-base-content/60 text-xl">
+          {t('noBoxes')}
+          <Link href="/settings?tab=boxes" className="btn btn-primary btn-lg">
+            {t('goToBoxSettings')}
+          </Link>
+        </div>
+      )}
 
       <div className="grid grid-cols-3 gap-6">
 

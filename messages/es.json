@@ -18,7 +18,8 @@
     "title": "Configuración",
     "tabs": {
       "user": "Usuario",
-      "shipping": "Envío"
+      "shipping": "Envío",
+      "boxes": "Cajas"
     },
     "user": {
       "language": "Idioma",
@@ -34,6 +35,39 @@
       "servicesEnabled": "{enabled} / {total} servicios habilitados",
       "domestic": "Nacional",
       "international": "Internacional"
+    },
+    "boxes": {
+      "description": "Tamaños de caja que los empacadores pueden elegir. Dimensiones en pulgadas, peso en lbs.",
+      "addButton": "Agregar caja",
+      "addTitle": "Agregar caja",
+      "editTitle": "Editar caja",
+      "name": "Nombre",
+      "length": "Largo (in)",
+      "width": "Ancho (in)",
+      "height": "Alto (in)",
+      "maxWeight": "Peso máximo (lbs)",
+      "maxWeightHint": "Opcional",
+      "dimensions": "Dimensiones",
+      "dimensionsValue": "{length} × {width} × {height} in",
+      "weightValue": "{weight} lbs",
+      "packagesUsed": "Paquetes",
+      "status": "Estado",
+      "active": "Activa",
+      "archived": "Archivada",
+      "edit": "Editar",
+      "archive": "Archivar",
+      "restore": "Restaurar",
+      "delete": "Eliminar",
+      "deleteConfirm": "¿Eliminar la caja \"{name}\"? Esta acción no se puede deshacer.",
+      "save": "Guardar",
+      "cancel": "Cancelar",
+      "noBoxes": "Aún no hay cajas. Agrega una caja para que los empacadores puedan crear paquetes.",
+      "errors": {
+        "nameRequired": "El nombre es obligatorio.",
+        "invalidDimensions": "El largo, ancho y alto deben ser mayores que 0.",
+        "invalidMaxWeight": "El peso máximo debe ser mayor que 0.",
+        "inUse": "Usada por paquetes existentes. Archívala en su lugar."
+      }
     }
   },
   "login": {
@@ -219,6 +253,8 @@
     "customerNote": "Nota del Cliente",
     "orderNotes": "Notas del Pedido",
     "itemNotes": "Notas de Artículos",
-    "noNotes": "Sin notas"
+    "noNotes": "Sin notas",
+    "noBoxes": "Aún no hay cajas configuradas.",
+    "goToBoxSettings": "Agregar cajas en Configuración"
   }
 }

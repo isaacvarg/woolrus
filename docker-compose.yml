@@ -1,0 +1,124 @@
+# Local development stack for Woolrus.
+# The Next.js app runs on the host (`pnpm dev`); this provides everything it talks to.
+#
+#   docker compose up -d                 # start postgres, rustfs, wordpress
+#   docker compose run --rm wp-setup     # one-time: install WooCommerce + GraphQL plugins, seed data
+#   pnpm s3:init                         # one-time: create the notes bucket
+#
+# See README "Local Development" for the matching .env values.
+
+services:
+  # --- Woolrus database -------------------------------------------------------
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: woolrus
+      POSTGRES_PASSWORD: woolrus
+      POSTGRES_DB: woolrus
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U woolrus -d woolrus"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # --- S3-compatible storage for note attachments ----------------------------
+  # Bucket is created from the app side with `pnpm s3:init`.
+  rustfs:
+    image: rustfs/rustfs:latest
+    restart: unless-stopped
+    depends_on:
+      rustfs-permissions:
+        condition: service_completed_successfully
+    environment:
+      RUSTFS_VOLUMES: /data
+      RUSTFS_ADDRESS: 0.0.0.0:9000
+      RUSTFS_CONSOLE_ADDRESS: 0.0.0.0:9001
+      RUSTFS_CONSOLE_ENABLE: "true"
+      RUSTFS_ACCESS_KEY: woolrus
+      RUSTFS_SECRET_KEY: woolrus-secret
+    ports:
+      - "${S3_PORT:-9000}:9000"
+      - "${S3_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - rustfs-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:9000/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  # RustFS runs as uid 10001; named volumes are created root-owned.
+  rustfs-permissions:
+    image: alpine:3
+    volumes:
+      - rustfs-data:/data
+    command: chown -R 10001:10001 /data
+
+  # --- WordPress / WooCommerce -----------------------------------------------
+  mariadb:
+    image: mariadb:11
+    restart: unless-stopped
+    environment:
+      MARIADB_ROOT_PASSWORD: root
+      MARIADB_DATABASE: wordpress
+      MARIADB_USER: wordpress
+      MARIADB_PASSWORD: wordpress
+    volumes:
+      - mariadb-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  wordpress:
+    image: wordpress:php8.3-apache
+    restart: unless-stopped
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    ports:
+      - "${WORDPRESS_PORT:-8080}:80"
+    environment:
+      WORDPRESS_DB_HOST: mariadb
+      WORDPRESS_DB_USER: wordpress
+      WORDPRESS_DB_PASSWORD: wordpress
+      WORDPRESS_DB_NAME: wordpress
+      WORDPRESS_CONFIG_EXTRA: |
+        // Lets application passwords work over plain http.
+        define('WP_ENVIRONMENT_TYPE', 'local');
+    volumes:
+      - wordpress-data:/var/www/html
+
+  # One-shot installer. Safe to re-run.
+  wp-setup:
+    image: wordpress:cli-php8.3
+    profiles: ["setup"]
+    user: "33:33" # match www-data in the apache image so files stay writable
+    depends_on:
+      wordpress:
+        condition: service_started
+    environment:
+      HOME: /tmp
+      WORDPRESS_DB_HOST: mariadb
+      WORDPRESS_DB_USER: wordpress
+      WORDPRESS_DB_PASSWORD: wordpress
+      WORDPRESS_DB_NAME: wordpress
+      WP_URL: http://localhost:${WORDPRESS_PORT:-8080}
+    volumes:
+      - wordpress-data:/var/www/html
+      - ./docker/wordpress/setup.sh:/setup.sh:ro
+      - ./docker/wordpress/plugins:/extra-plugins:ro
+    entrypoint: ["sh", "/setup.sh"]
+
+volumes:
+  postgres-data:
+  rustfs-data:
+  mariadb-data:
+  wordpress-data:

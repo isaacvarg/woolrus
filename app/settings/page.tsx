@@ -1,19 +1,26 @@
 'use client'
 
-import { useState } from 'react'
+import { Suspense, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { useLocale } from 'next-intl'
 import { signOut } from 'next-auth/react'
 import { updatePreferences } from '@/actions/user/updatePreferences'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import type { Locale } from '@/lib/preferences/types'
 import ShippingSettings from './ShippingSettings'
+import BoxSettings from './BoxSettings'
 
-const SettingsPage = () => {
+type Tab = 'user' | 'shipping' | 'boxes'
+const tabs: Tab[] = ['user', 'shipping', 'boxes']
+
+const SettingsContent = () => {
   const t = useTranslations('settings')
   const currentLocale = useLocale() as Locale
   const router = useRouter()
-  const [activeTab, setActiveTab] = useState<'user' | 'shipping'>('user')
+  const tabParam = useSearchParams().get('tab') as Tab | null
+  const [activeTab, setActiveTab] = useState<Tab>(
+    tabParam && tabs.includes(tabParam) ? tabParam : 'user',
+  )
 
   const handleLocaleChange = async (locale: Locale) => {
     await updatePreferences({ locale })
@@ -38,6 +45,13 @@ const SettingsPage = () => {
           onClick={() => setActiveTab('shipping')}
         >
           {t('tabs.shipping')}
+        </button>
+        <button
+          role="tab"
+          className={`tab ${activeTab === 'boxes' ? 'tab-active' : ''}`}
+          onClick={() => setActiveTab('boxes')}
+        >
+          {t('tabs.boxes')}
         </button>
       </div>
 
@@ -69,8 +83,16 @@ const SettingsPage = () => {
       )}
 
       {activeTab === 'shipping' && <ShippingSettings />}
+      {activeTab === 'boxes' && <BoxSettings />}
     </div>
   )
 }
+
+// useSearchParams needs a Suspense boundary in client pages
+const SettingsPage = () => (
+  <Suspense>
+    <SettingsContent />
+  </Suspense>
+)
 
 export default SettingsPage

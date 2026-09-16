@@ -18,7 +18,8 @@
     "title": "Settings",
     "tabs": {
       "user": "User",
-      "shipping": "Shipping"
+      "shipping": "Shipping",
+      "boxes": "Boxes"
     },
     "user": {
       "language": "Language",
@@ -34,6 +35,39 @@
       "servicesEnabled": "{enabled} / {total} services enabled",
       "domestic": "Domestic",
       "international": "International"
+    },
+    "boxes": {
+      "description": "Box sizes packers can choose from. Dimensions are in inches, weight in lbs.",
+      "addButton": "Add Box",
+      "addTitle": "Add Box",
+      "editTitle": "Edit Box",
+      "name": "Name",
+      "length": "Length (in)",
+      "width": "Width (in)",
+      "height": "Height (in)",
+      "maxWeight": "Max weight (lbs)",
+      "maxWeightHint": "Optional",
+      "dimensions": "Dimensions",
+      "dimensionsValue": "{length} × {width} × {height} in",
+      "weightValue": "{weight} lbs",
+      "packagesUsed": "Packages",
+      "status": "Status",
+      "active": "Active",
+      "archived": "Archived",
+      "edit": "Edit",
+      "archive": "Archive",
+      "restore": "Restore",
+      "delete": "Delete",
+      "deleteConfirm": "Delete box \"{name}\"? This cannot be undone.",
+      "save": "Save",
+      "cancel": "Cancel",
+      "noBoxes": "No boxes yet. Add a box so packers can create packages.",
+      "errors": {
+        "nameRequired": "Name is required.",
+        "invalidDimensions": "Length, width and height must be greater than 0.",
+        "invalidMaxWeight": "Max weight must be greater than 0.",
+        "inUse": "Used by existing packages. Archive it instead."
+      }
     }
   },
   "login": {
@@ -219,6 +253,8 @@
     "customerNote": "Customer Note",
     "orderNotes": "Order Notes",
     "itemNotes": "Item Notes",
-    "noNotes": "No notes"
+    "noNotes": "No notes",
+    "noBoxes": "No boxes are set up yet.",
+    "goToBoxSettings": "Add boxes in Settings"
   }
 }
