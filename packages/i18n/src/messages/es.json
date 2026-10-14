@@ -29,6 +29,11 @@
     "box": {
       "nameTaken": "Ya existe una caja con este nombre.",
       "inUse": "Esta caja está en uso por un paquete y solo se puede archivar."
+    },
+    "field": {
+      "invalid": "Este valor no es válido.",
+      "tooSmall": "Este valor es demasiado pequeño.",
+      "tooBig": "Este valor es demasiado grande."
     }
   }
 }

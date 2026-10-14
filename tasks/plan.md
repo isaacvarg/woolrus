@@ -27,7 +27,7 @@ that: an admin `/settings` page (General + Integrations), a `formatWeight` helpe
   Tests use `vi.stubEnv`.
 - **No secret hint:** a secret's status is `{ configured }`, from the column being non-null. Reads never decrypt,
   so the page still loads without a key (criterion 7). Only `getIntegrationConfig` decrypts.
-- **Validation errors:** contract schemas use i18n keys as Zod messages (e.g. `errors.validation.urlHttps`). A
+- **Validation errors:** contract schemas use i18n keys as Zod messages (e.g. `errors.field.urlHttps`). A
   pure `toFieldErrors(issues)` in `@woolrus/contracts` maps issue paths to keys. The `mapErrors` middleware turns a
   contract validation failure into `BAD_REQUEST { messageKey: "errors.validation", fields }`. Every module gets
   this, not just settings.
@@ -55,7 +55,7 @@ e2e sign-in helper (T2) ──────────────────�
 ### Phase 1: Foundations (riskiest first)
 - [x] T1: Secret encryption (`crypto.ts`)
 - [x] T2: Signed-in Playwright helper
-- [ ] T3: Field-level validation errors through the API
+- [x] T3: Field-level validation errors through the API
 
 ### Checkpoint A: green, plus a signed-in e2e and a field error visible via REST
 

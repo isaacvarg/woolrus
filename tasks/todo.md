@@ -30,14 +30,15 @@ Better Auth, reads the token from `verification` and opens the verify URL. Prove
 **Files:** `apps/web/e2e/support/auth.ts`, `apps/web/e2e/auth-helper.spec.ts`, maybe `apps/web/package.json` (workspace dep on `@woolrus/db` for e2e)
 **Scope:** S
 
-### T3: Field-level validation errors through the API
+### T3: Field-level validation errors through the API ✅
 **Description:** A contract input that fails Zod returns `BAD_REQUEST` with `data.messageKey = "errors.validation"`
-and `data.fields` (dotted path → message key). Schemas use i18n keys as messages. Unknown messages fall back to
-`errors.validation.invalid`.
+and `data.fields` (dotted path → message key). Schemas use i18n keys as messages. Other Zod messages map by issue code to
+`errors.field.tooSmall`/`tooBig`/`invalid` (`errors.validation` is the form-level string, so field keys live under
+`errors.field.*`).
 **Acceptance criteria:**
-- [ ] Unit: `toFieldErrors(issues)` maps nested paths (`shipFromAddress.state`) and falls back for non-key messages
-- [ ] `POST /api/v1/boxes` with `lengthIn: -1` (signed in) returns 400 with `fields.lengthIn` set to a key that exists in `en.json`
-- [ ] `useErrorMessage` callers get the form-level message. A `useFieldErrors(error)` hook returns translated per-field messages
+- [x] Unit: `toFieldErrors(issues)` maps nested paths (`shipFromAddress.state`) and falls back for non-key messages
+- [x] `POST /api/v1/boxes` with `lengthIn: -1` (signed in) returns 400 with `fields.lengthIn` set to a key that exists in `en.json`
+- [x] `useErrorMessage` callers get the form-level message. A `useFieldErrors(error)` hook returns translated per-field messages
 **Verification:** contracts unit test; e2e API check using T2; `pnpm typecheck`
 **Dependencies:** T2 (for the e2e check)
 **Files:** `packages/contracts/src/base.ts` (+ test), `apps/web/src/server/orpc.ts`, `apps/web/src/lib/errors.ts`, `packages/i18n/src/messages/{en,es}.json`

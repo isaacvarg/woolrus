@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { Form } from "react-aria-components";
 import { Button, NumberField, TextField } from "@/components/ui/fields";
-import { useErrorMessage } from "@/lib/errors";
+import { useErrorMessage, useFieldErrors } from "@/lib/errors";
 import { orpc } from "@/lib/orpc";
 
 const emptyForm = {
@@ -19,6 +19,7 @@ const emptyForm = {
 export function BoxesManager() {
   const t = useTranslations();
   const errorMessage = useErrorMessage();
+  const fieldErrors = useFieldErrors();
   const queryClient = useQueryClient();
   const boxes = useQuery(orpc.boxes.list.queryOptions({ input: { includeArchived: false } }));
   const [form, setForm] = useState(emptyForm);
@@ -79,6 +80,7 @@ export function BoxesManager() {
 
       <Form
         className="card bg-base-100 shadow-sm"
+        validationErrors={fieldErrors(create.error)}
         onSubmit={(event) => {
           event.preventDefault();
           create.mutate({
@@ -99,12 +101,14 @@ export function BoxesManager() {
           <div className="grid gap-x-4 sm:grid-cols-2 lg:grid-cols-5">
             <TextField
               label={t("boxes.name")}
+              name="name"
               isRequired
               value={form.name}
               onChange={(name) => setForm({ ...form, name })}
             />
             <NumberField
               label={t("boxes.length")}
+              name="lengthIn"
               isRequired
               minValue={0.01}
               value={form.lengthIn}
@@ -112,6 +116,7 @@ export function BoxesManager() {
             />
             <NumberField
               label={t("boxes.width")}
+              name="widthIn"
               isRequired
               minValue={0.01}
               value={form.widthIn}
@@ -119,6 +124,7 @@ export function BoxesManager() {
             />
             <NumberField
               label={t("boxes.height")}
+              name="heightIn"
               isRequired
               minValue={0.01}
               value={form.heightIn}
@@ -126,6 +132,7 @@ export function BoxesManager() {
             />
             <NumberField
               label={t("boxes.maxWeight")}
+              name="maxWeightOz"
               minValue={0.01}
               value={form.maxWeightLb}
               onChange={(maxWeightLb) => setForm({ ...form, maxWeightLb })}

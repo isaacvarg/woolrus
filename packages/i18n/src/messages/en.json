@@ -29,6 +29,11 @@
     "box": {
       "nameTaken": "A box with this name already exists.",
       "inUse": "This box is used by a package and can only be archived."
+    },
+    "field": {
+      "invalid": "This value isn't valid.",
+      "tooSmall": "This value is too small.",
+      "tooBig": "This value is too large."
     }
   }
 }

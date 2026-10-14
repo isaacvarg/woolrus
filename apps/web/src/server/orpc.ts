@@ -1,5 +1,5 @@
-import { implement, ORPCError } from "@orpc/server";
-import { contract } from "@woolrus/contracts";
+import { implement, ORPCError, ValidationError } from "@orpc/server";
+import { contract, toFieldErrors } from "@woolrus/contracts";
 import { type Actor, AppError } from "@woolrus/core";
 import { db } from "@woolrus/db";
 import type { Logger } from "@woolrus/logger";
@@ -12,11 +12,24 @@ export type BaseContext = {
 
 const os = implement(contract).$context<BaseContext>();
 
-/** Turns domain AppErrors into typed API errors carrying an i18n message key. */
+/**
+ * Turns domain AppErrors and contract input-validation failures into typed API errors carrying
+ * i18n message keys. Input validation runs after this middleware, so its error passes through here.
+ */
 const mapErrors = os.middleware(async ({ next, context }) => {
   try {
     return await next();
   } catch (error) {
+    // Only input failures: output validation also throws ValidationError, but as a 500 (our bug).
+    if (
+      error instanceof ORPCError &&
+      error.code === "BAD_REQUEST" &&
+      error.cause instanceof ValidationError
+    ) {
+      throw new ORPCError("BAD_REQUEST", {
+        data: { messageKey: "errors.validation", fields: toFieldErrors(error.cause.issues) },
+      });
+    }
     if (error instanceof AppError) {
       throw new ORPCError(error.kind, {
         data: { messageKey: error.messageKey, fields: error.fields },
