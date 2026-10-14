@@ -110,9 +110,12 @@ test("replacing a secret marks it set without showing it, and clearing unsets it
 
 test("a missing encryption key is explained in the user's language", async ({ page }) => {
   // The server half (setSecret refuses without a key) is covered by the core tests. The dev server
-  // has a key, so the API's answer is stubbed here to check the UI translates it.
-  await page.route("**/rpc/settings/setSecret", (route) =>
-    route.fulfill({
+  // has a key, so the API's answer is stubbed here to check the UI translates it. Every secret write
+  // is intercepted (RPC and REST), so a real one can never reach the shared dev database.
+  let stubbed = 0;
+  await page.route(/\/(rpc\/settings\/setSecret|api\/v1\/settings\/secrets\/)/, (route) => {
+    stubbed += 1;
+    return route.fulfill({
       status: 400,
       contentType: "application/json",
       body: JSON.stringify({
@@ -124,8 +127,8 @@ test("a missing encryption key is explained in the user's language", async ({ pa
           data: { messageKey: "errors.settings.encryptionKeyMissing" },
         },
       }),
-    }),
-  );
+    });
+  });
   await signInAs(page, ["ADMIN"]);
   await page.goto("/settings");
   const row = secretRow(page, "ShipStation", "API key");
@@ -134,16 +137,25 @@ test("a missing encryption key is explained in the user's language", async ({ pa
   await row.getByLabel("New value").fill("anything");
   await row.getByRole("button", { name: "Save" }).click();
   await expect(row.getByRole("alert")).toHaveText(en.errors.settings.encryptionKeyMissing);
+  expect(stubbed).toBe(1);
 });
 
 test("an http:// store URL shows the field message", async ({ page }) => {
   await signInAs(page, ["ADMIN"]);
-  await page.goto("/settings");
-  const woo = page.getByRole("region", { name: "WooCommerce" });
+  await withSettingsLock(async () => {
+    // If validation ever regressed, this would save the URL; put back whatever was there.
+    const before = (await (await page.request.get("/api/v1/settings")).json()).wooStoreUrl;
+    try {
+      await page.goto("/settings");
+      const woo = page.getByRole("region", { name: "WooCommerce" });
 
-  await woo.getByLabel("Store URL").fill("http://shop.example.com");
-  await woo.getByRole("button", { name: "Save" }).click();
-  await expect(woo.getByText(en.errors.field.urlHttps)).toBeVisible();
+      await woo.getByLabel("Store URL").fill("http://shop.example.com");
+      await woo.getByRole("button", { name: "Save" }).click();
+      await expect(woo.getByText(en.errors.field.urlHttps)).toBeVisible();
+    } finally {
+      await page.request.patch("/api/v1/settings", { data: { wooStoreUrl: before } });
+    }
+  });
 });
 
 test("an admin saves and removes the Lumexia base URL", async ({ page }) => {
