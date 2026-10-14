@@ -1,9 +1,8 @@
 import { implement, ORPCError, ValidationError } from "@orpc/server";
 import { contract, toFieldErrors } from "@woolrus/contracts";
-import { type Actor, AppError } from "@woolrus/core";
-import { db } from "@woolrus/db";
+import { AppError } from "@woolrus/core";
 import type { Logger } from "@woolrus/logger";
-import { auth } from "./auth";
+import { resolveActor } from "./actor";
 
 export type BaseContext = {
   headers: Headers;
@@ -42,15 +41,14 @@ const mapErrors = os.middleware(async ({ next, context }) => {
 
 /**
  * Deny by default (NFR-SEC-01): every procedure goes through `authed`, which resolves the
- * session (cookie or bearer token) to an active user and builds the Actor.
+ * request to an active user's Actor (see `resolveActor`).
  */
 const authed = os.middleware(async ({ next, context }) => {
-  const session = await auth().api.getSession({ headers: context.headers });
-  const user = session ? await db.user.findUnique({ where: { id: session.user.id } }) : null;
-  if (!user?.active) {
+  const resolved = await resolveActor(context.headers);
+  if (!resolved) {
     throw new ORPCError("UNAUTHORIZED", { data: { messageKey: "errors.unauthenticated" } });
   }
-  const actor: Actor = { userId: user.id, roles: user.roles, stationId: null };
+  const { actor, user } = resolved;
   return next({ context: { actor, user, log: context.log.child({ userId: user.id }) } });
 });
 

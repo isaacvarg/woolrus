@@ -1,5 +1,8 @@
 import { expect, test } from "@playwright/test";
+import { createDb } from "@woolrus/db";
 import { signInAs } from "./support/auth";
+
+const db = createDb();
 
 test("signInAs opens a session with the given roles", async ({ page }) => {
   await signInAs(page, ["ADMIN"]);
@@ -21,4 +24,13 @@ test("two users can be signed in side by side", async ({ browser }) => {
 
   await admin.close();
   await picker.close();
+});
+
+test("a deactivated user keeps no access, in the API or the pages", async ({ page }) => {
+  const admin = await signInAs(page, ["ADMIN"]);
+  await db.user.update({ where: { id: admin.id }, data: { active: false } });
+
+  expect((await page.request.get("/api/v1/me")).status()).toBe(401);
+  await page.goto("/settings");
+  await expect(page.getByText("You don't have permission to do that.")).toBeVisible();
 });

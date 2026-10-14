@@ -1,8 +1,21 @@
 import type { Actor } from "@woolrus/core";
-import { db } from "@woolrus/db";
+import { db, type User } from "@woolrus/db";
 import { headers } from "next/headers";
 import { cache } from "react";
 import { auth } from "./auth";
+
+/**
+ * The one rule for who is acting: the session (cookie or bearer token) must belong to an active
+ * user. Used by the API's `authed` middleware and by server components, so they always agree.
+ */
+export async function resolveActor(
+  requestHeaders: Headers,
+): Promise<{ user: User; actor: Actor } | null> {
+  const session = await auth().api.getSession({ headers: requestHeaders });
+  const user = session ? await db.user.findUnique({ where: { id: session.user.id } }) : null;
+  if (!user?.active) return null;
+  return { user, actor: { userId: user.id, roles: user.roles, stationId: null } };
+}
 
 /** The session for the current request, shared by the layout and page of one render. */
 export const currentSession = cache(async () =>
@@ -10,11 +23,9 @@ export const currentSession = cache(async () =>
 );
 
 /**
- * The signed-in, active user as an Actor, or null. Server components use it to decide what to show;
- * the API still checks permissions on its own (see `authed` in ./orpc).
+ * The current request's Actor, or null. Server components use it to decide what to show; the API
+ * still checks permissions on its own.
  */
-export const currentActor = cache(async (): Promise<Actor | null> => {
-  const session = await currentSession();
-  const user = session ? await db.user.findUnique({ where: { id: session.user.id } }) : null;
-  return user?.active ? { userId: user.id, roles: user.roles, stationId: null } : null;
-});
+export const currentActor = cache(
+  async (): Promise<Actor | null> => (await resolveActor(await headers()))?.actor ?? null,
+);
