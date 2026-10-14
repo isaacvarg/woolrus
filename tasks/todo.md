@@ -143,8 +143,9 @@ and per-secret "Set" / "Not set" with Replace (an empty write-only field) and Cl
 **Dependencies:** T5, T8
 **Done differently:** an unset secret's button reads "Add" (Replace once it is set); Clear asks for confirmation
 inline. The encryption-key-missing e2e check stubs the `setSecret` response, since the dev server always has a key
-(the server side is covered by T5's core tests). Tests use the webhook secret and the Lumexia key, never the Woo
-consumer key/secret the dev stack falls back on, and clear them again. The General form is now named by its
+(the server side is covered by T5's core tests). Tests use the webhook secret, never the Woo consumer key/secret the
+dev stack falls back on, and clear it again. (After review, every settings-writing test takes turns through
+`withSettingsLock` instead of per-project fields.) The General form is now named by its
 heading so tests can scope its Save button.
 **Files:** `apps/web/src/app/(app)/settings/{integrations,page,general-form}.tsx`, `apps/web/src/components/ui/fields.tsx` (descriptions wrap), `apps/web/e2e/settings.spec.ts`, i18n
 **Scope:** S
