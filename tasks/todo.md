@@ -45,9 +45,9 @@ and `data.fields` (dotted path → message key). Schemas use i18n keys as messag
 **Scope:** M
 
 ### Checkpoint A
-- [ ] Green checks pass
-- [ ] Signed-in e2e and field errors work
-- [ ] Review with the user before Phase 2
+- [x] Green checks pass
+- [x] Signed-in e2e and field errors work
+- [x] Review with the user before Phase 2
 
 ## Phase 2: Settings API
 
@@ -96,8 +96,8 @@ because health now returns 503 without a key and CI waits on it.
 **Scope:** S
 
 ### Checkpoint B
-- [ ] Criteria 1–7 have passing tests; green checks pass
-- [ ] Review with the user before Phase 3
+- [x] Criteria 1–7 have passing tests; green checks pass
+- [x] Review with the user before Phase 3
 
 ## Phase 3: UI
 
@@ -168,4 +168,4 @@ unset through the API, so the dev DB keeps the e2e address.
 ### Checkpoint C
 - [x] Every spec success criterion maps to a passing test
 - [x] `pnpm lint && pnpm typecheck && pnpm test && pnpm build` + Playwright pass
-- [ ] `SPEC.md` status → `in progress` (during build); then `/agent-skills:review`
+- [x] `SPEC.md` status → `in progress` (during build); then `/agent-skills:review`
