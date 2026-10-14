@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import { SecretName } from "@woolrus/contracts";
 import type { Db } from "@woolrus/db";
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createActor, resetDb, testDb } from "../../test/db";
@@ -17,6 +18,19 @@ afterEach(() => vi.unstubAllEnvs());
 const SECRET = "cs_live_9f8e7d6c5b4a3210";
 
 describe("settings secrets", () => {
+  it.each(SecretName.options)("stores %s in its own column and nowhere else", async (name) => {
+    const admin = await createActor(db, ["ADMIN"]);
+    const settings = await setSecret(db, admin, { name, value: `v-${name}` });
+
+    const row = await db.settings.findUniqueOrThrow({ where: { id: 1 } });
+    for (const other of SecretName.options) {
+      const stored = row[`${other}Enc`];
+      if (other === name) expect(decryptSecret(stored as string, key)).toBe(`v-${name}`);
+      else expect(stored).toBeNull();
+      expect(settings.secrets[other]).toEqual({ configured: other === name });
+    }
+  });
+
   it("stores only ciphertext and reports the secret as configured", async () => {
     const admin = await createActor(db, ["ADMIN"]);
     const settings = await setSecret(db, admin, { name: "wooConsumerSecret", value: SECRET });

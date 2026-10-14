@@ -42,6 +42,26 @@ async function configureWooInSettings() {
 }
 
 describe("getIntegrationConfig", () => {
+  it("builds every integration from Settings alone in production, each from its own values", async () => {
+    stubEnv("production", fallbackEnv);
+    const admin = await configureWooInSettings();
+    await updateSettings(db, admin, { lumexiaBaseUrl: "https://lumexia.example.com" });
+    await setSecret(db, admin, { name: "wooWebhookSecret", value: "wh_settings" });
+    await setSecret(db, admin, { name: "shipstationApiKey", value: "ss_settings" });
+    await setSecret(db, admin, { name: "lumexiaApiKey", value: "lx_settings" });
+
+    expect(await getIntegrationConfig(db)).toEqual({
+      woocommerce: {
+        url: "https://shop.example.com",
+        consumerKey: "ck_settings",
+        consumerSecret: "cs_settings",
+        webhookSecret: "wh_settings",
+      },
+      shipstation: { apiKey: "ss_settings" },
+      lumexia: { baseUrl: "https://lumexia.example.com", apiKey: "lx_settings" },
+    });
+  });
+
   it("returns decrypted values from Settings", async () => {
     stubEnv("production");
     await configureWooInSettings();
