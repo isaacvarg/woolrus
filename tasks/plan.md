@@ -54,7 +54,7 @@ e2e sign-in helper (T2) ──────────────────�
 
 ### Phase 1: Foundations (riskiest first)
 - [x] T1: Secret encryption (`crypto.ts`)
-- [ ] T2: Signed-in Playwright helper
+- [x] T2: Signed-in Playwright helper
 - [ ] T3: Field-level validation errors through the API
 
 ### Checkpoint A: green, plus a signed-in e2e and a field error visible via REST

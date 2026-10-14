@@ -19,12 +19,12 @@ a wrong key and malformed input.
 **Files:** `packages/core/src/settings/crypto.ts`, `crypto.test.ts`
 **Scope:** XS
 
-### T2: Signed-in Playwright helper
+### T2: Signed-in Playwright helper ✅
 **Description:** `signInAs(page, roles)` creates a user with the roles in the dev DB, requests a magic link via
 Better Auth, reads the token from `verification` and opens the verify URL. Proved by one test.
 **Acceptance criteria:**
-- [ ] `signInAs(page, ["ADMIN"])` then `/boxes` shows the Boxes heading (no redirect to sign-in)
-- [ ] Two different users can be signed in, in separate browser contexts, in one test file
+- [x] `signInAs(page, ["ADMIN"])` then `/boxes` shows the Boxes heading (no redirect to sign-in)
+- [x] Two different users can be signed in, in separate browser contexts, in one test file
 **Verification:** `pnpm --filter @woolrus/web test:e2e -- auth-helper` against the dev stack
 **Dependencies:** none
 **Files:** `apps/web/e2e/support/auth.ts`, `apps/web/e2e/auth-helper.spec.ts`, maybe `apps/web/package.json` (workspace dep on `@woolrus/db` for e2e)
