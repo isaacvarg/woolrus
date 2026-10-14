@@ -1,6 +1,7 @@
 "use client";
 
 // Thin wrappers that pair React Aria behaviour (labels, validation, keyboard, focus) with daisyUI styling.
+import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 import {
   Button as AriaButton,
@@ -23,6 +24,27 @@ import {
 
 const focusRing = "outline-2 outline-offset-2 outline-primary";
 
+/**
+ * Field messages always come from the catalog: server errors arrive translated (see useFieldErrors),
+ * and the browser's own checks (required, email format, range) are mapped to catalog messages
+ * instead of showing the browser's wording in the browser's language.
+ */
+function AppFieldError({ isEmail = false }: { isEmail?: boolean }) {
+  const t = useTranslations();
+  return (
+    <FieldError className="label whitespace-normal text-error">
+      {({ validationErrors, validationDetails: check }) => {
+        if (check.customError) return validationErrors.join(" ");
+        if (check.valueMissing) return t("errors.field.required");
+        if (check.typeMismatch && isEmail) return t("errors.field.email");
+        if (check.rangeUnderflow) return t("errors.field.tooSmall");
+        if (check.rangeOverflow) return t("errors.field.tooBig");
+        return t("errors.field.invalid");
+      }}
+    </FieldError>
+  );
+}
+
 export function Button({
   className = "btn-primary",
   ...props
@@ -44,7 +66,7 @@ export function TextField({
           {description}
         </Text>
       )}
-      <FieldError className="label text-error" />
+      <AppFieldError isEmail={props.type === "email"} />
     </AriaTextField>
   );
 }
@@ -63,7 +85,7 @@ export function NumberField({
           {description}
         </Text>
       )}
-      <FieldError className="label text-error" />
+      <AppFieldError />
     </AriaNumberField>
   );
 }
@@ -102,7 +124,7 @@ export function RadioGroup({
     <AriaRadioGroup {...props} className="fieldset">
       <Label className="fieldset-legend">{label}</Label>
       <div className="flex flex-wrap gap-x-6">{children}</div>
-      <FieldError className="label text-error" />
+      <AppFieldError />
     </AriaRadioGroup>
   );
 }

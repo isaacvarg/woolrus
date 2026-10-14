@@ -250,3 +250,16 @@ test("signed-out callers can't read public settings", async ({ request }) => {
   expect(response.status()).toBe(401);
   expect((await response.json()).data).toEqual({ messageKey: "errors.unauthenticated" });
 });
+
+test("checks the browser makes before saving use the app's messages", async ({ page }) => {
+  await signInAs(page, ["ADMIN"]);
+  await page.goto("/settings");
+  const general = page.getByRole("form", { name: "General" });
+
+  await general.getByLabel("Sync interval", { exact: false }).fill("");
+  await general.getByRole("group", { name: "Ship-from address" }).getByLabel("Email").fill("nope");
+  await general.getByRole("button", { name: "Save" }).click();
+
+  await expect(general.getByText(en.errors.field.required)).toBeVisible();
+  await expect(general.getByText(en.errors.field.email)).toBeVisible();
+});
