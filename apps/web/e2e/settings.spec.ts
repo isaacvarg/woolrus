@@ -68,6 +68,24 @@ test("an admin sees the Settings link", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Settings", level: 1 })).toBeVisible();
 });
 
+/**
+ * Records every API response body the page receives (RPC and REST), to search them for a secret.
+ * Secrets in these tests end in a tail that can't occur by chance in ids or timestamps.
+ */
+function recordApiResponses(page: Page) {
+  const bodies: Promise<string>[] = [];
+  page.on("response", (response) => {
+    if (/\/(rpc|api\/v1)\//.test(response.url())) bodies.push(response.text().catch(() => ""));
+  });
+  return async () => {
+    const all = (await Promise.all(bodies)).join("\n");
+    expect(all).toContain('"configured"'); // the recorder really saw the settings responses
+    return all;
+  };
+}
+
+const LEAK_TAIL = "QZXJ";
+
 /** A secret's row on the settings page: its card, then the row named after the secret. */
 function secretRow(page: Page, card: string, secret: string) {
   return page.getByRole("region", { name: card }).getByRole("group", { name: secret, exact: true });
@@ -77,8 +95,9 @@ test("replacing a secret marks it set without showing it, and clearing unsets it
   page,
 }) => {
   // Not a secret the dev stack's Woo sync relies on.
-  const value = `e2e-${crypto.randomUUID()}`;
+  const value = `e2e-${crypto.randomUUID()}-${LEAK_TAIL}`;
   await signInAs(page, ["ADMIN"]);
+  const apiResponses = recordApiResponses(page);
   await withSettingsLock(async () => {
     try {
       await page.request.delete("/api/v1/settings/secrets/wooWebhookSecret");
@@ -102,6 +121,10 @@ test("replacing a secret marks it set without showing it, and clearing unsets it
       await row.getByRole("button", { name: "Clear" }).click();
       await row.getByRole("button", { name: "Yes, clear" }).click();
       await expect(row.getByText("Not set", { exact: true })).toBeVisible();
+
+      const received = await apiResponses();
+      expect(received).not.toContain(value);
+      expect(received).not.toContain(LEAK_TAIL);
     } finally {
       await page.request.delete("/api/v1/settings/secrets/wooWebhookSecret");
     }
@@ -185,8 +208,9 @@ test("an admin saves and removes the Lumexia base URL", async ({ page }) => {
 test("an admin saves the ship-from address and the Woo consumer secret, and both survive a reload", async ({
   page,
 }) => {
-  const secret = `e2e-${crypto.randomUUID()}`;
+  const secret = `e2e-${crypto.randomUUID()}-${LEAK_TAIL}`;
   await signInAs(page, ["ADMIN"]);
+  const apiResponses = recordApiResponses(page);
   await withSettingsLock(async () => {
     try {
       await page.goto("/settings");
@@ -214,6 +238,9 @@ test("an admin saves the ship-from address and the Woo consumer secret, and both
       await row.getByRole("button", { name: "Replace" }).click();
       await expect(row.getByLabel("New value")).toHaveValue("");
       expect(await page.content()).not.toContain(secret);
+      const received = await apiResponses();
+      expect(received).not.toContain(secret);
+      expect(received).not.toContain(LEAK_TAIL);
     } finally {
       // The dev stack's Woo sync falls back on .env only while this secret is unset.
       await page.request.delete("/api/v1/settings/secrets/wooConsumerSecret");
