@@ -34,6 +34,13 @@ describe("settings service", () => {
       weightDisplay: "LB_OZ",
       piiRetentionDays: null,
       qaMustDifferFromPacker: false,
+      secrets: {
+        wooConsumerKey: { configured: false },
+        wooConsumerSecret: { configured: false },
+        wooWebhookSecret: { configured: false },
+        shipstationApiKey: { configured: false },
+        lumexiaApiKey: { configured: false },
+      },
     });
     expect(await db.settings.count()).toBe(1);
   });

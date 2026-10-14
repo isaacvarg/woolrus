@@ -1,10 +1,12 @@
 import {
   archiveBox,
+  clearSecret,
   createBox,
   getPublicSettings,
   getSettings,
   listBoxes,
   permissionsFor,
+  setSecret,
   updateSettings,
 } from "@woolrus/core";
 import { db } from "@woolrus/db";
@@ -37,6 +39,12 @@ export const router = api.router({
     public: api.settings.public.handler(({ context }) => getPublicSettings(db, context.actor)),
     update: api.settings.update.handler(({ input, context }) =>
       updateSettings(db, context.actor, input),
+    ),
+    setSecret: api.settings.setSecret.handler(({ input, context }) =>
+      setSecret(db, context.actor, input),
+    ),
+    clearSecret: api.settings.clearSecret.handler(({ input, context }) =>
+      clearSecret(db, context.actor, input),
     ),
   },
 });

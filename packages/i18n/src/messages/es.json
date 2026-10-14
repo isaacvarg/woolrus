@@ -38,6 +38,9 @@
       "usState": "Usa el código de estado de 2 letras, p. ej. TX.",
       "usZip": "Usa un código postal de 5 dígitos (o ZIP+4).",
       "email": "Ingresa un correo electrónico válido."
+    },
+    "settings": {
+      "encryptionKeyMissing": "No se pueden guardar secretos: falta la clave de cifrado del servidor o no es válida. Pide a quien administra el servidor que configure SETTINGS_ENCRYPTION_KEY."
     }
   }
 }

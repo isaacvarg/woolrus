@@ -50,7 +50,20 @@ const StationIdleLockMinutes = z.number().int().min(1).max(120);
 /** Null keeps customer PII forever (NFR-SEC-06). */
 const PiiRetentionDays = z.number().int().min(30).max(3650).nullable();
 
-/** Everything an admin sees. Secrets join as `{ configured }` statuses, never values. */
+export const SecretName = z.enum([
+  "wooConsumerKey",
+  "wooConsumerSecret",
+  "wooWebhookSecret",
+  "shipstationApiKey",
+  "lumexiaApiKey",
+]);
+export type SecretName = z.infer<typeof SecretName>;
+
+/** Whether a secret is set. Deliberately nothing derived from the value, not even a hint. */
+export const SecretStatus = z.object({ configured: z.boolean() });
+export type SecretStatus = z.infer<typeof SecretStatus>;
+
+/** Everything an admin sees. Secrets appear only as `{ configured }` statuses, never values. */
 export const AdminSettings = z.object({
   shipFromAddress: ShipFromAddress.nullable(),
   wooStoreUrl: z.string().nullable(),
@@ -61,6 +74,7 @@ export const AdminSettings = z.object({
   weightDisplay: WeightDisplay,
   piiRetentionDays: z.number().nullable(),
   qaMustDifferFromPacker: z.boolean(),
+  secrets: z.record(SecretName, SecretStatus),
 });
 export type AdminSettings = z.infer<typeof AdminSettings>;
 
@@ -86,6 +100,16 @@ export const UpdateSettingsInput = z.object({
 });
 export type UpdateSettingsInput = z.infer<typeof UpdateSettingsInput>;
 
+/** Write-only: the value is never returned by any procedure. */
+export const SetSecretInput = z.object({
+  name: SecretName,
+  value: z.string().trim().min(1).max(500),
+});
+export type SetSecretInput = z.infer<typeof SetSecretInput>;
+
+export const ClearSecretInput = z.object({ name: SecretName });
+export type ClearSecretInput = z.infer<typeof ClearSecretInput>;
+
 export const settings = {
   get: base
     .route({
@@ -108,5 +132,25 @@ export const settings = {
   update: base
     .route({ method: "PATCH", path: "/settings", tags: ["Settings"], summary: "Update settings" })
     .input(UpdateSettingsInput)
+    .output(AdminSettings),
+
+  setSecret: base
+    .route({
+      method: "PUT",
+      path: "/settings/secrets/{name}",
+      tags: ["Settings"],
+      summary: "Set an integration secret (write-only)",
+    })
+    .input(SetSecretInput)
+    .output(AdminSettings),
+
+  clearSecret: base
+    .route({
+      method: "DELETE",
+      path: "/settings/secrets/{name}",
+      tags: ["Settings"],
+      summary: "Clear an integration secret",
+    })
+    .input(ClearSecretInput)
     .output(AdminSettings),
 };

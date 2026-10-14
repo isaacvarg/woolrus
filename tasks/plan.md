@@ -61,7 +61,7 @@ e2e sign-in helper (T2) ──────────────────�
 
 ### Phase 2: Settings API
 - [x] T4: Read and update settings (contract + core + routes)
-- [ ] T5: Set and clear secrets
+- [x] T5: Set and clear secrets
 - [ ] T6: Integration config for other modules + health `encryption`
 
 ### Checkpoint B: criteria 1–7 covered by tests; green

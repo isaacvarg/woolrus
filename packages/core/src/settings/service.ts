@@ -1,18 +1,33 @@
 import {
   type AdminSettings,
+  type ClearSecretInput,
   type PublicSettings,
+  SecretName,
+  type SetSecretInput,
   ShipFromAddress,
   StageSlaMinutes,
   type UpdateSettingsInput,
 } from "@woolrus/contracts";
 import type { Db, DbTx, Prisma, Settings } from "@woolrus/db";
 import { recordAudit } from "../audit";
+import { AppError } from "../errors";
 import { type Actor, assertCan } from "../permissions";
+import { encryptSecret } from "./crypto";
+import { encryptionKey } from "./env";
 
 // One settings row (id 1) holds the warehouse's configuration (FR-SET-05). The seed creates it;
 // reads create it too, so a fresh database never fails here.
 
 const SETTINGS_ID = 1;
+
+/** The column holding each secret's ciphertext. */
+const secretColumns = {
+  wooConsumerKey: "wooConsumerKeyEnc",
+  wooConsumerSecret: "wooConsumerSecretEnc",
+  wooWebhookSecret: "wooWebhookSecretEnc",
+  shipstationApiKey: "shipstationApiKeyEnc",
+  lumexiaApiKey: "lumexiaApiKeyEnc",
+} as const satisfies Record<SecretName, keyof Settings>;
 
 async function loadSettings(tx: DbTx): Promise<Settings> {
   return tx.settings.upsert({
@@ -36,6 +51,10 @@ function toAdminSettings(row: Settings): AdminSettings {
     weightDisplay: row.weightDisplay,
     piiRetentionDays: row.piiRetentionDays,
     qaMustDifferFromPacker: row.qaMustDifferFromPacker,
+    // Status comes from the column alone, so reads never decrypt and work without a key.
+    secrets: Object.fromEntries(
+      SecretName.options.map((name) => [name, { configured: row[secretColumns[name]] !== null }]),
+    ) as AdminSettings["secrets"],
   };
 }
 
@@ -80,5 +99,53 @@ export async function updateSettings(
       after: after as Prisma.InputJsonObject,
     });
     return updated;
+  });
+}
+
+/** Encrypts and stores a secret. Audited by name only: never the value or anything derived from it. */
+export async function setSecret(
+  db: Db,
+  actor: Actor,
+  { name, value }: SetSecretInput,
+): Promise<AdminSettings> {
+  assertCan(actor, "settings.manage");
+  const key = encryptionKey();
+  if (!key) throw new AppError("BAD_REQUEST", "errors.settings.encryptionKeyMissing");
+  return db.$transaction(async (tx) => {
+    await loadSettings(tx);
+    const row = await tx.settings.update({
+      where: { id: SETTINGS_ID },
+      data: { [secretColumns[name]]: encryptSecret(value, key) },
+    });
+    await recordAudit(tx, actor, {
+      entityType: "Settings",
+      entityId: String(SETTINGS_ID),
+      action: "secret.set",
+      after: { secret: name },
+    });
+    return toAdminSettings(row);
+  });
+}
+
+export async function clearSecret(
+  db: Db,
+  actor: Actor,
+  { name }: ClearSecretInput,
+): Promise<AdminSettings> {
+  assertCan(actor, "settings.manage");
+  return db.$transaction(async (tx) => {
+    const current = await loadSettings(tx);
+    if (current[secretColumns[name]] === null) return toAdminSettings(current);
+    const row = await tx.settings.update({
+      where: { id: SETTINGS_ID },
+      data: { [secretColumns[name]]: null },
+    });
+    await recordAudit(tx, actor, {
+      entityType: "Settings",
+      entityId: String(SETTINGS_ID),
+      action: "secret.clear",
+      after: { secret: name },
+    });
+    return toAdminSettings(row);
   });
 }

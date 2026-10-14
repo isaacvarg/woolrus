@@ -65,14 +65,14 @@ procedure is wired to a one-line route.
 **Files:** `packages/contracts/src/{settings,index}.ts`, `packages/core/src/settings/service.ts` (+ test), `packages/core/src/index.ts`, `apps/web/src/server/router.ts`, i18n
 **Scope:** M
 
-### T5: Set and clear secrets
+### T5: Set and clear secrets ✅
 **Description:** `setSecret`/`clearSecret` in core, contract and routes (`PUT`/`DELETE /settings/secrets/{name}`).
 `getSettings` exposes `SecretStatus { configured }`. A missing or bad key → `errors.settings.encryptionKeyMissing`.
 Audit records `secret.set`/`secret.clear` with the name only.
 **Acceptance criteria:**
-- [ ] After `setSecret` the column holds `v1:…`. `getSettings` shows `configured: true` and nothing derived from the value. A leak test serializes every response and audit row and finds no plain value (criterion 3)
-- [ ] Without the key: `setSecret` fails with `encryptionKeyMissing`, and `getSettings` still succeeds and shows stored secrets as configured (criterion 7, core part)
-- [ ] Non-admins are forbidden for both. Clearing sets the column to null and audits
+- [x] After `setSecret` the column holds `v1:…`. `getSettings` shows `configured: true` and nothing derived from the value. A leak test serializes every response and audit row and finds no plain value (criterion 3)
+- [x] Without the key: `setSecret` fails with `encryptionKeyMissing`, and `getSettings` still succeeds and shows stored secrets as configured (criterion 7, core part)
+- [x] Non-admins are forbidden for both. Clearing sets the column to null and audits
 **Verification:** `pnpm --filter @woolrus/core test -- settings`
 **Dependencies:** T1, T4
 **Files:** `packages/contracts/src/settings.ts`, `packages/core/src/settings/{service,env}.ts` (+ test), `apps/web/src/server/router.ts`, i18n
