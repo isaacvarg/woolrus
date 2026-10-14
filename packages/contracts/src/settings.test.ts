@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { toFieldErrors } from "./base";
-import { UpdateSettingsInput } from "./settings";
+import { SetSecretInput, UpdateSettingsInput } from "./settings";
 
 const address = {
   name: "Shipping Dept",
@@ -92,5 +92,31 @@ describe("UpdateSettingsInput", () => {
     [{ COMPLETED: 60 }, "stageSlaMinutes"],
   ])("rejects SLA thresholds %j", (sla, field) => {
     expect(Object.keys(fieldErrors({ stageSlaMinutes: sla }))).toEqual([field]);
+  });
+});
+
+describe("SetSecretInput", () => {
+  function secretErrors(input: unknown) {
+    const result = SetSecretInput.safeParse(input);
+    return result.success ? {} : toFieldErrors(result.error.issues);
+  }
+
+  it.each([
+    ["an empty value", "", "errors.field.required"],
+    ["a value of only spaces", "   ", "errors.field.required"],
+    ["a value over 500 characters", "x".repeat(501), "errors.field.tooBig"],
+  ])("rejects %s", (_, value, key) => {
+    expect(secretErrors({ name: "wooConsumerKey", value })).toEqual({ value: key });
+  });
+
+  it("accepts 500 characters and trims the value", () => {
+    expect(
+      SetSecretInput.parse({ name: "wooConsumerKey", value: "x".repeat(500) }).value,
+    ).toHaveLength(500);
+    expect(SetSecretInput.parse({ name: "wooConsumerKey", value: "  abc  " }).value).toBe("abc");
+  });
+
+  it("rejects an unknown secret name", () => {
+    expect(Object.keys(secretErrors({ name: "nope", value: "abc" }))).toEqual(["name"]);
   });
 });
