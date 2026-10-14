@@ -30,6 +30,13 @@ pnpm install
 cp .env.example .env
 ```
 
+Then set `SETTINGS_ENCRYPTION_KEY` in `.env` (it encrypts integration secrets stored in Settings). Without it,
+`/api/health` reports `encryption: "fail"` with a 503, and the e2e suite waits on that endpoint:
+
+```bash
+openssl rand -base64 32
+```
+
 ```bash
 pnpm stack:up
 ```
