@@ -41,7 +41,7 @@
     "stationIdleLock": "Bloqueo de estación por inactividad (minutos)",
     "sla": {
       "title": "SLA por etapa (minutos)",
-      "hint": "Deja una etapa vacía para no tener SLA.",
+      "hint": "Marca los pedidos que permanecen más tiempo que esto en una etapa. Déjalo vacío para no tener límite.",
       "PENDING": "Pendiente",
       "PICKING": "Recolección",
       "PACKING": "Empaque",

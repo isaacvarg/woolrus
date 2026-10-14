@@ -41,7 +41,7 @@
     "stationIdleLock": "Station idle lock (minutes)",
     "sla": {
       "title": "SLA per stage (minutes)",
-      "hint": "Leave a stage empty for no SLA.",
+      "hint": "Flag orders that stay longer than this in a stage. Leave empty for no limit.",
       "PENDING": "Pending",
       "PICKING": "Picking",
       "PACKING": "Packing",
