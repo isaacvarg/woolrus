@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { createDb } from "@woolrus/db";
-import { signInAs } from "./support/auth";
+import { requestMagicLink, signInAs } from "./support/auth";
 
 const db = createDb();
 
@@ -8,6 +8,13 @@ test("signInAs opens a session with the given roles", async ({ page }) => {
   await signInAs(page, ["ADMIN"]);
   await page.goto("/boxes");
   await expect(page).toHaveURL(/\/boxes$/);
+  await expect(page.getByRole("heading", { name: "Boxes" })).toBeVisible();
+});
+
+test("a magic link requested at sign-in opens a session", async ({ page }) => {
+  // The only test that goes through /sign-in/magic-link, which production builds rate limit.
+  await requestMagicLink(page, ["PICKER"]);
+  await page.goto("/boxes");
   await expect(page.getByRole("heading", { name: "Boxes" })).toBeVisible();
 });
 
