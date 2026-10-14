@@ -57,7 +57,34 @@
       "label": "Keep customer details (days)",
       "hint": "Leave empty to keep them forever. Between 30 and 3650 days."
     },
-    "qaMustDifferFromPacker": "QA must be done by someone other than the packer"
+    "qaMustDifferFromPacker": "QA must be done by someone other than the packer",
+    "integrations": {
+      "title": "Integrations",
+      "saved": "Saved.",
+      "wooStoreUrl": "Store URL",
+      "lumexiaBaseUrl": "API base URL",
+      "names": {
+        "woocommerce": "WooCommerce",
+        "shipstation": "ShipStation",
+        "lumexia": "Lumexia"
+      },
+      "secrets": {
+        "wooConsumerKey": "Consumer key",
+        "wooConsumerSecret": "Consumer secret",
+        "wooWebhookSecret": "Webhook secret",
+        "shipstationApiKey": "API key",
+        "lumexiaApiKey": "API key"
+      },
+      "set": "Set",
+      "notSet": "Not set",
+      "add": "Add",
+      "replace": "Replace",
+      "clear": "Clear",
+      "yesClear": "Yes, clear",
+      "clearConfirm": "Clear the {name}? The integration stops working until a new value is added.",
+      "newValue": "New value",
+      "writeOnly": "Stored encrypted. Nobody can view it after saving, so keep your own copy if you need one."
+    }
   },
   "errors": {
     "unauthenticated": "Please sign in to continue.",

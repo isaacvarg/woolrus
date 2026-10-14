@@ -40,7 +40,7 @@ export function TextField({
       <Label className="fieldset-legend">{label}</Label>
       <Input className="input w-full" />
       {description && (
-        <Text slot="description" className="label">
+        <Text slot="description" className="label whitespace-normal">
           {description}
         </Text>
       )}
@@ -59,7 +59,7 @@ export function NumberField({
       <Label className="fieldset-legend">{label}</Label>
       <Input className="input w-full" />
       {description && (
-        <Text slot="description" className="label">
+        <Text slot="description" className="label whitespace-normal">
           {description}
         </Text>
       )}

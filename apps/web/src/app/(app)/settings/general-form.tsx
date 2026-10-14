@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { AdminSettings, UpdateSettingsInput, WeightDisplay } from "@woolrus/contracts";
 import { formatWeight } from "@woolrus/core/format";
 import { useLocale, useTranslations } from "next-intl";
-import { useState } from "react";
+import { useId, useState } from "react";
 import { Form } from "react-aria-components";
 import {
   Button,
@@ -122,6 +122,7 @@ function GeneralForm({ settings }: { settings: AdminSettings }) {
   const errorMessage = useErrorMessage();
   const fieldErrors = useFieldErrors();
   const queryClient = useQueryClient();
+  const headingId = useId();
   const [loaded, setLoaded] = useState(() => toForm(settings));
   const [form, setForm] = useState(loaded);
 
@@ -155,6 +156,7 @@ function GeneralForm({ settings }: { settings: AdminSettings }) {
 
   return (
     <Form
+      aria-labelledby={headingId}
       className="card bg-base-100 shadow-sm"
       validationErrors={fieldErrors(save.error)}
       onSubmit={(event) => {
@@ -163,7 +165,9 @@ function GeneralForm({ settings }: { settings: AdminSettings }) {
       }}
     >
       <div className="card-body">
-        <h2 className="card-title">{t("settings.general")}</h2>
+        <h2 id={headingId} className="card-title">
+          {t("settings.general")}
+        </h2>
 
         <fieldset className="grid gap-x-4 sm:grid-cols-2">
           <legend className="mb-1 font-semibold">{t("settings.shipFrom.title")}</legend>

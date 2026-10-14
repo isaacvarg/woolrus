@@ -57,7 +57,34 @@
       "label": "Conservar datos de clientes (días)",
       "hint": "Déjalo vacío para conservarlos siempre. Entre 30 y 3650 días."
     },
-    "qaMustDifferFromPacker": "El control de calidad debe hacerlo alguien distinto de quien empacó"
+    "qaMustDifferFromPacker": "El control de calidad debe hacerlo alguien distinto de quien empacó",
+    "integrations": {
+      "title": "Integraciones",
+      "saved": "Guardado.",
+      "wooStoreUrl": "URL de la tienda",
+      "lumexiaBaseUrl": "URL base de la API",
+      "names": {
+        "woocommerce": "WooCommerce",
+        "shipstation": "ShipStation",
+        "lumexia": "Lumexia"
+      },
+      "secrets": {
+        "wooConsumerKey": "Clave de consumidor",
+        "wooConsumerSecret": "Secreto de consumidor",
+        "wooWebhookSecret": "Secreto del webhook",
+        "shipstationApiKey": "Clave de API",
+        "lumexiaApiKey": "Clave de API"
+      },
+      "set": "Configurado",
+      "notSet": "Sin configurar",
+      "add": "Agregar",
+      "replace": "Reemplazar",
+      "clear": "Borrar",
+      "yesClear": "Sí, borrar",
+      "clearConfirm": "¿Borrar «{name}»? La integración dejará de funcionar hasta que se agregue un valor nuevo.",
+      "newValue": "Valor nuevo",
+      "writeOnly": "Se guarda cifrado. Nadie podrá verlo después de guardarlo; conserva tu propia copia si la necesitas."
+    }
   },
   "errors": {
     "unauthenticated": "Inicia sesión para continuar.",

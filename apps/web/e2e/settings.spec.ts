@@ -1,4 +1,5 @@
 import { expect, type Page, test } from "@playwright/test";
+import en from "@woolrus/i18n/messages/en.json" with { type: "json" };
 import { signInAs } from "./support/auth";
 
 /** On tablet width the nav is a drawer behind the menu button. */
@@ -13,17 +14,18 @@ async function openNav(page: Page) {
 test("an admin saves general settings and they persist after a reload", async ({ page }, info) => {
   await signInAs(page, ["ADMIN"]);
   await page.goto("/settings");
+  const general = page.getByRole("form", { name: "General" });
   const label = info.project.name === "desktop" ? "Sync interval" : "Station idle lock";
-  const field = page.getByLabel(label, { exact: false });
+  const field = general.getByLabel(label, { exact: false });
   const current = Number(await field.inputValue());
   const next = current === 7 ? 8 : 7;
 
   await field.fill(String(next));
-  await page.getByRole("button", { name: "Save" }).click();
-  await expect(page.getByRole("status")).toHaveText("Settings saved.");
+  await general.getByRole("button", { name: "Save" }).click();
+  await expect(general.getByRole("status")).toHaveText("Settings saved.");
 
   await page.reload();
-  await expect(page.getByLabel(label, { exact: false })).toHaveValue(String(next));
+  await expect(general.getByLabel(label, { exact: false })).toHaveValue(String(next));
 });
 
 test("invalid input shows the field-level message next to the field", async ({ page }) => {
@@ -37,7 +39,7 @@ test("invalid input shows the field-level message next to the field", async ({ p
   await shipFrom.getByLabel("City").fill("Austin");
   await shipFrom.getByLabel("State").fill("Texas");
   await shipFrom.getByLabel("ZIP code").fill("78701");
-  await page.getByRole("button", { name: "Save" }).click();
+  await page.getByRole("form", { name: "General" }).getByRole("button", { name: "Save" }).click();
 
   await expect(page.getByRole("alert").first()).toBeVisible();
   const state = shipFrom.getByRole("textbox", { name: "State" });
@@ -63,4 +65,102 @@ test("an admin sees the Settings link", async ({ page }) => {
   await openNav(page);
   await page.getByRole("link", { name: "Settings" }).click();
   await expect(page.getByRole("heading", { name: "Settings", level: 1 })).toBeVisible();
+});
+
+/** A secret's row on the settings page: its card, then the row named after the secret. */
+function secretRow(page: Page, card: string, secret: string) {
+  return page.getByRole("region", { name: card }).getByRole("group", { name: secret, exact: true });
+}
+
+test("replacing a secret marks it set without showing it, and clearing unsets it", async ({
+  page,
+}, info) => {
+  // Each project uses its own secret, and neither is one the dev stack's Woo sync relies on.
+  const [card, secret, name] =
+    info.project.name === "desktop"
+      ? ["WooCommerce", "Webhook secret", "wooWebhookSecret"]
+      : ["Lumexia", "API key", "lumexiaApiKey"];
+  const value = `e2e-${crypto.randomUUID()}`;
+  await signInAs(page, ["ADMIN"]);
+  await page.request.delete(`/api/v1/settings/secrets/${name}`);
+  await page.goto("/settings");
+  const row = secretRow(page, card, secret);
+  await expect(row.getByText("Not set", { exact: true })).toBeVisible();
+
+  await row.getByRole("button", { name: "Add" }).click();
+  await row.getByLabel("New value").fill(value);
+  await row.getByRole("button", { name: "Save" }).click();
+  await expect(row.getByText("Set", { exact: true })).toBeVisible();
+  await expect(row.getByLabel("New value")).toHaveCount(0);
+
+  await page.reload();
+  await expect(row.getByText("Set", { exact: true })).toBeVisible();
+  await row.getByRole("button", { name: "Replace" }).click();
+  await expect(row.getByLabel("New value")).toHaveValue("");
+  expect(await page.content()).not.toContain(value);
+  await row.getByRole("button", { name: "Cancel" }).click();
+
+  await row.getByRole("button", { name: "Clear" }).click();
+  await row.getByRole("button", { name: "Yes, clear" }).click();
+  await expect(row.getByText("Not set", { exact: true })).toBeVisible();
+});
+
+test("a missing encryption key is explained in the user's language", async ({ page }) => {
+  // The server half (setSecret refuses without a key) is covered by the core tests. The dev server
+  // has a key, so the API's answer is stubbed here to check the UI translates it.
+  await page.route("**/rpc/settings/setSecret", (route) =>
+    route.fulfill({
+      status: 400,
+      contentType: "application/json",
+      body: JSON.stringify({
+        json: {
+          defined: true,
+          code: "BAD_REQUEST",
+          status: 400,
+          message: "Bad Request",
+          data: { messageKey: "errors.settings.encryptionKeyMissing" },
+        },
+      }),
+    }),
+  );
+  await signInAs(page, ["ADMIN"]);
+  await page.goto("/settings");
+  const row = secretRow(page, "ShipStation", "API key");
+
+  await row.getByRole("button", { name: /^(Add|Replace)$/ }).click();
+  await row.getByLabel("New value").fill("anything");
+  await row.getByRole("button", { name: "Save" }).click();
+  await expect(row.getByRole("alert")).toHaveText(en.errors.settings.encryptionKeyMissing);
+});
+
+test("an http:// store URL shows the field message", async ({ page }) => {
+  await signInAs(page, ["ADMIN"]);
+  await page.goto("/settings");
+  const woo = page.getByRole("region", { name: "WooCommerce" });
+
+  await woo.getByLabel("Store URL").fill("http://shop.example.com");
+  await woo.getByRole("button", { name: "Save" }).click();
+  await expect(woo.getByText(en.errors.field.urlHttps)).toBeVisible();
+});
+
+test("an admin saves and removes the Lumexia base URL", async ({ page }, info) => {
+  test.skip(
+    info.project.name !== "desktop",
+    "one settings row: only one project writes this field",
+  );
+  await signInAs(page, ["ADMIN"]);
+  await page.goto("/settings");
+  const lumexia = page.getByRole("region", { name: "Lumexia" });
+
+  await lumexia.getByLabel("API base URL").fill("https://lumexia.example.com");
+  await lumexia.getByRole("button", { name: "Save" }).click();
+  await expect(lumexia.getByRole("status")).toHaveText("Saved.");
+  await page.reload();
+  await expect(lumexia.getByLabel("API base URL")).toHaveValue("https://lumexia.example.com");
+
+  await lumexia.getByLabel("API base URL").fill("");
+  await lumexia.getByRole("button", { name: "Save" }).click();
+  await expect(lumexia.getByRole("status")).toHaveText("Saved.");
+  await page.reload();
+  await expect(lumexia.getByLabel("API base URL")).toHaveValue("");
 });

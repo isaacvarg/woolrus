@@ -132,16 +132,21 @@ parallel e2e projects) editing different fields don't overwrite each other. Weig
 **Files:** `apps/web/src/app/(app)/settings/{page,general-form}.tsx`, `apps/web/src/app/(app)/layout.tsx`, `apps/web/src/server/actor.ts`, `apps/web/src/components/ui/fields.tsx` (Checkbox, RadioGroup/Radio, field descriptions), `apps/web/e2e/settings.spec.ts`, i18n
 **Scope:** M
 
-### T9: Settings page, Integrations section
+### T9: Settings page, Integrations section ✅
 **Description:** WooCommerce, ShipStation and Lumexia cards: URL fields (Woo, Lumexia) saved with `settings.update`,
 and per-secret "Set" / "Not set" with Replace (an empty write-only field) and Clear (with confirm).
 **Acceptance criteria:**
-- [ ] Replace sets the secret, and the field empties afterwards; the status shows "Set"
-- [ ] Clear returns the secret to "Not set"
-- [ ] An encryption-key-missing error is shown translated
+- [x] Replace sets the secret, and the field empties afterwards; the status shows "Set"
+- [x] Clear returns the secret to "Not set"
+- [x] An encryption-key-missing error is shown translated
 **Verification:** dev preview check
 **Dependencies:** T5, T8
-**Files:** `apps/web/src/app/(app)/settings/integrations.tsx`, `page.tsx`, i18n
+**Done differently:** an unset secret's button reads "Add" (Replace once it is set); Clear asks for confirmation
+inline. The encryption-key-missing e2e check stubs the `setSecret` response, since the dev server always has a key
+(the server side is covered by T5's core tests). Tests use the webhook secret and the Lumexia key, never the Woo
+consumer key/secret the dev stack falls back on, and clear them again. The General form is now named by its
+heading so tests can scope its Save button.
+**Files:** `apps/web/src/app/(app)/settings/{integrations,page,general-form}.tsx`, `apps/web/src/components/ui/fields.tsx` (descriptions wrap), `apps/web/e2e/settings.spec.ts`, i18n
 **Scope:** S
 
 ### T10: Settings e2e

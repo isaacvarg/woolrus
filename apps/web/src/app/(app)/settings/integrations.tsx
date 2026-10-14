@@ -1,0 +1,248 @@
+"use client";
+
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { AdminSettings, SecretName } from "@woolrus/contracts";
+import { useTranslations } from "next-intl";
+import { useId, useState } from "react";
+import { Form } from "react-aria-components";
+import { Button, TextField } from "@/components/ui/fields";
+import { useErrorMessage, useFieldErrors } from "@/lib/errors";
+import { orpc } from "@/lib/orpc";
+
+type UrlField = "wooStoreUrl" | "lumexiaBaseUrl";
+
+const integrations: { id: string; url?: UrlField; secrets: SecretName[] }[] = [
+  {
+    id: "woocommerce",
+    url: "wooStoreUrl",
+    secrets: ["wooConsumerKey", "wooConsumerSecret", "wooWebhookSecret"],
+  },
+  { id: "shipstation", secrets: ["shipstationApiKey"] },
+  { id: "lumexia", url: "lumexiaBaseUrl", secrets: ["lumexiaApiKey"] },
+];
+
+/** Every settings mutation returns the full admin settings: put them straight into the cache. */
+function useApplySettings() {
+  const queryClient = useQueryClient();
+  return (updated: AdminSettings) =>
+    queryClient.setQueryData(orpc.settings.get.queryKey(), updated);
+}
+
+export function IntegrationsSection() {
+  const t = useTranslations();
+  // Same query as the General section, which shows its loading and error states.
+  const settings = useQuery(orpc.settings.get.queryOptions());
+  if (!settings.data) return null;
+
+  return (
+    <div className="space-y-6">
+      <h2 className="text-2xl font-bold">{t("settings.integrations.title")}</h2>
+      {integrations.map(({ id, url, secrets }) => (
+        <IntegrationCard key={id} name={t(`settings.integrations.names.${id}`)}>
+          {url && <UrlForm field={url} saved={settings.data[url]} />}
+          <div className="divide-y divide-base-200">
+            {secrets.map((secret) => (
+              <SecretRow
+                key={secret}
+                name={secret}
+                configured={settings.data.secrets[secret]?.configured ?? false}
+              />
+            ))}
+          </div>
+        </IntegrationCard>
+      ))}
+    </div>
+  );
+}
+
+function IntegrationCard({ name, children }: { name: string; children: React.ReactNode }) {
+  const headingId = useId();
+  return (
+    <section aria-labelledby={headingId} className="card bg-base-100 shadow-sm">
+      <div className="card-body">
+        <h3 id={headingId} className="card-title">
+          {name}
+        </h3>
+        {children}
+      </div>
+    </section>
+  );
+}
+
+function UrlForm({ field, saved }: { field: UrlField; saved: string | null }) {
+  const t = useTranslations();
+  const errorMessage = useErrorMessage();
+  const fieldErrors = useFieldErrors();
+  const applySettings = useApplySettings();
+  const [value, setValue] = useState(saved ?? "");
+
+  const save = useMutation(
+    orpc.settings.update.mutationOptions({
+      onSuccess: (updated) => {
+        setValue(updated[field] ?? "");
+        applySettings(updated);
+      },
+    }),
+  );
+  const errors = fieldErrors(save.error);
+
+  return (
+    <Form
+      className="flex flex-wrap items-end gap-x-4"
+      validationErrors={errors}
+      onSubmit={(event) => {
+        event.preventDefault();
+        const url = value.trim();
+        save.mutate({ [field]: url === "" ? null : url });
+      }}
+    >
+      <div className="min-w-64 flex-1">
+        <TextField
+          label={t(`settings.integrations.${field}`)}
+          name={field}
+          inputMode="url"
+          value={value}
+          onChange={(next) => {
+            if (save.isSuccess) save.reset();
+            setValue(next);
+          }}
+        />
+      </div>
+      <Button type="submit" isPending={save.isPending} className="btn-primary mb-1">
+        {t("common.save")}
+      </Button>
+      {save.error && Object.keys(errors).length === 0 && (
+        <p role="alert" className="basis-full text-error">
+          {errorMessage(save.error)}
+        </p>
+      )}
+      <p role="status" className="basis-full text-success">
+        {save.isSuccess ? t("settings.integrations.saved") : ""}
+      </p>
+    </Form>
+  );
+}
+
+/**
+ * One write-only secret: shows only whether it is set. Replacing opens an empty field; the current
+ * value is never sent to the browser, so there is nothing to pre-fill.
+ */
+function SecretRow({ name, configured }: { name: SecretName; configured: boolean }) {
+  const t = useTranslations();
+  const errorMessage = useErrorMessage();
+  const fieldErrors = useFieldErrors();
+  const applySettings = useApplySettings();
+  const labelId = useId();
+  const [mode, setMode] = useState<"idle" | "editing" | "confirmingClear">("idle");
+  const [value, setValue] = useState("");
+  const label = t(`settings.integrations.secrets.${name}`);
+
+  const close = () => {
+    setValue("");
+    setMode("idle");
+  };
+  const set = useMutation(
+    orpc.settings.setSecret.mutationOptions({
+      onSuccess: (updated) => {
+        applySettings(updated);
+        close();
+      },
+    }),
+  );
+  const clear = useMutation(
+    orpc.settings.clearSecret.mutationOptions({
+      onSuccess: (updated) => {
+        applySettings(updated);
+        close();
+      },
+    }),
+  );
+  const open = (next: typeof mode) => {
+    set.reset();
+    clear.reset();
+    setMode(next);
+  };
+  const error = set.error ?? clear.error;
+  const errors = fieldErrors(set.error);
+
+  return (
+    <fieldset aria-labelledby={labelId} className="py-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <span id={labelId} className="font-medium">
+          {label}
+        </span>
+        <span className={`badge ${configured ? "badge-success" : "badge-ghost"}`}>
+          {configured ? t("settings.integrations.set") : t("settings.integrations.notSet")}
+        </span>
+        {mode === "idle" && (
+          <div className="ml-auto flex gap-2">
+            <Button className="btn-outline btn-sm" onPress={() => open("editing")}>
+              {configured ? t("settings.integrations.replace") : t("settings.integrations.add")}
+            </Button>
+            {configured && (
+              <Button
+                className="btn-ghost btn-sm text-error"
+                onPress={() => open("confirmingClear")}
+              >
+                {t("settings.integrations.clear")}
+              </Button>
+            )}
+          </div>
+        )}
+      </div>
+
+      {mode === "editing" && (
+        <Form
+          className="mt-2"
+          validationErrors={errors}
+          onSubmit={(event) => {
+            event.preventDefault();
+            set.mutate({ name, value });
+          }}
+        >
+          <TextField
+            label={t("settings.integrations.newValue")}
+            description={t("settings.integrations.writeOnly")}
+            name="value"
+            type="password"
+            autoComplete="new-password"
+            autoFocus
+            isRequired
+            value={value}
+            onChange={setValue}
+          />
+          <div className="flex justify-end gap-2">
+            <Button className="btn-ghost" onPress={close}>
+              {t("common.cancel")}
+            </Button>
+            <Button type="submit" isPending={set.isPending} className="btn-primary">
+              {t("common.save")}
+            </Button>
+          </div>
+        </Form>
+      )}
+
+      {mode === "confirmingClear" && (
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <p>{t("settings.integrations.clearConfirm", { name: label })}</p>
+          <Button
+            className="btn-error btn-sm"
+            isPending={clear.isPending}
+            onPress={() => clear.mutate({ name })}
+          >
+            {t("settings.integrations.yesClear")}
+          </Button>
+          <Button className="btn-ghost btn-sm" onPress={close}>
+            {t("common.cancel")}
+          </Button>
+        </div>
+      )}
+
+      {error && Object.keys(errors).length === 0 && (
+        <p role="alert" className="mt-1 text-error">
+          {errorMessage(error)}
+        </p>
+      )}
+    </fieldset>
+  );
+}
