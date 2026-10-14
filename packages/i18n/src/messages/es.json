@@ -99,6 +99,7 @@
     },
     "field": {
       "invalid": "Este valor no es válido.",
+      "required": "Este campo es obligatorio.",
       "tooSmall": "Este valor es demasiado pequeño.",
       "tooBig": "Este valor es demasiado grande.",
       "urlHttps": "Usa una dirección https://.",

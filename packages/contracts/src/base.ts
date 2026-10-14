@@ -20,12 +20,19 @@ export const base = oc.errors({
   BAD_REQUEST: { data: AppErrorData },
 });
 
-/** The parts of a Standard Schema issue we use; Zod's issues also carry a `code`. */
+/** The parts of a Standard Schema issue we use; Zod's issues also carry `code`, `origin`, `minimum`. */
 type Issue = {
   message: string;
   path?: readonly (PropertyKey | { key: PropertyKey })[];
   code?: string;
+  origin?: string;
+  minimum?: unknown;
 };
+
+/** Text with `min(1)` that came in empty: "required" reads better than "too small". */
+function isEmptyRequiredText(issue: Issue): boolean {
+  return issue.code === "too_small" && issue.origin === "string" && issue.minimum === 1;
+}
 
 const keyByCode: Record<string, ErrorCode> = {
   too_small: "errors.field.tooSmall",
@@ -45,9 +52,9 @@ export function toFieldErrors(issues: readonly Issue[]): Record<string, ErrorCod
       .map((segment) => String(typeof segment === "object" ? segment.key : segment))
       .join(".");
     if (path in fields) continue;
-    fields[path] = isErrorCode(issue.message)
-      ? issue.message
-      : (keyByCode[issue.code ?? ""] ?? "errors.field.invalid");
+    if (isErrorCode(issue.message)) fields[path] = issue.message;
+    else if (isEmptyRequiredText(issue)) fields[path] = "errors.field.required";
+    else fields[path] = keyByCode[issue.code ?? ""] ?? "errors.field.invalid";
   }
   return fields;
 }

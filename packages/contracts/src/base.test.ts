@@ -23,6 +23,14 @@ describe("toFieldErrors", () => {
     });
   });
 
+  it("calls an empty required text 'required', not 'too small'", () => {
+    const schema = z.object({ name: z.string().trim().min(1), phone: z.string().min(7) });
+    expect(toFieldErrors(issuesOf(schema, { name: "  ", phone: "123" }))).toEqual({
+      name: "errors.field.required",
+      phone: "errors.field.tooSmall",
+    });
+  });
+
   it("joins nested paths with dots and keeps the first issue per field", () => {
     const schema = z.object({
       address: z.object({
