@@ -1,0 +1,136 @@
+// Settings, integration bookkeeping, audit and API idempotency.
+
+enum WeightDisplay {
+  LB_DECIMAL
+  LB_OZ
+
+  @@map("weight_display")
+}
+
+/// Single-row table (id is always 1). Secrets are AES-GCM encrypted with SETTINGS_ENCRYPTION_KEY
+/// and never leave the server (FR-SET-05, NFR-SEC-03).
+model Settings {
+  id Int @id @default(1)
+
+  shipFromAddress      Json?   @map("ship_from_address")
+  wooStoreUrl          String? @map("woo_store_url")
+  wooConsumerKeyEnc    String? @map("woo_consumer_key_enc")
+  wooConsumerSecretEnc String? @map("woo_consumer_secret_enc")
+  wooWebhookSecretEnc  String? @map("woo_webhook_secret_enc")
+  shipstationApiKeyEnc String? @map("shipstation_api_key_enc")
+  lumexiaBaseUrl       String? @map("lumexia_base_url")
+  lumexiaApiKeyEnc     String? @map("lumexia_api_key_enc")
+
+  syncIntervalMinutes    Int           @default(5) @map("sync_interval_minutes")
+  stationIdleLockMinutes Int           @default(10) @map("station_idle_lock_minutes")
+  qaMustDifferFromPacker Boolean       @default(false) @map("qa_must_differ_from_packer")
+  weightDisplay          WeightDisplay @default(LB_OZ) @map("weight_display")
+  /// Per-stage SLA thresholds in minutes, e.g. { "PENDING": 240, "PICKING": 60 } (FR-LIST-05).
+  stageSlaMinutes        Json          @default("{}") @map("stage_sla_minutes")
+  /// Days after completion before customer PII is purged (NFR-SEC-06). Null = keep.
+  piiRetentionDays       Int?          @map("pii_retention_days")
+
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@map("settings")
+}
+
+enum SyncType {
+  ORDERS_POLL
+  ORDERS_WEBHOOK
+  PRODUCTS
+  CARRIERS
+
+  @@map("sync_type")
+}
+
+enum SyncStatus {
+  RUNNING
+  SUCCEEDED
+  PARTIAL
+  FAILED
+
+  @@map("sync_status")
+}
+
+model SyncRun {
+  id               String     @id @default(uuid(7)) @db.Uuid
+  type             SyncType
+  status           SyncStatus @default(RUNNING)
+  recordsProcessed Int        @default(0) @map("records_processed")
+  recordsFailed    Int        @default(0) @map("records_failed")
+  error            String?
+  startedAt        DateTime   @default(now()) @map("started_at") @db.Timestamptz(3)
+  finishedAt       DateTime?  @map("finished_at") @db.Timestamptz(3)
+
+  errors SyncRunError[]
+
+  @@index([type, startedAt(sort: Desc)])
+  @@map("sync_runs")
+}
+
+model SyncRunError {
+  id         String   @id @default(uuid(7)) @db.Uuid
+  syncRunId  String   @map("sync_run_id") @db.Uuid
+  externalId String   @map("external_id")
+  error      String
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  syncRun SyncRun @relation(fields: [syncRunId], references: [id], onDelete: Cascade)
+
+  @@index([syncRunId])
+  @@map("sync_run_errors")
+}
+
+/// Inbox for incoming webhooks (WooCommerce, later others). Stored first, processed by the worker,
+/// deduplicated on (source, deliveryId).
+model InboundWebhook {
+  id          String    @id @default(uuid(7)) @db.Uuid
+  source      String
+  deliveryId  String    @map("delivery_id")
+  topic       String
+  payload     Json
+  receivedAt  DateTime  @default(now()) @map("received_at") @db.Timestamptz(3)
+  processedAt DateTime? @map("processed_at") @db.Timestamptz(3)
+  error       String?
+
+  @@unique([source, deliveryId])
+  @@index([processedAt])
+  @@map("inbound_webhooks")
+}
+
+/// Append-only audit trail of changes made through the API (FR-WF-08, admin forensics).
+model AuditEvent {
+  id         String   @id @default(uuid(7)) @db.Uuid
+  actorId    String?  @map("actor_id") @db.Uuid
+  stationId  String?  @map("station_id") @db.Uuid
+  entityType String   @map("entity_type")
+  entityId   String   @map("entity_id")
+  action     String
+  before     Json?
+  after      Json?
+  requestId  String?  @map("request_id")
+  at         DateTime @default(now()) @db.Timestamptz(3)
+
+  actor   User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  station Station? @relation(fields: [stationId], references: [id], onDelete: SetNull)
+
+  @@index([entityType, entityId, at])
+  @@index([actorId, at])
+  @@map("audit_events")
+}
+
+/// Client-supplied idempotency keys for mutations, so a replayed request (flaky Wi-Fi, a future
+/// offline Android client) returns the original result instead of acting twice.
+model IdempotentRequest {
+  key       String   @id
+  userId    String?  @map("user_id") @db.Uuid
+  procedure String
+  response  Json
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@map("idempotent_requests")
+}

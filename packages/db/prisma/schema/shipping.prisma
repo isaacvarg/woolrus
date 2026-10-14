@@ -1,0 +1,210 @@
+// Boxes, packages, carriers, rates, labels and manifests.
+
+model Box {
+  id            String    @id @default(uuid(7)) @db.Uuid
+  name          String    @unique
+  // Inner dimensions: what fits. Outer dimensions: what the carrier measures (defaults to inner when null).
+  lengthIn      Decimal   @map("length_in") @db.Decimal(8, 2)
+  widthIn       Decimal   @map("width_in") @db.Decimal(8, 2)
+  heightIn      Decimal   @map("height_in") @db.Decimal(8, 2)
+  outerLengthIn Decimal?  @map("outer_length_in") @db.Decimal(8, 2)
+  outerWidthIn  Decimal?  @map("outer_width_in") @db.Decimal(8, 2)
+  outerHeightIn Decimal?  @map("outer_height_in") @db.Decimal(8, 2)
+  tareWeightOz  Decimal?  @map("tare_weight_oz") @db.Decimal(10, 2)
+  maxWeightOz   Decimal?  @map("max_weight_oz") @db.Decimal(10, 2)
+  archivedAt    DateTime? @map("archived_at") @db.Timestamptz(3)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  packages Package[]
+
+  @@map("boxes")
+}
+
+/// One physical box being shipped.
+model Package {
+  id                    String   @id @default(uuid(7)) @db.Uuid
+  orderId               String   @map("order_id") @db.Uuid
+  /// 1-based position within the order ("Package 2 of 3").
+  number                Int
+  boxId                 String?  @map("box_id") @db.Uuid
+  weightOz              Decimal? @map("weight_oz") @db.Decimal(10, 2)
+  weightOverrideReason  String?  @map("weight_override_reason")
+  // Override for non-standard boxes; falls back to the box's outer dimensions.
+  lengthIn              Decimal? @map("length_in") @db.Decimal(8, 2)
+  widthIn               Decimal? @map("width_in") @db.Decimal(8, 2)
+  heightIn              Decimal? @map("height_in") @db.Decimal(8, 2)
+  shipstationShipmentId String?  @map("shipstation_shipment_id")
+  createdAt             DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt             DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  order         Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  box           Box?            @relation(fields: [boxId], references: [id], onDelete: Restrict)
+  items         PackageItem[]
+  rates         ShippingRate[]
+  labels        ShippingLabel[]
+  notes         Note[]
+  qualityIssues QualityIssue[]
+
+  @@unique([orderId, number])
+  @@map("packages")
+}
+
+/// How many units of an order line are in a package. Splitting a line across boxes creates
+/// several PackageItems; the OrderItem itself never changes.
+model PackageItem {
+  id             String    @id @default(uuid(7)) @db.Uuid
+  packageId      String    @map("package_id") @db.Uuid
+  orderItemId    String    @map("order_item_id") @db.Uuid
+  quantity       Int
+  packedById     String?   @map("packed_by_id") @db.Uuid
+  packedAt       DateTime  @default(now()) @map("packed_at") @db.Timestamptz(3)
+  qaVerifiedById String?   @map("qa_verified_by_id") @db.Uuid
+  qaVerifiedAt   DateTime? @map("qa_verified_at") @db.Timestamptz(3)
+  // Lot traceability (Lumexia). Null until lot capture is enabled for the product.
+  lotCode        String?   @map("lot_code")
+  lumexiaLotId   String?   @map("lumexia_lot_id")
+
+  package      Package   @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  orderItem    OrderItem @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  packedBy     User?     @relation("PackedBy", fields: [packedById], references: [id], onDelete: SetNull)
+  qaVerifiedBy User?     @relation("QaVerifiedBy", fields: [qaVerifiedById], references: [id], onDelete: SetNull)
+
+  @@index([packageId])
+  @@index([orderItemId])
+  @@index([lotCode])
+  @@map("package_items")
+}
+
+model ShippingCarrier {
+  id                   String   @id @default(uuid(7)) @db.Uuid
+  shipstationCarrierId String   @unique @map("shipstation_carrier_id")
+  code                 String
+  name                 String
+  nickname             String?
+  isPrimary            Boolean  @default(false) @map("is_primary")
+  enabled              Boolean  @default(false)
+  createdAt            DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt            DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  services  CarrierService[]
+  manifests Manifest[]
+
+  @@map("shipping_carriers")
+}
+
+model CarrierService {
+  id            String   @id @default(uuid(7)) @db.Uuid
+  carrierId     String   @map("carrier_id") @db.Uuid
+  code          String
+  name          String
+  domestic      Boolean
+  international Boolean
+  enabled       Boolean  @default(false)
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  carrier ShippingCarrier @relation(fields: [carrierId], references: [id], onDelete: Cascade)
+
+  @@unique([carrierId, code])
+  @@map("carrier_services")
+}
+
+model ShippingRate {
+  id                  String    @id @default(uuid(7)) @db.Uuid
+  packageId           String    @map("package_id") @db.Uuid
+  shipstationRateId   String    @map("shipstation_rate_id")
+  carrierCode         String    @map("carrier_code")
+  serviceCode         String    @map("service_code")
+  serviceName         String    @map("service_name")
+  amountCents         Int       @map("amount_cents")
+  currency            String    @db.Char(3)
+  deliveryDays        Int?      @map("delivery_days")
+  estimatedDeliveryAt DateTime? @map("estimated_delivery_at") @db.Timestamptz(3)
+  guaranteed          Boolean   @default(false)
+  trackable           Boolean   @default(true)
+  selected            Boolean   @default(false)
+  fetchedAt           DateTime  @default(now()) @map("fetched_at") @db.Timestamptz(3)
+  expiresAt           DateTime? @map("expires_at") @db.Timestamptz(3)
+
+  package Package @relation(fields: [packageId], references: [id], onDelete: Cascade)
+
+  @@index([packageId])
+  @@map("shipping_rates")
+}
+
+enum LabelStatus {
+  /// Intent recorded, purchase call in flight (NFR-REL-02). Reconciled by the worker if the call's fate is unknown.
+  PURCHASING
+  ACTIVE
+  PURCHASE_FAILED
+  VOID_REQUESTED
+  VOIDED
+  VOID_REJECTED
+
+  @@map("label_status")
+}
+
+/// A purchased (or attempted) label. Voided labels are kept for history and billing reconciliation.
+/// Exactly one of packageId / returnId is set (check constraint in migration).
+model ShippingLabel {
+  id                    String      @id @default(uuid(7)) @db.Uuid
+  packageId             String?     @map("package_id") @db.Uuid
+  returnId              String?     @map("return_id") @db.Uuid
+  status                LabelStatus
+  /// Sent to ShipStation so a retried purchase can never buy twice.
+  idempotencyKey        String      @unique @map("idempotency_key")
+  shipstationLabelId    String?     @unique @map("shipstation_label_id")
+  shipstationShipmentId String?     @map("shipstation_shipment_id")
+  trackingNumber        String?     @map("tracking_number")
+  carrierCode           String      @map("carrier_code")
+  serviceCode           String      @map("service_code")
+  costCents             Int?        @map("cost_cents")
+  currency              String      @db.Char(3)
+  format                String      @default("pdf")
+  pdfUrl                String?     @map("pdf_url")
+  pngUrl                String?     @map("png_url")
+  shipDate              DateTime?   @map("ship_date") @db.Date
+  error                 String?
+  purchasedById         String?     @map("purchased_by_id") @db.Uuid
+  purchasedAt           DateTime?   @map("purchased_at") @db.Timestamptz(3)
+  // Printing is separate from shipping (FR-SHIP-11).
+  printCount            Int         @default(0) @map("print_count")
+  lastPrintedAt         DateTime?   @map("last_printed_at") @db.Timestamptz(3)
+  voidedById            String?     @map("voided_by_id") @db.Uuid
+  voidRequestedAt       DateTime?   @map("void_requested_at") @db.Timestamptz(3)
+  voidedAt              DateTime?   @map("voided_at") @db.Timestamptz(3)
+  voidReason            String?     @map("void_reason")
+  manifestId            String?     @map("manifest_id") @db.Uuid
+  createdAt             DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt             DateTime    @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  package       Package?       @relation(fields: [packageId], references: [id], onDelete: Restrict)
+  return        ReturnRequest? @relation(fields: [returnId], references: [id], onDelete: Restrict)
+  purchasedBy   User?          @relation("LabelPurchasedBy", fields: [purchasedById], references: [id], onDelete: SetNull)
+  voidedBy      User?          @relation("LabelVoidedBy", fields: [voidedById], references: [id], onDelete: SetNull)
+  manifest      Manifest?      @relation(fields: [manifestId], references: [id], onDelete: SetNull)
+  qualityIssues QualityIssue[]
+
+  @@index([packageId])
+  @@index([trackingNumber])
+  @@index([status])
+  @@map("shipping_labels")
+}
+
+/// End-of-day SCAN form per carrier (FR-SHIP-14).
+model Manifest {
+  id                    String   @id @default(uuid(7)) @db.Uuid
+  carrierId             String   @map("carrier_id") @db.Uuid
+  shipstationManifestId String   @unique @map("shipstation_manifest_id")
+  shipDate              DateTime @map("ship_date") @db.Date
+  formUrl               String?  @map("form_url")
+  createdById           String?  @map("created_by_id") @db.Uuid
+  createdAt             DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  carrier   ShippingCarrier @relation(fields: [carrierId], references: [id], onDelete: Restrict)
+  createdBy User?           @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  labels    ShippingLabel[]
+
+  @@map("manifests")
+}

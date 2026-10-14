@@ -1,0 +1,28 @@
+{
+  "name": "woolrus",
+  "private": true,
+  "packageManager": "pnpm@12.11.2",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "lint": "biome check .",
+    "format": "biome check --write .",
+    "db:generate": "pnpm --filter @woolrus/db generate",
+    "db:migrate": "pnpm --filter @woolrus/db migrate:dev",
+    "db:deploy": "pnpm --filter @woolrus/db migrate:deploy",
+    "db:seed": "pnpm --filter @woolrus/db seed",
+    "db:studio": "pnpm --filter @woolrus/db studio",
+    "stack:up": "docker compose -f docker/compose.dev.yml up -d",
+    "stack:down": "docker compose -f docker/compose.dev.yml down"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.15",
+    "turbo": "2.11.8",
+    "typescript": "6.0.3"
+  }
+}

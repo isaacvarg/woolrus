@@ -1,0 +1,21 @@
+{
+  "name": "@woolrus/contracts",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc"
+  },
+  "dependencies": {
+    "@orpc/contract": "1.15.7",
+    "@woolrus/i18n": "workspace:*",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "@woolrus/config": "workspace:*"
+  }
+}

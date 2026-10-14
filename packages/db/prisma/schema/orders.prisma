@@ -1,0 +1,216 @@
+// Orders and the fulfillment workflow.
+// OrderItem is "what was ordered" and is never split or merged; placement in boxes lives in PackageItem.
+
+enum WorkflowStatus {
+  PENDING
+  PICKING
+  PACKING
+  QA
+  READY
+  COMPLETED
+  ON_HOLD
+  CANCELLED
+
+  @@map("workflow_status")
+}
+
+/// Where in the process something happened (voids, quality issues).
+enum FulfillmentStage {
+  INTAKE
+  PICKING
+  PACKING
+  QA
+  SHIPPING
+  CUSTOMER
+
+  @@map("fulfillment_stage")
+}
+
+enum PickStatus {
+  PENDING
+  PICKED
+  OUT_OF_STOCK
+  SUBSTITUTED
+
+  @@map("pick_status")
+}
+
+enum WooPushStatus {
+  NOT_NEEDED
+  PENDING
+  SUCCEEDED
+  FAILED
+
+  @@map("woo_push_status")
+}
+
+model Order {
+  id                   String   @id @default(uuid(7)) @db.Uuid
+  wooOrderId           Int      @unique @map("woo_order_id")
+  number               String
+  wooStatus            String   @map("woo_status")
+  currency             String   @db.Char(3)
+  customerName         String   @map("customer_name")
+  customerEmail        String?  @map("customer_email")
+  shippingAddress      Json     @map("shipping_address")
+  billingAddress       Json     @map("billing_address")
+  customerNote         String?  @map("customer_note")
+  paymentMethod        String?  @map("payment_method")
+  totalCents           Int      @map("total_cents")
+  shippingMethod       String?  @map("shipping_method")
+  shippingChargedCents Int      @default(0) @map("shipping_charged_cents")
+  orderedAt            DateTime @map("ordered_at") @db.Timestamptz(3)
+  wooModifiedAt        DateTime @map("woo_modified_at") @db.Timestamptz(3)
+  syncedAt             DateTime @map("synced_at") @db.Timestamptz(3)
+  rawPayload           Json     @map("raw_payload")
+
+  // Workflow
+  status          WorkflowStatus  @default(PENDING)
+  statusChangedAt DateTime        @default(now()) @map("status_changed_at") @db.Timestamptz(3)
+  priority        Int             @default(0)
+  holdReason      String?         @map("hold_reason")
+  heldFromStatus  WorkflowStatus? @map("held_from_status")
+  claimedById     String?         @map("claimed_by_id") @db.Uuid
+  claimedAt       DateTime?       @map("claimed_at") @db.Timestamptz(3)
+  completedAt     DateTime?       @map("completed_at") @db.Timestamptz(3)
+
+  // Store changed the order after import (FR-SYNC-10): flagged for a person, not silently applied.
+  externalChangeDetectedAt DateTime? @map("external_change_detected_at") @db.Timestamptz(3)
+  externalChangeSummary    Json?     @map("external_change_summary")
+
+  // Push of Completed + tracking back to WooCommerce (FR-SHIP-06/07/10)
+  wooPushStatus   WooPushStatus @default(NOT_NEEDED) @map("woo_push_status")
+  wooPushAttempts Int           @default(0) @map("woo_push_attempts")
+  wooPushedAt     DateTime?     @map("woo_pushed_at") @db.Timestamptz(3)
+  wooPushError    String?       @map("woo_push_error")
+
+  /// Optimistic locking (NFR-REL-04): every workflow write increments this and checks the old value.
+  version   Int      @default(1)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  claimedBy     User?             @relation("OrderClaimedBy", fields: [claimedById], references: [id], onDelete: SetNull)
+  items         OrderItem[]
+  packages      Package[]
+  stageEvents   OrderStageEvent[]
+  notes         Note[]
+  qualityIssues QualityIssue[]
+  voids         ItemVoid[]
+  returns       ReturnRequest[]
+
+  @@index([status, priority(sort: Desc), orderedAt])
+  @@index([number])
+  @@index([customerName])
+  @@map("orders")
+}
+
+model OrderItem {
+  id             String  @id @default(uuid(7)) @db.Uuid
+  orderId        String  @map("order_id") @db.Uuid
+  wooLineItemId  Int     @unique @map("woo_line_item_id")
+  productId      String? @map("product_id") @db.Uuid
+  variationId    String? @map("variation_id") @db.Uuid
+  /// Bundled products: child lines point at their bundle line.
+  bundleParentId String? @map("bundle_parent_id") @db.Uuid
+  name           String
+  sku            String?
+  quantity       Int
+  unitPriceCents Int     @map("unit_price_cents")
+  imageUrl       String? @map("image_url")
+  attributes     Json    @default("[]")
+  metaData       Json    @default("[]") @map("meta_data")
+
+  pickStatus       PickStatus @default(PENDING) @map("pick_status")
+  pickedQuantity   Int        @default(0) @map("picked_quantity")
+  pickedById       String?    @map("picked_by_id") @db.Uuid
+  pickedAt         DateTime?  @map("picked_at") @db.Timestamptz(3)
+  substitutionNote String?    @map("substitution_note")
+  createdAt        DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  order         Order             @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product       Product?          @relation(fields: [productId], references: [id], onDelete: SetNull)
+  variation     ProductVariation? @relation(fields: [variationId], references: [id], onDelete: SetNull)
+  bundleParent  OrderItem?        @relation("Bundle", fields: [bundleParentId], references: [id], onDelete: SetNull)
+  bundleItems   OrderItem[]       @relation("Bundle")
+  pickedBy      User?             @relation("ItemPickedBy", fields: [pickedById], references: [id], onDelete: SetNull)
+  packageItems  PackageItem[]
+  notes         Note[]
+  qualityIssues QualityIssue[]
+  voids         ItemVoid[]
+  returnItems   ReturnItem[]
+
+  @@index([orderId])
+  @@map("order_items")
+}
+
+/// Append-only history of workflow transitions (FR-WF-04/05/08). Backs the history panel and cycle-time reports.
+model OrderStageEvent {
+  id         String          @id @default(uuid(7)) @db.Uuid
+  orderId    String          @map("order_id") @db.Uuid
+  fromStatus WorkflowStatus? @map("from_status")
+  toStatus   WorkflowStatus  @map("to_status")
+  actorId    String?         @map("actor_id") @db.Uuid
+  stationId  String?         @map("station_id") @db.Uuid
+  reason     String?
+  at         DateTime        @default(now()) @db.Timestamptz(3)
+
+  order   Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  actor   User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  station Station? @relation(fields: [stationId], references: [id], onDelete: SetNull)
+
+  @@index([orderId, at])
+  @@index([toStatus, at])
+  @@map("order_stage_events")
+}
+
+/// Removal of (part of) a line from fulfillment, kept for resolution in the store (FR-VOID-*).
+enum VoidResolution {
+  HANDLED_MANUALLY
+  REFUNDED
+  LINE_EDITED
+
+  @@map("void_resolution")
+}
+
+model ItemVoid {
+  id              String           @id @default(uuid(7)) @db.Uuid
+  orderId         String           @map("order_id") @db.Uuid
+  orderItemId     String           @map("order_item_id") @db.Uuid
+  quantity        Int
+  reason          String
+  stage           FulfillmentStage
+  voidedById      String?          @map("voided_by_id") @db.Uuid
+  voidedAt        DateTime         @default(now()) @map("voided_at") @db.Timestamptz(3)
+  undoneById      String?          @map("undone_by_id") @db.Uuid
+  undoneAt        DateTime?        @map("undone_at") @db.Timestamptz(3)
+  resolution      VoidResolution?
+  resolutionNotes String?          @map("resolution_notes")
+  wooRefundId     Int?             @map("woo_refund_id")
+  resolvedById    String?          @map("resolved_by_id") @db.Uuid
+  resolvedAt      DateTime?        @map("resolved_at") @db.Timestamptz(3)
+
+  order      Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderItem  OrderItem @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  voidedBy   User?     @relation("VoidedBy", fields: [voidedById], references: [id], onDelete: SetNull)
+  undoneBy   User?     @relation("VoidUndoneBy", fields: [undoneById], references: [id], onDelete: SetNull)
+  resolvedBy User?     @relation("VoidResolvedBy", fields: [resolvedById], references: [id], onDelete: SetNull)
+
+  @@index([orderId])
+  @@index([resolvedAt])
+  @@map("item_voids")
+}
+
+/// Rules that compute Order.priority (FR-LIST-04). `condition` is a JSON rule evaluated in core.
+model PriorityRule {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  name      String
+  enabled   Boolean  @default(true)
+  position  Int
+  condition Json
+  priority  Int
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@map("priority_rules")
+}

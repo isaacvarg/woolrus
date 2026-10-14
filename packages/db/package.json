@@ -1,0 +1,32 @@
+{
+  "name": "@woolrus/db",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./enums": "./src/enums.ts"
+  },
+  "scripts": {
+    "generate": "prisma generate",
+    "migrate:dev": "prisma migrate dev",
+    "migrate:deploy": "prisma migrate deploy",
+    "seed": "prisma db seed",
+    "studio": "prisma studio",
+    "typecheck": "tsc",
+    "migrate:check": "prisma migrate diff --from-config-datasource --to-schema prisma/schema --exit-code"
+  },
+  "dependencies": {
+    "@prisma/adapter-pg": "7.10.0",
+    "@prisma/client": "7.10.0",
+    "pg": "^8.23.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "@types/pg": "^8.23.1",
+    "@woolrus/config": "workspace:*",
+    "dotenv": "^18.0.7",
+    "prisma": "7.10.0",
+    "tsx": "^4.23.15"
+  }
+}

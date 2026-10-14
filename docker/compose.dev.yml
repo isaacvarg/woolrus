@@ -1,0 +1,87 @@
+# Local development stack. Runs alongside other projects: own project name, non-default ports.
+name: woolrus-v2-dev
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: woolrus
+      POSTGRES_PASSWORD: woolrus
+      POSTGRES_DB: woolrus
+    ports:
+      - "5442:5432"
+    volumes:
+      - postgres:/var/lib/postgresql/data
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U woolrus"]
+      interval: 2s
+      retries: 30
+
+  storage:
+    image: rustfs/rustfs:latest
+    environment:
+      RUSTFS_ACCESS_KEY: woolrus
+      RUSTFS_SECRET_KEY: woolrus-secret
+      RUSTFS_CONSOLE_ENABLE: "true"
+    ports:
+      - "9010:9000"
+      - "9011:9001"
+    volumes:
+      - storage:/data
+
+  mariadb:
+    image: mariadb:11
+    environment:
+      MARIADB_ROOT_PASSWORD: root
+      MARIADB_DATABASE: wordpress
+      MARIADB_USER: wordpress
+      MARIADB_PASSWORD: wordpress
+    volumes:
+      - mariadb:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 2s
+      retries: 30
+
+  wordpress:
+    image: wordpress:7-php8.4-apache
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    environment:
+      WORDPRESS_DB_HOST: mariadb
+      WORDPRESS_DB_USER: wordpress
+      WORDPRESS_DB_PASSWORD: wordpress
+      WORDPRESS_DB_NAME: wordpress
+      WORDPRESS_CONFIG_EXTRA: |
+        define('WP_ENVIRONMENT_TYPE', 'local');
+    ports:
+      - "8090:80"
+    volumes:
+      - wordpress:/var/www/html
+
+  # One-shot: installs WordPress + WooCommerce and seeds products and processing orders.
+  # Re-running is safe; it skips work that is already done.
+  wordpress-setup:
+    image: wordpress:cli-php8.4
+    user: "33:33"
+    depends_on:
+      - wordpress
+    environment:
+      WORDPRESS_DB_HOST: mariadb
+      WORDPRESS_DB_USER: wordpress
+      WORDPRESS_DB_PASSWORD: wordpress
+      WORDPRESS_DB_NAME: wordpress
+      WP_URL: http://localhost:8090
+    volumes:
+      - wordpress:/var/www/html
+      - ./wordpress/setup.sh:/setup.sh:ro
+    entrypoint: ["sh", "/setup.sh"]
+    restart: "no"
+
+volumes:
+  postgres:
+  storage:
+  mariadb:
+  wordpress:

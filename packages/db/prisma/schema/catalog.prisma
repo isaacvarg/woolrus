@@ -1,0 +1,66 @@
+// Products mirrored from WooCommerce, plus warehouse-only fields (bin, customs, Lumexia link).
+
+model Product {
+  id                 String   @id @default(uuid(7)) @db.Uuid
+  wooProductId       Int      @unique @map("woo_product_id")
+  type               String // simple | variable | grouped | bundle | ... (as reported by Woo)
+  name               String
+  sku                String?
+  imageUrl           String?  @map("image_url")
+  priceCents         Int?     @map("price_cents")
+  weightOz           Decimal? @map("weight_oz") @db.Decimal(10, 2)
+  lengthIn           Decimal? @map("length_in") @db.Decimal(8, 2)
+  widthIn            Decimal? @map("width_in") @db.Decimal(8, 2)
+  heightIn           Decimal? @map("height_in") @db.Decimal(8, 2)
+  stockQuantity      Int?     @map("stock_quantity")
+  binLocation        String?  @map("bin_location")
+  barcode            String?
+  // Customs (FR-SHIP-13)
+  hsCode             String?  @map("hs_code")
+  countryOfOrigin    String?  @map("country_of_origin") @db.Char(2)
+  customsDescription String?  @map("customs_description")
+  // Link to the item in Lumexia (ERP)
+  lumexiaItemId      String?  @map("lumexia_item_id")
+  rawPayload         Json     @map("raw_payload")
+  syncedAt           DateTime @map("synced_at") @db.Timestamptz(3)
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  variations ProductVariation[]
+  orderItems OrderItem[]
+
+  @@index([sku])
+  @@index([barcode])
+  @@map("products")
+}
+
+model ProductVariation {
+  id             String   @id @default(uuid(7)) @db.Uuid
+  productId      String   @map("product_id") @db.Uuid
+  wooVariationId Int      @unique @map("woo_variation_id")
+  name           String
+  sku            String?
+  attributes     Json // [{ name, option }]
+  imageUrl       String?  @map("image_url")
+  priceCents     Int?     @map("price_cents")
+  weightOz       Decimal? @map("weight_oz") @db.Decimal(10, 2)
+  lengthIn       Decimal? @map("length_in") @db.Decimal(8, 2)
+  widthIn        Decimal? @map("width_in") @db.Decimal(8, 2)
+  heightIn       Decimal? @map("height_in") @db.Decimal(8, 2)
+  stockQuantity  Int?     @map("stock_quantity")
+  binLocation    String?  @map("bin_location")
+  barcode        String?
+  lumexiaItemId  String?  @map("lumexia_item_id")
+  rawPayload     Json     @map("raw_payload")
+  syncedAt       DateTime @map("synced_at") @db.Timestamptz(3)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  product    Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  orderItems OrderItem[]
+
+  @@index([productId])
+  @@index([sku])
+  @@index([barcode])
+  @@map("product_variations")
+}

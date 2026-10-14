@@ -1,0 +1,15 @@
+{
+  "extends": "@woolrus/config/tsconfig.nextjs.json",
+  "compilerOptions": {
+    "paths": { "@/*": ["./src/*"] }
+  },
+  "include": [
+    "next-env.d.ts",
+    "src",
+    ".next/types/**/*.ts",
+    "e2e",
+    "playwright.config.ts",
+    "next.config.ts"
+  ],
+  "exclude": ["node_modules"]
+}

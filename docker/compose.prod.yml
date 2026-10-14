@@ -1,0 +1,81 @@
+# Production stack for the on-prem host. Deploy/upgrade with:
+#   docker compose -f compose.prod.yml pull && docker compose -f compose.prod.yml up -d
+# Configuration lives in .env.prod next to this file (see .env.prod.example).
+name: woolrus
+
+x-app-env: &app-env
+  env_file: .env.prod
+  restart: unless-stopped
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-woolrus}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      POSTGRES_DB: woolrus
+    volumes:
+      - postgres:/var/lib/postgresql/data
+      - ./postgres/init-prod.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-woolrus}"]
+      interval: 5s
+      retries: 20
+
+  storage:
+    image: rustfs/rustfs:latest
+    restart: unless-stopped
+    environment:
+      RUSTFS_ACCESS_KEY: ${S3_ACCESS_KEY:?set S3_ACCESS_KEY}
+      RUSTFS_SECRET_KEY: ${S3_SECRET_KEY:?set S3_SECRET_KEY}
+    volumes:
+      - storage:/data
+
+  # Applies pending migrations, then exits. web and worker wait for it to succeed.
+  migrate:
+    image: ghcr.io/isaacvarg/woolrus-migrate:${WOOLRUS_VERSION:-latest}
+    env_file: .env.prod
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  web:
+    <<: *app-env
+    image: ghcr.io/isaacvarg/woolrus-web:${WOOLRUS_VERSION:-latest}
+    ports:
+      - "${WEB_PORT:-3000}:3000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  worker:
+    <<: *app-env
+    image: ghcr.io/isaacvarg/woolrus-worker:${WOOLRUS_VERSION:-latest}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  # Error tracking (Sentry-compatible). All-in-one mode on Postgres; no Valkey/Redis.
+  glitchtip:
+    image: glitchtip/glitchtip:latest
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-woolrus}:${POSTGRES_PASSWORD}@postgres:5432/glitchtip
+      SECRET_KEY: ${GLITCHTIP_SECRET_KEY:?set GLITCHTIP_SECRET_KEY}
+      GLITCHTIP_DOMAIN: ${GLITCHTIP_DOMAIN:-http://localhost:8000}
+      DEFAULT_FROM_EMAIL: ${GLITCHTIP_FROM_EMAIL:-glitchtip@localhost}
+      EMAIL_URL: ${GLITCHTIP_EMAIL_URL:-consolemail://}
+      VALKEY_URL: ""
+      GLITCHTIP_EMBED_WORKER: "true"
+      ENABLE_USER_REGISTRATION: "false"
+    ports:
+      - "${GLITCHTIP_PORT:-8000}:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres:
+  storage:

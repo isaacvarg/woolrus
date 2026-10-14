@@ -1,0 +1,16 @@
+// Woolrus data model. Conventions:
+// - IDs are UUIDv7 (time-sortable). External IDs (WooCommerce, ShipStation, Lumexia) live in their own columns.
+// - Tables and columns are snake_case in Postgres, camelCase in Prisma.
+// - Weights are ounces, dimensions are inches (Decimal), money is integer cents + ISO currency.
+// - Constraints Prisma can't express (partial unique indexes, check constraints) are added by hand
+//   in the migration SQL; see docs/decisions.md.
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../../src/generated/prisma"
+  moduleFormat = "esm"
+}
+
+datasource db {
+  provider = "postgresql"
+}

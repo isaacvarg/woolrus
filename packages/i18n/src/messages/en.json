@@ -1,0 +1,34 @@
+{
+  "common": {
+    "appName": "Woolrus",
+    "save": "Save",
+    "cancel": "Cancel",
+    "loading": "Loading…",
+    "empty": "Nothing here yet"
+  },
+  "nav": {
+    "boxes": "Boxes"
+  },
+  "boxes": {
+    "title": "Boxes",
+    "name": "Name",
+    "dimensions": "Dimensions (in)",
+    "maxWeight": "Max weight (lb)",
+    "add": "Add box",
+    "length": "Length",
+    "width": "Width",
+    "height": "Height"
+  },
+  "errors": {
+    "unauthenticated": "Please sign in to continue.",
+    "forbidden": "You don't have permission to do that.",
+    "notFound": "We couldn't find that.",
+    "validation": "Some fields need attention.",
+    "conflict": "Someone else changed this. Reload and try again.",
+    "internal": "Something went wrong. Try again.",
+    "box": {
+      "nameTaken": "A box with this name already exists.",
+      "inUse": "This box is used by a package and can only be archived."
+    }
+  }
+}
