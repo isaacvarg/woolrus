@@ -63,12 +63,30 @@ describe("settings service", () => {
     });
     const audit = await db.auditEvent.findMany({ where: { entityType: "Settings" } });
     expect(audit).toHaveLength(1);
-    expect(audit[0]).toMatchObject({
-      actorId: admin.userId,
-      action: "update",
-      before: { shipFromAddress: null, syncIntervalMinutes: 5 },
-      after: { shipFromAddress: address, syncIntervalMinutes: 15 },
+    expect(audit[0]).toMatchObject({ actorId: admin.userId, action: "update" });
+    // Exactly the changed fields: the unchanged weightDisplay must not appear.
+    expect(audit[0]?.before).toEqual({ shipFromAddress: null, syncIntervalMinutes: 5 });
+    expect(audit[0]?.after).toEqual({ shipFromAddress: address, syncIntervalMinutes: 15 });
+  });
+
+  it("leaves every field a patch omits as it was, not back at its default", async () => {
+    const admin = await createActor(db, ["ADMIN"]);
+    const earlier = await updateSettings(db, admin, {
+      shipFromAddress: address,
+      wooStoreUrl: "https://shop.example.com",
+      lumexiaBaseUrl: "https://lumexia.example.com",
+      stationIdleLockMinutes: 20,
+      stageSlaMinutes: { QA: 30 },
+      weightDisplay: "LB_DECIMAL",
+      piiRetentionDays: 90,
+      qaMustDifferFromPacker: true,
     });
+
+    const updated = await updateSettings(db, admin, { syncIntervalMinutes: 15 });
+
+    const expected = { ...earlier, syncIntervalMinutes: 15 };
+    expect(updated).toEqual(expected);
+    expect(await getSettings(db, admin)).toEqual(expected);
   });
 
   it("writes no audit event when nothing changes", async () => {
