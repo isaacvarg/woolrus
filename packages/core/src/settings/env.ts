@@ -20,11 +20,13 @@ export type IntegrationEnv = {
 };
 
 /**
- * Keeps the zero-config dev stack working. In production Settings is the only source, so this
- * returns nothing there (decisions in SPEC-settings.md).
+ * Keeps the zero-config dev stack working. Fails closed: only an explicit development or test
+ * environment uses it, so production (or a run with NODE_ENV unset) has Settings as the only
+ * source (decisions in SPEC-settings.md).
  */
 export function integrationEnvFallback(): IntegrationEnv | null {
-  if (process.env.NODE_ENV === "production") return null;
+  const env = process.env.NODE_ENV;
+  if (env !== "development" && env !== "test") return null;
   const read = (name: string) => process.env[name] || null;
   return {
     wooUrl: read("WOO_URL"),

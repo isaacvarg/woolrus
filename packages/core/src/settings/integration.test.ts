@@ -78,28 +78,35 @@ describe("getIntegrationConfig", () => {
     });
   });
 
-  it("ignores env vars in production", async () => {
-    stubEnv("production", fallbackEnv);
-    expect(await getIntegrationConfig(db)).toEqual({
-      woocommerce: null,
-      shipstation: null,
-      lumexia: null,
-    });
-  });
+  // Fails closed: only an explicit development or test environment may use the env fallback.
+  it.each(["production", "staging", ""])(
+    "ignores env vars when NODE_ENV is %j",
+    async (nodeEnv) => {
+      stubEnv(nodeEnv, fallbackEnv);
+      expect(await getIntegrationConfig(db)).toEqual({
+        woocommerce: null,
+        shipstation: null,
+        lumexia: null,
+      });
+    },
+  );
 
-  it("fills unset values from env vars in development", async () => {
-    stubEnv("development", fallbackEnv);
-    expect(await getIntegrationConfig(db)).toEqual({
-      woocommerce: {
-        url: "http://localhost:8090",
-        consumerKey: "ck_env",
-        consumerSecret: "cs_env",
-        webhookSecret: "wh_env",
-      },
-      shipstation: { apiKey: "ss_env" },
-      lumexia: { baseUrl: "http://lumexia.localhost", apiKey: "lx_env" },
-    });
-  });
+  it.each(["development", "test"])(
+    "fills unset values from env vars when NODE_ENV is %j",
+    async (nodeEnv) => {
+      stubEnv(nodeEnv, fallbackEnv);
+      expect(await getIntegrationConfig(db)).toEqual({
+        woocommerce: {
+          url: "http://localhost:8090",
+          consumerKey: "ck_env",
+          consumerSecret: "cs_env",
+          webhookSecret: "wh_env",
+        },
+        shipstation: { apiKey: "ss_env" },
+        lumexia: { baseUrl: "http://lumexia.localhost", apiKey: "lx_env" },
+      });
+    },
+  );
 
   it("prefers values stored in Settings over env vars in development", async () => {
     stubEnv("development", fallbackEnv);

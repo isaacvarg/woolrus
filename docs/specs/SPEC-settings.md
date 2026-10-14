@@ -74,7 +74,8 @@ module one typed, safe way to read that configuration.
 | `getIntegrationConfig(db, integration)` | none (server-internal, **not** exposed through the API) | `{ woocommerce: { url, consumerKey, consumerSecret, webhookSecret } \| null, shipstation: … , lumexia: … }`, decrypted |
 
 - Secret names (enum): `wooConsumerKey`, `wooConsumerSecret`, `wooWebhookSecret`, `shipstationApiKey`, `lumexiaApiKey`.
-- **Development fallback:** outside `NODE_ENV=production`, `getIntegrationConfig` falls back to env vars (`WOO_URL`,
+- **Development fallback:** only when `NODE_ENV` is `development` or `test` (fails closed otherwise, including
+  when unset), `getIntegrationConfig` falls back to env vars (`WOO_URL`,
   `WOO_CONSUMER_KEY`, `WOO_CONSUMER_SECRET`, …) for any value not set in Settings. That keeps the zero-config dev
   stack working. In production the env vars are ignored and Settings is the only source.
 - The settings row is created on first read if it's missing (the seed creates it too).
