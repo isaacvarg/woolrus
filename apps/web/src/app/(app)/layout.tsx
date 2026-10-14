@@ -1,14 +1,15 @@
-import { headers } from "next/headers";
+import { can } from "@woolrus/core";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
-import { auth } from "@/server/auth";
+import { currentActor, currentSession } from "@/server/actor";
 
 // Everything under (app) requires a session. The API enforces auth independently; this only
 // keeps signed-out users on the sign-in page.
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const session = await auth().api.getSession({ headers: await headers() });
+  const session = await currentSession();
   if (!session) redirect("/sign-in");
+  const actor = await currentActor();
   const t = await getTranslations();
 
   return (
@@ -30,6 +31,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <li>
             <Link href="/boxes">{t("nav.boxes")}</Link>
           </li>
+          {actor && can(actor, "settings.manage") && (
+            <li>
+              <Link href="/settings">{t("nav.settings")}</Link>
+            </li>
+          )}
         </nav>
       </div>
     </div>

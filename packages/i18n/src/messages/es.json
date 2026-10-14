@@ -7,7 +7,8 @@
     "empty": "Aún no hay nada aquí"
   },
   "nav": {
-    "boxes": "Cajas"
+    "boxes": "Cajas",
+    "settings": "Configuración"
   },
   "boxes": {
     "title": "Cajas",
@@ -19,6 +20,44 @@
     "length": "Largo",
     "width": "Ancho",
     "height": "Alto"
+  },
+  "settings": {
+    "title": "Configuración",
+    "general": "General",
+    "saved": "Configuración guardada.",
+    "shipFrom": {
+      "title": "Dirección de envío",
+      "name": "Nombre de contacto",
+      "company": "Empresa",
+      "phone": "Teléfono",
+      "email": "Correo electrónico",
+      "address1": "Dirección, línea 1",
+      "address2": "Dirección, línea 2",
+      "city": "Ciudad",
+      "state": "Estado",
+      "postalCode": "Código postal"
+    },
+    "syncInterval": "Intervalo de sincronización (minutos)",
+    "stationIdleLock": "Bloqueo de estación por inactividad (minutos)",
+    "sla": {
+      "title": "SLA por etapa (minutos)",
+      "hint": "Deja una etapa vacía para no tener SLA.",
+      "PENDING": "Pendiente",
+      "PICKING": "Recolección",
+      "PACKING": "Empaque",
+      "QA": "Control de calidad",
+      "READY": "Listo para enviar"
+    },
+    "weightDisplay": {
+      "label": "Formato de peso",
+      "LB_OZ": "Libras y onzas ({example})",
+      "LB_DECIMAL": "Libras decimales ({example})"
+    },
+    "piiRetention": {
+      "label": "Conservar datos de clientes (días)",
+      "hint": "Déjalo vacío para conservarlos siempre. Entre 30 y 3650 días."
+    },
+    "qaMustDifferFromPacker": "El control de calidad debe hacerlo alguien distinto de quien empacó"
   },
   "errors": {
     "unauthenticated": "Inicia sesión para continuar.",

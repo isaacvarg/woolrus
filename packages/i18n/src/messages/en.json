@@ -7,7 +7,8 @@
     "empty": "Nothing here yet"
   },
   "nav": {
-    "boxes": "Boxes"
+    "boxes": "Boxes",
+    "settings": "Settings"
   },
   "boxes": {
     "title": "Boxes",
@@ -19,6 +20,44 @@
     "length": "Length",
     "width": "Width",
     "height": "Height"
+  },
+  "settings": {
+    "title": "Settings",
+    "general": "General",
+    "saved": "Settings saved.",
+    "shipFrom": {
+      "title": "Ship-from address",
+      "name": "Contact name",
+      "company": "Company",
+      "phone": "Phone",
+      "email": "Email",
+      "address1": "Address line 1",
+      "address2": "Address line 2",
+      "city": "City",
+      "state": "State",
+      "postalCode": "ZIP code"
+    },
+    "syncInterval": "Sync interval (minutes)",
+    "stationIdleLock": "Station idle lock (minutes)",
+    "sla": {
+      "title": "SLA per stage (minutes)",
+      "hint": "Leave a stage empty for no SLA.",
+      "PENDING": "Pending",
+      "PICKING": "Picking",
+      "PACKING": "Packing",
+      "QA": "QA",
+      "READY": "Ready to ship"
+    },
+    "weightDisplay": {
+      "label": "Weight display",
+      "LB_OZ": "Pounds and ounces ({example})",
+      "LB_DECIMAL": "Decimal pounds ({example})"
+    },
+    "piiRetention": {
+      "label": "Keep customer details (days)",
+      "hint": "Leave empty to keep them forever. Between 30 and 3650 days."
+    },
+    "qaMustDifferFromPacker": "QA must be done by someone other than the packer"
   },
   "errors": {
     "unauthenticated": "Please sign in to continue.",

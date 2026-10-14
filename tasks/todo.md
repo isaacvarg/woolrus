@@ -115,17 +115,21 @@ core index pulls in Prisma and `node:crypto`, which can't go in a client bundle.
 **Files:** `packages/core/src/settings/format.ts` (+ test), `packages/core/src/index.ts`, `apps/web/src/app/(app)/boxes/boxes-manager.tsx`, i18n
 **Scope:** S
 
-### T8: Settings page, General section + nav
+### T8: Settings page, General section + nav ✅
 **Description:** `/settings` page with a General form: ship-from, sync interval, idle lock, SLA per stage, weight
 display, PII retention, QA rule. One Save button, field errors via `useFieldErrors`. A nav link is shown only with
 `settings.manage`. Non-admins see the translated forbidden message.
 **Acceptance criteria:**
-- [ ] An admin edits and saves; values persist after a reload
-- [ ] Invalid input shows the field-level message next to the field
-- [ ] A Picker has no nav link, and `/settings` shows "You don't have permission to do that."
+- [x] An admin edits and saves; values persist after a reload
+- [x] Invalid input shows the field-level message next to the field
+- [x] A Picker has no nav link, and `/settings` shows "You don't have permission to do that."
 **Verification:** dev preview check (desktop + tablet width); i18n parity test
 **Dependencies:** T3, T4
-**Files:** `apps/web/src/app/(app)/settings/{page,general-form}.tsx`, `apps/web/src/app/(app)/layout.tsx`, `apps/web/src/components/ui/fields.tsx` (Select/Checkbox if missing), i18n
+**Done differently:** the form saves only the fields that changed since it loaded, so two admins (or the two
+parallel e2e projects) editing different fields don't overwrite each other. Weight display is a radio group
+(two options), not a Select. `server/actor.ts` adds `currentActor()` so the layout and page can check
+`settings.manage`. The tests went into `e2e/settings.spec.ts` now (T10 extends that file).
+**Files:** `apps/web/src/app/(app)/settings/{page,general-form}.tsx`, `apps/web/src/app/(app)/layout.tsx`, `apps/web/src/server/actor.ts`, `apps/web/src/components/ui/fields.tsx` (Checkbox, RadioGroup/Radio, field descriptions), `apps/web/e2e/settings.spec.ts`, i18n
 **Scope:** M
 
 ### T9: Settings page, Integrations section
