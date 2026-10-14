@@ -1,7 +1,8 @@
 # Woolrus V2
 
 Warehouse fulfillment for a WooCommerce shop: pull paid orders in, then pick, pack, QA, buy labels and ship.
-Decisions and conventions: [docs/decisions.md](docs/decisions.md).
+Decisions and conventions: [docs/decisions.md](docs/decisions.md). Roadmap, module status and project rules:
+[SPEC.md](SPEC.md). Requirements: [docs/srs.md](docs/srs.md).
 
 ## Layout
 
