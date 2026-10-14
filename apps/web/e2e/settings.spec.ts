@@ -279,3 +279,40 @@ test("checks the browser makes before saving use the app's messages", async ({ p
   await expect(general.getByText(en.errors.field.required)).toBeVisible();
   await expect(general.getByText(en.errors.field.email)).toBeVisible();
 });
+
+test("saving sends only the fields this form changed, so another admin's change survives", async ({
+  page,
+}) => {
+  await signInAs(page, ["ADMIN"]);
+  await withSettingsLock(async () => {
+    const before = await (await page.request.get("/api/v1/settings")).json();
+    try {
+      await page.goto("/settings");
+      const general = page.getByRole("form", { name: "General" });
+      await expect(general.getByLabel("Sync interval", { exact: false })).toBeVisible();
+
+      // Someone else changes the idle lock after this page loaded.
+      const otherIdleLock = before.stationIdleLockMinutes === 9 ? 10 : 9;
+      await page.request.patch("/api/v1/settings", {
+        data: { stationIdleLockMinutes: otherIdleLock },
+      });
+
+      const nextSync = before.syncIntervalMinutes === 7 ? 8 : 7;
+      await general.getByLabel("Sync interval", { exact: false }).fill(String(nextSync));
+      const request = page.waitForRequest("**/rpc/settings/update");
+      await general.getByRole("button", { name: "Save" }).click();
+      expect(Object.keys((await request).postDataJSON().json)).toEqual(["syncIntervalMinutes"]);
+      await expect(general.getByRole("status")).toHaveText("Settings saved.");
+
+      const after = await (await page.request.get("/api/v1/settings")).json();
+      expect(after).toMatchObject({
+        syncIntervalMinutes: nextSync,
+        stationIdleLockMinutes: otherIdleLock,
+      });
+    } finally {
+      await page.request.patch("/api/v1/settings", {
+        data: { stationIdleLockMinutes: before.stationIdleLockMinutes },
+      });
+    }
+  });
+});
