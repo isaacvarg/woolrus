@@ -24,7 +24,11 @@ export const ShipFromAddress = z.object({
   address1: text(100),
   address2: text(100).optional(),
   city: text(60),
-  state: z.string().regex(/^[A-Z]{2}$/, "errors.field.usState"),
+  state: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .regex(/^[A-Z]{2}$/, "errors.field.usState"),
   postalCode: z.string().regex(/^\d{5}(-\d{4})?$/, "errors.field.usZip"),
   country: z.literal("US"),
 });

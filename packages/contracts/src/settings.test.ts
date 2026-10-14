@@ -40,6 +40,11 @@ describe("UpdateSettingsInput", () => {
     ).toEqual({});
   });
 
+  it("normalizes the state code to upper case", () => {
+    const result = UpdateSettingsInput.parse({ shipFromAddress: { ...address, state: " tx " } });
+    expect(result.shipFromAddress?.state).toBe("TX");
+  });
+
   it("allows http only for localhost hosts", () => {
     expect(fieldErrors({ wooStoreUrl: "http://localhost:8090" })).toEqual({});
     expect(fieldErrors({ wooStoreUrl: "http://shop.localhost" })).toEqual({});
@@ -57,7 +62,6 @@ describe("UpdateSettingsInput", () => {
   it.each([
     ["missing phone", { phone: undefined }, "shipFromAddress.phone"],
     ["missing name", { name: "" }, "shipFromAddress.name"],
-    ["lowercase state", { state: "tx" }, "shipFromAddress.state"],
     ["3-letter state", { state: "TEX" }, "shipFromAddress.state"],
     ["bad ZIP", { postalCode: "7870" }, "shipFromAddress.postalCode"],
     ["non-US country", { country: "CA" }, "shipFromAddress.country"],
