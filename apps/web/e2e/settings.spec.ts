@@ -105,11 +105,14 @@ test("replacing a secret marks it set without showing it, and clearing unsets it
       const row = secretRow(page, "WooCommerce", "Webhook secret");
       await expect(row.getByText("Not set", { exact: true })).toBeVisible();
 
+      // Keyboard focus follows the row: into the field, back to the button that opened it.
       await row.getByRole("button", { name: "Add" }).click();
+      await expect(row.getByLabel("New value")).toBeFocused();
       await row.getByLabel("New value").fill(value);
       await row.getByRole("button", { name: "Save" }).click();
       await expect(row.getByText("Set", { exact: true })).toBeVisible();
       await expect(row.getByLabel("New value")).toHaveCount(0);
+      await expect(row.getByRole("button", { name: "Replace" })).toBeFocused();
 
       await page.reload();
       await expect(row.getByText("Set", { exact: true })).toBeVisible();
@@ -119,8 +122,10 @@ test("replacing a secret marks it set without showing it, and clearing unsets it
       await row.getByRole("button", { name: "Cancel" }).click();
 
       await row.getByRole("button", { name: "Clear" }).click();
+      await expect(row.getByRole("button", { name: "Cancel" })).toBeFocused();
       await row.getByRole("button", { name: "Yes, clear" }).click();
       await expect(row.getByText("Not set", { exact: true })).toBeVisible();
+      await expect(row.getByRole("button", { name: "Add" })).toBeFocused();
 
       const received = await apiResponses();
       expect(received).not.toContain(value);

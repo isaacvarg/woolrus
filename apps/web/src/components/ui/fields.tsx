@@ -2,7 +2,7 @@
 
 // Thin wrappers that pair React Aria behaviour (labels, validation, keyboard, focus) with daisyUI styling.
 import { useTranslations } from "next-intl";
-import type { ReactNode } from "react";
+import type { ReactNode, Ref } from "react";
 import {
   Button as AriaButton,
   Checkbox as AriaCheckbox,
@@ -48,7 +48,7 @@ function AppFieldError({ isEmail = false }: { isEmail?: boolean }) {
 export function Button({
   className = "btn-primary",
   ...props
-}: ButtonProps & { className?: string }) {
+}: ButtonProps & { className?: string; ref?: Ref<HTMLButtonElement> }) {
   return <AriaButton {...props} className={`btn ${className}`} />;
 }
 

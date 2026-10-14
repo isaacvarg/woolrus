@@ -3,7 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { AdminSettings, SecretName } from "@woolrus/contracts";
 import { useTranslations } from "next-intl";
-import { useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Form } from "react-aria-components";
 import { Button, TextField } from "@/components/ui/fields";
 import { useErrorMessage, useFieldErrors } from "@/lib/errors";
@@ -134,10 +134,21 @@ function SecretRow({ name, configured }: { name: SecretName; configured: boolean
   const applySettings = useApplySettings();
   const labelId = useId();
   const [mode, setMode] = useState<"idle" | "editing" | "confirmingClear">("idle");
+  // After the editor or the confirmation closes, keyboard focus goes back to the row's main button
+  // (its own button may be gone, e.g. Clear after clearing).
+  const mainButton = useRef<HTMLButtonElement>(null);
+  const [returnFocus, setReturnFocus] = useState(false);
+  useEffect(() => {
+    if (mode === "idle" && returnFocus) {
+      mainButton.current?.focus();
+      setReturnFocus(false);
+    }
+  }, [mode, returnFocus]);
   const [value, setValue] = useState("");
   const label = t(`settings.integrations.secrets.${name}`);
 
   const close = () => {
+    setReturnFocus(true);
     setValue("");
     setMode("idle");
   };
@@ -176,7 +187,7 @@ function SecretRow({ name, configured }: { name: SecretName; configured: boolean
         </span>
         {mode === "idle" && (
           <div className="ml-auto flex gap-2">
-            <Button className="btn-outline btn-sm" onPress={() => open("editing")}>
+            <Button ref={mainButton} className="btn-outline btn-sm" onPress={() => open("editing")}>
               {configured ? t("settings.integrations.replace") : t("settings.integrations.add")}
             </Button>
             {configured && (
@@ -232,7 +243,7 @@ function SecretRow({ name, configured }: { name: SecretName; configured: boolean
           >
             {t("settings.integrations.yesClear")}
           </Button>
-          <Button className="btn-ghost btn-sm" onPress={close}>
+          <Button className="btn-ghost btn-sm" autoFocus onPress={close}>
             {t("common.cancel")}
           </Button>
         </div>
