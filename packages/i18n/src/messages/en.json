@@ -14,6 +14,7 @@
     "name": "Name",
     "dimensions": "Dimensions (in)",
     "maxWeight": "Max weight (lb)",
+    "maxWeightColumn": "Max weight",
     "add": "Add box",
     "length": "Length",
     "width": "Width",

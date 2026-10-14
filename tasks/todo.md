@@ -101,14 +101,17 @@ because health now returns 503 without a key and CI waits on it.
 
 ## Phase 3: UI
 
-### T7: `formatWeight` + boxes page
+### T7: `formatWeight` + boxes page ✅
 **Description:** `formatWeight(oz, weightDisplay, locale)` in core (built on `splitPoundsOunces`/`ouncesToPounds`).
 The boxes page reads `settings.public` and formats max weight with it.
 **Acceptance criteria:**
-- [ ] `formatWeight(37, "LB_OZ", "en")` → `"2 lb 5 oz"`, `formatWeight(37, "LB_DECIMAL", "en")` → `"2.31 lb"`; covers 0, a whole number of pounds, rounding to 16 oz, and `es`
-- [ ] The boxes table shows max weight in the configured format (criterion 9 is proved in T10)
+- [x] `formatWeight(37, "LB_OZ", "en")` → `"2 lb 5 oz"`, `formatWeight(37, "LB_DECIMAL", "en")` → `"2.31 lb"`; covers 0, a whole number of pounds, rounding to 16 oz, and `es`
+- [x] The boxes table shows max weight in the configured format (criterion 9 is proved in T10)
 **Verification:** core unit test; the boxes page renders in dev
 **Dependencies:** T4
+**Done differently:** core also exports `./format` as a client-safe subpath (`@woolrus/core/format`), because the
+core index pulls in Prisma and `node:crypto`, which can't go in a client bundle. The table header loses "(lb)" (new
+`boxes.maxWeightColumn` key) because cells now carry their own units; the form label keeps it.
 **Files:** `packages/core/src/settings/format.ts` (+ test), `packages/core/src/index.ts`, `apps/web/src/app/(app)/boxes/boxes-manager.tsx`, i18n
 **Scope:** S
 

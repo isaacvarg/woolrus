@@ -14,6 +14,7 @@
     "name": "Nombre",
     "dimensions": "Dimensiones (pulg)",
     "maxWeight": "Peso máximo (lb)",
+    "maxWeightColumn": "Peso máximo",
     "add": "Agregar caja",
     "length": "Largo",
     "width": "Ancho",

@@ -1,7 +1,8 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useTranslations } from "next-intl";
+import { formatWeight } from "@woolrus/core/format";
+import { useLocale, useTranslations } from "next-intl";
 import { useState } from "react";
 import { Form } from "react-aria-components";
 import { Button, NumberField, TextField } from "@/components/ui/fields";
@@ -18,10 +19,14 @@ const emptyForm = {
 
 export function BoxesManager() {
   const t = useTranslations();
+  const locale = useLocale();
   const errorMessage = useErrorMessage();
   const fieldErrors = useFieldErrors();
   const queryClient = useQueryClient();
   const boxes = useQuery(orpc.boxes.list.queryOptions({ input: { includeArchived: false } }));
+  const settings = useQuery(orpc.settings.public.queryOptions());
+  // Until settings load, use the schema default so the table isn't held back.
+  const weightDisplay = settings.data?.weightDisplay ?? "LB_OZ";
   const [form, setForm] = useState(emptyForm);
   // One key per form submission: retries of the same submission can't create two boxes.
   const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
@@ -44,7 +49,7 @@ export function BoxesManager() {
             <tr>
               <th>{t("boxes.name")}</th>
               <th>{t("boxes.dimensions")}</th>
-              <th>{t("boxes.maxWeight")}</th>
+              <th>{t("boxes.maxWeightColumn")}</th>
             </tr>
           </thead>
           <tbody>
@@ -71,7 +76,11 @@ export function BoxesManager() {
                 <td>
                   {box.lengthIn} × {box.widthIn} × {box.heightIn}
                 </td>
-                <td>{box.maxWeightOz === null ? "—" : box.maxWeightOz / 16}</td>
+                <td>
+                  {box.maxWeightOz === null
+                    ? "—"
+                    : formatWeight(box.maxWeightOz, weightDisplay, locale)}
+                </td>
               </tr>
             ))}
           </tbody>
