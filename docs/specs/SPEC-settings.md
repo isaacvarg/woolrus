@@ -1,7 +1,7 @@
 # Spec: `settings`
 
 **Milestone:** M1 · **Depends on:** — · **Used by:** `store-sync`, `identity`, `carriers`, `lumexia`, `workflow`
-(SLA), `packing`/`qa` (QA rule), `operations` (PII retention) · **State:** spec draft
+(SLA), `packing`/`qa` (QA rule), `operations` (PII retention) · **State:** planned
 
 Project-wide commands, structure, code style, testing levels and boundaries are in [`../../SPEC.md`](../../SPEC.md);
 this spec only adds what is specific to `settings`.
@@ -22,7 +22,7 @@ module one typed, safe way to read that configuration.
 ### User stories
 
 1. As an admin, I enter the store URL and the WooCommerce key and secret once. Afterwards I can see that they're
-   set (with the last 4 characters), but I can never read them back.
+   set, but I can never read them back, not even in part.
 2. As an admin, I set the warehouse's ship-from address, and labels later use it.
 3. As an admin, I set the sync interval, the station idle-lock time, the per-stage SLA thresholds, the weight
    display format, the PII retention period and whether QA must be a different person from the packer.
@@ -66,10 +66,10 @@ module one typed, safe way to read that configuration.
 
 | Function | Permission | Returns |
 |---|---|---|
-| `getSettings(db, actor)` | `settings.manage` | `AdminSettings`: every field except secret values; each secret appears as `{ configured: boolean, hint: string \| null }` (hint = `…` + last 4 chars) |
+| `getSettings(db, actor)` | `settings.manage` | `AdminSettings`: every field except secret values; each secret appears as `{ configured: boolean }`, with no part of the value |
 | `getPublicSettings(db, actor)` | any signed-in user | `PublicSettings`: `weightDisplay`, `stationIdleLockMinutes`, `stageSlaMinutes` |
 | `updateSettings(db, actor, patch)` | `settings.manage` | `AdminSettings`. Partial: omitted fields are untouched. Audited with before/after of the changed non-secret fields |
-| `setSecret(db, actor, { name, value })` | `settings.manage` | `AdminSettings`. Audited as `secret.set` with the name only, never the value or hint |
+| `setSecret(db, actor, { name, value })` | `settings.manage` | `AdminSettings`. Audited as `secret.set` with the name only, never the value |
 | `clearSecret(db, actor, { name })` | `settings.manage` | `AdminSettings`. Audited as `secret.clear` |
 | `getIntegrationConfig(db, integration)` | none (server-internal, **not** exposed through the API) | `{ woocommerce: { url, consumerKey, consumerSecret, webhookSecret } \| null, shipstation: … , lumexia: … }`, decrypted |
 
@@ -115,7 +115,7 @@ No output schema has a field that can carry a secret value.
 - **General:** ship-from form, sync interval, idle lock, SLA per stage, weight display, PII retention, QA rule.
   It saves with one button and shows field-level errors from message keys.
 - **Integrations:** a card per integration (WooCommerce, ShipStation, Lumexia) with the URL field where relevant.
-  Each secret shows as "Set (…a1b2)" or "Not set", with Replace and Clear actions. Replacing opens an empty write-only
+  Each secret shows as "Set" or "Not set", with Replace and Clear actions. Replacing opens an empty write-only
   field; current values are never pre-filled.
 - Built with the React Aria + daisyUI primitives in `components/ui`, and every string is in both catalogs.
 
@@ -134,7 +134,7 @@ No output schema has a field that can carry a secret value.
 2. `settings.get` and `settings.update` succeed for an Admin. For Picker, Packer, QA and Shipper they fail with
    `FORBIDDEN` / `errors.forbidden`. `settings.public` succeeds for every role and fails for a signed-out caller.
 3. After `setSecret`, the database column holds a `v1:` ciphertext, not the plain value. `settings.get` returns
-   `{ configured: true, hint: "…" + last4 }`, and no API response or audit row contains the plain value. A test
+   `{ configured: true }`, and no API response or audit row contains the plain value. A test
    serializes all responses and audit rows from a session and searches them for the secret.
 4. `getIntegrationConfig` returns the decrypted values. In production mode, unset values come back null even when
    env vars are present. In development mode, env vars fill unset values.
@@ -145,14 +145,15 @@ No output schema has a field that can carry a secret value.
 7. Without `SETTINGS_ENCRYPTION_KEY`, `setSecret` fails with `errors.settings.encryptionKeyMissing`,
    `/api/health` reports `encryption: "fail"` and the settings page still loads.
 8. E2E (desktop): an admin saves a ship-from address and sets the WooCommerce secret. After a reload the address is
-   shown, the secret shows as set with its hint, and the input is empty. A Picker sees no Settings link and gets the
+   shown, the secret shows as set, and the input is empty. A Picker sees no Settings link and gets the
    forbidden message at `/settings`.
 9. Switching weight display to `LB_DECIMAL` changes how the boxes page shows max weight.
 10. Green: `pnpm lint && pnpm typecheck && pnpm test && pnpm build`, plus the Playwright suite.
 
-## Open questions
+## Decisions (resolved open questions, 2026-10-14)
 
-1. **Env fallback in production:** the proposal ignores env vars in production so the UI is the single source of
-   truth. Is that OK, or do you want env vars to keep working in production too (e.g. for disaster recovery)?
-2. **Secret hint:** is showing the last 4 characters acceptable, or should it only show "Set"?
-3. **Ship-from country:** restricted to `US` for now. Do you ever ship from outside the US?
+1. **Env fallback in production:** ignored. In production Settings is the only source; the env fallback is
+   development-only.
+2. **Secret hint:** none. A secret shows only as set or not set; no characters are ever revealed (changed
+   from the original "last 4" proposal).
+3. **Ship-from country:** `US` only for now.
