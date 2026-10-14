@@ -33,7 +33,11 @@
     "field": {
       "invalid": "Este valor no es válido.",
       "tooSmall": "Este valor es demasiado pequeño.",
-      "tooBig": "Este valor es demasiado grande."
+      "tooBig": "Este valor es demasiado grande.",
+      "urlHttps": "Usa una dirección https://.",
+      "usState": "Usa el código de estado de 2 letras, p. ej. TX.",
+      "usZip": "Usa un código postal de 5 dígitos (o ZIP+4).",
+      "email": "Ingresa un correo electrónico válido."
     }
   }
 }

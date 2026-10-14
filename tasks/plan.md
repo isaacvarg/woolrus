@@ -60,7 +60,7 @@ e2e sign-in helper (T2) ──────────────────�
 ### Checkpoint A: green, plus a signed-in e2e and a field error visible via REST
 
 ### Phase 2: Settings API
-- [ ] T4: Read and update settings (contract + core + routes)
+- [x] T4: Read and update settings (contract + core + routes)
 - [ ] T5: Set and clear secrets
 - [ ] T6: Integration config for other modules + health `encryption`
 

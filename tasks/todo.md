@@ -51,15 +51,15 @@ and `data.fields` (dotted path → message key). Schemas use i18n keys as messag
 
 ## Phase 2: Settings API
 
-### T4: Read and update settings
+### T4: Read and update settings ✅
 **Description:** `packages/contracts/src/settings.ts` holds `AdminSettings`, `PublicSettings`, `UpdateSettingsInput`
 (validation table) and the `get`/`public`/`update` procedures. Core adds `getSettings`, `getPublicSettings`,
 `updateSettings` (row created on first read; partial; audit of before/after for changed fields only). Each
 procedure is wired to a one-line route.
 **Acceptance criteria:**
-- [ ] Admin can get/update. Picker, Packer, QA and Shipper get `errors.forbidden`. Every role can read public settings (criterion 2; the signed-out case is covered by the `authed` middleware and asserted in T10)
-- [ ] A partial patch changes only the given fields and writes exactly one audit event with before/after for them. An empty or no-op patch writes none (criterion 6)
-- [ ] Each validation-table row has a rejecting case with the expected field key, and nothing is written (criterion 5)
+- [x] Admin can get/update. Picker, Packer, QA and Shipper get `errors.forbidden`. Every role can read public settings (criterion 2; the signed-out case is covered by the `authed` middleware and asserted in T10)
+- [x] A partial patch changes only the given fields and writes exactly one audit event with before/after for them. An empty or no-op patch writes none (criterion 6)
+- [x] Each validation-table row has a rejecting case with the expected field key, and nothing is written (criterion 5)
 **Verification:** `pnpm --filter @woolrus/core test -- settings`; contracts schema tests; typecheck
 **Dependencies:** T3
 **Files:** `packages/contracts/src/{settings,index}.ts`, `packages/core/src/settings/service.ts` (+ test), `packages/core/src/index.ts`, `apps/web/src/server/router.ts`, i18n
