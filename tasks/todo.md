@@ -149,19 +149,23 @@ heading so tests can scope its Save button.
 **Files:** `apps/web/src/app/(app)/settings/{integrations,page,general-form}.tsx`, `apps/web/src/components/ui/fields.tsx` (descriptions wrap), `apps/web/e2e/settings.spec.ts`, i18n
 **Scope:** S
 
-### T10: Settings e2e
+### T10: Settings e2e ✅
 **Description:** `apps/web/e2e/settings.spec.ts` covers criteria 8 and 9 and the signed-out `settings.public` case.
 CI env gets a throwaway `SETTINGS_ENCRYPTION_KEY` (approved; CI-only value).
 **Acceptance criteria:**
-- [ ] An admin saves a ship-from address and the Woo consumer secret. After a reload the address is shown, the secret shows "Set" and the input is empty
-- [ ] A Picker sees no Settings link and gets the forbidden message at `/settings`; anonymous `GET /api/v1/settings/public` → 401
-- [ ] Switching to `LB_DECIMAL` changes the boxes page's max weight display
+- [x] An admin saves a ship-from address and the Woo consumer secret. After a reload the address is shown, the secret shows "Set" and the input is empty
+- [x] A Picker sees no Settings link and gets the forbidden message at `/settings`; anonymous `GET /api/v1/settings/public` → 401
+- [x] Switching to `LB_DECIMAL` changes the boxes page's max weight display
 **Verification:** `pnpm --filter @woolrus/web test:e2e` (desktop + tablet)
 **Dependencies:** T2, T7, T9
-**Files:** `apps/web/e2e/settings.spec.ts`, `.github/workflows/ci.yml`
+**Done differently:** the CI key was already added in T6, so `ci.yml` is unchanged. Tests that change global
+settings (address, Woo consumer secret, weight display) take turns across the desktop and tablet workers through a
+Postgres advisory lock (`e2e/support/settings-lock.ts`) and restore what they changed. The ship-from address can't be
+unset through the API, so the dev DB keeps the e2e address.
+**Files:** `apps/web/e2e/settings.spec.ts`, `apps/web/e2e/support/settings-lock.ts`
 **Scope:** S
 
 ### Checkpoint C
-- [ ] Every spec success criterion maps to a passing test
-- [ ] `pnpm lint && pnpm typecheck && pnpm test && pnpm build` + Playwright pass
+- [x] Every spec success criterion maps to a passing test
+- [x] `pnpm lint && pnpm typecheck && pnpm test && pnpm build` + Playwright pass
 - [ ] `SPEC.md` status → `in progress` (during build); then `/agent-skills:review`

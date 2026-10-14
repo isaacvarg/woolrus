@@ -1,6 +1,7 @@
 import { expect, type Page, test } from "@playwright/test";
 import en from "@woolrus/i18n/messages/en.json" with { type: "json" };
 import { signInAs } from "./support/auth";
+import { withSettingsLock } from "./support/settings-lock";
 
 /** On tablet width the nav is a drawer behind the menu button. */
 async function openNav(page: Page) {
@@ -163,4 +164,89 @@ test("an admin saves and removes the Lumexia base URL", async ({ page }, info) =
   await expect(lumexia.getByRole("status")).toHaveText("Saved.");
   await page.reload();
   await expect(lumexia.getByLabel("API base URL")).toHaveValue("");
+});
+
+test("an admin saves the ship-from address and the Woo consumer secret, and both survive a reload", async ({
+  page,
+}) => {
+  const secret = `e2e-${crypto.randomUUID()}`;
+  await signInAs(page, ["ADMIN"]);
+  await withSettingsLock(async () => {
+    try {
+      await page.goto("/settings");
+      const general = page.getByRole("form", { name: "General" });
+      const shipFrom = general.getByRole("group", { name: "Ship-from address" });
+      await shipFrom.getByLabel("Contact name").fill("E2E Shipping");
+      await shipFrom.getByLabel("Phone").fill("555-010-2030");
+      await shipFrom.getByLabel("Address line 1").fill("100 Dock Street");
+      await shipFrom.getByLabel("City").fill("Austin");
+      await shipFrom.getByLabel("State").fill("TX");
+      await shipFrom.getByLabel("ZIP code").fill("78702");
+      await general.getByRole("button", { name: "Save" }).click();
+      await expect(general.getByRole("status")).toHaveText("Settings saved.");
+
+      const row = secretRow(page, "WooCommerce", "Consumer secret");
+      await row.getByRole("button", { name: /^(Add|Replace)$/ }).click();
+      await row.getByLabel("New value").fill(secret);
+      await row.getByRole("button", { name: "Save" }).click();
+      await expect(row.getByText("Set", { exact: true })).toBeVisible();
+
+      await page.reload();
+      await expect(shipFrom.getByLabel("Address line 1")).toHaveValue("100 Dock Street");
+      await expect(shipFrom.getByLabel("ZIP code")).toHaveValue("78702");
+      await expect(row.getByText("Set", { exact: true })).toBeVisible();
+      await row.getByRole("button", { name: "Replace" }).click();
+      await expect(row.getByLabel("New value")).toHaveValue("");
+      expect(await page.content()).not.toContain(secret);
+    } finally {
+      // The dev stack's Woo sync falls back on .env only while this secret is unset.
+      await page.request.delete("/api/v1/settings/secrets/wooConsumerSecret");
+    }
+  });
+});
+
+test("switching weight display to decimal pounds changes the boxes page", async ({ page }) => {
+  await signInAs(page, ["ADMIN"]);
+  const created = await page.request.post("/api/v1/boxes", {
+    data: {
+      idempotencyKey: crypto.randomUUID(),
+      name: `E2E weight ${crypto.randomUUID()}`,
+      lengthIn: 10,
+      widthIn: 8,
+      heightIn: 4,
+      maxWeightOz: 37,
+      tareWeightOz: null,
+    },
+  });
+  expect(created.ok()).toBe(true);
+  const box = await created.json();
+
+  await withSettingsLock(async () => {
+    try {
+      await page.request.patch("/api/v1/settings", { data: { weightDisplay: "LB_OZ" } });
+      await page.goto("/boxes");
+      const row = page.getByRole("row", { name: new RegExp(box.name) });
+      await expect(row).toContainText("2 lb 5 oz");
+
+      await page.goto("/settings");
+      const general = page.getByRole("form", { name: "General" });
+      // React Aria hides the native input; people click the label.
+      await general.getByText(/^Decimal pounds/).click();
+      await expect(general.getByRole("radio", { name: /Decimal pounds/ })).toBeChecked();
+      await general.getByRole("button", { name: "Save" }).click();
+      await expect(general.getByRole("status")).toHaveText("Settings saved.");
+
+      await page.goto("/boxes");
+      await expect(row).toContainText("2.31 lb");
+    } finally {
+      await page.request.patch("/api/v1/settings", { data: { weightDisplay: "LB_OZ" } });
+      await page.request.post(`/api/v1/boxes/${box.id}/archive`);
+    }
+  });
+});
+
+test("signed-out callers can't read public settings", async ({ request }) => {
+  const response = await request.get("/api/v1/settings/public");
+  expect(response.status()).toBe(401);
+  expect((await response.json()).data).toEqual({ messageKey: "errors.unauthenticated" });
 });
