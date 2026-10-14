@@ -78,17 +78,20 @@ Audit records `secret.set`/`secret.clear` with the name only.
 **Files:** `packages/contracts/src/settings.ts`, `packages/core/src/settings/{service,env}.ts` (+ test), `apps/web/src/server/router.ts`, i18n
 **Scope:** M
 
-### T6: Integration config + health
+### T6: Integration config + health ✅
 **Description:** `getIntegrationConfig(db)` (server-internal, not in the contract) returns decrypted config per
 integration. Outside production it falls back to env vars for unset values. `/api/health` gains `encryption`
 (ok when the key parses). `turbo.json` declares `SETTINGS_ENCRYPTION_KEY` and `WOO_*`. `.env.example` keeps a
 generated dev key comment.
 **Acceptance criteria:**
-- [ ] Decrypted values are returned. In production, unset → null even with env vars set. In development, env fills unset values, and stored values win (criterion 4)
-- [ ] Health reports `encryption: "fail"` (and 503) without a key, and `"ok"` with one (criterion 7)
-- [ ] `getIntegrationConfig` is exported from core but absent from `contract`
+- [x] Decrypted values are returned. In production, unset → null even with env vars set. In development, env fills unset values, and stored values win (criterion 4)
+- [x] Health reports `encryption: "fail"` (and 503) without a key, and `"ok"` with one (criterion 7)
+- [x] `getIntegrationConfig` is exported from core but absent from `contract`
 **Verification:** core tests with `vi.stubEnv`; `curl localhost:3000/api/health` in dev; build
 **Dependencies:** T5
+**Done differently:** no `turbo.json` change. Vitest, Next and Playwright each load the root `.env`
+with dotenv in-process, so Turbo's env filtering never applies. The CI key was added here instead of in T10,
+because health now returns 503 without a key and CI waits on it.
 **Files:** `packages/core/src/settings/{integration,env}.ts` (+ test), `apps/web/src/app/api/health/route.ts`, `turbo.json`, `.env.example`
 **Scope:** S
 

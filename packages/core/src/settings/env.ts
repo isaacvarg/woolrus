@@ -7,3 +7,32 @@ import { parseEncryptionKey } from "./crypto";
 export function encryptionKey(): Buffer | null {
   return parseEncryptionKey(process.env.SETTINGS_ENCRYPTION_KEY);
 }
+
+/** Env vars that stand in for unset integration settings, outside production only. */
+export type IntegrationEnv = {
+  wooUrl: string | null;
+  wooConsumerKey: string | null;
+  wooConsumerSecret: string | null;
+  wooWebhookSecret: string | null;
+  shipstationApiKey: string | null;
+  lumexiaBaseUrl: string | null;
+  lumexiaApiKey: string | null;
+};
+
+/**
+ * Keeps the zero-config dev stack working. In production Settings is the only source, so this
+ * returns nothing there (decisions in SPEC-settings.md).
+ */
+export function integrationEnvFallback(): IntegrationEnv | null {
+  if (process.env.NODE_ENV === "production") return null;
+  const read = (name: string) => process.env[name] || null;
+  return {
+    wooUrl: read("WOO_URL"),
+    wooConsumerKey: read("WOO_CONSUMER_KEY"),
+    wooConsumerSecret: read("WOO_CONSUMER_SECRET"),
+    wooWebhookSecret: read("WOO_WEBHOOK_SECRET"),
+    shipstationApiKey: read("SHIPSTATION_API_KEY"),
+    lumexiaBaseUrl: read("LUMEXIA_BASE_URL"),
+    lumexiaApiKey: read("LUMEXIA_API_KEY"),
+  };
+}

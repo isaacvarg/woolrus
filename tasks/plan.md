@@ -62,7 +62,7 @@ e2e sign-in helper (T2) ──────────────────�
 ### Phase 2: Settings API
 - [x] T4: Read and update settings (contract + core + routes)
 - [x] T5: Set and clear secrets
-- [ ] T6: Integration config for other modules + health `encryption`
+- [x] T6: Integration config for other modules + health `encryption`
 
 ### Checkpoint B: criteria 1–7 covered by tests; green
 
@@ -80,7 +80,7 @@ e2e sign-in helper (T2) ──────────────────�
 |---|---|---|
 | Better Auth's magic-link storage format (token in `identifier` vs `value`) differs from what the helper assumes | Med | T2 runs first. If it's not readable, fall back to scraping the logged link from the dev server output |
 | Hooking oRPC's validation error into `mapErrors` (where the input-validation error surfaces) | Med | T3 proves it on `boxes.create` before settings depends on it |
-| Turbo strict env silently hides `SETTINGS_ENCRYPTION_KEY` from `dev`/`build`/`test` | Med | T6 declares it in `turbo.json` and asserts the health check is `ok` in dev |
+| Turbo strict env silently hides `SETTINGS_ENCRYPTION_KEY` from `dev`/`build`/`test` | Med | Resolved in T6: every app loads the root `.env` in-process, so no `turbo.json` change. Health asserts `encryption: ok` |
 | Leaking a secret through logs (oRPC error logging of input) | High | Leak test covers responses and audit rows. T5 also checks `setSecret` failures don't log the input |
 | JSON settings fields (`shipFromAddress`, `stageSlaMinutes`) stored in a shape that later fails the contract | Low | Core parses stored JSON with the contract schema on read and treats invalid stored data as unset |
 

@@ -5,5 +5,7 @@ export * from "./idempotency";
 export * from "./jobs";
 export * from "./permissions";
 export * from "./settings/crypto";
+export { encryptionKey } from "./settings/env";
+export * from "./settings/integration";
 export * from "./settings/service";
 export * from "./units";
