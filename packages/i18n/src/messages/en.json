@@ -103,6 +103,7 @@
       "tooSmall": "This value is too small.",
       "tooBig": "This value is too large.",
       "urlHttps": "Use an https:// address.",
+      "urlCredentials": "Leave the username and password out of the address; enter keys in the fields below.",
       "usState": "Use the 2-letter state code, e.g. TX.",
       "usZip": "Use a 5-digit ZIP code (or ZIP+4).",
       "email": "Enter a valid email address."

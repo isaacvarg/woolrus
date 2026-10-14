@@ -45,6 +45,26 @@ describe("UpdateSettingsInput", () => {
     expect(result.shipFromAddress?.state).toBe("TX");
   });
 
+  it("refuses a username or password in an integration URL", () => {
+    // It would be stored and shown in plain text, outside the encrypted secrets.
+    expect(fieldErrors({ wooStoreUrl: "https://ck_x:cs_y@shop.example.com" })).toEqual({
+      wooStoreUrl: "errors.field.urlCredentials",
+    });
+    expect(fieldErrors({ lumexiaBaseUrl: "https://key@lumexia.example.com" })).toEqual({
+      lumexiaBaseUrl: "errors.field.urlCredentials",
+    });
+  });
+
+  it("caps integration URLs at 2048 characters and trims them", () => {
+    const long = `https://shop.example.com/${"a".repeat(2049 - 25)}`;
+    expect(long).toHaveLength(2049);
+    expect(fieldErrors({ wooStoreUrl: long })).toEqual({ wooStoreUrl: "errors.field.tooBig" });
+    expect(fieldErrors({ wooStoreUrl: long.slice(0, 2048) })).toEqual({});
+    expect(
+      UpdateSettingsInput.parse({ wooStoreUrl: " https://shop.example.com " }).wooStoreUrl,
+    ).toBe("https://shop.example.com");
+  });
+
   it("allows http only for localhost hosts", () => {
     expect(fieldErrors({ wooStoreUrl: "http://localhost:8090" })).toEqual({});
     expect(fieldErrors({ wooStoreUrl: "http://shop.localhost" })).toEqual({});

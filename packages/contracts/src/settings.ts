@@ -6,12 +6,27 @@ import { base } from "./base";
 
 const LOCAL_HOST = /^(localhost|.+\.localhost)$/;
 
-/** https://, or http:// for localhost and *.localhost (the dev stack). */
-export const IntegrationUrl = z.string().refine((value) => {
-  if (!URL.canParse(value)) return false;
-  const url = new URL(value);
-  return url.protocol === "https:" || (url.protocol === "http:" && LOCAL_HOST.test(url.hostname));
-}, "errors.field.urlHttps");
+const parseUrl = (value: string) => (URL.canParse(value) ? new URL(value) : null);
+
+/**
+ * https://, or http:// for localhost and *.localhost (the dev stack). No username or password in
+ * the URL: it would be stored and shown in plain text, outside the encrypted secrets.
+ */
+export const IntegrationUrl = z
+  .string()
+  .trim()
+  .max(2048)
+  .refine((value) => {
+    const url = parseUrl(value);
+    return (
+      url !== null &&
+      (url.protocol === "https:" || (url.protocol === "http:" && LOCAL_HOST.test(url.hostname)))
+    );
+  }, "errors.field.urlHttps")
+  .refine((value) => {
+    const url = parseUrl(value);
+    return url === null || (url.username === "" && url.password === "");
+  }, "errors.field.urlCredentials");
 
 const text = (max: number) => z.string().trim().min(1).max(max);
 
