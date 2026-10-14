@@ -1,0 +1,34 @@
+{
+  "common": {
+    "appName": "Woolrus",
+    "save": "Guardar",
+    "cancel": "Cancelar",
+    "loading": "Cargando…",
+    "empty": "Aún no hay nada aquí"
+  },
+  "nav": {
+    "boxes": "Cajas"
+  },
+  "boxes": {
+    "title": "Cajas",
+    "name": "Nombre",
+    "dimensions": "Dimensiones (pulg)",
+    "maxWeight": "Peso máximo (lb)",
+    "add": "Agregar caja",
+    "length": "Largo",
+    "width": "Ancho",
+    "height": "Alto"
+  },
+  "errors": {
+    "unauthenticated": "Inicia sesión para continuar.",
+    "forbidden": "No tienes permiso para hacer eso.",
+    "notFound": "No pudimos encontrarlo.",
+    "validation": "Algunos campos necesitan atención.",
+    "conflict": "Alguien más cambió esto. Recarga e inténtalo de nuevo.",
+    "internal": "Algo salió mal. Inténtalo de nuevo.",
+    "box": {
+      "nameTaken": "Ya existe una caja con este nombre.",
+      "inUse": "Esta caja está en uso por un paquete y solo se puede archivar."
+    }
+  }
+}

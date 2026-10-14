@@ -1,0 +1,197 @@
+// Notes with media, quality issues and returns.
+
+enum NoteVisibility {
+  INTERNAL
+  CUSTOMER
+
+  @@map("note_visibility")
+}
+
+/// A note always belongs to an order (for listing) and optionally to one narrower target.
+/// At most one of orderItemId / packageId / qualityIssueId / returnId is set (check constraint in migration).
+model Note {
+  id             String         @id @default(uuid(7)) @db.Uuid
+  orderId        String         @map("order_id") @db.Uuid
+  orderItemId    String?        @map("order_item_id") @db.Uuid
+  packageId      String?        @map("package_id") @db.Uuid
+  qualityIssueId String?        @map("quality_issue_id") @db.Uuid
+  returnId       String?        @map("return_id") @db.Uuid
+  authorId       String?        @map("author_id") @db.Uuid
+  content        String
+  visibility     NoteVisibility @default(INTERNAL)
+  /// Set once a CUSTOMER note has been posted to WooCommerce, so it is never posted twice.
+  wooNoteId      Int?           @map("woo_note_id")
+  pushedToWooAt  DateTime?      @map("pushed_to_woo_at") @db.Timestamptz(3)
+  editedAt       DateTime?      @map("edited_at") @db.Timestamptz(3)
+  createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  order        Order            @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderItem    OrderItem?       @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  package      Package?         @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  qualityIssue QualityIssue?    @relation(fields: [qualityIssueId], references: [id], onDelete: Cascade)
+  return       ReturnRequest?   @relation(fields: [returnId], references: [id], onDelete: Cascade)
+  author       User?            @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  attachments  NoteAttachment[]
+
+  @@index([orderId])
+  @@map("notes")
+}
+
+enum AttachmentKind {
+  IMAGE
+  VOICE
+
+  @@map("attachment_kind")
+}
+
+model NoteAttachment {
+  id           String         @id @default(uuid(7)) @db.Uuid
+  noteId       String         @map("note_id") @db.Uuid
+  kind         AttachmentKind
+  storageKey   String         @unique @map("storage_key")
+  thumbnailKey String?        @map("thumbnail_key")
+  contentType  String         @map("content_type")
+  fileName     String         @map("file_name")
+  sizeBytes    Int            @map("size_bytes")
+  width        Int?
+  height       Int?
+  durationMs   Int?           @map("duration_ms")
+  createdAt    DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  note Note @relation(fields: [noteId], references: [id], onDelete: Cascade)
+
+  @@index([noteId])
+  @@map("note_attachments")
+}
+
+enum QualityIssueType {
+  WRONG_ITEM
+  DAMAGED_ITEM
+  MISSING_ITEM
+  WRONG_QUANTITY
+  PACKAGING_DAMAGE
+  LABELING_ERROR
+  WRONG_BOX_SIZE
+  OTHER
+
+  @@map("quality_issue_type")
+}
+
+enum QualityIssueSeverity {
+  MINOR
+  MAJOR
+  CRITICAL
+
+  @@map("quality_issue_severity")
+}
+
+enum QualityIssueStatus {
+  OPEN
+  RESOLVED
+  DISMISSED
+
+  @@map("quality_issue_status")
+}
+
+model QualityIssue {
+  id                String               @id @default(uuid(7)) @db.Uuid
+  orderId           String               @map("order_id") @db.Uuid
+  orderItemId       String?              @map("order_item_id") @db.Uuid
+  packageId         String?              @map("package_id") @db.Uuid
+  labelId           String?              @map("label_id") @db.Uuid
+  type              QualityIssueType
+  severity          QualityIssueSeverity
+  status            QualityIssueStatus   @default(OPEN)
+  description       String
+  discoveredStage   FulfillmentStage     @map("discovered_stage")
+  originStage       FulfillmentStage?    @map("origin_stage")
+  customerReported  Boolean              @default(false) @map("customer_reported")
+  reporterId        String?              @map("reporter_id") @db.Uuid
+  responsibleUserId String?              @map("responsible_user_id") @db.Uuid
+  triggeredRepack   Boolean              @default(false) @map("triggered_repack")
+  resolutionNotes   String?              @map("resolution_notes")
+  resolvedById      String?              @map("resolved_by_id") @db.Uuid
+  resolvedAt        DateTime?            @map("resolved_at") @db.Timestamptz(3)
+  createdAt         DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  order           Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderItem       OrderItem?      @relation(fields: [orderItemId], references: [id], onDelete: SetNull)
+  package         Package?        @relation(fields: [packageId], references: [id], onDelete: SetNull)
+  label           ShippingLabel?  @relation(fields: [labelId], references: [id], onDelete: SetNull)
+  reporter        User?           @relation("IssueReporter", fields: [reporterId], references: [id], onDelete: SetNull)
+  responsibleUser User?           @relation("IssueResponsible", fields: [responsibleUserId], references: [id], onDelete: SetNull)
+  resolvedBy      User?           @relation("IssueResolver", fields: [resolvedById], references: [id], onDelete: SetNull)
+  notes           Note[]
+  returns         ReturnRequest[]
+
+  @@index([orderId])
+  @@index([status, severity])
+  @@index([createdAt])
+  @@map("quality_issues")
+}
+
+// Returns are modelled now so they don't arrive as a bolt-on; the flows are built in a later milestone.
+
+enum ReturnStatus {
+  REQUESTED
+  APPROVED
+  LABEL_SENT
+  RECEIVED
+  INSPECTED
+  CLOSED
+  REJECTED
+
+  @@map("return_status")
+}
+
+enum ReturnItemCondition {
+  UNOPENED
+  OPENED
+  DAMAGED
+  NOT_RECEIVED
+
+  @@map("return_item_condition")
+}
+
+model ReturnRequest {
+  id             String       @id @default(uuid(7)) @db.Uuid
+  orderId        String       @map("order_id") @db.Uuid
+  rmaNumber      String       @unique @map("rma_number")
+  status         ReturnStatus @default(REQUESTED)
+  reason         String
+  qualityIssueId String?      @map("quality_issue_id") @db.Uuid
+  createdById    String?      @map("created_by_id") @db.Uuid
+  receivedAt     DateTime?    @map("received_at") @db.Timestamptz(3)
+  closedAt       DateTime?    @map("closed_at") @db.Timestamptz(3)
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  order        Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  qualityIssue QualityIssue?   @relation(fields: [qualityIssueId], references: [id], onDelete: SetNull)
+  createdBy    User?           @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  items        ReturnItem[]
+  labels       ShippingLabel[]
+  notes        Note[]
+
+  @@index([orderId])
+  @@index([status])
+  @@map("return_requests")
+}
+
+model ReturnItem {
+  id          String               @id @default(uuid(7)) @db.Uuid
+  returnId    String               @map("return_id") @db.Uuid
+  orderItemId String               @map("order_item_id") @db.Uuid
+  quantity    Int
+  condition   ReturnItemCondition?
+  restock     Boolean              @default(false)
+  lotCode     String?              @map("lot_code")
+
+  return    ReturnRequest @relation(fields: [returnId], references: [id], onDelete: Cascade)
+  orderItem OrderItem     @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+
+  @@index([returnId])
+  @@map("return_items")
+}

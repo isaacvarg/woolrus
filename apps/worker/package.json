@@ -1,0 +1,24 @@
+{
+  "name": "@woolrus/worker",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "SERVICE_NAME=worker tsx watch --env-file-if-exists=../../.env src/main.ts",
+    "build": "tsdown",
+    "start": "node dist/main.mjs",
+    "typecheck": "tsc"
+  },
+  "dependencies": {
+    "@woolrus/core": "workspace:*",
+    "@woolrus/db": "workspace:*",
+    "@woolrus/logger": "workspace:*",
+    "pg-boss": "12.38.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "@woolrus/config": "workspace:*",
+    "tsdown": "0.23.1",
+    "tsx": "^4.23.15"
+  }
+}

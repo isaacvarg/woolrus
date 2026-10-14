@@ -1,0 +1,9 @@
+**/node_modules
+**/.next
+**/.turbo
+**/dist
+**/src/generated
+.env
+.env.*
+.git
+docker/compose.*.yml

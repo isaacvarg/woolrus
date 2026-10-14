@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: woolrus
+          POSTGRES_PASSWORD: woolrus
+          POSTGRES_DB: woolrus
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U woolrus" --health-interval 2s --health-retries 30
+    env:
+      DATABASE_URL: postgresql://woolrus:woolrus@localhost:5432/woolrus
+      TEST_DATABASE_URL: postgresql://woolrus:woolrus@localhost:5432/woolrus_test
+      BETTER_AUTH_URL: http://localhost:3000
+      BETTER_AUTH_SECRET: ci-only-secret-ci-only-secret-ci-only
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Create test database
+        run: psql "$DATABASE_URL" -c "CREATE DATABASE woolrus_test"
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - name: Migrations apply cleanly and match the schema
+        run: pnpm db:deploy && pnpm --filter @woolrus/db migrate:check
+      - run: pnpm test
+      - run: pnpm build
+      - name: End-to-end smoke tests
+        run: |
+          pnpm --filter @woolrus/web exec playwright install --with-deps chromium
+          (cd apps/web && pnpm start &) 
+          npx --yes wait-on@8 http://localhost:3000/api/health
+          pnpm --filter @woolrus/web test:e2e
+        env:
+          E2E_BASE_URL: http://localhost:3000
