@@ -4,4 +4,5 @@ export * from "./errors";
 export * from "./idempotency";
 export * from "./jobs";
 export * from "./permissions";
+export * from "./settings/crypto";
 export * from "./units";

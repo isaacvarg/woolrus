@@ -1,7 +1,7 @@
 # Spec: `settings`
 
 **Milestone:** M1 · **Depends on:** — · **Used by:** `store-sync`, `identity`, `carriers`, `lumexia`, `workflow`
-(SLA), `packing`/`qa` (QA rule), `operations` (PII retention) · **State:** planned
+(SLA), `packing`/`qa` (QA rule), `operations` (PII retention) · **State:** in progress
 
 Project-wide commands, structure, code style, testing levels and boundaries are in [`../../SPEC.md`](../../SPEC.md);
 this spec only adds what is specific to `settings`.

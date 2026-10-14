@@ -6,14 +6,14 @@ E2E: `pnpm --filter @woolrus/web test:e2e` (dev stack up).
 
 ## Phase 1: Foundations
 
-### T1: Secret encryption
+### T1: Secret encryption ✅
 **Description:** Pure AES-256-GCM `encryptSecret`/`decryptSecret` with the `v1:<iv>:<tag>:<ct>` format, plus
 `parseEncryptionKey(base64)` that rejects keys that aren't 32 bytes. A typed `SecretDecryptError` covers tampering,
 a wrong key and malformed input.
 **Acceptance criteria:**
-- [ ] Round-trip works, and two encryptions of the same value differ (random IV)
-- [ ] Flipping one byte of the IV, tag or ciphertext, using another key, or a malformed string throws `SecretDecryptError` (criterion 1)
-- [ ] A key that isn't base64 for 32 bytes is rejected
+- [x] Round-trip works, and two encryptions of the same value differ (random IV)
+- [x] Flipping one byte of the IV, tag or ciphertext, using another key, or a malformed string throws `SecretDecryptError` (criterion 1)
+- [x] A key that isn't base64 for 32 bytes is rejected
 **Verification:** `pnpm --filter @woolrus/core test -- crypto`; typecheck
 **Dependencies:** none
 **Files:** `packages/core/src/settings/crypto.ts`, `crypto.test.ts`

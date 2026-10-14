@@ -53,7 +53,7 @@ e2e sign-in helper (T2) ──────────────────�
 ## Task list
 
 ### Phase 1: Foundations (riskiest first)
-- [ ] T1: Secret encryption (`crypto.ts`)
+- [x] T1: Secret encryption (`crypto.ts`)
 - [ ] T2: Signed-in Playwright helper
 - [ ] T3: Field-level validation errors through the API
 
