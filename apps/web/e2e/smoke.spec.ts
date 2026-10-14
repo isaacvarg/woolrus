@@ -1,9 +1,9 @@
 import { expect, test } from "@playwright/test";
 
-test("health check reports the database", async ({ request }) => {
+test("health check reports the database and the encryption key", async ({ request }) => {
   const response = await request.get("/api/health");
   expect(response.ok()).toBe(true);
-  expect(await response.json()).toMatchObject({ checks: { database: "ok" } });
+  expect(await response.json()).toMatchObject({ checks: { database: "ok", encryption: "ok" } });
 });
 
 test("signed-out visitors land on sign-in", async ({ page }) => {

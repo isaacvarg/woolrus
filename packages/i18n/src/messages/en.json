@@ -7,17 +7,84 @@
     "empty": "Nothing here yet"
   },
   "nav": {
-    "boxes": "Boxes"
+    "boxes": "Boxes",
+    "settings": "Settings"
   },
   "boxes": {
     "title": "Boxes",
     "name": "Name",
     "dimensions": "Dimensions (in)",
     "maxWeight": "Max weight (lb)",
+    "maxWeightColumn": "Max weight",
     "add": "Add box",
     "length": "Length",
     "width": "Width",
     "height": "Height"
+  },
+  "settings": {
+    "title": "Settings",
+    "general": "General",
+    "saved": "Settings saved.",
+    "shipFrom": {
+      "title": "Ship-from address",
+      "name": "Contact name",
+      "company": "Company",
+      "phone": "Phone",
+      "email": "Email",
+      "address1": "Address line 1",
+      "address2": "Address line 2",
+      "city": "City",
+      "state": "State",
+      "postalCode": "ZIP code"
+    },
+    "syncInterval": "Sync interval (minutes)",
+    "stationIdleLock": "Station idle lock (minutes)",
+    "sla": {
+      "title": "SLA per stage (minutes)",
+      "hint": "Flag orders that stay longer than this in a stage. Leave empty for no limit.",
+      "PENDING": "Pending",
+      "PICKING": "Picking",
+      "PACKING": "Packing",
+      "QA": "QA",
+      "READY": "Ready to ship"
+    },
+    "weightDisplay": {
+      "label": "Weight display",
+      "LB_OZ": "Pounds and ounces ({example})",
+      "LB_DECIMAL": "Decimal pounds ({example})"
+    },
+    "piiRetention": {
+      "label": "Keep customer details (days)",
+      "hint": "Leave empty to keep them forever. Between 30 and 3650 days."
+    },
+    "qaMustDifferFromPacker": "QA must be done by someone other than the packer",
+    "integrations": {
+      "title": "Integrations",
+      "saved": "Saved.",
+      "wooStoreUrl": "Store URL",
+      "lumexiaBaseUrl": "API base URL",
+      "names": {
+        "woocommerce": "WooCommerce",
+        "shipstation": "ShipStation",
+        "lumexia": "Lumexia"
+      },
+      "secrets": {
+        "wooConsumerKey": "Consumer key",
+        "wooConsumerSecret": "Consumer secret",
+        "wooWebhookSecret": "Webhook secret",
+        "shipstationApiKey": "API key",
+        "lumexiaApiKey": "API key"
+      },
+      "set": "Set",
+      "notSet": "Not set",
+      "add": "Add",
+      "replace": "Replace",
+      "clear": "Clear",
+      "yesClear": "Yes, clear",
+      "clearConfirm": "Clear the {name}? The integration stops working until a new value is added.",
+      "newValue": "New value",
+      "writeOnly": "Stored encrypted. Nobody can view it after saving, so keep your own copy if you need one."
+    }
   },
   "errors": {
     "unauthenticated": "Please sign in to continue.",
@@ -29,6 +96,20 @@
     "box": {
       "nameTaken": "A box with this name already exists.",
       "inUse": "This box is used by a package and can only be archived."
+    },
+    "field": {
+      "invalid": "This value isn't valid.",
+      "required": "This field is required.",
+      "tooSmall": "This value is too small.",
+      "tooBig": "This value is too large.",
+      "urlHttps": "Use an https:// address.",
+      "urlCredentials": "Leave the username and password out of the address; enter keys in the fields below.",
+      "usState": "Use the 2-letter state code, e.g. TX.",
+      "usZip": "Use a 5-digit ZIP code (or ZIP+4).",
+      "email": "Enter a valid email address."
+    },
+    "settings": {
+      "encryptionKeyMissing": "Secrets can't be saved: the server's encryption key is missing or invalid. Ask whoever runs the server to set SETTINGS_ENCRYPTION_KEY."
     }
   }
 }

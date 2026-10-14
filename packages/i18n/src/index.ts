@@ -25,3 +25,18 @@ export type MessageKey = Leaves<Messages>;
  * so the server never sends user-facing English.
  */
 export type ErrorCode = Extract<MessageKey, `errors.${string}`>;
+
+function leafKeys(tree: object, prefix = ""): string[] {
+  return Object.entries(tree).flatMap(([key, value]) =>
+    typeof value === "string" ? [`${prefix}${key}`] : leafKeys(value, `${prefix}${key}.`),
+  );
+}
+
+const errorCodes: ReadonlySet<string> = new Set(
+  leafKeys(en).filter((key) => key.startsWith("errors.")),
+);
+
+/** True when `value` is an error key present in the catalog (the API sends only these). */
+export function isErrorCode(value: unknown): value is ErrorCode {
+  return typeof value === "string" && errorCodes.has(value);
+}

@@ -1,4 +1,10 @@
+import path from "node:path";
 import { defineConfig, devices } from "@playwright/test";
+import { config as loadEnv } from "dotenv";
+
+// e2e helpers seed users straight into the database, so they need DATABASE_URL from the root .env
+// (CI sets it in the environment instead).
+loadEnv({ path: path.resolve(import.meta.dirname, "../../.env"), quiet: true });
 
 const baseURL = process.env.E2E_BASE_URL ?? "http://localhost:3000";
 

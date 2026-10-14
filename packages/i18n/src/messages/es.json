@@ -7,17 +7,84 @@
     "empty": "Aún no hay nada aquí"
   },
   "nav": {
-    "boxes": "Cajas"
+    "boxes": "Cajas",
+    "settings": "Configuración"
   },
   "boxes": {
     "title": "Cajas",
     "name": "Nombre",
     "dimensions": "Dimensiones (pulg)",
     "maxWeight": "Peso máximo (lb)",
+    "maxWeightColumn": "Peso máximo",
     "add": "Agregar caja",
     "length": "Largo",
     "width": "Ancho",
     "height": "Alto"
+  },
+  "settings": {
+    "title": "Configuración",
+    "general": "General",
+    "saved": "Configuración guardada.",
+    "shipFrom": {
+      "title": "Dirección de envío",
+      "name": "Nombre de contacto",
+      "company": "Empresa",
+      "phone": "Teléfono",
+      "email": "Correo electrónico",
+      "address1": "Dirección, línea 1",
+      "address2": "Dirección, línea 2",
+      "city": "Ciudad",
+      "state": "Estado",
+      "postalCode": "Código postal"
+    },
+    "syncInterval": "Intervalo de sincronización (minutos)",
+    "stationIdleLock": "Bloqueo de estación por inactividad (minutos)",
+    "sla": {
+      "title": "SLA por etapa (minutos)",
+      "hint": "Marca los pedidos que permanecen más tiempo que esto en una etapa. Déjalo vacío para no tener límite.",
+      "PENDING": "Pendiente",
+      "PICKING": "Recolección",
+      "PACKING": "Empaque",
+      "QA": "Control de calidad",
+      "READY": "Listo para enviar"
+    },
+    "weightDisplay": {
+      "label": "Formato de peso",
+      "LB_OZ": "Libras y onzas ({example})",
+      "LB_DECIMAL": "Libras decimales ({example})"
+    },
+    "piiRetention": {
+      "label": "Conservar datos de clientes (días)",
+      "hint": "Déjalo vacío para conservarlos siempre. Entre 30 y 3650 días."
+    },
+    "qaMustDifferFromPacker": "El control de calidad debe hacerlo alguien distinto de quien empacó",
+    "integrations": {
+      "title": "Integraciones",
+      "saved": "Guardado.",
+      "wooStoreUrl": "URL de la tienda",
+      "lumexiaBaseUrl": "URL base de la API",
+      "names": {
+        "woocommerce": "WooCommerce",
+        "shipstation": "ShipStation",
+        "lumexia": "Lumexia"
+      },
+      "secrets": {
+        "wooConsumerKey": "Clave de consumidor",
+        "wooConsumerSecret": "Secreto de consumidor",
+        "wooWebhookSecret": "Secreto del webhook",
+        "shipstationApiKey": "Clave de API",
+        "lumexiaApiKey": "Clave de API"
+      },
+      "set": "Configurado",
+      "notSet": "Sin configurar",
+      "add": "Agregar",
+      "replace": "Reemplazar",
+      "clear": "Borrar",
+      "yesClear": "Sí, borrar",
+      "clearConfirm": "¿Borrar «{name}»? La integración dejará de funcionar hasta que se agregue un valor nuevo.",
+      "newValue": "Valor nuevo",
+      "writeOnly": "Se guarda cifrado. Nadie podrá verlo después de guardarlo; conserva tu propia copia si la necesitas."
+    }
   },
   "errors": {
     "unauthenticated": "Inicia sesión para continuar.",
@@ -29,6 +96,20 @@
     "box": {
       "nameTaken": "Ya existe una caja con este nombre.",
       "inUse": "Esta caja está en uso por un paquete y solo se puede archivar."
+    },
+    "field": {
+      "invalid": "Este valor no es válido.",
+      "required": "Este campo es obligatorio.",
+      "tooSmall": "Este valor es demasiado pequeño.",
+      "tooBig": "Este valor es demasiado grande.",
+      "urlHttps": "Usa una dirección https://.",
+      "urlCredentials": "No incluyas usuario ni contraseña en la dirección; ingresa las claves en los campos de abajo.",
+      "usState": "Usa el código de estado de 2 letras, p. ej. TX.",
+      "usZip": "Usa un código postal de 5 dígitos (o ZIP+4).",
+      "email": "Ingresa un correo electrónico válido."
+    },
+    "settings": {
+      "encryptionKeyMissing": "No se pueden guardar secretos: falta la clave de cifrado del servidor o no es válida. Pide a quien administra el servidor que configure SETTINGS_ENCRYPTION_KEY."
     }
   }
 }

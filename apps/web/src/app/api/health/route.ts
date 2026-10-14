@@ -1,3 +1,4 @@
+import { encryptionKey } from "@woolrus/core";
 import { db } from "@woolrus/db";
 
 export const dynamic = "force-dynamic";
@@ -11,6 +12,8 @@ export async function GET() {
   } catch {
     checks.database = "fail";
   }
+  // Without a valid key, integration secrets can't be stored or read (FR-SET-05).
+  checks.encryption = encryptionKey() ? "ok" : "fail";
   const ok = Object.values(checks).every((c) => c === "ok");
   return Response.json({ ok, checks }, { status: ok ? 200 : 503 });
 }
