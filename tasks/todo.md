@@ -23,7 +23,7 @@ criterion n. Every task ends green for the packages it touches (`pnpm --filter <
     `apps/web/src/app/(app)/settings/general-form.tsx`, `packages/i18n/src/messages/{en,es}.json`.
   - Deps: T1.
 
-- [ ] **T3: State machine (pure)** (S)
+- [x] **T3: State machine (pure)** (S)
   - Acceptance: the transition table from the spec as data. `canTransition` / `transitionFor(from, to, kind)`.
     Every (from, to, kind) is tested; unlisted ones give `errors.workflow.illegalTransition`, and terminal states
     are left only by force (SC 1).

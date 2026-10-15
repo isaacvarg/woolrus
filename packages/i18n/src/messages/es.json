@@ -112,6 +112,9 @@
     },
     "settings": {
       "encryptionKeyMissing": "No se pueden guardar secretos: falta la clave de cifrado del servidor o no es válida. Pide a quien administra el servidor que configure SETTINGS_ENCRYPTION_KEY."
+    },
+    "workflow": {
+      "illegalTransition": "Ese cambio no está permitido desde el estado actual del pedido."
     }
   }
 }

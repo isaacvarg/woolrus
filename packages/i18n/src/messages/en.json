@@ -112,6 +112,9 @@
     },
     "settings": {
       "encryptionKeyMissing": "Secrets can't be saved: the server's encryption key is missing or invalid. Ask whoever runs the server to set SETTINGS_ENCRYPTION_KEY."
+    },
+    "workflow": {
+      "illegalTransition": "That move isn't allowed from the order's current status."
     }
   }
 }
