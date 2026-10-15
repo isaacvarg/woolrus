@@ -4,11 +4,21 @@
     "save": "Guardar",
     "cancel": "Cancelar",
     "loading": "Cargando…",
-    "empty": "Aún no hay nada aquí"
+    "empty": "Aún no hay nada aquí",
+    "dismiss": "Cerrar",
+    "notifications": "Notificaciones"
   },
   "nav": {
     "boxes": "Cajas",
-    "settings": "Configuración"
+    "settings": "Configuración",
+    "pending": "Pendientes",
+    "picking": "En surtido",
+    "packing": "En empaque",
+    "qa": "Control de calidad",
+    "ready": "Listos",
+    "onHold": "En espera",
+    "allOrders": "Todos los pedidos",
+    "queues": "Colas"
   },
   "boxes": {
     "title": "Cajas",
@@ -87,6 +97,43 @@
       "newValue": "Valor nuevo",
       "writeOnly": "Se guarda cifrado. Nadie podrá verlo después de guardarlo; conserva tu propia copia si la necesitas."
     }
+  },
+  "queue": {
+    "search": "Buscar pedidos",
+    "searchPlaceholder": "Número de pedido o cliente",
+    "number": "Pedido",
+    "customer": "Cliente",
+    "items": "Artículos",
+    "priority": "Prioridad",
+    "orderedAt": "Fecha del pedido",
+    "age": "En la etapa",
+    "claimedBy": "Tomado por",
+    "heldFrom": "En espera desde",
+    "holdReason": "Motivo",
+    "priorityLevel": {
+      "0": "Normal",
+      "1": "Alta",
+      "2": "Urgente"
+    },
+    "ageMinutes": "{count} min",
+    "ageHours": "{count} h",
+    "ageDays": "{count} d",
+    "slaBreached": "Superó el tiempo límite de la etapa",
+    "externalChange": "Modificado en la tienda después de importarlo",
+    "beginPicking": "Comenzar surtido",
+    "begunPicking": "El pedido {number} está ahora en surtido.",
+    "loadMore": "Cargar más",
+    "noOrders": "No hay pedidos en esta cola."
+  },
+  "status": {
+    "PENDING": "Pendiente",
+    "PICKING": "En surtido",
+    "PACKING": "En empaque",
+    "QA": "Control de calidad",
+    "READY": "Listo",
+    "COMPLETED": "Completado",
+    "ON_HOLD": "En espera",
+    "CANCELLED": "Cancelado"
   },
   "errors": {
     "unauthenticated": "Inicia sesión para continuar.",

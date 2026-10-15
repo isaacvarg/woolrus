@@ -3,7 +3,9 @@
 import { ORPCError } from "@orpc/client";
 import { useTranslations } from "next-intl";
 
-function errorData(error: unknown): { messageKey?: unknown; fields?: unknown } | undefined {
+function errorData(
+  error: unknown,
+): { messageKey?: unknown; fields?: unknown; params?: unknown } | undefined {
   return error instanceof ORPCError
     ? (error.data as Record<string, unknown> | undefined)
     : undefined;
@@ -13,9 +15,12 @@ function errorData(error: unknown): { messageKey?: unknown; fields?: unknown } |
 export function useErrorMessage() {
   const t = useTranslations();
   return (error: unknown): string => {
-    // Every API error the server raises on purpose carries data.messageKey (see @woolrus/contracts).
-    const key = errorData(error)?.messageKey;
-    if (typeof key === "string" && t.has(key)) return t(key);
+    // Every API error the server raises on purpose carries data.messageKey (see @woolrus/contracts),
+    // and `params` for messages that name something ("{name} is working on this order.").
+    const { messageKey: key, params } = errorData(error) ?? {};
+    if (typeof key === "string" && t.has(key)) {
+      return t(key, typeof params === "object" && params !== null ? (params as never) : undefined);
+    }
     return t("errors.internal");
   };
 }

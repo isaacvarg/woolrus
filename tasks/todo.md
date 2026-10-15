@@ -129,7 +129,7 @@ criterion n. Every task ends green for the packages it touches (`pnpm --filter <
     9,000,001+ so they never collide with Woo), each with a stage-event history; existing ones are skipped, never reset.
     Each stage has orders ready to complete and blocked ones. Priority is set inline the way T18's rules will compute it.
 
-- [ ] **T13: Nav counts + queue pages** (M)
+- [x] **T13: Nav counts + queue pages** (M)
   - Acceptance: nav entries Pending…Ready, On Hold (with counts) and All Orders. `/queue/[stage]` has search,
     a priority badge, red stage age past SLA, the claim holder, the external-change icon and tablet-sized rows.
     Pending rows have **Begin Picking**. Stale-version errors show a toast and refetch. en/es strings.
@@ -137,6 +137,12 @@ criterion n. Every task ends green for the packages it touches (`pnpm --filter <
   - Files: `apps/web/src/app/(app)/layout.tsx`, `queue/[stage]/{page,queue-table}.tsx`, i18n,
     `apps/web/e2e/workflow.spec.ts`.
   - Deps: T8, T10, T12.
+  - Done: `QueueNav` (`(app)/queue-nav.tsx`, counts via `orpc.orders.counts`); queue slugs in `lib/queues.ts`
+    (`/queue/on-hold`). Reuse: `toast.success/error` + `<Toaster>` (`components/ui/toast.tsx`, RAC's UNSTABLE toast
+    wrapped); `useErrorMessage` now passes `data.params`; `status.*` i18n labels. Mutations invalidate
+    `orpc.orders.key()` on settle, which covers stale. `/orders` links are cast `as Route` until T14/T15 add the
+    pages. E2E: `support/orders.ts` `createOrder` (unique customer per test, search to isolate) + `deleteCreatedOrders`
+    in `afterAll`; race tests do the other station's move inside `page.route`, or a refetch beats the click.
 
 - [ ] **T14: Order detail page** (M/L)
   - Acceptance: `/orders/[id]` has the header, claim banner + take-over confirmation, buttons from `allowedActions`,

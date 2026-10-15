@@ -4,11 +4,21 @@
     "save": "Save",
     "cancel": "Cancel",
     "loading": "Loading…",
-    "empty": "Nothing here yet"
+    "empty": "Nothing here yet",
+    "dismiss": "Dismiss",
+    "notifications": "Notifications"
   },
   "nav": {
     "boxes": "Boxes",
-    "settings": "Settings"
+    "settings": "Settings",
+    "pending": "Pending",
+    "picking": "Picking",
+    "packing": "Packing",
+    "qa": "QA",
+    "ready": "Ready",
+    "onHold": "On Hold",
+    "allOrders": "All Orders",
+    "queues": "Queues"
   },
   "boxes": {
     "title": "Boxes",
@@ -87,6 +97,43 @@
       "newValue": "New value",
       "writeOnly": "Stored encrypted. Nobody can view it after saving, so keep your own copy if you need one."
     }
+  },
+  "queue": {
+    "search": "Search orders",
+    "searchPlaceholder": "Order number or customer",
+    "number": "Order",
+    "customer": "Customer",
+    "items": "Items",
+    "priority": "Priority",
+    "orderedAt": "Ordered",
+    "age": "In stage",
+    "claimedBy": "Claimed by",
+    "heldFrom": "Held from",
+    "holdReason": "Reason",
+    "priorityLevel": {
+      "0": "Normal",
+      "1": "High",
+      "2": "Urgent"
+    },
+    "ageMinutes": "{count} min",
+    "ageHours": "{count} h",
+    "ageDays": "{count} d",
+    "slaBreached": "Past the stage's time limit",
+    "externalChange": "Changed in the store after import",
+    "beginPicking": "Begin Picking",
+    "begunPicking": "Order {number} is now in Picking.",
+    "loadMore": "Load more",
+    "noOrders": "No orders in this queue."
+  },
+  "status": {
+    "PENDING": "Pending",
+    "PICKING": "Picking",
+    "PACKING": "Packing",
+    "QA": "QA",
+    "READY": "Ready",
+    "COMPLETED": "Completed",
+    "ON_HOLD": "On Hold",
+    "CANCELLED": "Cancelled"
   },
   "errors": {
     "unauthenticated": "Please sign in to continue.",
