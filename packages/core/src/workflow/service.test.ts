@@ -420,6 +420,20 @@ describe("hold and resume (SC 7)", () => {
     },
   );
 
+  // Every role may hold and resume, so the only caller to refuse is one without roles (SC 4).
+  it("is forbidden to a user without roles", async () => {
+    const nobody = await createActor(db, []);
+    const { order: pending } = await createOrder(db);
+    const { order: held } = await createOrder(db, { status: "ON_HOLD", heldFromStatus: "PACKING" });
+
+    await expect(
+      hold(db, nobody, { orderId: pending.id, expectedVersion: 1, reason: "Customer called" }),
+    ).rejects.toMatchObject({ kind: "FORBIDDEN" });
+    await expect(
+      resume(db, nobody, { orderId: held.id, expectedVersion: 1 }),
+    ).rejects.toMatchObject({ kind: "FORBIDDEN" });
+  });
+
   it("can't resume an order that isn't held, or has nowhere to return to", async () => {
     const picker = await createActor(db, ["PICKER"]);
     const { order: pending } = await createOrder(db);
