@@ -6,9 +6,19 @@ import { z } from "zod";
  * Every API error carries a message key from @woolrus/i18n ("errors.box.inUse"), never English.
  * Clients translate it; `fields` maps form fields to message keys for validation errors.
  */
+const MessageParams = z.record(z.string(), z.union([z.string(), z.number()]));
+
 export const AppErrorData = z.object({
   messageKey: z.string(),
   fields: z.record(z.string(), z.string()).optional(),
+  /** Values for the message, e.g. `{ name }` in "{name} is working on this order." */
+  params: MessageParams.optional(),
+  /** What a refused workflow gate still needs, each a message key with its values. */
+  unmet: z.array(z.object({ messageKey: z.string(), params: MessageParams })).optional(),
+  /** Why each order of an all-or-nothing batch was refused. */
+  failures: z
+    .array(z.object({ orderId: z.string(), messageKey: z.string(), params: MessageParams }))
+    .optional(),
 });
 export type AppErrorData = z.infer<typeof AppErrorData>;
 

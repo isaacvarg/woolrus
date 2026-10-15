@@ -31,7 +31,13 @@ const mapErrors = os.middleware(async ({ next, context }) => {
     }
     if (error instanceof AppError) {
       throw new ORPCError(error.kind, {
-        data: { messageKey: error.messageKey, fields: error.fields },
+        data: {
+          messageKey: error.messageKey,
+          fields: error.fields,
+          params: error.params,
+          unmet: error.unmet ? [...error.unmet] : undefined,
+          failures: error.failures ? [...error.failures] : undefined,
+        },
       });
     }
     if (!(error instanceof ORPCError)) context.log.error({ err: error }, "unhandled API error");

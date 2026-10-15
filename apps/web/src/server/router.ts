@@ -5,6 +5,7 @@ import {
   getPublicSettings,
   getSettings,
   listBoxes,
+  orderMutations,
   permissionsFor,
   setSecret,
   updateSettings,
@@ -45,6 +46,44 @@ export const router = api.router({
     ),
     clearSecret: api.settings.clearSecret.handler(({ input, context }) =>
       clearSecret(db, context.actor, input),
+    ),
+  },
+  orders: {
+    beginPicking: api.orders.beginPicking.handler(({ input, context }) =>
+      orderMutations.beginPicking(db, context.actor, input),
+    ),
+    completePicking: api.orders.completePicking.handler(({ input, context }) =>
+      orderMutations.completePicking(db, context.actor, input),
+    ),
+    completePacking: api.orders.completePacking.handler(({ input, context }) =>
+      orderMutations.completePacking(db, context.actor, input),
+    ),
+    completeQa: api.orders.completeQa.handler(({ input, context }) =>
+      orderMutations.completeQa(db, context.actor, input),
+    ),
+    hold: api.orders.hold.handler(({ input, context }) =>
+      orderMutations.hold(db, context.actor, input),
+    ),
+    resume: api.orders.resume.handler(({ input, context }) =>
+      orderMutations.resume(db, context.actor, input),
+    ),
+    cancel: api.orders.cancel.handler(({ input, context }) =>
+      orderMutations.cancel(db, context.actor, input),
+    ),
+    forceStatus: api.orders.forceStatus.handler(({ input, context }) =>
+      orderMutations.forceStatus(db, context.actor, input),
+    ),
+    claim: api.orders.claim.handler(({ input, context }) =>
+      orderMutations.claim(db, context.actor, input),
+    ),
+    release: api.orders.release.handler(({ input, context }) =>
+      orderMutations.release(db, context.actor, input),
+    ),
+    takeOver: api.orders.takeOver.handler(({ input, context }) =>
+      orderMutations.takeOver(db, context.actor, input),
+    ),
+    claimMany: api.orders.claimMany.handler(({ input, context }) =>
+      orderMutations.claimMany(db, context.actor, input),
     ),
   },
 });

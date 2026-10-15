@@ -11,6 +11,7 @@ export * from "./settings/integration";
 export * from "./settings/service";
 export * from "./units";
 export * from "./workflow/claims";
+export * from "./workflow/detail";
 export * from "./workflow/gates";
 export * from "./workflow/lock";
 export * from "./workflow/machine";

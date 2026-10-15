@@ -1,3 +1,4 @@
+import { CLAIM_MANY_MAX } from "@woolrus/contracts";
 import type { Db, DbTx, Order, WorkflowStatus } from "@woolrus/db";
 import type { ErrorCode } from "@woolrus/i18n";
 import { recordAudit } from "../audit";
@@ -13,8 +14,6 @@ import { notifyOrderChanged } from "./notify";
 
 export type ClaimOptions = { now?: Date };
 export type ClaimInput = { orderId: string; expectedVersion: number };
-
-export const CLAIM_MANY_MAX = 50;
 
 /** Who may claim an order, by its status. Other statuses can't be claimed. */
 const claimPermission: Partial<Record<WorkflowStatus, Permission>> = {

@@ -69,7 +69,7 @@ criterion n. Every task ends green for the packages it touches (`pnpm --filter <
   - Files: `packages/core/src/workflow/claims.ts` (+test), `service.ts` (claimedAt refresh), i18n keys.
   - Deps: T5, T2.
 
-- [ ] **T8: Orders mutation contract + router** (M)
+- [x] **T8: Orders mutation contract + router** (M)
   - Acceptance: `packages/contracts/src/orders.ts` has every mutation from the spec's API table, with
     `expectedVersion`, reason rules and `OrderDetail` output (the shape is used by T11). The router has one line
     each. The `/api/v1` OpenAPI lists them. A refused gate surfaces the `unmet` list in the error `data`.
