@@ -126,3 +126,78 @@ export const completePicking = stageMove("completePicking", "PACKING");
 export const completePacking = stageMove("completePacking", "QA");
 /** QA → Ready; needs the actor's live claim and the **verified** gate. */
 export const completeQa = stageMove("completeQa", "READY");
+
+export type ReasonInput = StageInput & { reason: string };
+
+/** Any active stage → On Hold, with a reason. */
+export function hold(
+  db: Db,
+  actor: Actor,
+  input: ReasonInput,
+  options?: TransitionOptions,
+): Promise<Order> {
+  return db.$transaction((tx) =>
+    transition(tx, actor, { ...input, to: "ON_HOLD", kind: "hold" }, options),
+  );
+}
+
+/** On Hold → the stage it was held from. */
+export function resume(
+  db: Db,
+  actor: Actor,
+  input: StageInput,
+  options?: TransitionOptions,
+): Promise<Order> {
+  return db.$transaction(async (tx) => {
+    const held = await tx.order.findUnique({
+      where: { id: input.orderId },
+      select: { heldFromStatus: true },
+    });
+    // Unlocked read: `transition` re-checks it under the row lock. The fallback lets it refuse the move
+    // (or report not found) in its usual order.
+    const to = held?.heldFromStatus ?? "PENDING";
+    return transition(tx, actor, { ...input, to, kind: "resume" }, options);
+  });
+}
+
+/** Any non-terminal status → Cancelled, with a reason and no live labels. */
+export function cancel(
+  db: Db,
+  actor: Actor,
+  input: ReasonInput,
+  options?: TransitionOptions,
+): Promise<Order> {
+  return db.$transaction((tx) =>
+    transition(tx, actor, { ...input, to: "CANCELLED", kind: "cancel" }, options),
+  );
+}
+
+/** Admin override to any other status, with a reason. Skips gates, except reopening a Completed order with live labels. */
+export function forceStatus(
+  db: Db,
+  actor: Actor,
+  input: ReasonInput & { to: WorkflowStatus },
+  options?: TransitionOptions,
+): Promise<Order> {
+  return db.$transaction((tx) => transition(tx, actor, { ...input, kind: "forceStatus" }, options));
+}
+
+/** Ready → Completed. For `shipping`, inside its own transaction; no claim needed (batches). */
+export function ship(
+  tx: DbTx,
+  actor: Actor,
+  input: StageInput,
+  options?: TransitionOptions,
+): Promise<Order> {
+  return transition(tx, actor, { ...input, to: "COMPLETED", kind: "ship" }, options);
+}
+
+/** Ready → Packing, with a reason and no live labels. For `shipping`, inside its own transaction. */
+export function repack(
+  tx: DbTx,
+  actor: Actor,
+  input: ReasonInput,
+  options?: TransitionOptions,
+): Promise<Order> {
+  return transition(tx, actor, { ...input, to: "PACKING", kind: "repack" }, options);
+}

@@ -53,7 +53,7 @@ criterion n. Every task ends green for the packages it touches (`pnpm --filter <
   - Files: `packages/core/src/workflow/{service,notify}.ts` (+test), `packages/core/src/index.ts`, i18n keys.
   - Deps: T4.
 
-- [ ] **T6: Hold, resume, cancel, force, repack, ship** (S/M)
+- [x] **T6: Hold, resume, cancel, force, repack, ship** (S/M)
   - Acceptance: hold from each stage needs a reason and resume returns to `heldFromStatus`. Cancel and repack are
     refused with a live label. Force needs `order.forceStatus` and a reason, and skips gates. `ship` and `repack`
     are exported for `shipping` and take a caller `tx`. One stage event + one audit row per move (SC 7, 8).
