@@ -2,7 +2,6 @@
 
 import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { QueueRow, QueueStage } from "@woolrus/contracts";
-import type { Route } from "next";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useFormatter, useTranslations } from "next-intl";
@@ -128,8 +127,7 @@ export function QueueTable({
             )}
             {rows.map((row) => {
               const age = ageParts(row.stageEnteredAt, now);
-              // The detail page arrives with T14; until then typed routes don't know it.
-              const href = `/orders/${row.id}` as Route;
+              const href = `/orders/${row.id}` as const;
               return (
                 <tr
                   key={row.id}

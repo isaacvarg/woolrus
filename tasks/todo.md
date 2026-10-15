@@ -144,7 +144,7 @@ criterion n. Every task ends green for the packages it touches (`pnpm --filter <
     pages. E2E: `support/orders.ts` `createOrder` (unique customer per test, search to isolate) + `deleteCreatedOrders`
     in `afterAll`; race tests do the other station's move inside `page.route`, or a refetch beats the click.
 
-- [ ] **T14: Order detail page** (M/L)
+- [x] **T14: Order detail page** (M/L)
   - Acceptance: `/orders/[id]` has the header, claim banner + take-over confirmation, buttons from `allowedActions`,
     and dialogs for hold/cancel (reason) and force (status + reason). A refused completion shows the unmet list.
     Read-only lines (non-physical lines marked) and a history panel.
@@ -152,6 +152,11 @@ criterion n. Every task ends green for the packages it touches (`pnpm --filter <
   - Files: `orders/[id]/{page,order-actions,history-panel}.tsx`, `components/ui` dialog primitive if missing, i18n,
     e2e.
   - Deps: T11, T13.
+  - Done: `orders/[id]/{page,order-view,order-actions,history-panel}.tsx`. `components/ui/dialog.tsx` (`DialogTrigger`
+    + `Dialog title` with a `(close) => …` render child) — not daisyUI's `.modal-box`, which is invisible outside
+    `.modal-open`. Actions run through one `useMutation` taking `{ action, call, done }`; a gate refusal's
+    `data.unmet` renders as an alert list instead of a toast. E2E: `createOrder({ rushOrderLine: true })` adds a
+    shared non-physical product; second users go in `browser.newContext()`; click RAC radios by label text.
 
 - [ ] **T15: All Orders page** (S/M)
   - Acceptance: `/orders` has search, a status filter, sortable columns and pagination (TanStack Table) in the URL

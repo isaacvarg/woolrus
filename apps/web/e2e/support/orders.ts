@@ -29,15 +29,19 @@ export async function createOrder({
   priority = 0,
   quantity = 2,
   statusChangedAt = new Date(),
+  rushOrderLine = false,
 }: {
   customerName?: string;
   status?: WorkflowStatus;
   priority?: number;
   quantity?: number;
   statusChangedAt?: Date;
+  /** Adds a line for a non-physical product, like the store's Rush Order. */
+  rushOrderLine?: boolean;
 } = {}) {
   const wooOrderId = nextWooId();
   const now = new Date();
+  const rushOrder = rushOrderLine ? await rushOrderProduct() : null;
   const order = await db.order.create({
     data: {
       wooOrderId,
@@ -56,18 +60,50 @@ export async function createOrder({
       statusChangedAt,
       priority,
       items: {
-        create: {
-          wooLineItemId: wooOrderId,
-          sku: "E2E-SKU",
-          name: "E2E item",
-          quantity,
-          unitPriceCents: 500,
-        },
+        create: [
+          {
+            wooLineItemId: wooOrderId,
+            sku: "E2E-SKU",
+            name: "E2E item",
+            quantity,
+            unitPriceCents: 500,
+          },
+          ...(rushOrder
+            ? [
+                {
+                  wooLineItemId: wooOrderId + 1,
+                  productId: rushOrder.id,
+                  sku: rushOrder.sku,
+                  name: rushOrder.name,
+                  quantity: 1,
+                  unitPriceCents: 1500,
+                },
+              ]
+            : []),
+        ],
       },
     },
   });
   created.push(order.id);
   return order;
+}
+
+const RUSH_ORDER_WOO_ID = 999_999_999;
+
+/** One shared non-physical product, kept between runs (orders using it are deleted, it isn't). */
+async function rushOrderProduct() {
+  const where = { wooProductId: RUSH_ORDER_WOO_ID };
+  const product = { type: "simple", name: "E2E Rush Order", sku: "E2E-RUSH", physical: false };
+  try {
+    return await db.product.upsert({
+      where,
+      update: {},
+      create: { ...where, ...product, rawPayload: {}, syncedAt: new Date() },
+    });
+  } catch {
+    // Both projects' workers may create it at once: the loser reads the winner's row.
+    return db.product.findUniqueOrThrow({ where });
+  }
 }
 
 /**
