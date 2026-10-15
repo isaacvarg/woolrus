@@ -217,6 +217,36 @@ describe("recomputePriorities", () => {
     expect(await priorityOf(cancelled.id)).toBe(1);
   });
 
+  // The 5-minute job and a rule edit can overlap: run one after the other, so neither writes
+  // priorities from rules the other just changed, nor deadlocks on the same orders.
+  it("waits for another recompute to commit before starting", async () => {
+    await createOrder(db);
+    const steps: string[] = [];
+    let commitFirst = () => {};
+    const firstHolding = new Promise<void>((started) => {
+      void db.$transaction(async (tx) => {
+        await recomputePriorities(tx);
+        steps.push("first recomputed");
+        await new Promise<void>((resolve) => {
+          commitFirst = resolve;
+          started();
+        });
+        steps.push("first commits");
+      });
+    });
+    await firstHolding;
+
+    const second = db.$transaction(async (tx) => {
+      await recomputePriorities(tx);
+      steps.push("second recomputed");
+    });
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    commitFirst();
+    await second;
+
+    expect(steps).toEqual(["first recomputed", "first commits", "second recomputed"]);
+  });
+
   describe("notifications", () => {
     let listener: pg.Client;
     let received: unknown[];

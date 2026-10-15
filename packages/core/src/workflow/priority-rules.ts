@@ -29,15 +29,23 @@ export function toPriorityRuleDto(rule: PriorityRule): PriorityRuleDto {
   };
 }
 
+/** Advisory lock key for `recomputePriorities` (any constant; unique among the app's advisory locks). */
+const RECOMPUTE_LOCK_KEY = 4_201_001;
+
 /**
  * Sets `priority` on open orders (all, or `orderIds`) from the enabled rules, writing only the ones
  * that changed. No version bump: nobody edits priority, so it mustn't make a user's screen stale.
  * Each changed order gets an `order_changed` notify. `store-sync` calls it after an import.
+ *
+ * Recomputes run one at a time until their transaction ends. Otherwise the 5-minute job could read
+ * the rules just before an admin's edit commits and write the old priorities back, and two
+ * recomputes updating the same orders in a different order could deadlock.
  */
 export async function recomputePriorities(
   tx: DbTx,
   { orderIds, now = new Date() }: { orderIds?: readonly string[]; now?: Date } = {},
 ): Promise<{ updated: number }> {
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(${RECOMPUTE_LOCK_KEY}::bigint)`;
   const rules: PriorityRuleInput[] = (
     await tx.priorityRule.findMany({ where: { enabled: true } })
   ).map((rule) => ({
