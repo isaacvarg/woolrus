@@ -39,6 +39,8 @@
     },
     "syncInterval": "Sync interval (minutes)",
     "stationIdleLock": "Station idle lock (minutes)",
+    "claimExpiry": "Order claim expiry (minutes)",
+    "claimExpiryHint": "A claimed order is freed for others this long after its holder last worked on it.",
     "sla": {
       "title": "SLA per stage (minutes)",
       "hint": "Flag orders that stay longer than this in a stage. Leave empty for no limit.",

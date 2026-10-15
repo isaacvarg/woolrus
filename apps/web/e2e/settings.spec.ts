@@ -19,13 +19,19 @@ test("an admin saves general settings and they persist after a reload", async ({
     const general = page.getByRole("form", { name: "General" });
     const field = general.getByLabel("Sync interval", { exact: false });
     const next = Number(await field.inputValue()) === 7 ? 8 : 7;
+    const claimExpiry = general.getByLabel("Order claim expiry", { exact: false });
+    const nextExpiry = Number(await claimExpiry.inputValue()) === 45 ? 30 : 45;
 
     await field.fill(String(next));
+    await claimExpiry.fill(String(nextExpiry));
     await general.getByRole("button", { name: "Save" }).click();
     await expect(general.getByRole("status")).toHaveText("Settings saved.");
 
     await page.reload();
     await expect(general.getByLabel("Sync interval", { exact: false })).toHaveValue(String(next));
+    await expect(general.getByLabel("Order claim expiry", { exact: false })).toHaveValue(
+      String(nextExpiry),
+    );
   });
 });
 

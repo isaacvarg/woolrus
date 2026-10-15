@@ -15,7 +15,7 @@ criterion n. Every task ends green for the packages it touches (`pnpm --filter <
     (+ test).
   - Deps: none.
 
-- [ ] **T2: `claimExpiryMinutes` in settings** (S/M)
+- [x] **T2: `claimExpiryMinutes` in settings** (S/M)
   - Acceptance: in `AdminSettings`, `PublicSettings` and the update contract (integer 5–480, rejected outside the
     range). The General form edits it, with en/es strings.
   - Verify: contract + service tests extended; the settings e2e still passes.
