@@ -10,6 +10,7 @@ import { recordAudit } from "../audit";
 import { AppError, notFound } from "../errors";
 import { withIdempotency } from "../idempotency";
 import { type Actor, assertCan } from "../permissions";
+import { lockOrders } from "./lock";
 import { notifyOrdersChanged, type OrderChangedEvent } from "./notify";
 import { computePriority, type PriorityRuleInput } from "./priority";
 
@@ -61,18 +62,34 @@ export async function recomputePriorities(
       priority: true,
       shippingMethod: true,
       orderedAt: true,
-      items: { select: { sku: true, name: true } },
+      items: {
+        select: {
+          sku: true,
+          name: true,
+          quantity: true,
+          voids: { where: { undoneAt: null }, select: { quantity: true } },
+        },
+      },
     },
   });
 
   const byPriority = new Map<number, string[]>();
   const events: OrderChangedEvent[] = [];
   for (const order of orders) {
-    const priority = computePriority(order, order.items, rules, now);
+    // A fully voided line is no longer part of the order: a voided Rush Order doesn't keep it Urgent.
+    const items = order.items.filter(
+      (item) => item.quantity - item.voids.reduce((sum, v) => sum + v.quantity, 0) > 0,
+    );
+    const priority = computePriority(order, items, rules, now);
     if (priority === order.priority) continue;
     byPriority.set(priority, [...(byPriority.get(priority) ?? []), order.id]);
     events.push({ id: order.id, status: order.status });
   }
+  // Lock what changes in id order first, as claimMany does, so the two can't deadlock.
+  await lockOrders(
+    tx,
+    events.map((event) => event.id),
+  );
   for (const [priority, ids] of byPriority) {
     await tx.order.updateMany({ where: { id: { in: ids } }, data: { priority } });
   }

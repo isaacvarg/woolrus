@@ -170,6 +170,22 @@ describe("recompute on rule changes", () => {
 });
 
 describe("recomputePriorities", () => {
+  it("ignores a line once it's fully voided, but not while units remain", async () => {
+    const admin = await createActor(db, ["ADMIN"]);
+    await createPriorityRule(db, admin, rushRule);
+    const rush = { sku: "RUSH-ORDER", physical: false, quantity: 2 };
+    const { order: voided } = await createOrder(db, {
+      lines: [{}, { ...rush, voids: [{ quantity: 2 }] }],
+    });
+    const { order: partly } = await createOrder(db, {
+      lines: [{}, { ...rush, voids: [{ quantity: 1 }, { quantity: 1, undone: true }] }],
+    });
+
+    await recomputePriorities(db);
+    expect(await priorityOf(voided.id)).toBe(0);
+    expect(await priorityOf(partly.id)).toBe(2);
+  });
+
   it("raises an order once it crosses an age threshold", async () => {
     const admin = await createActor(db, ["ADMIN"]);
     const now = new Date("2026-10-15T12:00:00Z");
