@@ -10,6 +10,8 @@ export async function recordAudit(
     action: string;
     before?: Prisma.InputJsonValue;
     after?: Prisma.InputJsonValue;
+    /** Defaults to the database clock. Workflow passes its `now` so audit and stage events agree. */
+    at?: Date;
   },
 ): Promise<void> {
   await tx.auditEvent.create({

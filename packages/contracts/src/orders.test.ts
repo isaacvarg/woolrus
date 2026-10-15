@@ -4,6 +4,7 @@ import { toFieldErrors } from "./base";
 import {
   ClaimManyInput,
   ForceStatusInput,
+  OrderListInput,
   OrderReasonInput,
   OrderVersionInput,
   QueueInput,
@@ -110,5 +111,31 @@ describe("QueueInput", () => {
       stage: "errors.field.invalid",
       limit: "errors.field.tooBig",
     });
+  });
+});
+
+describe("OrderListInput", () => {
+  it("defaults to newest first, page 1 of 50", () => {
+    expect(OrderListInput.parse({})).toEqual({
+      sort: "orderedAt",
+      dir: "desc",
+      page: 1,
+      pageSize: 50,
+    });
+  });
+
+  it("coerces query-string numbers and a single status", () => {
+    expect(
+      OrderListInput.parse({ page: "3", pageSize: "20", statuses: "QA", sort: "customer" }),
+    ).toMatchObject({ page: 3, pageSize: 20, statuses: ["QA"], sort: "customer" });
+    expect(OrderListInput.parse({ statuses: ["QA", "READY"] }).statuses).toEqual(["QA", "READY"]);
+  });
+
+  it("refuses unknown statuses and sorts, and pages past the cap", () => {
+    expect(
+      Object.keys(
+        fieldsOf(OrderListInput, { statuses: ["SHIPPED"], sort: "total", pageSize: 101 }),
+      ),
+    ).toEqual(expect.arrayContaining(["statuses.0", "sort", "pageSize"]));
   });
 });

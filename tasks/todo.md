@@ -104,13 +104,18 @@ criterion n. Every task ends green for the packages it touches (`pnpm --filter <
     claim; `isClaimLive`/`claimExpiryMinutes` (claims.ts); `loadGateSnapshot` (gates.ts) already computes active
     quantity. GET inputs arrive as query strings over `/api/v1`, so numbers need `z.coerce`.
 
-- [ ] **T11: Detail, history, All Orders reads** (M)
+- [x] **T11: Detail, history, All Orders reads** (M)
   - Acceptance: `getOrder` with `allowedActions` per actor (tested for each role/claim combination), `getOrderHistory`
     (stage + claim/takeover audit, actor/station names, newest first), and `listOrders` (filters, sort, offset paging,
     total). Contract + router.
   - Verify: core integration tests.
   - Files: `queries.ts` (+test), `packages/core/src/workflow/actions.ts` (+test), contract, router.
   - Deps: T10.
+  - Done: `getOrder` → `OrderView` (= `OrderDetail` + addresses, lines, packages, `allowedActions`); `getOrderHistory`
+    merges stage events with `order.claim/takeOver/release` audit rows; `listOrders` is raw SQL reusing `searchFilter`,
+    number sort is `length, number`. `allowedActions` (actions.ts) is pure; it never offers `beginPicking` over someone
+    else's live claim (the service still allows it, see review note). `recordAudit` takes an optional `at`; workflow passes
+    its `now` so history orders correctly under an injected clock. Over `/api/v1`, `statuses=QA` and repeats both parse.
 
 - [ ] **T12: Dev demo orders seed** (S)
   - Acceptance: `pnpm db:seed` adds about 30 orders across all statuses in dev (never in production), including a

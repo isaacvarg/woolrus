@@ -92,6 +92,7 @@ export async function transition(
     action: `order.${kind}`,
     before: { status: order.status, version: order.version },
     after: { status: to, version: updated.version, ...(reasonText ? { reason: reasonText } : {}) },
+    at: now,
   });
   await notifyOrderChanged(tx, { id: orderId, status: to });
 

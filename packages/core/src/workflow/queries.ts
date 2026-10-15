@@ -1,8 +1,21 @@
-import { type QueueCounts, type QueuePage, QueueStage, StageSlaMinutes } from "@woolrus/contracts";
+import {
+  type OrderAddress,
+  type OrderHistoryEntry,
+  type OrderListPage,
+  type OrderListSort,
+  type OrderView,
+  type QueueCounts,
+  type QueuePage,
+  QueueStage,
+  StageSlaMinutes,
+} from "@woolrus/contracts";
 import { type DbTx, Prisma, type WorkflowStatus } from "@woolrus/db";
-import { AppError } from "../errors";
+import { AppError, notFound } from "../errors";
 import { type Actor, assertCan } from "../permissions";
 import { loadSettings } from "../settings/service";
+import { allowedActions } from "./actions";
+import { toOrderDetails } from "./detail";
+import { liveLabelStatuses } from "./gates";
 
 // Read models for the floor (SPEC-workflow "Reads"). Queues are keyset-paged on the
 // (status, priority desc, ordered_at) index and searched in Postgres, so they stay fast with
@@ -153,4 +166,240 @@ export async function queueCounts(db: DbTx, actor: Actor): Promise<QueueCounts> 
   const counts = Object.fromEntries(QueueStage.options.map((s) => [s, 0])) as QueueCounts;
   for (const g of groups) counts[g.status as QueueStage] = g._count._all;
   return counts;
+}
+
+const addressFields = [
+  "name",
+  "company",
+  "address1",
+  "address2",
+  "city",
+  "state",
+  "postalCode",
+  "country",
+  "phone",
+  "email",
+] as const;
+
+/** The stored address JSON comes from WooCommerce: keep the string fields we know, drop the rest. */
+function toAddress(json: Prisma.JsonValue): OrderAddress {
+  if (!json || typeof json !== "object" || Array.isArray(json)) return {};
+  const address: OrderAddress = {};
+  for (const field of addressFields) {
+    const value = json[field];
+    if (typeof value === "string") address[field] = value;
+  }
+  return address;
+}
+
+/** One order for its detail page, with the buttons the caller may use. */
+export async function getOrder(
+  db: DbTx,
+  actor: Actor,
+  { id }: { id: string },
+  { now = new Date() }: QueryOptions = {},
+): Promise<OrderView> {
+  assertCan(actor, "order.read");
+  const order = await db.order.findUnique({
+    where: { id },
+    include: {
+      items: {
+        orderBy: { createdAt: "asc" },
+        include: {
+          product: { select: { physical: true } },
+          voids: { where: { undoneAt: null }, select: { quantity: true } },
+        },
+      },
+      packages: {
+        orderBy: { number: "asc" },
+        include: {
+          box: { select: { name: true } },
+          items: { select: { quantity: true } },
+          labels: { where: { status: { in: [...liveLabelStatuses] } }, select: { id: true } },
+        },
+      },
+    },
+  });
+  if (!order) throw notFound();
+
+  const [detail] = await toOrderDetails(db, [order], { now });
+  if (!detail) throw notFound();
+  return {
+    ...detail,
+    customerEmail: order.customerEmail,
+    customerNote: order.customerNote,
+    shippingAddress: toAddress(order.shippingAddress),
+    billingAddress: toAddress(order.billingAddress),
+    lines: order.items.map((i) => ({
+      id: i.id,
+      name: i.name,
+      sku: i.sku,
+      imageUrl: i.imageUrl,
+      quantity: i.quantity,
+      activeQuantity: Math.max(i.quantity - i.voids.reduce((sum, v) => sum + v.quantity, 0), 0),
+      // A line whose product row is gone counts as physical (SPEC-workflow "Schema additions").
+      physical: i.product?.physical ?? true,
+      pickStatus: i.pickStatus,
+      pickedQuantity: i.pickedQuantity,
+      substitutionNote: i.substitutionNote,
+    })),
+    packages: order.packages.map((p) => ({
+      id: p.id,
+      number: p.number,
+      boxName: p.box?.name ?? null,
+      weightOz: p.weightOz === null ? null : p.weightOz.toNumber(),
+      units: p.items.reduce((sum, it) => sum + it.quantity, 0),
+      liveLabel: p.labels.length > 0,
+    })),
+    allowedActions: allowedActions(actor, {
+      status: order.status,
+      heldFromStatus: order.heldFromStatus,
+      liveClaimHolderId: detail.claim?.userId ?? null,
+    }),
+  };
+}
+
+/** Audit actions that belong in the history panel next to stage changes. */
+const claimActions = {
+  "order.claim": "claim",
+  "order.takeOver": "takeOver",
+  "order.release": "release",
+} as const;
+
+const previousHolderId = (before: Prisma.JsonValue): string | null =>
+  before &&
+  typeof before === "object" &&
+  !Array.isArray(before) &&
+  typeof before.claimedById === "string"
+    ? before.claimedById
+    : null;
+
+/** Stage changes and claim moves, newest first, with who and where (FR-WF-05). */
+export async function getOrderHistory(
+  db: DbTx,
+  actor: Actor,
+  { id }: { id: string },
+): Promise<OrderHistoryEntry[]> {
+  assertCan(actor, "order.read");
+  const order = await db.order.findUnique({ where: { id }, select: { id: true } });
+  if (!order) throw notFound();
+
+  const names = { actor: { select: { name: true } }, station: { select: { name: true } } };
+  const [stages, audits] = await Promise.all([
+    db.orderStageEvent.findMany({ where: { orderId: id }, include: names }),
+    db.auditEvent.findMany({
+      where: { entityType: "Order", entityId: id, action: { in: Object.keys(claimActions) } },
+      include: names,
+    }),
+  ]);
+
+  const takenFrom = audits.flatMap((a) =>
+    a.action === "order.takeOver" ? [previousHolderId(a.before)].filter((x) => x !== null) : [],
+  );
+  const holders = new Map(
+    (
+      await db.user.findMany({
+        where: { id: { in: [...new Set(takenFrom)] } },
+        select: { id: true, name: true },
+      })
+    ).map((u) => [u.id, u.name]),
+  );
+
+  const entries: OrderHistoryEntry[] = [
+    ...stages.map((e) => ({
+      id: e.id,
+      at: e.at,
+      type: "stage" as const,
+      fromStatus: e.fromStatus,
+      toStatus: e.toStatus,
+      reason: e.reason,
+      actorName: e.actor?.name ?? null,
+      stationName: e.station?.name ?? null,
+      previousHolderName: null,
+    })),
+    ...audits.map((a) => {
+      const type = claimActions[a.action as keyof typeof claimActions];
+      const previous = type === "takeOver" ? previousHolderId(a.before) : null;
+      return {
+        id: a.id,
+        at: a.at,
+        type,
+        fromStatus: null,
+        toStatus: null,
+        reason: null,
+        actorName: a.actor?.name ?? null,
+        stationName: a.station?.name ?? null,
+        previousHolderName: previous ? (holders.get(previous) ?? null) : null,
+      };
+    }),
+  ];
+  // Ids are UUIDv7, so they break ties in write order.
+  return entries.sort((a, b) => b.at.getTime() - a.at.getTime() || (a.id < b.id ? 1 : -1));
+}
+
+export type ListOrdersInput = {
+  search?: string;
+  statuses?: WorkflowStatus[];
+  sort?: OrderListSort;
+  dir?: "asc" | "desc";
+  page?: number;
+  pageSize?: number;
+};
+
+function orderBy(sort: OrderListSort, dir: "asc" | "desc"): Prisma.Sql {
+  const d = Prisma.raw(dir === "asc" ? "ASC" : "DESC");
+  switch (sort) {
+    // Woo order numbers are digits: shorter is smaller, so "999" sorts before "1000".
+    case "number":
+      return Prisma.sql`length(o.number) ${d}, o.number ${d}`;
+    case "customer":
+      return Prisma.sql`lower(o.customer_name) ${d}, o.ordered_at DESC`;
+    // The enum's declared order is the workflow's.
+    case "status":
+      return Prisma.sql`o.status ${d}, o.ordered_at DESC`;
+    case "priority":
+      return Prisma.sql`o.priority ${d}, o.ordered_at ASC`;
+    case "orderedAt":
+      return Prisma.sql`o.ordered_at ${d}`;
+  }
+}
+
+type OrderListSqlRow = {
+  id: string;
+  number: string;
+  customerName: string;
+  status: WorkflowStatus;
+  priority: number;
+  orderedAt: Date;
+  statusChangedAt: Date;
+  externalChange: boolean;
+};
+
+/** All Orders: every status, filtered, sorted and offset-paged with a total. */
+export async function listOrders(
+  db: DbTx,
+  actor: Actor,
+  { search, statuses, sort = "orderedAt", dir = "desc", page = 1, pageSize = 50 }: ListOrdersInput,
+): Promise<OrderListPage> {
+  assertCan(actor, "order.read");
+  const size = Math.min(Math.max(Math.trunc(pageSize), 1), 100);
+  const pageNumber = Math.max(Math.trunc(page), 1);
+
+  const where = Prisma.sql`WHERE TRUE
+    ${statuses?.length ? Prisma.sql`AND o.status::text = ANY(${statuses})` : Prisma.empty}
+    ${searchFilter(search)}`;
+
+  const [rows, [count]] = await Promise.all([
+    db.$queryRaw<OrderListSqlRow[]>`
+      SELECT o.id, o.number, o.customer_name AS "customerName", o.status::text AS status,
+        o.priority, o.ordered_at AS "orderedAt", o.status_changed_at AS "statusChangedAt",
+        o.external_change_detected_at IS NOT NULL AS "externalChange"
+      FROM orders o
+      ${where}
+      ORDER BY ${orderBy(sort, dir)}, o.id ASC
+      LIMIT ${size} OFFSET ${(pageNumber - 1) * size}`,
+    db.$queryRaw<{ total: number }[]>`SELECT COUNT(*)::int AS total FROM orders o ${where}`,
+  ]);
+
+  return { rows, total: count?.total ?? 0, page: pageNumber, pageSize: size };
 }

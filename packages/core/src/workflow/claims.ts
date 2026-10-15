@@ -16,7 +16,7 @@ export type ClaimOptions = { now?: Date };
 export type ClaimInput = { orderId: string; expectedVersion: number };
 
 /** Who may claim an order, by its status. Other statuses can't be claimed. */
-const claimPermission: Partial<Record<WorkflowStatus, Permission>> = {
+export const claimPermission: Partial<Record<WorkflowStatus, Permission>> = {
   PENDING: "order.pick",
   PICKING: "order.pick",
   PACKING: "order.pack",
@@ -90,6 +90,7 @@ async function writeClaim(
     action,
     before: { claimedById: live ? order.claimedById : null, version: order.version },
     after: { claimedById: actor.userId, version: updated.version },
+    at: now,
   });
   await notifyOrderChanged(tx, { id: order.id, status: order.status });
   return updated;
@@ -208,6 +209,7 @@ export async function release(
       action: "order.release",
       before: { claimedById: order.claimedById, version: order.version },
       after: { claimedById: null, version: updated.version },
+      at: now,
     });
     await notifyOrderChanged(tx, { id: orderId, status: order.status });
     return updated;
