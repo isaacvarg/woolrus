@@ -204,4 +204,4 @@ criterion n. Every task ends green for the packages it touches (`pnpm --filter <
 - [ ] Every spec success criterion has a test; green + Playwright; ready for `/agent-skills:review`.
 - [x] **Before opening the PR: sort out the branch.** Settled 2026-10-15: PR #15 merged the spec, T1, T2 and the
   Next `agentRules` chore into `main`. T3 onward were cherry-picked onto `workflow/state-machine`, the branch for
-  the workflow PR. The pre-split tip is kept locally as `backup/chore-before-split`.
+  the workflow PR. The chore branch was deleted after the merge.
