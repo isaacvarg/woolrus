@@ -16,6 +16,40 @@ async function namedActor(name: string, roles: Parameters<typeof createActor>[1]
   return actor;
 }
 
+// Permission comes before any read, so a caller who may not claim learns nothing about the order:
+// not whether it exists, its status, nor (for release) its details.
+describe("callers who may not claim", () => {
+  it.each([
+    ["a user without roles", []],
+    ["a Shipper", ["SHIPPER"]],
+  ] as const)("refuses %s before reading the order", async (_who, roles) => {
+    const actor = await createActor(db, roles);
+    const { order: ready } = await createOrder(db, { status: "READY" });
+    const missing = crypto.randomUUID();
+
+    for (const orderId of [ready.id, missing]) {
+      await expect(claim(db, actor, { orderId, expectedVersion: 1 })).rejects.toMatchObject({
+        kind: "FORBIDDEN",
+      });
+      await expect(
+        takeOver(db, actor, { orderId, expectedVersion: 1, confirm: true }),
+      ).rejects.toMatchObject({ kind: "FORBIDDEN" });
+      await expect(
+        claimMany(db, actor, { orders: [{ id: orderId, expectedVersion: 1 }] }),
+      ).rejects.toMatchObject({ kind: "FORBIDDEN" });
+    }
+  });
+
+  it("refuses release to a user without roles, even when nothing is claimed", async () => {
+    const nobody = await createActor(db, []);
+    const { order } = await createOrder(db);
+
+    await expect(release(db, nobody, { orderId: order.id })).rejects.toMatchObject({
+      kind: "FORBIDDEN",
+    });
+  });
+});
+
 describe("isClaimLive", () => {
   const now = new Date("2026-10-15T12:00:00Z");
 

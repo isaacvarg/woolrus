@@ -3,7 +3,7 @@ import type { Db, DbTx, Order, WorkflowStatus } from "@woolrus/db";
 import type { ErrorCode } from "@woolrus/i18n";
 import { recordAudit } from "../audit";
 import { AppError, type AppErrorKind, forbidden, type OrderFailure } from "../errors";
-import { type Actor, can, type Permission } from "../permissions";
+import { type Actor, assertCan, can, type Permission } from "../permissions";
 import { loadSettings } from "../settings/service";
 import { type LockedOrder, lockOrder, lockOrders } from "./lock";
 import { notifyOrderChanged } from "./notify";
@@ -23,6 +23,12 @@ export const claimPermission: Partial<Record<WorkflowStatus, Permission>> = {
   PACKING: "order.pack",
   QA: "order.qa",
 };
+
+/** Someone who can't claim in any stage is refused before the order is read, so they learn nothing about it. */
+function assertMayClaim(actor: Actor): void {
+  if (!Object.values(claimPermission).some((permission) => can(actor, permission)))
+    throw forbidden();
+}
 
 export async function claimExpiryMinutes(tx: DbTx): Promise<number> {
   return (await loadSettings(tx)).claimExpiryMinutes;
@@ -99,6 +105,7 @@ async function claimOne(
   { orderId, expectedVersion }: ClaimInput,
   { now, takeOver }: { now: Date; takeOver: boolean },
 ): Promise<Order> {
+  assertMayClaim(actor);
   return db.$transaction(async (tx) => {
     const expiry = await claimExpiryMinutes(tx);
     const order = await lockOrder(tx, orderId);
@@ -142,6 +149,7 @@ export async function claimMany(
   { orders }: { orders: readonly { id: string; expectedVersion: number }[] },
   { now = new Date() }: ClaimOptions = {},
 ): Promise<Order[]> {
+  assertMayClaim(actor);
   const ids = orders.map((o) => o.id);
   if (orders.length === 0 || orders.length > CLAIM_MANY_MAX || new Set(ids).size !== ids.length) {
     throw new AppError("BAD_REQUEST", "errors.validation", { orders: "errors.field.invalid" });
@@ -189,6 +197,8 @@ export async function release(
   { orderId }: { orderId: string },
   { now = new Date() }: ClaimOptions = {},
 ): Promise<Order> {
+  // Releasing returns the order, so it needs at least what reading it needs.
+  assertCan(actor, "order.read");
   return db.$transaction(async (tx) => {
     const expiry = await claimExpiryMinutes(tx);
     const order = await lockOrder(tx, orderId);
