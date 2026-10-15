@@ -9,6 +9,7 @@ import type {
 import type { Db, DbTx, Order } from "@woolrus/db";
 import type { Actor } from "../permissions";
 import { claim, claimExpiryMinutes, claimMany, isClaimLive, release, takeOver } from "./claims";
+import { displayName, nameFields } from "./people";
 import {
   beginPicking,
   cancel,
@@ -34,9 +35,9 @@ export async function toOrderDetails(
     (
       await db.user.findMany({
         where: { id: { in: [...new Set(holderIds)] } },
-        select: { id: true, name: true },
+        select: { id: true, ...nameFields },
       })
-    ).map((u) => [u.id, u.name]),
+    ).map((u) => [u.id, displayName(u)]),
   );
 
   return orders.map((o) => {

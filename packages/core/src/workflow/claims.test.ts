@@ -93,6 +93,17 @@ describe("claim", () => {
     });
   });
 
+  it("names a holder who has no name yet by their email", async () => {
+    const holder = await namedActor("", ["PICKER"]);
+    const { email } = await db.user.findUniqueOrThrow({ where: { id: holder.userId } });
+    const picker = await createActor(db, ["PICKER"]);
+    const { order } = await createOrder(db, { claimedById: holder.userId });
+
+    await expect(
+      claim(db, picker, { orderId: order.id, expectedVersion: 1 }),
+    ).rejects.toMatchObject({ params: { name: email } });
+  });
+
   it("claims over an expired claim (SC 6)", async () => {
     const [holder, picker] = [await createActor(db, ["PICKER"]), await createActor(db, ["PICKER"])];
     const { order } = await createOrder(db, {

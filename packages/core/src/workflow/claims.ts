@@ -7,6 +7,7 @@ import { type Actor, can, type Permission } from "../permissions";
 import { loadSettings } from "../settings/service";
 import { type LockedOrder, lockOrder, lockOrders } from "./lock";
 import { notifyOrderChanged } from "./notify";
+import { holderName } from "./people";
 
 // A claim is Order.claimedById + claimedAt (SPEC-workflow "Claims"). Expiry is lazy: a claim older
 // than Settings.claimExpiryMinutes reads as absent, and nothing clears it. Claims bump the version
@@ -61,14 +62,10 @@ async function refusalFor(
     return { kind: "CONFLICT", messageKey: "errors.workflow.stale", params: {} };
   }
   if (live && !takeOver && order.claimedById !== actor.userId) {
-    const holder = await tx.user.findUnique({
-      where: { id: order.claimedById ?? "" },
-      select: { name: true },
-    });
     return {
       kind: "CONFLICT",
       messageKey: "errors.workflow.claimedByOther",
-      params: { name: holder?.name ?? "" },
+      params: { name: await holderName(tx, order.claimedById) },
     };
   }
   return null;

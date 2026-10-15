@@ -171,7 +171,12 @@ criterion n. Every task ends green for the packages it touches (`pnpm --filter <
     API sort keys. The nav's `as Route` cast is gone. E2E `createOrder` takes `orderedAt`.
 
 ### Checkpoint C
-- [ ] Green + Playwright. A demo-seeded dev stack is walkable from Pending to QA through the UI. Review with the user.
+- [x] Green + Playwright. A demo-seeded dev stack is walkable from Pending to QA through the UI. Review with the user.
+  - Done 2026-10-15: walked #9002 (Begin Picking; Complete Picking refused, unmet list shown), #9009 Picking → Packing,
+    #9014 Packing → QA (QA refused: not verified/no rate/no label), #9018 QA → Ready, each claim → complete → released.
+    Found and fixed: magic-link users have an empty `name`, so claim holders showed blank. `workflow/people.ts`
+    `displayName` (name, else email) is used for claim holders, conflict errors and history names. Use it for any new
+    person shown by name.
 
 ## Phase 4: Priority
 

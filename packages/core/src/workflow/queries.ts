@@ -16,6 +16,7 @@ import { loadSettings } from "../settings/service";
 import { allowedActions } from "./actions";
 import { toOrderDetails } from "./detail";
 import { liveLabelStatuses } from "./gates";
+import { displayName, nameFields } from "./people";
 
 // Read models for the floor (SPEC-workflow "Reads"). Queues are keyset-paged on the
 // (status, priority desc, ordered_at) index and searched in Postgres, so they stay fast with
@@ -81,6 +82,7 @@ type QueueSqlRow = {
   claimedById: string | null;
   claimedAt: Date | null;
   claimerName: string | null;
+  claimerEmail: string | null;
   externalChange: boolean;
   holdReason: string | null;
   heldFromStatus: WorkflowStatus | null;
@@ -110,7 +112,7 @@ export async function listQueue(
   const rows = await db.$queryRaw<QueueSqlRow[]>`
     SELECT o.id, o.number, o.customer_name AS "customerName", o.priority,
       o.ordered_at AS "orderedAt", o.status_changed_at AS "stageEnteredAt",
-      o.claimed_by_id AS "claimedById", o.claimed_at AS "claimedAt", u.name AS "claimerName",
+      o.claimed_by_id AS "claimedById", o.claimed_at AS "claimedAt", u.name AS "claimerName", u.email AS "claimerEmail",
       o.external_change_detected_at IS NOT NULL AS "externalChange",
       o.hold_reason AS "holdReason", o.held_from_status::text AS "heldFromStatus", o.version,
       COALESCE((
@@ -143,8 +145,12 @@ export async function listQueue(
       slaBreached:
         typeof sla === "number" && now.getTime() - r.stageEnteredAt.getTime() > sla * 60_000,
       claim:
-        r.claimerName !== null && r.claimedById && r.claimedAt
-          ? { userId: r.claimedById, userName: r.claimerName, at: r.claimedAt }
+        r.claimerName !== null && r.claimerEmail !== null && r.claimedById && r.claimedAt
+          ? {
+              userId: r.claimedById,
+              userName: displayName({ name: r.claimerName, email: r.claimerEmail }),
+              at: r.claimedAt,
+            }
           : null,
       externalChange: r.externalChange,
       holdReason: r.holdReason,
@@ -284,7 +290,7 @@ export async function getOrderHistory(
   const order = await db.order.findUnique({ where: { id }, select: { id: true } });
   if (!order) throw notFound();
 
-  const names = { actor: { select: { name: true } }, station: { select: { name: true } } };
+  const names = { actor: { select: nameFields }, station: { select: { name: true } } };
   const [stages, audits] = await Promise.all([
     db.orderStageEvent.findMany({ where: { orderId: id }, include: names }),
     db.auditEvent.findMany({
@@ -300,9 +306,9 @@ export async function getOrderHistory(
     (
       await db.user.findMany({
         where: { id: { in: [...new Set(takenFrom)] } },
-        select: { id: true, name: true },
+        select: { id: true, ...nameFields },
       })
-    ).map((u) => [u.id, u.name]),
+    ).map((u) => [u.id, displayName(u)]),
   );
 
   const entries: OrderHistoryEntry[] = [
@@ -313,7 +319,7 @@ export async function getOrderHistory(
       fromStatus: e.fromStatus,
       toStatus: e.toStatus,
       reason: e.reason,
-      actorName: e.actor?.name ?? null,
+      actorName: e.actor ? displayName(e.actor) : null,
       stationName: e.station?.name ?? null,
       previousHolderName: null,
     })),
@@ -327,7 +333,7 @@ export async function getOrderHistory(
         fromStatus: null,
         toStatus: null,
         reason: null,
-        actorName: a.actor?.name ?? null,
+        actorName: a.actor ? displayName(a.actor) : null,
         stationName: a.station?.name ?? null,
         previousHolderName: previous ? (holders.get(previous) ?? null) : null,
       };

@@ -151,6 +151,15 @@ describe("listQueue", () => {
     expect(rows.find((r) => r.number === "4002")?.claim).toBeNull();
   });
 
+  it("names a holder who has no name yet by their email", async () => {
+    // Magic-link sign-up creates users with an empty name.
+    const user = await db.user.update({ where: { id: picker.userId }, data: { name: " " } });
+    await createOrder(db, { number: "4101", status: "PICKING", claimedById: picker.userId });
+
+    const [row] = (await listQueue(db, picker, { stage: "PICKING" })).rows;
+    expect(row?.claim?.userName).toBe(user.email);
+  });
+
   it("carries the external-change flag, hold details and version", async () => {
     const { order } = await createOrder(db, {
       status: "ON_HOLD",
@@ -271,6 +280,13 @@ describe("getOrder", () => {
     );
   });
 
+  it("names a holder who has no name yet by their email", async () => {
+    const user = await db.user.update({ where: { id: picker.userId }, data: { name: "" } });
+    const { order } = await createOrder(db, { claimedById: picker.userId });
+
+    expect((await getOrder(db, picker, { id: order.id })).claim?.userName).toBe(user.email);
+  });
+
   it("treats an expired claim as free", async () => {
     const packer = await createActor(db, ["PACKER"]);
     const { order } = await createOrder(db, {
@@ -321,6 +337,19 @@ describe("getOrderHistory", () => {
       stationName: null,
     });
     expect(history[3]?.stationName).toBe("Tablet 3");
+  });
+
+  it("names people who have no name yet by their email", async () => {
+    const ana = await db.user.update({ where: { id: picker.userId }, data: { name: "" } });
+    const bruno = await createActor(db, ["PICKER"]);
+    const { order } = await createOrder(db);
+    const t = (min: number) => ({ now: new Date(Date.now() - (10 - min) * 60_000) });
+    await claim(db, picker, { orderId: order.id, expectedVersion: 1 }, t(1));
+    await takeOver(db, bruno, { orderId: order.id, expectedVersion: 2, confirm: true }, t(2));
+
+    const history = await getOrderHistory(db, picker, { id: order.id });
+    expect(history.map((h) => h.actorName)).toEqual(["Test User", ana.email]);
+    expect(history[0]?.previousHolderName).toBe(ana.email);
   });
 
   it("leaves out audit rows that aren't about claims, and other orders", async () => {

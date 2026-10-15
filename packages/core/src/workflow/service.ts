@@ -7,6 +7,7 @@ import { evaluateGate, loadGateSnapshot } from "./gates";
 import { lockOrder } from "./lock";
 import { ruleFor, type TransitionKind, transitionFor } from "./machine";
 import { notifyOrderChanged } from "./notify";
+import { holderName } from "./people";
 
 // The only code that writes Order.status (SPEC-workflow "Transition service"). Stage modules call
 // `transition` with their own tx so their writes and the move commit or roll back together.
@@ -53,12 +54,8 @@ export async function transition(
     }
     // Taking the claim never silently overwrites someone else's live one: that's a takeover.
     if (move.claim === "claims" && live && order.claimedById !== actor.userId) {
-      const holder = await tx.user.findUnique({
-        where: { id: order.claimedById ?? "" },
-        select: { name: true },
-      });
       throw new AppError("CONFLICT", "errors.workflow.claimedByOther", undefined, {
-        params: { name: holder?.name ?? "" },
+        params: { name: await holderName(tx, order.claimedById) },
       });
     }
   }
