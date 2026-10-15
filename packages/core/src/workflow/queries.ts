@@ -44,7 +44,9 @@ function decodeCursor(cursor: string): Cursor {
   try {
     const [priority, orderedAt, id] = JSON.parse(Buffer.from(cursor, "base64url").toString());
     const at = new Date(orderedAt);
-    if (Number.isInteger(priority) && !Number.isNaN(at.getTime()) && uuid.test(id)) {
+    // Priority is bound as a Postgres int: anything larger is an error there, not a value.
+    const int32 = Number.isInteger(priority) && Math.abs(priority) <= 2_147_483_647;
+    if (int32 && !Number.isNaN(at.getTime()) && uuid.test(id)) {
       return { priority, orderedAt: at, id };
     }
   } catch {
@@ -392,7 +394,7 @@ export async function listOrders(
   const pageNumber = Math.max(Math.trunc(page), 1);
 
   const where = Prisma.sql`WHERE TRUE
-    ${statuses?.length ? Prisma.sql`AND o.status::text = ANY(${statuses})` : Prisma.empty}
+    ${statuses?.length ? Prisma.sql`AND o.status = ANY(${statuses}::workflow_status[])` : Prisma.empty}
     ${searchFilter(search)}`;
 
   const [rows, [count]] = await Promise.all([

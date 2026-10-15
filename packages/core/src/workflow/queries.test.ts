@@ -70,9 +70,16 @@ describe("listQueue", () => {
   });
 
   it("refuses a cursor it didn't issue", async () => {
-    await expect(
-      listQueue(db, picker, { stage: "PENDING", cursor: "not-a-cursor" }),
-    ).rejects.toMatchObject({ kind: "BAD_REQUEST", fields: { cursor: "errors.field.invalid" } });
+    // Well-formed, but a priority Postgres can't hold: a 400, not a database error.
+    const outOfRange = Buffer.from(
+      JSON.stringify([1e300, new Date().toISOString(), crypto.randomUUID()]),
+    ).toString("base64url");
+    for (const cursor of ["not-a-cursor", outOfRange]) {
+      await expect(listQueue(db, picker, { stage: "PENDING", cursor })).rejects.toMatchObject({
+        kind: "BAD_REQUEST",
+        fields: { cursor: "errors.field.invalid" },
+      });
+    }
   });
 
   it("searches by number prefix and by part of the customer's name", async () => {

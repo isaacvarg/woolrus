@@ -134,6 +134,24 @@ describe("packed gate", () => {
     ]);
   });
 
+  it("reports units packed for a fully voided line as over-packed", () => {
+    const lines = [line(), line({ id: "line-2", name: "Cap", voidedQuantity: 2 })];
+    const packages = [
+      pkg({
+        items: [
+          { orderItemId: "line-1", quantity: 2, qaVerified: false },
+          { orderItemId: "line-2", quantity: 1, qaVerified: false },
+        ],
+      }),
+    ];
+    expect(evaluateGate("packed", snapshot({ lines, packages }))).toEqual([
+      {
+        messageKey: "errors.workflow.gate.lineOverPacked",
+        params: { line: "Cap", packed: 1, expected: 0 },
+      },
+    ]);
+  });
+
   it("reports an empty package", () => {
     const packages = [pkg(), pkg({ id: "pkg-2", number: 2, items: [] })];
     expect(evaluateGate("packed", snapshot({ packages }))).toEqual([
