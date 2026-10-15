@@ -1,6 +1,6 @@
 import type { DbTx, LabelStatus, PickStatus, WorkflowStatus } from "@woolrus/db";
 import type { ErrorCode } from "@woolrus/i18n";
-import { notFound } from "../errors";
+import { notFound, type UnmetCondition } from "../errors";
 import type { GateKind } from "./machine";
 
 // Stage-exit gates (SPEC-workflow "Gates"). They read only the database, never the client, and say
@@ -13,8 +13,6 @@ export const liveLabelStatuses: readonly LabelStatus[] = [
   "VOID_REQUESTED",
   "VOID_REJECTED",
 ];
-
-export type UnmetCondition = { messageKey: ErrorCode; params: Record<string, string | number> };
 
 export type GateLine = {
   id: string;

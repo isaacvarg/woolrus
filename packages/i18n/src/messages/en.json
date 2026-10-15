@@ -115,6 +115,9 @@
     },
     "workflow": {
       "illegalTransition": "That move isn't allowed from the order's current status.",
+      "stale": "This order changed since you loaded it. It has been refreshed; check it and try again.",
+      "claimRequired": "Claim this order before completing the stage.",
+      "gateFailed": "This stage isn't finished yet.",
       "gate": {
         "lineNotPicked": "{line} hasn't been picked.",
         "lineOutOfStock": "{line} is out of stock. Void it or pick a substitute first.",

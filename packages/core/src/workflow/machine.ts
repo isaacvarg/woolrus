@@ -146,6 +146,13 @@ export const transitions: readonly Transition[] = [
   },
 ];
 
+/** The rule for a kind, whatever the order's status: what a caller needs before reading the order. */
+export function ruleFor(kind: TransitionKind): Transition {
+  const rule = transitions.find((t) => t.kind === kind);
+  if (!rule) throw new Error(`No transition rule for ${kind}`);
+  return rule;
+}
+
 export function canTransition(
   from: WorkflowStatus,
   to: WorkflowStatus,
@@ -166,10 +173,9 @@ export function transitionFor(
   to: WorkflowStatus,
   kind: TransitionKind,
 ): Transition {
-  const rule = transitions.find((t) => t.kind === kind);
-  if (!rule || !canTransition(from, to, kind)) {
+  if (!canTransition(from, to, kind))
     throw new AppError("CONFLICT", "errors.workflow.illegalTransition");
-  }
+  const rule = ruleFor(kind);
   if (kind === "forceStatus" && from === "COMPLETED" && !terminalStatuses.includes(to)) {
     return { ...rule, gate: "noLiveLabels" };
   }

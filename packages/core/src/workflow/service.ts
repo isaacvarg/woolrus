@@ -1,0 +1,128 @@
+import type { Db, DbTx, Order, WorkflowStatus } from "@woolrus/db";
+import { recordAudit } from "../audit";
+import { AppError, notFound } from "../errors";
+import { type Actor, assertCan } from "../permissions";
+import { claimExpiryMinutes, isClaimLive } from "./claims";
+import { evaluateGate, loadGateSnapshot } from "./gates";
+import { ruleFor, type TransitionKind, transitionFor } from "./machine";
+import { notifyOrderChanged } from "./notify";
+
+// The only code that writes Order.status (SPEC-workflow "Transition service"). Stage modules call
+// `transition` with their own tx so their writes and the move commit or roll back together.
+
+export type TransitionInput = {
+  orderId: string;
+  expectedVersion: number;
+  to: WorkflowStatus;
+  kind: TransitionKind;
+  reason?: string;
+};
+
+export type TransitionOptions = { now?: Date };
+
+type LockedOrder = Pick<
+  Order,
+  "id" | "status" | "version" | "claimedById" | "claimedAt" | "heldFromStatus"
+>;
+
+const activeStatuses: readonly WorkflowStatus[] = ["PENDING", "PICKING", "PACKING", "QA", "READY"];
+
+async function lockOrder(tx: DbTx, orderId: string): Promise<LockedOrder> {
+  const [row] = await tx.$queryRaw<LockedOrder[]>`
+    SELECT id, status::text AS status, version, claimed_by_id AS "claimedById", claimed_at AS "claimedAt",
+           held_from_status::text AS "heldFromStatus"
+    FROM orders WHERE id = ${orderId}::uuid FOR UPDATE`;
+  if (!row) throw notFound();
+  return row;
+}
+
+export async function transition(
+  tx: DbTx,
+  actor: Actor,
+  { orderId, expectedVersion, to, kind, reason }: TransitionInput,
+  { now = new Date() }: TransitionOptions = {},
+): Promise<Order> {
+  const reasonText = reason?.trim() || null;
+
+  // Permission first: it depends only on the kind, so a forbidden caller learns nothing about the order.
+  const rule = ruleFor(kind);
+  assertCan(actor, rule.permission);
+  if (rule.reasonRequired && !reasonText) {
+    throw new AppError("BAD_REQUEST", "errors.validation", { reason: "errors.field.required" });
+  }
+
+  const order = await lockOrder(tx, orderId);
+  if (order.version !== expectedVersion) throw new AppError("CONFLICT", "errors.workflow.stale");
+
+  const move = transitionFor(order.status, to, kind);
+  if (kind === "resume" && to !== order.heldFromStatus) {
+    throw new AppError("CONFLICT", "errors.workflow.illegalTransition");
+  }
+
+  if (move.claim === "holds") {
+    const live = isClaimLive(order, await claimExpiryMinutes(tx), now);
+    if (!live || order.claimedById !== actor.userId) {
+      throw new AppError("CONFLICT", "errors.workflow.claimRequired");
+    }
+  }
+
+  if (move.gate) {
+    const unmet = evaluateGate(move.gate, await loadGateSnapshot(tx, orderId));
+    if (unmet.length > 0)
+      throw new AppError("CONFLICT", "errors.workflow.gateFailed", undefined, unmet);
+  }
+
+  const claims = move.claim === "claims";
+  const updated = await tx.order.update({
+    where: { id: orderId },
+    data: {
+      status: to,
+      statusChangedAt: now,
+      version: { increment: 1 },
+      claimedById: claims ? actor.userId : null,
+      claimedAt: claims ? now : null,
+      holdReason: to === "ON_HOLD" ? reasonText : null,
+      heldFromStatus:
+        to === "ON_HOLD" && activeStatuses.includes(order.status) ? order.status : null,
+      completedAt: to === "COMPLETED" ? now : null,
+    },
+  });
+
+  await tx.orderStageEvent.create({
+    data: {
+      orderId,
+      fromStatus: order.status,
+      toStatus: to,
+      actorId: actor.userId,
+      stationId: actor.stationId,
+      reason: reasonText,
+      at: now,
+    },
+  });
+  await recordAudit(tx, actor, {
+    entityType: "Order",
+    entityId: orderId,
+    action: `order.${kind}`,
+    before: { status: order.status, version: order.version },
+    after: { status: to, version: updated.version, ...(reasonText ? { reason: reasonText } : {}) },
+  });
+  await notifyOrderChanged(tx, { id: orderId, status: to });
+
+  return updated;
+}
+
+export type StageInput = { orderId: string; expectedVersion: number };
+
+const stageMove =
+  (kind: TransitionKind, to: WorkflowStatus) =>
+  (db: Db, actor: Actor, input: StageInput, options?: TransitionOptions): Promise<Order> =>
+    db.$transaction((tx) => transition(tx, actor, { ...input, to, kind }, options));
+
+/** Pending → Picking; the actor takes the claim. */
+export const beginPicking = stageMove("beginPicking", "PICKING");
+/** Picking → Packing; needs the actor's live claim and the **picked** gate. */
+export const completePicking = stageMove("completePicking", "PACKING");
+/** Packing → QA; needs the actor's live claim and the **packed** gate. */
+export const completePacking = stageMove("completePacking", "QA");
+/** QA → Ready; needs the actor's live claim and the **verified** gate. */
+export const completeQa = stageMove("completeQa", "READY");

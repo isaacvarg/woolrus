@@ -40,11 +40,11 @@ criterion n. Every task ends green for the packages it touches (`pnpm --filter <
   - Deps: T1, T3.
 
 ### Checkpoint A
-- [ ] `pnpm lint && pnpm typecheck && pnpm test` green; migration applied in dev; review with the user.
+- [x] `pnpm lint && pnpm typecheck && pnpm test` green; migration applied in dev; review with the user.
 
 ## Phase 2: Transitions and claims
 
-- [ ] **T5: Transition engine + stage completions** (M)
+- [x] **T5: Transition engine + stage completions** (M)
   - Acceptance: `transition()` in one transaction does permission → lock + version check → machine → claim rule →
     gate → update → `OrderStageEvent` + audit → `pg_notify`. `beginPicking` (sets the claim), `completePicking`,
     `completePacking` and `completeQa` (need a live claim; clear it). A refused gate changes nothing (SC 3). Two

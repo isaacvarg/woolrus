@@ -29,7 +29,8 @@ const secretColumns = {
   lumexiaApiKey: "lumexiaApiKeyEnc",
 } as const satisfies Record<SecretName, keyof Settings>;
 
-async function loadSettings(tx: DbTx): Promise<Settings> {
+/** The settings row, created with defaults on first use. */
+export async function loadSettings(tx: DbTx): Promise<Settings> {
   return tx.settings.upsert({
     where: { id: SETTINGS_ID },
     create: { id: SETTINGS_ID },

@@ -115,6 +115,9 @@
     },
     "workflow": {
       "illegalTransition": "Ese cambio no está permitido desde el estado actual del pedido.",
+      "stale": "Este pedido cambió desde que lo abriste. Se actualizó; revísalo e inténtalo de nuevo.",
+      "claimRequired": "Reclama este pedido antes de completar la etapa.",
+      "gateFailed": "Esta etapa aún no está terminada.",
       "gate": {
         "lineNotPicked": "{line} no se ha recolectado.",
         "lineOutOfStock": "{line} está agotado. Anúlalo o recolecta un sustituto primero.",

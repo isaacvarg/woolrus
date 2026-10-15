@@ -10,3 +10,8 @@ export * from "./settings/format";
 export * from "./settings/integration";
 export * from "./settings/service";
 export * from "./units";
+export * from "./workflow/claims";
+export * from "./workflow/gates";
+export * from "./workflow/machine";
+export * from "./workflow/notify";
+export * from "./workflow/service";
