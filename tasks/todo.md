@@ -99,6 +99,10 @@ criterion n. Every task ends green for the packages it touches (`pnpm --filter <
   - Verify: core integration tests.
   - Files: `packages/core/src/workflow/queries.ts` (+test), `packages/contracts/src/orders.ts`, `router.ts`.
   - Deps: T7.
+  - Done: `listQueue` is raw SQL (`$queryRaw` + `Prisma.sql` fragments) with an opaque base64url cursor; bad cursor →
+    `BAD_REQUEST` `fields.cursor`. Reuse for T11: `toOrderDetails` (detail.ts) maps rows → `OrderDetail` with the live
+    claim; `isClaimLive`/`claimExpiryMinutes` (claims.ts); `loadGateSnapshot` (gates.ts) already computes active
+    quantity. GET inputs arrive as query strings over `/api/v1`, so numbers need `z.coerce`.
 
 - [ ] **T11: Detail, history, All Orders reads** (M)
   - Acceptance: `getOrder` with `allowedActions` per actor (tested for each role/claim combination), `getOrderHistory`
