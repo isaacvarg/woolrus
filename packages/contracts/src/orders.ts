@@ -75,6 +75,57 @@ export const ClaimManyInput = z.object({
 });
 export type ClaimManyInput = z.infer<typeof ClaimManyInput>;
 
+/** The statuses that have a floor queue: the five stages, plus On Hold. */
+export const QueueStage = WorkflowStatus.extract([
+  "PENDING",
+  "PICKING",
+  "PACKING",
+  "QA",
+  "READY",
+  "ON_HOLD",
+]);
+export type QueueStage = z.infer<typeof QueueStage>;
+
+export const QUEUE_PAGE_MAX = 100;
+
+export const QueueInput = z.object({
+  stage: QueueStage,
+  /** Order number prefix ("#" optional) or part of the customer's name. */
+  search: z.string().trim().max(100).optional(),
+  /** `nextCursor` of the previous page. Opaque. */
+  cursor: z.string().max(500).optional(),
+  // Coerced: over /api/v1 it arrives as a query string.
+  limit: z.coerce.number().int().min(1).max(QUEUE_PAGE_MAX).default(50),
+});
+export type QueueInput = z.input<typeof QueueInput>;
+
+/** One queue row. Sorted by priority, then oldest order first. */
+export const QueueRow = z.object({
+  id: Id,
+  number: z.string(),
+  customerName: z.string(),
+  /** Active units of physical lines (voids and non-physical lines like Rush Order excluded). */
+  itemCount: z.number().int(),
+  priority: z.number().int(),
+  orderedAt: z.date(),
+  stageEnteredAt: z.date(),
+  /** Time in stage is past `Settings.stageSlaMinutes` for this stage. */
+  slaBreached: z.boolean(),
+  claim: OrderClaim.nullable(),
+  externalChange: z.boolean(),
+  holdReason: z.string().nullable(),
+  heldFromStatus: WorkflowStatus.nullable(),
+  version: z.number().int(),
+});
+export type QueueRow = z.infer<typeof QueueRow>;
+
+export const QueuePage = z.object({ rows: z.array(QueueRow), nextCursor: z.string().nullable() });
+export type QueuePage = z.infer<typeof QueuePage>;
+
+/** Orders in each queue, for the nav. */
+export const QueueCounts = z.record(QueueStage, z.number().int());
+export type QueueCounts = z.infer<typeof QueueCounts>;
+
 const tags = ["Orders"];
 
 const move = (path: string, summary: string) =>
@@ -90,6 +141,19 @@ const moveWithReason = (path: string, summary: string) =>
     .output(OrderDetail);
 
 export const orders = {
+  queue: base
+    .route({
+      method: "GET",
+      path: "/orders/queue/{stage}",
+      tags,
+      summary: "One stage's queue, most urgent first, keyset-paged",
+    })
+    .input(QueueInput)
+    .output(QueuePage),
+  counts: base
+    .route({ method: "GET", path: "/orders/counts", tags, summary: "Orders in each queue" })
+    .output(QueueCounts),
+
   beginPicking: move("begin-picking", "Begin picking a Pending order and claim it"),
   completePicking: move("complete-picking", "Finish picking; refused while lines are unpicked"),
   completePacking: move("complete-packing", "Finish packing; refused until every unit is packed"),

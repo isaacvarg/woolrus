@@ -6,6 +6,7 @@ import {
   ForceStatusInput,
   OrderReasonInput,
   OrderVersionInput,
+  QueueInput,
   TakeOverInput,
 } from "./orders";
 
@@ -94,6 +95,20 @@ describe("ClaimManyInput", () => {
   it("refuses the same order twice", () => {
     expect(fieldsOf(ClaimManyInput, { orders: [order(id), order(id)] })).toEqual({
       orders: "errors.field.invalid",
+    });
+  });
+});
+
+describe("QueueInput", () => {
+  it("defaults the page size and coerces it from a query string", () => {
+    expect(QueueInput.parse({ stage: "PENDING" })).toEqual({ stage: "PENDING", limit: 50 });
+    expect(QueueInput.parse({ stage: "ON_HOLD", limit: "20" })).toMatchObject({ limit: 20 });
+  });
+
+  it("only takes queue stages and pages up to 100", () => {
+    expect(fieldsOf(QueueInput, { stage: "COMPLETED", limit: 101 })).toEqual({
+      stage: "errors.field.invalid",
+      limit: "errors.field.tooBig",
     });
   });
 });

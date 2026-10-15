@@ -17,4 +17,5 @@ export * from "./workflow/live";
 export * from "./workflow/lock";
 export * from "./workflow/machine";
 export * from "./workflow/notify";
+export * from "./workflow/queries";
 export * from "./workflow/service";

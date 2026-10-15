@@ -88,11 +88,11 @@ criterion n. Every task ends green for the packages it touches (`pnpm --filter <
   - Deps: T5.
 
 ### Checkpoint B
-- [ ] Green. Every mutation works through `/api/v1` against dev data. SSE delivers events. Review with the user.
+- [x] Green. Every mutation works through `/api/v1` against dev data. SSE delivers events. Review with the user.
 
 ## Phase 3: Reads and UI
 
-- [ ] **T10: Queue reads** (M)
+- [x] **T10: Queue reads** (M)
   - Acceptance: `listQueue` (five stages + ON_HOLD, keyset paging, number-prefix/customer search, priority then
     age, active physical unit count, stage age, SLA breach, live claim only, external-change flag) and
     `queueCounts`. Contract + router (SC 10, except the benchmark).

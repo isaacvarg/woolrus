@@ -5,8 +5,10 @@ import {
   getPublicSettings,
   getSettings,
   listBoxes,
+  listQueue,
   orderMutations,
   permissionsFor,
+  queueCounts,
   setSecret,
   updateSettings,
 } from "@woolrus/core";
@@ -49,6 +51,8 @@ export const router = api.router({
     ),
   },
   orders: {
+    queue: api.orders.queue.handler(({ input, context }) => listQueue(db, context.actor, input)),
+    counts: api.orders.counts.handler(({ context }) => queueCounts(db, context.actor)),
     beginPicking: api.orders.beginPicking.handler(({ input, context }) =>
       orderMutations.beginPicking(db, context.actor, input),
     ),
