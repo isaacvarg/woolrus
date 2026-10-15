@@ -1,4 +1,7 @@
+import type { DimensionUnit, WeightUnit } from "../../units";
 import type { WooOrder, WooProduct, WooVariation } from "./schemas";
+
+export { type DimensionUnit, dimensionUnits, type WeightUnit, weightUnits } from "../../units";
 
 export type {
   WooAddress,
@@ -8,12 +11,6 @@ export type {
   WooProduct,
   WooVariation,
 } from "./schemas";
-
-/** The store's `woocommerce_weight_unit` / `woocommerce_dimension_unit` settings. */
-export const weightUnits = ["lbs", "oz", "kg", "g"] as const;
-export const dimensionUnits = ["in", "cm", "mm", "m", "yd"] as const;
-export type WeightUnit = (typeof weightUnits)[number];
-export type DimensionUnit = (typeof dimensionUnits)[number];
 
 export type ListOrdersQuery = {
   status?: "processing";

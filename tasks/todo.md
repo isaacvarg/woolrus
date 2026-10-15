@@ -25,7 +25,7 @@ focused tests; checkpoints run the full green set. Add a `Done:` line (2–3 lin
     added to core (approved). Gotcha: `pnpm --filter @woolrus/core test -- <path>` runs every file; use
     `pnpm --filter @woolrus/core exec vitest run src/<path>` for focused runs.
 
-- [ ] **T2: Mapping and fake store**
+- [x] **T2: Mapping and fake store**
   - Pure `mapOrder`, `mapProduct`, `mapVariation` per the spec's mapping table; decimal-string → cents without
     floats; weight/dimension unit conversion to oz/in (extend `units.ts`); customer name fallback; bundle
     `bundled_by`; bin from `_bin_location`. `FakeStoreAdapter` with `addOrder/editOrder/cancelOrder/refundOrder/
@@ -36,6 +36,15 @@ focused tests; checkpoints run the full green set. Add a `Done:` line (2–3 lin
   - Files: `core/src/sync/mapping.ts` (+test), `core/src/units.ts` (+test), `core/src/adapters/woocommerce/fake.ts`
     (+test).
   - Deps: T1 (types) · Size: M
+  - Done: `sync/mapping.ts`: `mapOrder(o)`, `mapProduct(p, units)`, `mapVariation(parentWooId, v, units)` return
+    Prisma-ready fields with Woo ids (`wooProductId`, `wooVariationId`, `bundleParentWooLineItemId`) for T4 to
+    resolve to rows. Addresses use the contracts `OrderAddress` shape; `binLocation`/`barcode` are *absent* (not null)
+    unless sent, so a Prisma update leaves them alone. Malformed amounts throw `StoreError("badResponse")`.
+    `units.ts` gained `toCents`, `toOunces`, `toInches` and owns the unit lists (adapter re-exports). Schemas now read
+    variation `name`, `global_unique_id` (→ barcode) and line `bundled_by`. `adapters/woocommerce/fake.ts` (not in
+    core's index): `addOrder({ lines, ...rawFields })` (default line uses an auto-created product), `editOrder`
+    (`lines` with `id` keeps a line), `cancelOrder`, `refundOrder(id, amount?)`, `addProduct({ variations })`,
+    `failNext(method, error, times)`, `calls`, `now()`; each change ticks the clock 1 s.
 
 - [ ] **T3: System actor and the review permission**
   - `Actor.userId: string | null`, exported `systemActor` (`system: "store-sync"`, roles `[ADMIN]`); audit and stage

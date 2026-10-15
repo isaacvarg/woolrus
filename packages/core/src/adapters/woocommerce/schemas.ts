@@ -69,6 +69,15 @@ const imageSrc = z
   .nullish()
   .transform((i) => i?.src ?? null);
 
+/** A line item id sent as a number or a string; "" and 0 mean none. */
+const lineId = z
+  .union([z.string(), z.number()])
+  .nullish()
+  .transform((v) =>
+    v === null || v === undefined || v === "" || Number(v) === 0 ? null : Number(v),
+  )
+  .pipe(z.number().int().nullable());
+
 const dimensionsSchema = z.object({ length: decimal, width: decimal, height: decimal });
 
 const lineItemSchema = z
@@ -83,6 +92,8 @@ const lineItemSchema = z
     total: decimal,
     image: z.unknown().optional(),
     meta_data: z.array(metaSchema),
+    // Product Bundles adds the bundle line's id to each bundled line.
+    bundled_by: lineId,
   })
   .transform((l) => ({
     id: l.id,
@@ -95,6 +106,7 @@ const lineItemSchema = z
     total: l.total,
     imageSrc: imageSrc.parse(l.image),
     metaData: l.meta_data,
+    bundledBy: l.bundled_by,
   }));
 
 const orderSchema = z
@@ -146,6 +158,8 @@ const productFields = {
   dimensions: dimensionsSchema,
   stock_quantity: z.number().nullish(),
   virtual: z.boolean(),
+  // GTIN/UPC/EAN/ISBN (WooCommerce 9.2+); older stores don't send it.
+  global_unique_id: text,
   meta_data: z.array(metaSchema),
 };
 
@@ -166,6 +180,7 @@ const productSchema = z
     dimensions: p.dimensions,
     stockQuantity: p.stock_quantity ?? null,
     virtual: p.virtual,
+    globalUniqueId: p.global_unique_id,
     imageSrc: p.images[0]?.src ?? null,
     metaData: p.meta_data,
   }));
@@ -173,17 +188,20 @@ const productSchema = z
 const variationSchema = z
   .object({
     ...productFields,
+    name: text,
     image: z.unknown().optional(),
     attributes: z.array(z.object({ name: z.string(), option: z.string() })),
   })
   .transform((v) => ({
     id: v.id,
+    name: v.name,
     sku: v.sku,
     price: v.price,
     weight: v.weight,
     dimensions: v.dimensions,
     stockQuantity: v.stock_quantity ?? null,
     virtual: v.virtual,
+    globalUniqueId: v.global_unique_id,
     imageSrc: imageSrc.parse(v.image),
     attributes: v.attributes,
     metaData: v.meta_data,
