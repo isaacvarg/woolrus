@@ -202,7 +202,8 @@ Levels: `0` Normal, `1` High, `2` Urgent. `Order.priority` stores the level; the
 - Core issues `pg_notify('order_changed', json)` in each workflow transaction (payload: order id and new status,
   no PII).
 - `apps/web/src/app/api/events/orders/route.ts`: an authenticated SSE stream (session cookie or bearer). One shared
-  `LISTEN` connection per web process fans out to subscribers, with a heartbeat every 25 s.
+  `LISTEN` connection per web process fans out to subscribers, with a heartbeat every 25 s. Each heartbeat
+  re-checks the session, and the stream ends once it's gone or the user is deactivated.
 - The client invalidates the matching TanStack Query keys (queue lists, counts, that order) on each event. If the
   stream is down, queries fall back to `refetchInterval: 30s` until it reconnects.
 
@@ -313,6 +314,8 @@ queue/**,orders/**,settings/priority-rules/**,settings/**}`, `apps/worker/src/ma
   doesn't offer it (`allowedActions`).
 - People are shown by name, or by email when the name is empty (magic-link users start without one):
   `workflow/people.ts` `displayName`, used for claim holders, conflict errors and history.
+- Recomputes run one at a time (a transaction-scoped advisory lock). Otherwise the 5-minute job could write
+  priorities from rules an admin had just changed, and two recomputes could deadlock on the same orders.
 - `recomputePriorities` also covers held orders (every status that isn't closed). Reordering rules doesn't
   recompute, because `position` doesn't affect priority.
 - `ship` and `repack` take the caller's `tx` and have no route yet. `shipping` will route them; their gates are
