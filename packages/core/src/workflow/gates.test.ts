@@ -202,6 +202,13 @@ describe("verified gate", () => {
       ]);
     }
   });
+
+  // Otherwise "every package is verified" holds vacuously, and the order reaches Ready unshippable.
+  it("reports an order with no packages", () => {
+    expect(evaluateGate("verified", snapshot({ packages: [] }))).toEqual([
+      { messageKey: "errors.workflow.gate.noPackages", params: {} },
+    ]);
+  });
 });
 
 describe("shippable gate", () => {

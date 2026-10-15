@@ -91,6 +91,7 @@ function packed(snap: GateSnapshot): UnmetCondition[] {
 }
 
 function verified(snap: GateSnapshot): UnmetCondition[] {
+  if (snap.packages.length === 0) return [unmet("noPackages")];
   return snap.packages.flatMap((p) => {
     const unverified = p.items.filter((it) => !it.qaVerified).length;
     return [
