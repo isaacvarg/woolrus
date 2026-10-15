@@ -3,7 +3,7 @@
 **Milestone:** M1 · **Depends on:** — (data model only; reads `settings` for SLA and claim expiry) ·
 **Used by:** `store-sync` (creates orders in Pending, sets priority on import), `picking`, `packing`, `qa`,
 `shipping`, `exceptions` (voids change what "active" means for gates), `reporting` (stage events) ·
-**State:** planned
+**State:** in progress
 
 Project-wide commands, structure, code style, testing levels and boundaries are in [`../../SPEC.md`](../../SPEC.md);
 this spec only adds what is specific to `workflow`.
@@ -107,7 +107,7 @@ store's Rush Order product: it changes priority but nothing is picked, packed or
 |---|---|
 | **picked** | Every active line is `PICKED` or `SUBSTITUTED` with `pickedQuantity` = active quantity. `OUT_OF_STOCK` and `PENDING` lines block (a picker voids them first, FR-VOID). |
 | **packed** | Σ `PackageItem.quantity` per active line = its active quantity; no line is over-packed; every package has items, a box (or all three override dimensions) and a weight. |
-| **verified** | Every `PackageItem` of the order has `qaVerifiedAt`; every package has exactly one selected `ShippingRate` and one `ACTIVE` label. |
+| **verified** | The order has at least one package; every `PackageItem` of the order has `qaVerifiedAt`; every package has exactly one selected `ShippingRate` and one `ACTIVE` label. |
 | **shippable** | Status is READY and every package has an `ACTIVE` label (fixes §7.1 #7). |
 
 Gates take nothing from the client: they only read the database. That's what makes "hidden buttons" irrelevant.
@@ -304,6 +304,23 @@ queue/**,orders/**,settings/priority-rules/**,settings/**}`, `apps/worker/src/ma
     cancels. A completion refused by a gate shows the unmet list. A queue in one browser updates when another
     browser moves an order, without reloading.
 14. Green: `pnpm lint && pnpm typecheck && pnpm test && pnpm build` plus Playwright.
+
+## Implementation notes (deviations found while building)
+
+- **verified** also needs at least one package (`noPackages`). Without that, "every package is verified" held for
+  an order with none, so it could reach Ready and then fail **shippable**. Found by the SC 3 e2e test.
+- `beginPicking` over someone else's live claim is refused with `claimedByOther`, the same as `claim`. The UI
+  doesn't offer it (`allowedActions`).
+- People are shown by name, or by email when the name is empty (magic-link users start without one):
+  `workflow/people.ts` `displayName`, used for claim holders, conflict errors and history.
+- `recomputePriorities` also covers held orders (every status that isn't closed). Reordering rules doesn't
+  recompute, because `position` doesn't affect priority.
+- `ship` and `repack` take the caller's `tx` and have no route yet. `shipping` will route them; their gates are
+  tested in core.
+- SC 11 benchmark (`queries.bench.test.ts`): 2,000 open orders (80% Pending, 3 lines each, with voids, non-physical
+  lines and claims). `listQueue` p95 is about 10–20 ms on the dev machine for the first page, a 100-row page, a deep
+  keyset page and both kinds of search. The existing `(status, priority desc, ordered_at)` index is enough, so no
+  `pg_trgm` index was needed.
 
 ## Assumptions
 

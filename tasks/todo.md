@@ -233,7 +233,7 @@ criterion n. Every task ends green for the packages it touches (`pnpm --filter <
     each query update. Own backoff (1–30 s), since EventSource gives up on a 401. E2E `searchQueue` now waits for the
     searched response (a late debounced search used to remove rows). Fake-clock test (`page.clock`) for the fallback.
 
-- [ ] **T20: E2E coverage, perf benchmark, docs** (M)
+- [x] **T20: E2E coverage, perf benchmark, docs** (M)
   - Acceptance: every SC 12 journey is in `workflow.spec.ts` (desktop + tablet). An integration benchmark with
     2,000 open orders gets `listQueue` p95 under 1 s (SC 10). The spec state, SPEC.md status and any spec
     deviations are updated.
@@ -241,9 +241,14 @@ criterion n. Every task ends green for the packages it touches (`pnpm --filter <
   - Files: `apps/web/e2e/workflow.spec.ts`, `packages/core/src/workflow/queries.bench.test.ts`, `SPEC.md`,
     `docs/specs/SPEC-workflow.md`.
   - Deps: all.
+  - Done: the SC 13 journeys were already covered by T13–T19. New: an SC 3 e2e test (`complete-packing`/`complete-qa`
+    through `/api/v1` → 409 `gateFailed`, order and history unchanged). It found a bug: **verified** passed with zero
+    packages. That's fixed (`noPackages`), and the spec now records it under "Implementation notes". The benchmark
+    `queries.bench.test.ts` bulk-inserts with SQL (`gen_random_uuid()`, since Prisma's `uuid(7)` default is
+    client-side). p95 is about 10–20 ms. Spec and SPEC.md state are `in progress`; `done` comes at ship.
 
 ### Checkpoint D (complete)
-- [ ] Every spec success criterion has a test; green + Playwright; ready for `/agent-skills:review`.
+- [x] Every spec success criterion has a test; green + Playwright; ready for `/agent-skills:review`.
 - [x] **Before opening the PR: sort out the branch.** Settled 2026-10-15: PR #15 merged the spec, T1, T2 and the
   Next `agentRules` chore into `main`. T3 onward were cherry-picked onto `workflow/state-machine`, the branch for
   the workflow PR. The chore branch was deleted after the merge.

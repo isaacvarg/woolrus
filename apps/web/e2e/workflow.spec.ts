@@ -525,3 +525,37 @@ test("a Picker has no Priority rules link and is refused at the page", async ({ 
   await openNav(page);
   await expect(page.getByRole("link", { name: "Priority rules" })).toHaveCount(0);
 });
+
+// SC 3 (§7.1 #7): the gates hold for API callers, not just the buttons. `ship` has no route until
+// the shipping module; its gate refusal is covered in core.
+for (const { stage, roles, path } of [
+  { stage: "PACKING", roles: ["PACKER"], path: "complete-packing" },
+  { stage: "QA", roles: ["QA"], path: "complete-qa" },
+] as const) {
+  test(`a ${path} call through /api/v1 that misses its gate changes nothing`, async ({ page }) => {
+    const order = await createOrder({ status: stage });
+    await signInAs(page, [...roles]);
+    const claimed = await page.request.post(`/api/v1/orders/${order.id}/claim`, {
+      data: { expectedVersion: order.version },
+    });
+    expect(claimed.ok()).toBe(true);
+    const before = await (await page.request.get(`/api/v1/orders/${order.id}`)).json();
+    const historyBefore = await (
+      await page.request.get(`/api/v1/orders/${order.id}/history`)
+    ).json();
+
+    const refused = await page.request.post(`/api/v1/orders/${order.id}/${path}`, {
+      data: { expectedVersion: before.version },
+    });
+
+    expect(refused.status()).toBe(409);
+    const { data } = await refused.json();
+    expect(data.messageKey).toBe("errors.workflow.gateFailed");
+    expect(data.unmet.length).toBeGreaterThan(0);
+    const after = await (await page.request.get(`/api/v1/orders/${order.id}`)).json();
+    expect(after).toMatchObject({ status: stage, version: before.version });
+    expect(await (await page.request.get(`/api/v1/orders/${order.id}/history`)).json()).toEqual(
+      historyBefore,
+    );
+  });
+}
