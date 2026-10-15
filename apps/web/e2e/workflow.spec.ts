@@ -18,9 +18,18 @@ test.afterAll(async () => {
 
 const toasts = (page: Page) => page.getByRole("region", { name: "Notifications" });
 
-/** Narrows a queue to one test's orders: every test uses its own customer name. */
+/**
+ * Narrows a queue to one test's orders: every test uses its own customer name. Waits for the
+ * searched page, so a row seen afterwards can't vanish when a late debounced search lands.
+ */
 async function searchQueue(page: Page, text: string) {
+  const searched = page.waitForResponse(
+    (response) =>
+      response.url().endsWith("/rpc/orders/queue") &&
+      (response.request().postData() ?? "").includes(text),
+  );
   await page.getByRole("searchbox", { name: "Search orders" }).fill(text);
+  await searched;
 }
 
 test("the nav lists every queue with a count, and All Orders", async ({ page }) => {
@@ -111,6 +120,70 @@ test("a stale version shows a toast and the queue refetches", async ({ page }) =
   await row.getByRole("button", { name: "Begin Picking" }).click();
   await expect(toasts(page).getByText(/This order changed since you loaded it/)).toBeVisible();
   await expect(row).toHaveCount(0);
+});
+
+test("another browser's queue and order page update live when an order moves", async ({
+  page,
+  browser,
+}) => {
+  const customerName = `E2E ${crypto.randomUUID()}`;
+  const order = await createOrder({ customerName });
+  const watcher = await browser.newContext();
+  try {
+    const queue = await watcher.newPage();
+    await signInAs(queue, ["PACKER"]);
+    await queue.goto("/queue/pending");
+    await searchQueue(queue, customerName);
+    const watchedRow = queue.getByRole("row", { name: new RegExp(order.number) });
+    await expect(watchedRow).toBeVisible();
+    const detail = await watcher.newPage();
+    await detail.goto(`/orders/${order.id}`);
+    await expect(detail.getByTestId("order-status")).toHaveText("Pending");
+
+    await signInAs(page, ["PICKER"]);
+    await page.goto("/queue/pending");
+    await searchQueue(page, customerName);
+    await page
+      .getByRole("row", { name: new RegExp(order.number) })
+      .getByRole("button", { name: "Begin Picking" })
+      .click();
+
+    // Well inside the 30 s polling fallback, so only the live event can explain it.
+    await expect(watchedRow).toHaveCount(0, { timeout: 10_000 });
+    await expect(detail.getByTestId("order-status")).toHaveText("Picking", { timeout: 10_000 });
+    await expect(detail.getByText("Claimed by E2E PICKER")).toBeVisible();
+  } finally {
+    await watcher.close();
+  }
+});
+
+test("with the event stream down, the queue polls every 30 s until it reconnects", async ({
+  page,
+}) => {
+  const customerName = `E2E ${crypto.randomUUID()}`;
+  const order = await createOrder({ customerName });
+  await page.clock.install();
+  await page.route("**/api/events/orders", (route) => route.abort());
+  await signInAs(page, ["PICKER"]);
+  await page.goto("/queue/pending");
+  await searchQueue(page, customerName);
+  const row = page.getByRole("row", { name: new RegExp(order.number) });
+  await expect(row).toBeVisible();
+
+  const moved = await page.request.post(`/api/v1/orders/${order.id}/begin-picking`, {
+    data: { expectedVersion: order.version },
+  });
+  expect(moved.ok()).toBe(true);
+  await page.clock.runFor(25_000);
+  await expect(row).toBeVisible();
+  await page.clock.runFor(10_000);
+  await expect(row).toHaveCount(0);
+
+  // Back online: it reconnects within the backoff and stops polling.
+  await page.unroute("**/api/events/orders");
+  const connected = page.waitForResponse("**/api/events/orders");
+  await page.clock.runFor(60_000);
+  expect((await connected).status()).toBe(200);
 });
 
 test("a Packer sees the Pending queue without Begin Picking", async ({ page }) => {

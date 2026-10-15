@@ -221,12 +221,17 @@ criterion n. Every task ends green for the packages it touches (`pnpm --filter <
 
 ## Phase 5: Live and finish
 
-- [ ] **T19: Client live invalidation** (S)
+- [x] **T19: Client live invalidation** (S)
   - Acceptance: a `useOrderEvents()` hook subscribes once per tab and invalidates the queue/counts/order query keys.
     While disconnected, `refetchInterval` is 30 s. It reconnects with backoff.
   - Verify: Playwright: browser B's queue updates when browser A begins picking, without a reload (SC 12).
   - Files: `apps/web/src/lib/live.ts`, `(app)/layout.tsx` (provider), e2e.
   - Deps: T9, T13.
+  - Done: `lib/live.ts` `useOrderEvents` / `<OrderEvents />` (in the app layout). Events are batched (100 ms) and
+    invalidate queue/counts/list + that order's get/history; `resync` and every (re)open invalidate all of `orders`.
+    The 30 s fallback is a `setQueryDefaults(orpc.orders.key(), { refetchInterval: fn })` that TanStack re-reads on
+    each query update. Own backoff (1–30 s), since EventSource gives up on a 401. E2E `searchQueue` now waits for the
+    searched response (a late debounced search used to remove rows). Fake-clock test (`page.clock`) for the fallback.
 
 - [ ] **T20: E2E coverage, perf benchmark, docs** (M)
   - Acceptance: every SC 12 journey is in `workflow.spec.ts` (desktop + tablet). An integration benchmark with

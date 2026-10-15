@@ -2,6 +2,7 @@ import { can } from "@woolrus/core";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
+import { OrderEvents } from "@/lib/live";
 import { currentActor, currentSession } from "@/server/actor";
 import { QueueNav } from "./queue-nav";
 
@@ -15,6 +16,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="drawer lg:drawer-open">
+      <OrderEvents />
       <input id="nav" type="checkbox" className="drawer-toggle" />
       <div className="drawer-content flex flex-col">
         <header className="navbar bg-base-100 shadow-sm lg:hidden">
