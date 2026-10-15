@@ -31,11 +31,13 @@ const secretColumns = {
 
 /** The settings row, created with defaults on first use. */
 export async function loadSettings(tx: DbTx): Promise<Settings> {
-  return tx.settings.upsert({
-    where: { id: SETTINGS_ID },
-    create: { id: SETTINGS_ID },
-    update: {},
-  });
+  const row = await tx.settings.findUnique({ where: { id: SETTINGS_ID } });
+  if (row) return row;
+  // Not Prisma's upsert: it reads then inserts, so two first uses at once hit the primary key, and
+  // inside a transaction that error can't be recovered from. ON CONFLICT lets the loser just read.
+  await tx.$executeRaw`INSERT INTO settings (id, updated_at) VALUES (${SETTINGS_ID}, now())
+    ON CONFLICT (id) DO NOTHING`;
+  return tx.settings.findUniqueOrThrow({ where: { id: SETTINGS_ID } });
 }
 
 /** Stored JSON that no longer fits the contract (older shape, hand edits) reads as unset. */

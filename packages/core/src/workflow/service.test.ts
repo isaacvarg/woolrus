@@ -2,6 +2,7 @@ import type { Db, Role } from "@woolrus/db";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { createActor, resetDb, testDb } from "../../test/db";
 import { createOrder } from "../../test/factories";
+import { claim } from "./claims";
 import {
   beginPicking,
   cancel,
@@ -320,6 +321,28 @@ describe("optimistic locking (SC 5)", () => {
       { reason: { messageKey: "errors.workflow.stale" } },
     ]);
     expect(await db.orderStageEvent.count()).toBe(1);
+  });
+});
+
+describe("claims racing transitions (SC 5)", () => {
+  // Both read Settings (claim expiry) and lock the order; taken in different orders they deadlocked
+  // while the settings row was still being created, and the loser got a 500 instead of `stale`.
+  it("lets exactly one of a claim and beginPicking through, even before Settings exists", async () => {
+    for (let run = 0; run < 6; run++) {
+      await resetDb(db);
+      const [a, b] = [await createActor(db, ["PICKER"]), await createActor(db, ["PICKER"])];
+      const { order } = await createOrder(db);
+
+      const results = await Promise.allSettled([
+        claim(db, a, { orderId: order.id, expectedVersion: 1 }),
+        beginPicking(db, b, { orderId: order.id, expectedVersion: 1 }),
+      ]);
+
+      expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+      expect(results.filter((r) => r.status === "rejected")).toMatchObject([
+        { reason: { messageKey: "errors.workflow.stale" } },
+      ]);
+    }
   });
 });
 

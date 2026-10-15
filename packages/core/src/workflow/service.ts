@@ -39,6 +39,9 @@ export async function transition(
     throw new AppError("BAD_REQUEST", "errors.validation", { reason: "errors.field.required" });
   }
 
+  // Settings before the order lock, as in claims.ts: the same lock order everywhere, or a claim and
+  // a transition racing on one order can deadlock.
+  const expiryMinutes = await claimExpiryMinutes(tx);
   const order = await lockOrder(tx, orderId);
   if (order.version !== expectedVersion) throw new AppError("CONFLICT", "errors.workflow.stale");
 
@@ -48,7 +51,7 @@ export async function transition(
   }
 
   if (move.claim !== "none") {
-    const live = isClaimLive(order, await claimExpiryMinutes(tx), now);
+    const live = isClaimLive(order, expiryMinutes, now);
     if (move.claim === "holds" && (!live || order.claimedById !== actor.userId)) {
       throw new AppError("CONFLICT", "errors.workflow.claimRequired");
     }
