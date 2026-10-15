@@ -194,6 +194,16 @@
       "at": "en {station}"
     }
   },
+  "orders": {
+    "status": "Estado",
+    "statusFilter": "Filtrar por estado",
+    "noOrders": "Ningún pedido coincide.",
+    "pagination": "Páginas",
+    "previousPage": "Página anterior",
+    "nextPage": "Página siguiente",
+    "pageOf": "Página {page} de {pages}",
+    "total": "{count, plural, one {# pedido} other {# pedidos}}"
+  },
   "status": {
     "PENDING": "Pendiente",
     "PICKING": "En surtido",

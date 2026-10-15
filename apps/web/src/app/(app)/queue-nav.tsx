@@ -1,7 +1,6 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import type { Route } from "next";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -29,11 +28,7 @@ export function QueueNav() {
         );
       })}
       <li>
-        {/* The page arrives with T15; until then typed routes don't know it. */}
-        <Link
-          href={"/orders" as Route}
-          className={pathname === "/orders" ? "menu-active" : undefined}
-        >
+        <Link href="/orders" className={pathname === "/orders" ? "menu-active" : undefined}>
           {t("nav.allOrders")}
         </Link>
       </li>

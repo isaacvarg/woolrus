@@ -259,3 +259,72 @@ test("an admin forces an order to another status with a reason", async ({ page }
   await expect(historyPanel(page).getByRole("listitem").first()).toContainText("Pending → QA");
   await expect(historyPanel(page).getByRole("listitem").first()).toContainText("Packed by hand");
 });
+
+/** The All Orders rows for one test's orders, in table order. */
+const orderRows = (page: Page, tag: string) => page.getByRole("row").filter({ hasText: tag });
+
+test("All Orders searches, filters by status in the URL, and opens a row", async ({ page }) => {
+  const tag = `E2E ${crypto.randomUUID()}`;
+  await createOrder({ customerName: `${tag} Alpha` });
+  const packing = await createOrder({ customerName: `${tag} Bravo`, status: "PACKING" });
+  await signInAs(page, ["PICKER"]);
+  await page.goto("/orders");
+  await page.getByRole("searchbox", { name: "Search orders" }).fill(tag);
+  // Both are on the first page anyway (newest first); the URL shows the search was applied.
+  await expect(page).toHaveURL(/search=/);
+  await expect(orderRows(page, tag)).toHaveCount(2);
+
+  await page.getByRole("button", { name: "Packing", exact: true }).click();
+  await expect(orderRows(page, tag)).toHaveCount(1);
+  await expect(page).toHaveURL(/statuses=PACKING/);
+
+  // The URL carries the whole view: a reload (or a shared link) shows the same rows.
+  await page.reload();
+  await expect(page.getByRole("searchbox", { name: "Search orders" })).toHaveValue(tag);
+  await expect(page.getByRole("button", { name: "Packing", exact: true })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await expect(orderRows(page, tag)).toHaveCount(1);
+  await expect(orderRows(page, tag)).toContainText("Packing");
+
+  await orderRows(page, tag).getByRole("cell").nth(1).click();
+  await expect(page).toHaveURL(`/orders/${packing.id}`);
+  await page.goBack();
+  await expect(orderRows(page, tag)).toHaveCount(1);
+  await page.goBack();
+  await expect(page.getByRole("searchbox", { name: "Search orders" })).toHaveValue(tag);
+  await expect(orderRows(page, tag)).toHaveCount(2);
+});
+
+test("All Orders sorts by a column and pages through the results", async ({ page }) => {
+  const tag = `E2E ${crypto.randomUUID()}`;
+  const day = 24 * 60 * 60_000;
+  // Ordered newest first by default: Charlie, Bravo, Alpha.
+  for (const [i, name] of ["Alpha", "Bravo", "Charlie"].entries()) {
+    await createOrder({
+      customerName: `${tag} ${name}`,
+      orderedAt: new Date(Date.now() - (3 - i) * day),
+    });
+  }
+  await signInAs(page, ["PICKER"]);
+  await page.goto(`/orders?search=${encodeURIComponent(tag)}`);
+  await expect(orderRows(page, tag)).toHaveText([/Charlie/, /Bravo/, /Alpha/]);
+
+  const customer = page.getByRole("columnheader", { name: "Customer" });
+  await customer.getByRole("button").click();
+  await expect(customer).toHaveAttribute("aria-sort", "ascending");
+  await expect(orderRows(page, tag)).toHaveText([/Alpha/, /Bravo/, /Charlie/]);
+  await customer.getByRole("button").click();
+  await expect(customer).toHaveAttribute("aria-sort", "descending");
+  await expect(orderRows(page, tag)).toHaveText([/Charlie/, /Bravo/, /Alpha/]);
+  await expect(page).toHaveURL(/sort=customer&dir=desc/);
+
+  await page.goto(`/orders?search=${encodeURIComponent(tag)}&sort=customer&dir=asc&pageSize=2`);
+  await expect(orderRows(page, tag)).toHaveText([/Alpha/, /Bravo/]);
+  await expect(page.getByText("Page 1 of 2")).toBeVisible();
+  await page.getByRole("button", { name: "Next page" }).click();
+  await expect(orderRows(page, tag)).toHaveText([/Charlie/]);
+  await expect(page).toHaveURL(/page=2/);
+  await expect(page.getByRole("button", { name: "Next page" })).toBeDisabled();
+});

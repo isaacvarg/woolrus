@@ -158,12 +158,17 @@ criterion n. Every task ends green for the packages it touches (`pnpm --filter <
     `data.unmet` renders as an alert list instead of a toast. E2E: `createOrder({ rushOrderLine: true })` adds a
     shared non-physical product; second users go in `browser.newContext()`; click RAC radios by label text.
 
-- [ ] **T15: All Orders page** (S/M)
+- [x] **T15: All Orders page** (S/M)
   - Acceptance: `/orders` has search, a status filter, sortable columns and pagination (TanStack Table) in the URL
     query, and row → detail.
   - Verify: Playwright: search and sort.
   - Files: `orders/{page,orders-table}.tsx`, i18n, e2e.
   - Deps: T11, T13.
+  - Done: `orders/orders-table.tsx` keeps the whole view in the URL (`readQuery`/`toSearch`, defaults omitted, a bad
+    param falls back alone) and writes it with `window.history.push/replaceState`, which Next syncs into
+    `useSearchParams` with no server round trip. TanStack Table **v9** (new API: `tableFeatures({ rowSortingFeature,
+    rowPaginationFeature })`, `useTable`, `column.columns([...])` to type the array), manual sort/paging, column ids =
+    API sort keys. The nav's `as Route` cast is gone. E2E `createOrder` takes `orderedAt`.
 
 ### Checkpoint C
 - [ ] Green + Playwright. A demo-seeded dev stack is walkable from Pending to QA through the UI. Review with the user.

@@ -194,6 +194,16 @@
       "at": "at {station}"
     }
   },
+  "orders": {
+    "status": "Status",
+    "statusFilter": "Filter by status",
+    "noOrders": "No orders match.",
+    "pagination": "Pages",
+    "previousPage": "Previous page",
+    "nextPage": "Next page",
+    "pageOf": "Page {page} of {pages}",
+    "total": "{count, plural, one {# order} other {# orders}}"
+  },
   "status": {
     "PENDING": "Pending",
     "PICKING": "Picking",

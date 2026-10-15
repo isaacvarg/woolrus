@@ -29,6 +29,7 @@ export async function createOrder({
   priority = 0,
   quantity = 2,
   statusChangedAt = new Date(),
+  orderedAt = new Date(),
   rushOrderLine = false,
 }: {
   customerName?: string;
@@ -36,6 +37,7 @@ export async function createOrder({
   priority?: number;
   quantity?: number;
   statusChangedAt?: Date;
+  orderedAt?: Date;
   /** Adds a line for a non-physical product, like the store's Rush Order. */
   rushOrderLine?: boolean;
 } = {}) {
@@ -52,7 +54,7 @@ export async function createOrder({
       shippingAddress: address,
       billingAddress: address,
       totalCents: 1000,
-      orderedAt: now,
+      orderedAt,
       wooModifiedAt: now,
       syncedAt: now,
       rawPayload: {},
