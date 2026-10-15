@@ -1,4 +1,5 @@
 import { createDb } from "../src/index";
+import { seedDemoOrders } from "./seed-orders";
 
 const db = createDb();
 
@@ -14,6 +15,11 @@ async function main() {
     await db.box.upsert({ where: { name: box.name }, create: box, update: {} });
   }
   console.log(`Seeded settings and ${boxes.length} boxes`);
+
+  // Demo data is for the dev stack only (SPEC-workflow "Dev data").
+  if (process.env.NODE_ENV !== "production") {
+    console.log(`Seeded ${await seedDemoOrders(db)} demo orders`);
+  }
 }
 
 main()

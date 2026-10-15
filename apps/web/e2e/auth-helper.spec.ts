@@ -41,3 +41,43 @@ test("a deactivated user keeps no access, in the API or the pages", async ({ pag
   await page.goto("/settings");
   await expect(page.getByText("You don't have permission to do that.")).toBeVisible();
 });
+
+test("the order event stream refuses signed-out callers and users who can't read orders", async ({
+  page,
+  request,
+}) => {
+  const signedOut = await request.get("/api/events/orders");
+  expect(signedOut.status()).toBe(401);
+  expect(await signedOut.json()).toEqual({ messageKey: "errors.unauthenticated" });
+
+  await signInAs(page, []);
+  const noRoles = await page.request.get("/api/events/orders");
+  expect(noRoles.status()).toBe(403);
+  expect(await noRoles.json()).toEqual({ messageKey: "errors.forbidden" });
+});
+
+test("a user deactivated while the order event stream is open is cut off at the next heartbeat", async ({
+  page,
+}) => {
+  test.slow(); // The server re-checks the session every 25 s.
+  const picker = await signInAs(page, ["PICKER"]);
+  await page.goto("/");
+
+  // Reads the raw stream (EventSource would quietly reconnect). The first chunk proves it's open.
+  const status = await page.evaluate(async () => {
+    const response = await fetch("/api/events/orders");
+    const reader = (response.body as ReadableStream<Uint8Array>).getReader();
+    (window as unknown as { stream: typeof reader }).stream = reader;
+    await reader.read();
+    return response.status;
+  });
+  expect(status).toBe(200);
+  await db.user.update({ where: { id: picker.id }, data: { active: false } });
+
+  const ended = page.evaluate(async () => {
+    const reader = (window as unknown as { stream: ReadableStreamDefaultReader }).stream;
+    while (!(await reader.read()).done) {}
+    return "ended";
+  });
+  expect(await ended).toBe("ended");
+});

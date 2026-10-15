@@ -13,7 +13,9 @@ Rebuild of v1 (kept at git tag `v1-legacy`; don't copy from it).
    [`docs/srs.md`](docs/srs.md), and the code it touches. [`docs/decisions.md`](docs/decisions.md) is the
    authority when sources disagree.
 4. If `tasks/plan.md` / `tasks/todo.md` exist, they belong to the module in progress — continue from the first
-   unchecked task.
+   unchecked task. Read the `Done:` notes under the finished tasks it depends on before opening code.
+5. When a task is done, add a `Done:` line under it in `tasks/todo.md` (2–3 lines): where the code landed, the
+   helpers the next tasks should reuse, and anything surprising. It saves the next session from re-exploring.
 
 ## Workflow (addyosmani/agent-skills)
 

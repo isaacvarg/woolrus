@@ -12,3 +12,6 @@ packages/db/src/generated
 apps/web/test-results
 apps/web/playwright-report
 next-env.d.ts
+
+# Personal Claude Code overrides
+.claude/settings.local.json

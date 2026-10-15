@@ -3,6 +3,7 @@ import { PrismaClient } from "./generated/prisma/client";
 
 export * from "./generated/prisma/client";
 export { Prisma } from "./generated/prisma/client";
+export * from "./listen";
 
 export type Db = InstanceType<typeof PrismaClient>;
 /** A client or an interactive-transaction client; services accept either. */

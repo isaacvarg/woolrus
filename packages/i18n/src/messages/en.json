@@ -4,11 +4,22 @@
     "save": "Save",
     "cancel": "Cancel",
     "loading": "Loading…",
-    "empty": "Nothing here yet"
+    "empty": "Nothing here yet",
+    "dismiss": "Dismiss",
+    "notifications": "Notifications"
   },
   "nav": {
     "boxes": "Boxes",
-    "settings": "Settings"
+    "settings": "Settings",
+    "pending": "Pending",
+    "picking": "Picking",
+    "packing": "Packing",
+    "qa": "QA",
+    "ready": "Ready",
+    "onHold": "On Hold",
+    "allOrders": "All Orders",
+    "queues": "Queues",
+    "priorityRules": "Priority rules"
   },
   "boxes": {
     "title": "Boxes",
@@ -88,6 +99,166 @@
       "writeOnly": "Stored encrypted. Nobody can view it after saving, so keep your own copy if you need one."
     }
   },
+  "priorityRules": {
+    "title": "Priority rules",
+    "intro": "An order gets the highest level among the enabled rules it matches, or Normal if none match. The order of this list is only for reading it.",
+    "add": "Add rule",
+    "edit": "Edit",
+    "editRule": "Edit rule “{name}”",
+    "delete": "Delete",
+    "deleteRule": "Delete rule “{name}”",
+    "deleteBody": "Open orders that only matched this rule go back to the level of the remaining rules.",
+    "rule": "Rule",
+    "name": "Name",
+    "level": "Priority",
+    "enabled": "Enabled",
+    "actions": "Actions",
+    "enableRule": "Enable “{name}”",
+    "moveUp": "Move “{name}” up",
+    "moveDown": "Move “{name}” down",
+    "empty": "No rules yet: every order is Normal.",
+    "type": "Matches on",
+    "types": {
+      "lineItem": "Line item",
+      "shippingMethod": "Shipping method",
+      "orderAge": "Order age"
+    },
+    "match": "Match by",
+    "matchBy": {
+      "sku": "SKU",
+      "name": "Item name"
+    },
+    "contains": "Shipping method contains",
+    "containsHint": "Ignores upper and lower case, e.g. Express.",
+    "minHours": "Ordered at least (hours ago)",
+    "minHoursHint": "From 1 to 720 hours (30 days).",
+    "summary": {
+      "lineItem": "Has a line with {match, select, sku {SKU} other {name}} {value}",
+      "shippingMethod": "Shipping method contains “{contains}”",
+      "orderAge": "Ordered {hours, plural, one {# hour} other {# hours}} ago or more"
+    },
+    "created": "Rule “{name}” added. Open orders were re-prioritized.",
+    "updated": "Rule “{name}” saved. Open orders were re-prioritized.",
+    "deleted": "Rule “{name}” deleted. Open orders were re-prioritized.",
+    "enabledToast": "Rule “{name}” enabled.",
+    "disabledToast": "Rule “{name}” disabled."
+  },
+  "queue": {
+    "search": "Search orders",
+    "searchPlaceholder": "Order number or customer",
+    "number": "Order",
+    "customer": "Customer",
+    "items": "Items",
+    "priority": "Priority",
+    "orderedAt": "Ordered",
+    "age": "In stage",
+    "claimedBy": "Claimed by",
+    "heldFrom": "Held from",
+    "holdReason": "Reason",
+    "priorityLevel": {
+      "0": "Normal",
+      "1": "High",
+      "2": "Urgent"
+    },
+    "ageMinutes": "{count} min",
+    "ageHours": "{count} h",
+    "ageDays": "{count} d",
+    "slaBreached": "Past the stage's time limit",
+    "externalChange": "Changed in the store after import",
+    "beginPicking": "Begin Picking",
+    "begunPicking": "Order {number} is now in Picking.",
+    "loadMore": "Load more",
+    "noOrders": "No orders in this queue."
+  },
+  "order": {
+    "title": "Order #{number}",
+    "status": "Status",
+    "priority": "Priority",
+    "customer": "Customer",
+    "orderedAt": "Ordered",
+    "shippingMethod": "Shipping",
+    "shipTo": "Ship to",
+    "customerNote": "Customer note",
+    "claimedBy": "Claimed by {name} {time}",
+    "unclaimed": "Nobody is working on this order.",
+    "onHold": "On hold from {status}: {reason}",
+    "lines": "Items",
+    "line": "Item",
+    "sku": "SKU",
+    "quantity": "Ordered",
+    "activeQuantity": "Active",
+    "pickStatusLabel": "Pick",
+    "pickStatus": {
+      "PENDING": "Not picked",
+      "PICKED": "Picked",
+      "OUT_OF_STOCK": "Out of stock",
+      "SUBSTITUTED": "Substituted"
+    },
+    "picked": "{picked} of {expected}",
+    "notPhysical": "Not handled on the floor",
+    "packages": "Packages",
+    "package": "Package {number}",
+    "noBox": "No box yet",
+    "units": "{count, plural, one {# unit} other {# units}}",
+    "liveLabel": "Label",
+    "actions": {
+      "beginPicking": "Begin Picking",
+      "completePicking": "Complete Picking",
+      "completePacking": "Complete Packing",
+      "completeQa": "Complete QA",
+      "hold": "Hold",
+      "resume": "Resume",
+      "cancel": "Cancel order",
+      "forceStatus": "Force status",
+      "claim": "Claim",
+      "release": "Release",
+      "takeOver": "Take over"
+    },
+    "moved": "Order {number} is now in {status}.",
+    "claimed": "You claimed order {number}.",
+    "tookOver": "You took over order {number}.",
+    "released": "Released order {number}.",
+    "back": "Back",
+    "reason": "Reason",
+    "holdTitle": "Put this order on hold",
+    "cancelTitle": "Cancel this order",
+    "forceTitle": "Force status",
+    "forceHint": "Skips every check. The reason is kept in the order's history.",
+    "newStatus": "New status",
+    "takeOverTitle": "Take over this order?",
+    "takeOverBody": "{name} is working on this order. Taking it over moves the claim to you.",
+    "history": {
+      "title": "History",
+      "empty": "Nothing has happened to this order yet.",
+      "stage": "{from} → {to}",
+      "imported": "Imported as {to}",
+      "claim": "Claimed",
+      "takeOver": "Took over from {name}",
+      "release": "Released",
+      "by": "by {name}",
+      "at": "at {station}"
+    }
+  },
+  "orders": {
+    "status": "Status",
+    "statusFilter": "Filter by status",
+    "noOrders": "No orders match.",
+    "pagination": "Pages",
+    "previousPage": "Previous page",
+    "nextPage": "Next page",
+    "pageOf": "Page {page} of {pages}",
+    "total": "{count, plural, one {# order} other {# orders}}"
+  },
+  "status": {
+    "PENDING": "Pending",
+    "PICKING": "Picking",
+    "PACKING": "Packing",
+    "QA": "QA",
+    "READY": "Ready",
+    "COMPLETED": "Completed",
+    "ON_HOLD": "On Hold",
+    "CANCELLED": "Cancelled"
+  },
   "errors": {
     "unauthenticated": "Please sign in to continue.",
     "forbidden": "You don't have permission to do that.",
@@ -112,6 +283,32 @@
     },
     "settings": {
       "encryptionKeyMissing": "Secrets can't be saved: the server's encryption key is missing or invalid. Ask whoever runs the server to set SETTINGS_ENCRYPTION_KEY."
+    },
+    "workflow": {
+      "illegalTransition": "That move isn't allowed from the order's current status.",
+      "stale": "This order changed since you loaded it. It has been refreshed; check it and try again.",
+      "claimRequired": "Claim this order before completing the stage.",
+      "gateFailed": "This stage isn't finished yet.",
+      "claimedByOther": "{name} is working on this order.",
+      "notClaimable": "This order can't be claimed in its current status.",
+      "takeOverConfirm": "Confirm that you want to take this order over.",
+      "claimManyFailed": "Some orders couldn't be claimed, so none were.",
+      "gate": {
+        "lineNotPicked": "{line} hasn't been picked.",
+        "lineOutOfStock": "{line} is out of stock. Void it or pick a substitute first.",
+        "linePickedQuantity": "{line}: {picked} picked, {expected} needed.",
+        "lineUnderPacked": "{line}: {packed} packed, {expected} needed.",
+        "lineOverPacked": "{line}: {packed} packed, only {expected} needed.",
+        "packageEmpty": "Package {package} is empty.",
+        "packageNoBox": "Package {package} needs a box or all three dimensions.",
+        "packageNoWeight": "Package {package} needs a weight.",
+        "packageNotVerified": "Package {package} has {count} item(s) not yet verified.",
+        "packageNoRate": "Package {package} needs exactly one selected rate.",
+        "packageNoLabel": "Package {package} needs an active label.",
+        "packageLiveLabel": "Package {package} has a label that must be voided first.",
+        "notReady": "The order isn't Ready.",
+        "noPackages": "The order has no packages."
+      }
     }
   }
 }

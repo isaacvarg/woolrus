@@ -3,7 +3,7 @@
 **Milestone:** M1 · **Depends on:** — (data model only; reads `settings` for SLA and claim expiry) ·
 **Used by:** `store-sync` (creates orders in Pending, sets priority on import), `picking`, `packing`, `qa`,
 `shipping`, `exceptions` (voids change what "active" means for gates), `reporting` (stage events) ·
-**State:** planned
+**State:** done
 
 Project-wide commands, structure, code style, testing levels and boundaries are in [`../../SPEC.md`](../../SPEC.md);
 this spec only adds what is specific to `workflow`.
@@ -78,7 +78,7 @@ Statuses (`WorkflowStatus`): `PENDING`, `PICKING`, `PACKING`, `QA`, `READY`, `CO
 
 | Transition | Name | Permission | Claim needed | Gate |
 |---|---|---|---|---|
-| PENDING → PICKING | `beginPicking` | `order.pick` | none; the actor claims it | — |
+| PENDING → PICKING | `beginPicking` | `order.pick` | no one else's live claim; the actor claims it | — |
 | PICKING → PACKING | `completePicking` | `order.pick` | actor holds it | **picked** |
 | PACKING → QA | `completePacking` | `order.pack` | actor holds it | **packed** |
 | QA → READY | `completeQa` | `order.qa` | actor holds it | **verified** |
@@ -107,7 +107,7 @@ store's Rush Order product: it changes priority but nothing is picked, packed or
 |---|---|
 | **picked** | Every active line is `PICKED` or `SUBSTITUTED` with `pickedQuantity` = active quantity. `OUT_OF_STOCK` and `PENDING` lines block (a picker voids them first, FR-VOID). |
 | **packed** | Σ `PackageItem.quantity` per active line = its active quantity; no line is over-packed; every package has items, a box (or all three override dimensions) and a weight. |
-| **verified** | Every `PackageItem` of the order has `qaVerifiedAt`; every package has exactly one selected `ShippingRate` and one `ACTIVE` label. |
+| **verified** | The order has at least one package; every `PackageItem` of the order has `qaVerifiedAt`; every package has exactly one selected `ShippingRate` and one `ACTIVE` label. |
 | **shippable** | Status is READY and every package has an `ACTIVE` label (fixes §7.1 #7). |
 
 Gates take nothing from the client: they only read the database. That's what makes "hidden buttons" irrelevant.
@@ -152,7 +152,9 @@ its `tx`, so its own writes and the transition commit or roll back together.
 - `claimMany({ orders: [{ id, expectedVersion }] })`, up to 50: all or nothing in one transaction, rows locked in
   id order to avoid deadlocks. Each failure is reported per order. This exists now so batch picking (`picking`)
   can rely on it.
-- `release({ orderId })`: the holder or an Admin.
+- `release({ orderId })`: the holder or an Admin; needs `order.read` even when there's nothing to release.
+- `claim`, `takeOver` and `claimMany` refuse a caller who can't claim in any stage with `FORBIDDEN` before
+  reading the order, so they learn nothing about it.
 - `takeOver({ orderId, expectedVersion, confirm: true })`: same permission as `claim`, and `confirm` must be `true`
   (the UI shows a confirmation naming the current holder). Audited as `order.takeOver` with the previous holder.
 - Claims bump `version` and are audited, but don't write a stage event (the status didn't change).
@@ -165,7 +167,7 @@ Levels: `0` Normal, `1` High, `2` Urgent. `Order.priority` stores the level; the
 
 | `type` | Fields | Matches when |
 |---|---|---|
-| `lineItem` | `match: "sku" \| "name"`, `value` | Any `OrderItem` has that SKU (exact) or name (case-insensitive exact). Covers the store's **Rush Order** product. |
+| `lineItem` | `match: "sku" \| "name"`, `value` | Any `OrderItem` with active quantity left has that SKU (exact) or name (case-insensitive exact). Covers the store's **Rush Order** product; a fully voided Rush Order line no longer counts. |
 | `shippingMethod` | `contains` | `Order.shippingMethod` contains the text (case-insensitive) |
 | `orderAge` | `minHours` (1–720) | `now − orderedAt ≥ minHours` |
 
@@ -202,9 +204,11 @@ Levels: `0` Normal, `1` High, `2` Urgent. `Order.priority` stores the level; the
 - Core issues `pg_notify('order_changed', json)` in each workflow transaction (payload: order id and new status,
   no PII).
 - `apps/web/src/app/api/events/orders/route.ts`: an authenticated SSE stream (session cookie or bearer). One shared
-  `LISTEN` connection per web process fans out to subscribers, with a heartbeat every 25 s.
+  `LISTEN` connection per web process fans out to subscribers, with a heartbeat every 25 s. Each heartbeat
+  re-checks the session, and the stream ends once it's gone or the user is deactivated.
 - The client invalidates the matching TanStack Query keys (queue lists, counts, that order) on each event. If the
-  stream is down, queries fall back to `refetchInterval: 30s` until it reconnects.
+  stream is down, queries fall back to `refetchInterval: 30s` until it reconnects. While it's up they still
+  refetch every 60 s, for what changes with time and sends no event (SLA breach, claim expiry).
 
 ### API (oRPC, `packages/contracts/src/orders.ts`, `priority-rules.ts`)
 
@@ -304,6 +308,31 @@ queue/**,orders/**,settings/priority-rules/**,settings/**}`, `apps/worker/src/ma
     cancels. A completion refused by a gate shows the unmet list. A queue in one browser updates when another
     browser moves an order, without reloading.
 14. Green: `pnpm lint && pnpm typecheck && pnpm test && pnpm build` plus Playwright.
+
+## Implementation notes (deviations found while building)
+
+- **Lock order:** every claim and transition reads Settings before it locks the order, and a priority recompute
+  locks the orders it changes in id order (as `claimMany` does). Mixed orders deadlocked under real concurrency.
+  `loadSettings` creates the row with `INSERT … ON CONFLICT DO NOTHING`: Prisma's upsert failed two first
+  uses at once with a duplicate key.
+- **Voids and priority:** a fully voided line doesn't match `lineItem` rules. Voids don't trigger a recompute on
+  their own: `exceptions` must call `recomputePriorities(tx, { orderIds })` when it voids or un-voids a line.
+- **verified** also needs at least one package (`noPackages`). Without that, "every package is verified" held for
+  an order with none, so it could reach Ready and then fail **shippable**. Found by the SC 3 e2e test.
+- `beginPicking` over someone else's live claim is refused with `claimedByOther`, the same as `claim`. The UI
+  doesn't offer it (`allowedActions`).
+- People are shown by name, or by email when the name is empty (magic-link users start without one):
+  `workflow/people.ts` `displayName`, used for claim holders, conflict errors and history.
+- Recomputes run one at a time (a transaction-scoped advisory lock). Otherwise the 5-minute job could write
+  priorities from rules an admin had just changed, and two recomputes could deadlock on the same orders.
+- `recomputePriorities` also covers held orders (every status that isn't closed). Reordering rules doesn't
+  recompute, because `position` doesn't affect priority.
+- `ship` and `repack` take the caller's `tx` and have no route yet. `shipping` will route them; their gates are
+  tested in core.
+- SC 11 benchmark (`queries.bench.test.ts`): 2,000 open orders (80% Pending, 3 lines each, with voids, non-physical
+  lines and claims). `listQueue` p95 is about 10–20 ms on the dev machine for the first page, a 100-row page, a deep
+  keyset page and both kinds of search. The existing `(status, priority desc, ordered_at)` index is enough, so no
+  `pg_trgm` index was needed.
 
 ## Assumptions
 

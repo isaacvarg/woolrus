@@ -2,11 +2,22 @@ import {
   archiveBox,
   clearSecret,
   createBox,
+  createPriorityRule,
+  deletePriorityRule,
+  getOrder,
+  getOrderHistory,
   getPublicSettings,
   getSettings,
   listBoxes,
+  listOrders,
+  listPriorityRules,
+  listQueue,
+  orderMutations,
   permissionsFor,
+  queueCounts,
+  reorderPriorityRules,
   setSecret,
+  updatePriorityRule,
   updateSettings,
 } from "@woolrus/core";
 import { db } from "@woolrus/db";
@@ -45,6 +56,66 @@ export const router = api.router({
     ),
     clearSecret: api.settings.clearSecret.handler(({ input, context }) =>
       clearSecret(db, context.actor, input),
+    ),
+  },
+  orders: {
+    queue: api.orders.queue.handler(({ input, context }) => listQueue(db, context.actor, input)),
+    counts: api.orders.counts.handler(({ context }) => queueCounts(db, context.actor)),
+    list: api.orders.list.handler(({ input, context }) => listOrders(db, context.actor, input)),
+    get: api.orders.get.handler(({ input, context }) => getOrder(db, context.actor, input)),
+    history: api.orders.history.handler(({ input, context }) =>
+      getOrderHistory(db, context.actor, input),
+    ),
+    beginPicking: api.orders.beginPicking.handler(({ input, context }) =>
+      orderMutations.beginPicking(db, context.actor, input),
+    ),
+    completePicking: api.orders.completePicking.handler(({ input, context }) =>
+      orderMutations.completePicking(db, context.actor, input),
+    ),
+    completePacking: api.orders.completePacking.handler(({ input, context }) =>
+      orderMutations.completePacking(db, context.actor, input),
+    ),
+    completeQa: api.orders.completeQa.handler(({ input, context }) =>
+      orderMutations.completeQa(db, context.actor, input),
+    ),
+    hold: api.orders.hold.handler(({ input, context }) =>
+      orderMutations.hold(db, context.actor, input),
+    ),
+    resume: api.orders.resume.handler(({ input, context }) =>
+      orderMutations.resume(db, context.actor, input),
+    ),
+    cancel: api.orders.cancel.handler(({ input, context }) =>
+      orderMutations.cancel(db, context.actor, input),
+    ),
+    forceStatus: api.orders.forceStatus.handler(({ input, context }) =>
+      orderMutations.forceStatus(db, context.actor, input),
+    ),
+    claim: api.orders.claim.handler(({ input, context }) =>
+      orderMutations.claim(db, context.actor, input),
+    ),
+    release: api.orders.release.handler(({ input, context }) =>
+      orderMutations.release(db, context.actor, input),
+    ),
+    takeOver: api.orders.takeOver.handler(({ input, context }) =>
+      orderMutations.takeOver(db, context.actor, input),
+    ),
+    claimMany: api.orders.claimMany.handler(({ input, context }) =>
+      orderMutations.claimMany(db, context.actor, input),
+    ),
+  },
+  priorityRules: {
+    list: api.priorityRules.list.handler(({ context }) => listPriorityRules(db, context.actor)),
+    create: api.priorityRules.create.handler(({ input, context }) =>
+      createPriorityRule(db, context.actor, input),
+    ),
+    update: api.priorityRules.update.handler(({ input, context }) =>
+      updatePriorityRule(db, context.actor, input),
+    ),
+    delete: api.priorityRules.delete.handler(({ input, context }) =>
+      deletePriorityRule(db, context.actor, input),
+    ),
+    reorder: api.priorityRules.reorder.handler(({ input, context }) =>
+      reorderPriorityRules(db, context.actor, input),
     ),
   },
 });

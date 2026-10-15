@@ -4,11 +4,22 @@
     "save": "Guardar",
     "cancel": "Cancelar",
     "loading": "Cargando…",
-    "empty": "Aún no hay nada aquí"
+    "empty": "Aún no hay nada aquí",
+    "dismiss": "Cerrar",
+    "notifications": "Notificaciones"
   },
   "nav": {
     "boxes": "Cajas",
-    "settings": "Configuración"
+    "settings": "Configuración",
+    "pending": "Pendientes",
+    "picking": "En surtido",
+    "packing": "En empaque",
+    "qa": "Control de calidad",
+    "ready": "Listos",
+    "onHold": "En espera",
+    "allOrders": "Todos los pedidos",
+    "queues": "Colas",
+    "priorityRules": "Reglas de prioridad"
   },
   "boxes": {
     "title": "Cajas",
@@ -88,6 +99,166 @@
       "writeOnly": "Se guarda cifrado. Nadie podrá verlo después de guardarlo; conserva tu propia copia si la necesitas."
     }
   },
+  "priorityRules": {
+    "title": "Reglas de prioridad",
+    "intro": "Un pedido recibe el nivel más alto entre las reglas activas que cumple, o Normal si no cumple ninguna. El orden de esta lista solo sirve para leerla.",
+    "add": "Añadir regla",
+    "edit": "Editar",
+    "editRule": "Editar la regla «{name}»",
+    "delete": "Eliminar",
+    "deleteRule": "Eliminar la regla «{name}»",
+    "deleteBody": "Los pedidos abiertos que solo cumplían esta regla vuelven al nivel de las reglas restantes.",
+    "rule": "Regla",
+    "name": "Nombre",
+    "level": "Prioridad",
+    "enabled": "Activa",
+    "actions": "Acciones",
+    "enableRule": "Activar «{name}»",
+    "moveUp": "Subir «{name}»",
+    "moveDown": "Bajar «{name}»",
+    "empty": "Aún no hay reglas: todos los pedidos son Normal.",
+    "type": "Se basa en",
+    "types": {
+      "lineItem": "Artículo",
+      "shippingMethod": "Método de envío",
+      "orderAge": "Antigüedad del pedido"
+    },
+    "match": "Comparar por",
+    "matchBy": {
+      "sku": "SKU",
+      "name": "Nombre del artículo"
+    },
+    "contains": "El método de envío contiene",
+    "containsHint": "No distingue mayúsculas y minúsculas, p. ej. Express.",
+    "minHours": "Pedido hace al menos (horas)",
+    "minHoursHint": "De 1 a 720 horas (30 días).",
+    "summary": {
+      "lineItem": "Tiene un artículo con {match, select, sku {SKU} other {nombre}} {value}",
+      "shippingMethod": "El método de envío contiene «{contains}»",
+      "orderAge": "Pedido hace {hours, plural, one {# hora} other {# horas}} o más"
+    },
+    "created": "Regla «{name}» añadida. Se recalculó la prioridad de los pedidos abiertos.",
+    "updated": "Regla «{name}» guardada. Se recalculó la prioridad de los pedidos abiertos.",
+    "deleted": "Regla «{name}» eliminada. Se recalculó la prioridad de los pedidos abiertos.",
+    "enabledToast": "Regla «{name}» activada.",
+    "disabledToast": "Regla «{name}» desactivada."
+  },
+  "queue": {
+    "search": "Buscar pedidos",
+    "searchPlaceholder": "Número de pedido o cliente",
+    "number": "Pedido",
+    "customer": "Cliente",
+    "items": "Artículos",
+    "priority": "Prioridad",
+    "orderedAt": "Fecha del pedido",
+    "age": "En la etapa",
+    "claimedBy": "Tomado por",
+    "heldFrom": "En espera desde",
+    "holdReason": "Motivo",
+    "priorityLevel": {
+      "0": "Normal",
+      "1": "Alta",
+      "2": "Urgente"
+    },
+    "ageMinutes": "{count} min",
+    "ageHours": "{count} h",
+    "ageDays": "{count} d",
+    "slaBreached": "Superó el tiempo límite de la etapa",
+    "externalChange": "Modificado en la tienda después de importarlo",
+    "beginPicking": "Comenzar surtido",
+    "begunPicking": "El pedido {number} está ahora en surtido.",
+    "loadMore": "Cargar más",
+    "noOrders": "No hay pedidos en esta cola."
+  },
+  "order": {
+    "title": "Pedido #{number}",
+    "status": "Estado",
+    "priority": "Prioridad",
+    "customer": "Cliente",
+    "orderedAt": "Fecha del pedido",
+    "shippingMethod": "Envío",
+    "shipTo": "Enviar a",
+    "customerNote": "Nota del cliente",
+    "claimedBy": "Tomado por {name} {time}",
+    "unclaimed": "Nadie está trabajando en este pedido.",
+    "onHold": "En espera desde {status}: {reason}",
+    "lines": "Artículos",
+    "line": "Artículo",
+    "sku": "SKU",
+    "quantity": "Pedidos",
+    "activeQuantity": "Activos",
+    "pickStatusLabel": "Surtido",
+    "pickStatus": {
+      "PENDING": "Sin surtir",
+      "PICKED": "Surtido",
+      "OUT_OF_STOCK": "Sin existencias",
+      "SUBSTITUTED": "Sustituido"
+    },
+    "picked": "{picked} de {expected}",
+    "notPhysical": "No se maneja en el almacén",
+    "packages": "Paquetes",
+    "package": "Paquete {number}",
+    "noBox": "Sin caja todavía",
+    "units": "{count, plural, one {# unidad} other {# unidades}}",
+    "liveLabel": "Etiqueta",
+    "actions": {
+      "beginPicking": "Comenzar surtido",
+      "completePicking": "Terminar surtido",
+      "completePacking": "Terminar empaque",
+      "completeQa": "Terminar control de calidad",
+      "hold": "Poner en espera",
+      "resume": "Reanudar",
+      "cancel": "Cancelar pedido",
+      "forceStatus": "Forzar estado",
+      "claim": "Reclamar",
+      "release": "Liberar",
+      "takeOver": "Tomar el pedido"
+    },
+    "moved": "El pedido {number} está ahora en {status}.",
+    "claimed": "Reclamaste el pedido {number}.",
+    "tookOver": "Tomaste el pedido {number}.",
+    "released": "Liberaste el pedido {number}.",
+    "back": "Volver",
+    "reason": "Motivo",
+    "holdTitle": "Poner este pedido en espera",
+    "cancelTitle": "Cancelar este pedido",
+    "forceTitle": "Forzar estado",
+    "forceHint": "Se salta todas las comprobaciones. El motivo queda en el historial del pedido.",
+    "newStatus": "Nuevo estado",
+    "takeOverTitle": "¿Tomar este pedido?",
+    "takeOverBody": "{name} está trabajando en este pedido. Si lo tomas, el pedido pasa a tu nombre.",
+    "history": {
+      "title": "Historial",
+      "empty": "Todavía no ha pasado nada con este pedido.",
+      "stage": "{from} → {to}",
+      "imported": "Importado como {to}",
+      "claim": "Reclamado",
+      "takeOver": "Lo tomó de {name}",
+      "release": "Liberado",
+      "by": "por {name}",
+      "at": "en {station}"
+    }
+  },
+  "orders": {
+    "status": "Estado",
+    "statusFilter": "Filtrar por estado",
+    "noOrders": "Ningún pedido coincide.",
+    "pagination": "Páginas",
+    "previousPage": "Página anterior",
+    "nextPage": "Página siguiente",
+    "pageOf": "Página {page} de {pages}",
+    "total": "{count, plural, one {# pedido} other {# pedidos}}"
+  },
+  "status": {
+    "PENDING": "Pendiente",
+    "PICKING": "En surtido",
+    "PACKING": "En empaque",
+    "QA": "Control de calidad",
+    "READY": "Listo",
+    "COMPLETED": "Completado",
+    "ON_HOLD": "En espera",
+    "CANCELLED": "Cancelado"
+  },
   "errors": {
     "unauthenticated": "Inicia sesión para continuar.",
     "forbidden": "No tienes permiso para hacer eso.",
@@ -112,6 +283,32 @@
     },
     "settings": {
       "encryptionKeyMissing": "No se pueden guardar secretos: falta la clave de cifrado del servidor o no es válida. Pide a quien administra el servidor que configure SETTINGS_ENCRYPTION_KEY."
+    },
+    "workflow": {
+      "illegalTransition": "Ese cambio no está permitido desde el estado actual del pedido.",
+      "stale": "Este pedido cambió desde que lo abriste. Se actualizó; revísalo e inténtalo de nuevo.",
+      "claimRequired": "Reclama este pedido antes de completar la etapa.",
+      "gateFailed": "Esta etapa aún no está terminada.",
+      "claimedByOther": "{name} está trabajando en este pedido.",
+      "notClaimable": "Este pedido no se puede reclamar en su estado actual.",
+      "takeOverConfirm": "Confirma que quieres tomar este pedido.",
+      "claimManyFailed": "Algunos pedidos no se pudieron reclamar, así que no se reclamó ninguno.",
+      "gate": {
+        "lineNotPicked": "{line} no se ha recolectado.",
+        "lineOutOfStock": "{line} está agotado. Anúlalo o recolecta un sustituto primero.",
+        "linePickedQuantity": "{line}: {picked} recolectados, se necesitan {expected}.",
+        "lineUnderPacked": "{line}: {packed} empacados, se necesitan {expected}.",
+        "lineOverPacked": "{line}: {packed} empacados, solo se necesitan {expected}.",
+        "packageEmpty": "El paquete {package} está vacío.",
+        "packageNoBox": "El paquete {package} necesita una caja o las tres dimensiones.",
+        "packageNoWeight": "El paquete {package} necesita un peso.",
+        "packageNotVerified": "El paquete {package} tiene {count} artículo(s) sin verificar.",
+        "packageNoRate": "El paquete {package} necesita exactamente una tarifa seleccionada.",
+        "packageNoLabel": "El paquete {package} necesita una etiqueta activa.",
+        "packageLiveLabel": "El paquete {package} tiene una etiqueta que primero debe anularse.",
+        "notReady": "El pedido no está Listo.",
+        "noPackages": "El pedido no tiene paquetes."
+      }
     }
   }
 }

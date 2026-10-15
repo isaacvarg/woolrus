@@ -9,6 +9,7 @@ import {
   NumberField as AriaNumberField,
   Radio as AriaRadio,
   RadioGroup as AriaRadioGroup,
+  Switch as AriaSwitch,
   TextField as AriaTextField,
   type ButtonProps,
   type CheckboxProps,
@@ -18,6 +19,7 @@ import {
   type NumberFieldProps,
   type RadioGroupProps,
   type RadioProps,
+  type SwitchProps,
   Text,
   type TextFieldProps,
 } from "react-aria-components";
@@ -147,5 +149,33 @@ export function Radio({
         </>
       )}
     </AriaRadio>
+  );
+}
+
+/** An on/off toggle that applies at once (no form submit), e.g. enabling a rule. */
+export function Switch({
+  children,
+  ...props
+}: Omit<SwitchProps, "children"> & { children: ReactNode }) {
+  return (
+    <AriaSwitch {...props} className="flex cursor-pointer items-center gap-2 py-2">
+      {({ isSelected, isFocusVisible }) => (
+        <>
+          <span
+            aria-hidden="true"
+            className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
+              isSelected ? "bg-primary" : "bg-base-content/30"
+            } ${isFocusVisible ? focusRing : ""}`}
+          >
+            <span
+              className={`absolute top-0.5 size-5 rounded-full bg-base-100 shadow transition-transform ${
+                isSelected ? "translate-x-5.5" : "translate-x-0.5"
+              }`}
+            />
+          </span>
+          {children}
+        </>
+      )}
+    </AriaSwitch>
   );
 }
