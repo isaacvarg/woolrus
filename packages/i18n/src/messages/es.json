@@ -114,7 +114,23 @@
       "encryptionKeyMissing": "No se pueden guardar secretos: falta la clave de cifrado del servidor o no es válida. Pide a quien administra el servidor que configure SETTINGS_ENCRYPTION_KEY."
     },
     "workflow": {
-      "illegalTransition": "Ese cambio no está permitido desde el estado actual del pedido."
+      "illegalTransition": "Ese cambio no está permitido desde el estado actual del pedido.",
+      "gate": {
+        "lineNotPicked": "{line} no se ha recolectado.",
+        "lineOutOfStock": "{line} está agotado. Anúlalo o recolecta un sustituto primero.",
+        "linePickedQuantity": "{line}: {picked} recolectados, se necesitan {expected}.",
+        "lineUnderPacked": "{line}: {packed} empacados, se necesitan {expected}.",
+        "lineOverPacked": "{line}: {packed} empacados, solo se necesitan {expected}.",
+        "packageEmpty": "El paquete {package} está vacío.",
+        "packageNoBox": "El paquete {package} necesita una caja o las tres dimensiones.",
+        "packageNoWeight": "El paquete {package} necesita un peso.",
+        "packageNotVerified": "El paquete {package} tiene {count} artículo(s) sin verificar.",
+        "packageNoRate": "El paquete {package} necesita exactamente una tarifa seleccionada.",
+        "packageNoLabel": "El paquete {package} necesita una etiqueta activa.",
+        "packageLiveLabel": "El paquete {package} tiene una etiqueta que primero debe anularse.",
+        "notReady": "El pedido no está Listo.",
+        "noPackages": "El pedido no tiene paquetes."
+      }
     }
   }
 }

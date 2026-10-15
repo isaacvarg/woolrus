@@ -31,7 +31,7 @@ criterion n. Every task ends green for the packages it touches (`pnpm --filter <
   - Files: `packages/core/src/workflow/machine.ts` (+test), the i18n error key.
   - Deps: none.
 
-- [ ] **T4: Gates (pure evaluate + snapshot loader)** (M)
+- [x] **T4: Gates (pure evaluate + snapshot loader)** (M)
   - Acceptance: `evaluateGate(kind, snapshot)` returns unmet conditions with message keys for picked, packed,
     verified, shippable and noLiveLabels. Active quantity subtracts voids that aren't undone. Non-physical and
     zero-active lines are skipped. Over-packing fails. `loadGateSnapshot(tx, orderId)` uses the factories (SC 2, 9).

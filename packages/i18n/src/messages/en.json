@@ -114,7 +114,23 @@
       "encryptionKeyMissing": "Secrets can't be saved: the server's encryption key is missing or invalid. Ask whoever runs the server to set SETTINGS_ENCRYPTION_KEY."
     },
     "workflow": {
-      "illegalTransition": "That move isn't allowed from the order's current status."
+      "illegalTransition": "That move isn't allowed from the order's current status.",
+      "gate": {
+        "lineNotPicked": "{line} hasn't been picked.",
+        "lineOutOfStock": "{line} is out of stock. Void it or pick a substitute first.",
+        "linePickedQuantity": "{line}: {picked} picked, {expected} needed.",
+        "lineUnderPacked": "{line}: {packed} packed, {expected} needed.",
+        "lineOverPacked": "{line}: {packed} packed, only {expected} needed.",
+        "packageEmpty": "Package {package} is empty.",
+        "packageNoBox": "Package {package} needs a box or all three dimensions.",
+        "packageNoWeight": "Package {package} needs a weight.",
+        "packageNotVerified": "Package {package} has {count} item(s) not yet verified.",
+        "packageNoRate": "Package {package} needs exactly one selected rate.",
+        "packageNoLabel": "Package {package} needs an active label.",
+        "packageLiveLabel": "Package {package} has a label that must be voided first.",
+        "notReady": "The order isn't Ready.",
+        "noPackages": "The order has no packages."
+      }
     }
   }
 }
