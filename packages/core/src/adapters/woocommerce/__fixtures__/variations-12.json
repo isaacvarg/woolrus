@@ -1,0 +1,158 @@
+[
+  {
+    "id": 14,
+    "type": "variation",
+    "date_created": "2026-10-14T21:04:26",
+    "date_created_gmt": "2026-10-14T21:04:26",
+    "date_modified": "2026-10-14T21:04:26",
+    "date_modified_gmt": "2026-10-14T21:04:26",
+    "description": "",
+    "permalink": "https://localhost:8090/product/body-lotion/?attribute_size=16oz",
+    "sku": "LOTION-16",
+    "global_unique_id": "",
+    "price": "22.00",
+    "regular_price": "22.00",
+    "sale_price": "",
+    "date_on_sale_from": null,
+    "date_on_sale_from_gmt": null,
+    "date_on_sale_to": null,
+    "date_on_sale_to_gmt": null,
+    "on_sale": false,
+    "status": "publish",
+    "purchasable": true,
+    "virtual": false,
+    "downloadable": false,
+    "downloads": [],
+    "download_limit": -1,
+    "download_expiry": -1,
+    "tax_status": "taxable",
+    "tax_class": "",
+    "manage_stock": false,
+    "stock_quantity": null,
+    "stock_status": "instock",
+    "backorders": "no",
+    "backorders_allowed": false,
+    "backordered": false,
+    "low_stock_amount": null,
+    "weight": "1.1",
+    "dimensions": {
+      "length": "",
+      "width": "",
+      "height": ""
+    },
+    "shipping_class": "",
+    "shipping_class_id": 0,
+    "image": null,
+    "gallery_image_ids": [],
+    "attributes": [
+      {
+        "id": 0,
+        "name": "Size",
+        "slug": "size",
+        "option": "16oz"
+      }
+    ],
+    "menu_order": 0,
+    "meta_data": [],
+    "name": "16oz",
+    "parent_id": 12,
+    "_links": {
+      "self": [
+        {
+          "href": "https://localhost:8090/wp-json/wc/v3/products/12/variations/14",
+          "targetHints": {
+            "allow": ["GET", "POST", "PUT", "PATCH", "DELETE"]
+          }
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://localhost:8090/wp-json/wc/v3/products/12/variations"
+        }
+      ],
+      "up": [
+        {
+          "href": "https://localhost:8090/wp-json/wc/v3/products/12"
+        }
+      ]
+    }
+  },
+  {
+    "id": 13,
+    "type": "variation",
+    "date_created": "2026-10-14T21:04:25",
+    "date_created_gmt": "2026-10-14T21:04:25",
+    "date_modified": "2026-10-14T21:04:25",
+    "date_modified_gmt": "2026-10-14T21:04:25",
+    "description": "",
+    "permalink": "https://localhost:8090/product/body-lotion/?attribute_size=8oz",
+    "sku": "LOTION-8",
+    "global_unique_id": "",
+    "price": "14.00",
+    "regular_price": "14.00",
+    "sale_price": "",
+    "date_on_sale_from": null,
+    "date_on_sale_from_gmt": null,
+    "date_on_sale_to": null,
+    "date_on_sale_to_gmt": null,
+    "on_sale": false,
+    "status": "publish",
+    "purchasable": true,
+    "virtual": false,
+    "downloadable": false,
+    "downloads": [],
+    "download_limit": -1,
+    "download_expiry": -1,
+    "tax_status": "taxable",
+    "tax_class": "",
+    "manage_stock": false,
+    "stock_quantity": null,
+    "stock_status": "instock",
+    "backorders": "no",
+    "backorders_allowed": false,
+    "backordered": false,
+    "low_stock_amount": null,
+    "weight": "0.6",
+    "dimensions": {
+      "length": "",
+      "width": "",
+      "height": ""
+    },
+    "shipping_class": "",
+    "shipping_class_id": 0,
+    "image": null,
+    "gallery_image_ids": [],
+    "attributes": [
+      {
+        "id": 0,
+        "name": "Size",
+        "slug": "size",
+        "option": "8oz"
+      }
+    ],
+    "menu_order": 0,
+    "meta_data": [],
+    "name": "8oz",
+    "parent_id": 12,
+    "_links": {
+      "self": [
+        {
+          "href": "https://localhost:8090/wp-json/wc/v3/products/12/variations/13",
+          "targetHints": {
+            "allow": ["GET", "POST", "PUT", "PATCH", "DELETE"]
+          }
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://localhost:8090/wp-json/wc/v3/products/12/variations"
+        }
+      ],
+      "up": [
+        {
+          "href": "https://localhost:8090/wp-json/wc/v3/products/12"
+        }
+      ]
+    }
+  }
+]

@@ -1,3 +1,6 @@
+export * from "./adapters/woocommerce/adapter";
+export * from "./adapters/woocommerce/errors";
+export * from "./adapters/woocommerce/http";
 export * from "./audit";
 export * from "./boxes/service";
 export * from "./errors";

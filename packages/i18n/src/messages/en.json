@@ -309,6 +309,14 @@
         "notReady": "The order isn't Ready.",
         "noPackages": "The order has no packages."
       }
+    },
+    "sync": {
+      "unauthorized": "WooCommerce refused the consumer key or secret. Check them in Settings → Integrations.",
+      "notFound": "WooCommerce couldn't find that record.",
+      "unreachable": "WooCommerce couldn't be reached. Check the store URL and that the store is up.",
+      "notWooCommerce": "That URL doesn't look like a WooCommerce store (no REST API v3 found).",
+      "rateLimited": "WooCommerce is limiting requests. Sync will try again shortly.",
+      "badResponse": "WooCommerce sent a response Woolrus couldn't read."
     }
   }
 }

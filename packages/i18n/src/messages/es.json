@@ -309,6 +309,14 @@
         "notReady": "El pedido no está Listo.",
         "noPackages": "El pedido no tiene paquetes."
       }
+    },
+    "sync": {
+      "unauthorized": "WooCommerce rechazó la clave o el secreto del consumidor. Revísalos en Configuración → Integraciones.",
+      "notFound": "WooCommerce no encontró ese registro.",
+      "unreachable": "No se pudo conectar con WooCommerce. Revisa la URL de la tienda y que esté en línea.",
+      "notWooCommerce": "Esa URL no parece una tienda WooCommerce (no se encontró la API REST v3).",
+      "rateLimited": "WooCommerce está limitando las solicitudes. La sincronización lo intentará de nuevo en breve.",
+      "badResponse": "WooCommerce envió una respuesta que Woolrus no pudo leer."
     }
   }
 }

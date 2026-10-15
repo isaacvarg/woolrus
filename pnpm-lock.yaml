@@ -330,6 +330,9 @@ importers:
       '@woolrus/i18n':
         specifier: workspace:*
         version: link:../i18n
+      zod:
+        specifier: 4.6.7
+        version: 4.6.7
     devDependencies:
       '@types/node':
         specifier: ^24.19.2

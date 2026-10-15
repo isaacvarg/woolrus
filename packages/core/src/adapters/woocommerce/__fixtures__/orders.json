@@ -1,0 +1,425 @@
+[
+  {
+    "id": 17,
+    "parent_id": 0,
+    "status": "on-hold",
+    "currency": "USD",
+    "version": "11.2.1",
+    "prices_include_tax": false,
+    "date_created": "2026-10-14T21:04:30",
+    "date_modified": "2026-10-14T21:04:30",
+    "discount_total": "0.00",
+    "discount_tax": "0.00",
+    "shipping_total": "0.00",
+    "shipping_tax": "0.00",
+    "cart_tax": "0.00",
+    "total": "48.00",
+    "total_tax": "0.00",
+    "customer_id": 0,
+    "order_key": "wc_order_2QHc6C6HmwCl8",
+    "billing": {
+      "first_name": "Ana",
+      "last_name": "Lopez",
+      "company": "",
+      "address_1": "742 Evergreen Ter",
+      "address_2": "",
+      "city": "Springfield",
+      "state": "OR",
+      "postcode": "97477",
+      "country": "US",
+      "email": "ana@example.test",
+      "phone": "5555550100"
+    },
+    "shipping": {
+      "first_name": "Ana",
+      "last_name": "Lopez",
+      "company": "",
+      "address_1": "742 Evergreen Ter",
+      "address_2": "",
+      "city": "Springfield",
+      "state": "OR",
+      "postcode": "97477",
+      "country": "US",
+      "phone": "5555550100"
+    },
+    "payment_method": "",
+    "payment_method_title": "",
+    "transaction_id": "",
+    "customer_ip_address": "",
+    "customer_user_agent": "",
+    "created_via": "rest-api",
+    "customer_note": "",
+    "date_completed": null,
+    "date_paid": null,
+    "cart_hash": "",
+    "number": "17",
+    "meta_data": [],
+    "line_items": [
+      {
+        "id": 6,
+        "name": "Vitamin C Serum 1oz",
+        "product_id": 11,
+        "variation_id": 0,
+        "quantity": 2,
+        "tax_class": "",
+        "subtotal": "48.00",
+        "subtotal_tax": "0.00",
+        "total": "48.00",
+        "total_tax": "0.00",
+        "taxes": [],
+        "meta_data": [
+          {
+            "id": 50,
+            "key": "_reduced_stock",
+            "value": "2",
+            "display_key": "_reduced_stock",
+            "display_value": "2"
+          }
+        ],
+        "sku": "SERUM-VC-1",
+        "global_unique_id": "",
+        "price": 24,
+        "image": {
+          "id": "",
+          "src": ""
+        },
+        "parent_name": null
+      }
+    ],
+    "tax_lines": [],
+    "shipping_lines": [],
+    "fee_lines": [],
+    "coupon_lines": [],
+    "refunds": [],
+    "payment_url": "https://localhost:8090/checkout/order-pay/17/?pay_for_order=true&key=wc_order_2QHc6C6HmwCl8",
+    "is_editable": true,
+    "needs_payment": false,
+    "needs_processing": true,
+    "date_created_gmt": "2026-10-14T21:04:30",
+    "date_modified_gmt": "2026-10-14T21:04:30",
+    "date_completed_gmt": null,
+    "date_paid_gmt": null,
+    "currency_symbol": "$",
+    "_links": {
+      "self": [
+        {
+          "href": "https://localhost:8090/wp-json/wc/v3/orders/17",
+          "targetHints": {
+            "allow": ["GET", "POST", "PUT", "PATCH", "DELETE"]
+          }
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://localhost:8090/wp-json/wc/v3/orders"
+        }
+      ],
+      "email_templates": [
+        {
+          "embeddable": true,
+          "href": "https://localhost:8090/wp-json/wc/v3/orders/17/actions/email_templates"
+        }
+      ]
+    }
+  },
+  {
+    "id": 16,
+    "parent_id": 0,
+    "status": "processing",
+    "currency": "USD",
+    "version": "11.2.1",
+    "prices_include_tax": false,
+    "date_created": "2026-10-14T21:04:29",
+    "date_modified": "2026-10-14T21:04:29",
+    "discount_total": "0.00",
+    "discount_tax": "0.00",
+    "shipping_total": "18.00",
+    "shipping_tax": "0.00",
+    "cart_tax": "0.00",
+    "total": "46.00",
+    "total_tax": "0.00",
+    "customer_id": 0,
+    "order_key": "wc_order_ynTPMQcDcHk0f",
+    "billing": {
+      "first_name": "Ben",
+      "last_name": "Okafor",
+      "company": "",
+      "address_1": "1 Main St",
+      "address_2": "Apt 4",
+      "city": "Austin",
+      "state": "TX",
+      "postcode": "78701",
+      "country": "US",
+      "email": "ben@example.test",
+      "phone": ""
+    },
+    "shipping": {
+      "first_name": "Ben",
+      "last_name": "Okafor",
+      "company": "",
+      "address_1": "1 Main St",
+      "address_2": "Apt 4",
+      "city": "Austin",
+      "state": "TX",
+      "postcode": "78701",
+      "country": "US",
+      "phone": ""
+    },
+    "payment_method": "",
+    "payment_method_title": "",
+    "transaction_id": "",
+    "customer_ip_address": "",
+    "customer_user_agent": "",
+    "created_via": "rest-api",
+    "customer_note": "Please gift wrap",
+    "date_completed": null,
+    "date_paid": "2026-10-14T21:04:29",
+    "cart_hash": "",
+    "number": "16",
+    "meta_data": [],
+    "line_items": [
+      {
+        "id": 4,
+        "name": "Body Lotion - 8oz",
+        "product_id": 12,
+        "variation_id": 13,
+        "quantity": 2,
+        "tax_class": "",
+        "subtotal": "28.00",
+        "subtotal_tax": "0.00",
+        "total": "28.00",
+        "total_tax": "0.00",
+        "taxes": [],
+        "meta_data": [
+          {
+            "id": 35,
+            "key": "size",
+            "value": "8oz",
+            "display_key": "Size",
+            "display_value": "8oz"
+          }
+        ],
+        "sku": "LOTION-8",
+        "global_unique_id": "",
+        "price": 14,
+        "image": {
+          "id": 0,
+          "src": ""
+        },
+        "parent_name": "Body Lotion"
+      }
+    ],
+    "tax_lines": [],
+    "shipping_lines": [
+      {
+        "id": 5,
+        "method_title": "Express",
+        "method_id": "flat_rate",
+        "instance_id": "",
+        "total": "18.00",
+        "total_tax": "0.00",
+        "taxes": [],
+        "tax_status": "taxable",
+        "meta_data": []
+      }
+    ],
+    "fee_lines": [],
+    "coupon_lines": [],
+    "refunds": [],
+    "payment_url": "https://localhost:8090/checkout/order-pay/16/?pay_for_order=true&key=wc_order_ynTPMQcDcHk0f",
+    "is_editable": false,
+    "needs_payment": false,
+    "needs_processing": true,
+    "date_created_gmt": "2026-10-14T21:04:29",
+    "date_modified_gmt": "2026-10-14T21:04:29",
+    "date_completed_gmt": null,
+    "date_paid_gmt": "2026-10-14T21:04:29",
+    "currency_symbol": "$",
+    "_links": {
+      "self": [
+        {
+          "href": "https://localhost:8090/wp-json/wc/v3/orders/16",
+          "targetHints": {
+            "allow": ["GET", "POST", "PUT", "PATCH", "DELETE"]
+          }
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://localhost:8090/wp-json/wc/v3/orders"
+        }
+      ],
+      "email_templates": [
+        {
+          "embeddable": true,
+          "href": "https://localhost:8090/wp-json/wc/v3/orders/16/actions/email_templates"
+        }
+      ]
+    }
+  },
+  {
+    "id": 15,
+    "parent_id": 0,
+    "status": "processing",
+    "currency": "USD",
+    "version": "11.2.1",
+    "prices_include_tax": false,
+    "date_created": "2026-10-14T21:04:28",
+    "date_modified": "2026-10-14T21:04:28",
+    "discount_total": "0.00",
+    "discount_tax": "0.00",
+    "shipping_total": "6.00",
+    "shipping_tax": "0.00",
+    "cart_tax": "0.00",
+    "total": "54.00",
+    "total_tax": "0.00",
+    "customer_id": 0,
+    "order_key": "wc_order_6WR1iPZ7x9yA8",
+    "billing": {
+      "first_name": "Ana",
+      "last_name": "Lopez",
+      "company": "",
+      "address_1": "742 Evergreen Ter",
+      "address_2": "",
+      "city": "Springfield",
+      "state": "OR",
+      "postcode": "97477",
+      "country": "US",
+      "email": "ana@example.test",
+      "phone": "5555550100"
+    },
+    "shipping": {
+      "first_name": "Ana",
+      "last_name": "Lopez",
+      "company": "",
+      "address_1": "742 Evergreen Ter",
+      "address_2": "",
+      "city": "Springfield",
+      "state": "OR",
+      "postcode": "97477",
+      "country": "US",
+      "phone": "5555550100"
+    },
+    "payment_method": "",
+    "payment_method_title": "",
+    "transaction_id": "",
+    "customer_ip_address": "",
+    "customer_user_agent": "",
+    "created_via": "rest-api",
+    "customer_note": "",
+    "date_completed": null,
+    "date_paid": "2026-10-14T21:04:28",
+    "cart_hash": "",
+    "number": "15",
+    "meta_data": [],
+    "line_items": [
+      {
+        "id": 1,
+        "name": "Lavender Bar Soap",
+        "product_id": 10,
+        "variation_id": 0,
+        "quantity": 3,
+        "tax_class": "",
+        "subtotal": "24.00",
+        "subtotal_tax": "0.00",
+        "total": "24.00",
+        "total_tax": "0.00",
+        "taxes": [],
+        "meta_data": [
+          {
+            "id": 24,
+            "key": "_reduced_stock",
+            "value": "3",
+            "display_key": "_reduced_stock",
+            "display_value": "3"
+          }
+        ],
+        "sku": "SOAP-LAV",
+        "global_unique_id": "",
+        "price": 8,
+        "image": {
+          "id": "",
+          "src": ""
+        },
+        "parent_name": null
+      },
+      {
+        "id": 2,
+        "name": "Vitamin C Serum 1oz",
+        "product_id": 11,
+        "variation_id": 0,
+        "quantity": 1,
+        "tax_class": "",
+        "subtotal": "24.00",
+        "subtotal_tax": "0.00",
+        "total": "24.00",
+        "total_tax": "0.00",
+        "taxes": [],
+        "meta_data": [
+          {
+            "id": 25,
+            "key": "_reduced_stock",
+            "value": "1",
+            "display_key": "_reduced_stock",
+            "display_value": "1"
+          }
+        ],
+        "sku": "SERUM-VC-1",
+        "global_unique_id": "",
+        "price": 24,
+        "image": {
+          "id": "",
+          "src": ""
+        },
+        "parent_name": null
+      }
+    ],
+    "tax_lines": [],
+    "shipping_lines": [
+      {
+        "id": 3,
+        "method_title": "Standard",
+        "method_id": "flat_rate",
+        "instance_id": "",
+        "total": "6.00",
+        "total_tax": "0.00",
+        "taxes": [],
+        "tax_status": "taxable",
+        "meta_data": []
+      }
+    ],
+    "fee_lines": [],
+    "coupon_lines": [],
+    "refunds": [],
+    "payment_url": "https://localhost:8090/checkout/order-pay/15/?pay_for_order=true&key=wc_order_6WR1iPZ7x9yA8",
+    "is_editable": false,
+    "needs_payment": false,
+    "needs_processing": true,
+    "date_created_gmt": "2026-10-14T21:04:28",
+    "date_modified_gmt": "2026-10-14T21:04:28",
+    "date_completed_gmt": null,
+    "date_paid_gmt": "2026-10-14T21:04:28",
+    "currency_symbol": "$",
+    "_links": {
+      "self": [
+        {
+          "href": "https://localhost:8090/wp-json/wc/v3/orders/15",
+          "targetHints": {
+            "allow": ["GET", "POST", "PUT", "PATCH", "DELETE"]
+          }
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://localhost:8090/wp-json/wc/v3/orders"
+        }
+      ],
+      "email_templates": [
+        {
+          "embeddable": true,
+          "href": "https://localhost:8090/wp-json/wc/v3/orders/15/actions/email_templates"
+        }
+      ]
+    }
+  }
+]

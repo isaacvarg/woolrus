@@ -1,0 +1,32 @@
+{
+  "id": "woocommerce_dimension_unit",
+  "label": "Dimensions unit",
+  "description": "This controls what unit you will define lengths in.",
+  "type": "select",
+  "default": "in",
+  "options": {
+    "m": "m",
+    "cm": "cm",
+    "mm": "mm",
+    "in": "in",
+    "yd": "yd"
+  },
+  "tip": "This controls what unit you will define lengths in.",
+  "value": "in",
+  "group_id": "products",
+  "_links": {
+    "self": [
+      {
+        "href": "https://localhost:8090/wp-json/wc/v3/settings/products/woocommerce_dimension_unit",
+        "targetHints": {
+          "allow": ["GET", "POST", "PUT", "PATCH"]
+        }
+      }
+    ],
+    "collection": [
+      {
+        "href": "https://localhost:8090/wp-json/wc/v3/settings/products"
+      }
+    ]
+  }
+}

@@ -7,7 +7,7 @@ focused tests; checkpoints run the full green set. Add a `Done:` line (2–3 lin
 
 ## Phase 1: Foundation
 
-- [ ] **T1: WooCommerce HTTP adapter**
+- [x] **T1: WooCommerce HTTP adapter**
   - Interface `StoreAdapter`, `StoreError` kinds (`unauthorized`, `notFound`, `unreachable`, `notWooCommerce`,
     `rateLimited`, `badResponse`) → `errors.sync.*` keys, Zod response schemas (`passthrough`, `"" → null`),
     `createStoreAdapter(config)` on Node `fetch` with basic auth, `per_page=100`, GMT dates, 30 s timeout, retry on
@@ -18,6 +18,12 @@ focused tests; checkpoints run the full green set. Add a `Done:` line (2–3 lin
   - Verify: `pnpm --filter @woolrus/core test -- adapters/woocommerce`; `WOO_LIVE=1` run against `pnpm stack:up`.
   - Files: `core/src/adapters/woocommerce/{adapter,errors,schemas,http}.ts`, `http.test.ts`, `__fixtures__/*`.
   - Deps: none · Size: M
+  - Done: `core/src/adapters/woocommerce/{adapter,errors,schemas,http}.ts` (exported from core's index), tests in
+    `http.test.ts` + `schemas.test.ts`. Parsed objects are camelCase with the untouched JSON on `.raw` (store that as
+    `rawPayload`), not `passthrough`. Amounts stay decimal strings (line `price` arrives as a JSON number, normalised);
+    `""` → null; dates are `Date`. `createStoreAdapter(config, { fetch, sleep, log })`: inject `log` for pino. `zod`
+    added to core (approved). Gotcha: `pnpm --filter @woolrus/core test -- <path>` runs every file; use
+    `pnpm --filter @woolrus/core exec vitest run src/<path>` for focused runs.
 
 - [ ] **T2: Mapping and fake store**
   - Pure `mapOrder`, `mapProduct`, `mapVariation` per the spec's mapping table; decimal-string → cents without

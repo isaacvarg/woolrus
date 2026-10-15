@@ -1,0 +1,303 @@
+[
+  {
+    "id": 12,
+    "name": "Body Lotion",
+    "slug": "body-lotion",
+    "permalink": "https://localhost:8090/product/body-lotion/",
+    "date_created": "2026-10-14T21:04:24",
+    "date_created_gmt": "2026-10-14T21:04:24",
+    "date_modified": "2026-10-14T21:04:26",
+    "date_modified_gmt": "2026-10-14T21:04:26",
+    "type": "variable",
+    "status": "publish",
+    "featured": false,
+    "catalog_visibility": "visible",
+    "description": "",
+    "short_description": "",
+    "sku": "LOTION",
+    "price": "14.00",
+    "regular_price": "",
+    "sale_price": "",
+    "date_on_sale_from": null,
+    "date_on_sale_from_gmt": null,
+    "date_on_sale_to": null,
+    "date_on_sale_to_gmt": null,
+    "on_sale": false,
+    "purchasable": true,
+    "total_sales": 2,
+    "virtual": false,
+    "downloadable": false,
+    "downloads": [],
+    "download_limit": -1,
+    "download_expiry": -1,
+    "external_url": "",
+    "button_text": "",
+    "tax_status": "taxable",
+    "tax_class": "",
+    "manage_stock": false,
+    "stock_quantity": null,
+    "backorders": "no",
+    "backorders_allowed": false,
+    "backordered": false,
+    "low_stock_amount": null,
+    "sold_individually": false,
+    "weight": "",
+    "dimensions": {
+      "length": "",
+      "width": "",
+      "height": ""
+    },
+    "shipping_required": true,
+    "shipping_taxable": true,
+    "shipping_class": "",
+    "shipping_class_id": 0,
+    "reviews_allowed": true,
+    "average_rating": "0.00",
+    "rating_count": 0,
+    "upsell_ids": [],
+    "cross_sell_ids": [],
+    "parent_id": 0,
+    "purchase_note": "",
+    "categories": [
+      {
+        "id": 15,
+        "name": "Uncategorized",
+        "slug": "uncategorized"
+      }
+    ],
+    "brands": [],
+    "tags": [],
+    "images": [],
+    "attributes": [
+      {
+        "id": 0,
+        "name": "Size",
+        "slug": "Size",
+        "position": 0,
+        "visible": true,
+        "variation": true,
+        "options": ["8oz", "16oz"]
+      }
+    ],
+    "default_attributes": [],
+    "variations": [13, 14],
+    "grouped_products": [],
+    "menu_order": 0,
+    "price_html": "<span class=\"woocommerce-Price-amount amount\" aria-hidden=\"true\"><bdi><span class=\"woocommerce-Price-currencySymbol\" translate=\"no\" dir=\"auto\">&#36;</span>14.00</bdi></span> <span aria-hidden=\"true\">&ndash;</span> <span class=\"woocommerce-Price-amount amount\" aria-hidden=\"true\"><bdi><span class=\"woocommerce-Price-currencySymbol\" translate=\"no\" dir=\"auto\">&#36;</span>22.00</bdi></span><span class=\"screen-reader-text\">Price range: &#36;14.00 through &#36;22.00</span>",
+    "related_ids": [11, 10],
+    "meta_data": [],
+    "stock_status": "instock",
+    "has_options": true,
+    "post_password": "",
+    "global_unique_id": "",
+    "_links": {
+      "self": [
+        {
+          "href": "https://localhost:8090/wp-json/wc/v3/products/12",
+          "targetHints": {
+            "allow": ["GET", "POST", "PUT", "PATCH", "DELETE"]
+          }
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://localhost:8090/wp-json/wc/v3/products"
+        }
+      ]
+    }
+  },
+  {
+    "id": 11,
+    "name": "Vitamin C Serum 1oz",
+    "slug": "vitamin-c-serum-1oz",
+    "permalink": "https://localhost:8090/product/vitamin-c-serum-1oz/",
+    "date_created": "2026-10-14T21:04:23",
+    "date_created_gmt": "2026-10-14T21:04:23",
+    "date_modified": "2026-10-14T21:04:30",
+    "date_modified_gmt": "2026-10-14T21:04:30",
+    "type": "simple",
+    "status": "publish",
+    "featured": false,
+    "catalog_visibility": "visible",
+    "description": "",
+    "short_description": "",
+    "sku": "SERUM-VC-1",
+    "price": "24.00",
+    "regular_price": "24.00",
+    "sale_price": "",
+    "date_on_sale_from": null,
+    "date_on_sale_from_gmt": null,
+    "date_on_sale_to": null,
+    "date_on_sale_to_gmt": null,
+    "on_sale": false,
+    "purchasable": true,
+    "total_sales": 3,
+    "virtual": false,
+    "downloadable": false,
+    "downloads": [],
+    "download_limit": -1,
+    "download_expiry": -1,
+    "external_url": "",
+    "button_text": "",
+    "tax_status": "taxable",
+    "tax_class": "",
+    "manage_stock": true,
+    "stock_quantity": 37,
+    "backorders": "no",
+    "backorders_allowed": false,
+    "backordered": false,
+    "low_stock_amount": null,
+    "sold_individually": false,
+    "weight": "0.25",
+    "dimensions": {
+      "length": "2",
+      "width": "2",
+      "height": "4"
+    },
+    "shipping_required": true,
+    "shipping_taxable": true,
+    "shipping_class": "",
+    "shipping_class_id": 0,
+    "reviews_allowed": true,
+    "average_rating": "0.00",
+    "rating_count": 0,
+    "upsell_ids": [],
+    "cross_sell_ids": [],
+    "parent_id": 0,
+    "purchase_note": "",
+    "categories": [
+      {
+        "id": 15,
+        "name": "Uncategorized",
+        "slug": "uncategorized"
+      }
+    ],
+    "brands": [],
+    "tags": [],
+    "images": [],
+    "attributes": [],
+    "default_attributes": [],
+    "variations": [],
+    "grouped_products": [],
+    "menu_order": 0,
+    "price_html": "<span class=\"woocommerce-Price-amount amount\"><bdi><span class=\"woocommerce-Price-currencySymbol\" translate=\"no\" dir=\"auto\">&#36;</span>24.00</bdi></span>",
+    "related_ids": [12, 10],
+    "meta_data": [],
+    "stock_status": "instock",
+    "has_options": false,
+    "post_password": "",
+    "global_unique_id": "",
+    "_links": {
+      "self": [
+        {
+          "href": "https://localhost:8090/wp-json/wc/v3/products/11",
+          "targetHints": {
+            "allow": ["GET", "POST", "PUT", "PATCH", "DELETE"]
+          }
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://localhost:8090/wp-json/wc/v3/products"
+        }
+      ]
+    }
+  },
+  {
+    "id": 10,
+    "name": "Lavender Bar Soap",
+    "slug": "lavender-bar-soap",
+    "permalink": "https://localhost:8090/product/lavender-bar-soap/",
+    "date_created": "2026-10-14T21:04:22",
+    "date_created_gmt": "2026-10-14T21:04:22",
+    "date_modified": "2026-10-14T21:04:28",
+    "date_modified_gmt": "2026-10-14T21:04:28",
+    "type": "simple",
+    "status": "publish",
+    "featured": false,
+    "catalog_visibility": "visible",
+    "description": "",
+    "short_description": "",
+    "sku": "SOAP-LAV",
+    "price": "8.00",
+    "regular_price": "8.00",
+    "sale_price": "",
+    "date_on_sale_from": null,
+    "date_on_sale_from_gmt": null,
+    "date_on_sale_to": null,
+    "date_on_sale_to_gmt": null,
+    "on_sale": false,
+    "purchasable": true,
+    "total_sales": 3,
+    "virtual": false,
+    "downloadable": false,
+    "downloads": [],
+    "download_limit": -1,
+    "download_expiry": -1,
+    "external_url": "",
+    "button_text": "",
+    "tax_status": "taxable",
+    "tax_class": "",
+    "manage_stock": true,
+    "stock_quantity": 117,
+    "backorders": "no",
+    "backorders_allowed": false,
+    "backordered": false,
+    "low_stock_amount": null,
+    "sold_individually": false,
+    "weight": "0.3",
+    "dimensions": {
+      "length": "3",
+      "width": "2",
+      "height": "1"
+    },
+    "shipping_required": true,
+    "shipping_taxable": true,
+    "shipping_class": "",
+    "shipping_class_id": 0,
+    "reviews_allowed": true,
+    "average_rating": "0.00",
+    "rating_count": 0,
+    "upsell_ids": [],
+    "cross_sell_ids": [],
+    "parent_id": 0,
+    "purchase_note": "",
+    "categories": [
+      {
+        "id": 15,
+        "name": "Uncategorized",
+        "slug": "uncategorized"
+      }
+    ],
+    "brands": [],
+    "tags": [],
+    "images": [],
+    "attributes": [],
+    "default_attributes": [],
+    "variations": [],
+    "grouped_products": [],
+    "menu_order": 0,
+    "price_html": "<span class=\"woocommerce-Price-amount amount\"><bdi><span class=\"woocommerce-Price-currencySymbol\" translate=\"no\" dir=\"auto\">&#36;</span>8.00</bdi></span>",
+    "related_ids": [12, 11],
+    "meta_data": [],
+    "stock_status": "instock",
+    "has_options": false,
+    "post_password": "",
+    "global_unique_id": "",
+    "_links": {
+      "self": [
+        {
+          "href": "https://localhost:8090/wp-json/wc/v3/products/10",
+          "targetHints": {
+            "allow": ["GET", "POST", "PUT", "PATCH", "DELETE"]
+          }
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://localhost:8090/wp-json/wc/v3/products"
+        }
+      ]
+    }
+  }
+]
