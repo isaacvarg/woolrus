@@ -4,6 +4,7 @@ import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { createActor, resetDb, testDb } from "../../test/db";
 import type { Actor } from "../permissions";
 import { evaluateGate, loadGateSnapshot } from "./gates";
+import { recomputePriorities } from "./priority-rules";
 import { getOrder, getOrderHistory, listQueue, queueCounts } from "./queries";
 
 // The dev seed (T12) has to describe orders the workflow accepts, or the demo stack lies.
@@ -63,6 +64,24 @@ describe("seedDemoOrders", () => {
     const held = await db.order.findFirstOrThrow({ where: { status: "ON_HOLD" } });
     expect(held.holdReason).toBeTruthy();
     expect(held.heldFromStatus).not.toBeNull();
+  });
+
+  it("adds the priority rules that compute the priorities it seeded, once", async () => {
+    const now = new Date();
+    await seedDemoOrders(db, { now });
+
+    const rules = await db.priorityRule.findMany({ orderBy: { position: "asc" } });
+    expect(rules.map((r) => [r.name, r.priority, r.enabled])).toEqual([
+      ["Rush Order", 2, true],
+      ["Express shipping", 1, true],
+      ["Waiting 2+ days", 1, true],
+    ]);
+    expect(await db.$transaction((tx) => recomputePriorities(tx, { now }))).toEqual({
+      updated: 0,
+    });
+
+    await seedDemoOrders(db, { now });
+    expect(await db.priorityRule.count()).toBe(rules.length);
   });
 
   it("gives every order a history ending in its current status", async () => {

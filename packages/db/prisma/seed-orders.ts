@@ -93,7 +93,25 @@ function pathOf(order: DemoOrder): WorkflowStatus[] {
   return flow.slice(0, flow.indexOf(order.status) + 1);
 }
 
-/** What the priority rules seeded with T18 will compute: Rush Order 2, Express or 2+ days old 1. */
+/**
+ * The rules that give the queues meaningful priority before store-sync exists. Conditions use the
+ * shapes of contracts' `PriorityRuleCondition` (this package can't depend on contracts).
+ */
+const demoRules: { name: string; condition: Prisma.InputJsonObject; priority: number }[] = [
+  {
+    name: "Rush Order",
+    condition: { type: "lineItem", match: "sku", value: "RUSH-ORDER" },
+    priority: 2,
+  },
+  {
+    name: "Express shipping",
+    condition: { type: "shippingMethod", contains: "Express" },
+    priority: 1,
+  },
+  { name: "Waiting 2+ days", condition: { type: "orderAge", minHours: 48 }, priority: 1 },
+];
+
+/** What `demoRules` compute, set inline so the orders are right without core's recompute. */
 function priorityOf(order: DemoOrder): number {
   if (order.lines.some(([sku]) => sku === "RUSH-ORDER")) return 2;
   if (order.method?.toLowerCase().includes("express") || order.ageHours >= 48) return 1;
@@ -285,8 +303,18 @@ async function createDemoOrder(
   }
 }
 
-/** Adds the demo orders that don't exist yet. Returns how many were created. */
+/** Adds the demo rules whose name isn't taken yet, after any existing ones. */
+async function seedDemoRules(db: Db): Promise<void> {
+  for (const rule of demoRules) {
+    if (await db.priorityRule.findFirst({ where: { name: rule.name } })) continue;
+    const last = await db.priorityRule.aggregate({ _max: { position: true } });
+    await db.priorityRule.create({ data: { ...rule, position: (last._max.position ?? -1) + 1 } });
+  }
+}
+
+/** Adds the demo rules and orders that don't exist yet. Returns how many orders were created. */
 export async function seedDemoOrders(db: Db, { now = new Date() }: { now?: Date } = {}) {
+  await seedDemoRules(db);
   const catalog = await upsertProducts(db);
   const box = await db.box.findFirst({ where: { archivedAt: null }, orderBy: { name: "asc" } });
 

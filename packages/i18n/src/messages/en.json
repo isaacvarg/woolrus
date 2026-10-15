@@ -18,7 +18,8 @@
     "ready": "Ready",
     "onHold": "On Hold",
     "allOrders": "All Orders",
-    "queues": "Queues"
+    "queues": "Queues",
+    "priorityRules": "Priority rules"
   },
   "boxes": {
     "title": "Boxes",
@@ -97,6 +98,50 @@
       "newValue": "New value",
       "writeOnly": "Stored encrypted. Nobody can view it after saving, so keep your own copy if you need one."
     }
+  },
+  "priorityRules": {
+    "title": "Priority rules",
+    "intro": "An order gets the highest level among the enabled rules it matches, or Normal if none match. The order of this list is only for reading it.",
+    "add": "Add rule",
+    "edit": "Edit",
+    "editRule": "Edit rule “{name}”",
+    "delete": "Delete",
+    "deleteRule": "Delete rule “{name}”",
+    "deleteBody": "Open orders that only matched this rule go back to the level of the remaining rules.",
+    "rule": "Rule",
+    "name": "Name",
+    "level": "Priority",
+    "enabled": "Enabled",
+    "actions": "Actions",
+    "enableRule": "Enable “{name}”",
+    "moveUp": "Move “{name}” up",
+    "moveDown": "Move “{name}” down",
+    "empty": "No rules yet: every order is Normal.",
+    "type": "Matches on",
+    "types": {
+      "lineItem": "Line item",
+      "shippingMethod": "Shipping method",
+      "orderAge": "Order age"
+    },
+    "match": "Match by",
+    "matchBy": {
+      "sku": "SKU",
+      "name": "Item name"
+    },
+    "contains": "Shipping method contains",
+    "containsHint": "Ignores upper and lower case, e.g. Express.",
+    "minHours": "Ordered at least (hours ago)",
+    "minHoursHint": "From 1 to 720 hours (30 days).",
+    "summary": {
+      "lineItem": "Has a line with {match, select, sku {SKU} other {name}} {value}",
+      "shippingMethod": "Shipping method contains “{contains}”",
+      "orderAge": "Ordered {hours, plural, one {# hour} other {# hours}} ago or more"
+    },
+    "created": "Rule “{name}” added. Open orders were re-prioritized.",
+    "updated": "Rule “{name}” saved. Open orders were re-prioritized.",
+    "deleted": "Rule “{name}” deleted. Open orders were re-prioritized.",
+    "enabledToast": "Rule “{name}” enabled.",
+    "disabledToast": "Rule “{name}” disabled."
   },
   "queue": {
     "search": "Search orders",

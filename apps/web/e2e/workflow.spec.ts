@@ -1,6 +1,8 @@
 import { expect, type Page, test } from "@playwright/test";
+import en from "@woolrus/i18n/messages/en.json" with { type: "json" };
 import { signInAs } from "./support/auth";
 import { createOrder, deleteCreatedOrders } from "./support/orders";
+import { deleteCreatedRules, trackRules } from "./support/priority-rules";
 import { withSettingsLock } from "./support/settings-lock";
 
 /** On tablet width the nav is a drawer behind the menu button. */
@@ -10,6 +12,7 @@ async function openNav(page: Page) {
 }
 
 test.afterAll(async () => {
+  await withSettingsLock(deleteCreatedRules);
   await deleteCreatedOrders();
 });
 
@@ -36,10 +39,16 @@ test("a queue row shows priority, items, a past-SLA stage age and the claim hold
 }) => {
   const customerName = `E2E ${crypto.randomUUID()}`;
   const old = new Date(Date.now() - 3 * 24 * 60 * 60_000);
-  const order = await createOrder({ customerName, priority: 2, quantity: 3, statusChangedAt: old });
   // Admin: the only role that can set an SLA, and it reads queues like everyone else.
   await signInAs(page, ["ADMIN"]);
   await withSettingsLock(async () => {
+    // Inside the lock: a priority rule change elsewhere would recompute this priority away.
+    const order = await createOrder({
+      customerName,
+      priority: 2,
+      quantity: 3,
+      statusChangedAt: old,
+    });
     const before = (await (await page.request.get("/api/v1/settings")).json()).stageSlaMinutes;
     try {
       await page.request.patch("/api/v1/settings", {
@@ -121,13 +130,21 @@ const historyPanel = (page: Page) => page.getByRole("region", { name: "History" 
 
 test("the detail page shows the header, read-only lines and the history", async ({ page }) => {
   const customerName = `E2E ${crypto.randomUUID()}`;
-  const order = await createOrder({ customerName, priority: 1, quantity: 3, rushOrderLine: true });
   await signInAs(page, ["PICKER"]);
-  await page.goto(`/orders/${order.id}`);
-
-  await expect(page.getByRole("heading", { name: `Order #${order.number}` })).toBeVisible();
-  await expect(page.getByText(customerName)).toBeVisible();
-  await expect(page.getByText("High", { exact: true })).toBeVisible();
+  // In the lock while priority is checked: a priority rule change elsewhere would recompute it.
+  const order = await withSettingsLock(async () => {
+    const order = await createOrder({
+      customerName,
+      priority: 1,
+      quantity: 3,
+      rushOrderLine: true,
+    });
+    await page.goto(`/orders/${order.id}`);
+    await expect(page.getByRole("heading", { name: `Order #${order.number}` })).toBeVisible();
+    await expect(page.getByText(customerName)).toBeVisible();
+    await expect(page.getByText("High", { exact: true })).toBeVisible();
+    return order;
+  });
 
   const lines = page.getByRole("table", { name: "Items" });
   await expect(lines.getByRole("row", { name: /E2E item/ })).toContainText("3");
@@ -327,4 +344,111 @@ test("All Orders sorts by a column and pages through the results", async ({ page
   await expect(orderRows(page, tag)).toHaveText([/Charlie/]);
   await expect(page).toHaveURL(/page=2/);
   await expect(page.getByRole("button", { name: "Next page" })).toBeDisabled();
+});
+
+// Priority rules (/settings/priority-rules). Rules are global and every change recomputes all open
+// orders, so tests that change rules, or that check a priority set by hand, hold the settings lock.
+
+const ruleRows = (page: Page, tag: string) =>
+  page.getByRole("table", { name: "Priority rules" }).getByRole("row", { name: new RegExp(tag) });
+
+test("an admin adds a priority rule and the Pending queue reorders", async ({ page }) => {
+  const tag = trackRules(`E2E ${crypto.randomUUID()}`);
+  const sku = `E2E-${crypto.randomUUID().slice(0, 8)}`;
+  await createOrder({ customerName: `${tag} Older`, orderedAt: new Date(Date.now() - 3_600_000) });
+  await createOrder({ customerName: `${tag} Newer`, sku });
+  await signInAs(page, ["ADMIN"]);
+  const queueRows = page.getByRole("row", { name: new RegExp(tag) });
+
+  await withSettingsLock(async () => {
+    try {
+      await page.goto("/queue/pending");
+      await searchQueue(page, tag);
+      await expect(queueRows).toHaveText([/Older/, /Newer/]);
+
+      await page.goto("/settings/priority-rules");
+      await page.getByRole("button", { name: "Add rule" }).click();
+      const dialog = page.getByRole("dialog", { name: "Add rule" });
+      await dialog.getByRole("textbox", { name: "Name" }).fill(tag);
+      await dialog.getByRole("textbox", { name: "SKU" }).fill(sku);
+      await dialog.getByText("Urgent", { exact: true }).click();
+      await dialog.getByRole("button", { name: "Save" }).click();
+      await expect(toasts(page).getByText(`Rule “${tag}” added.`, { exact: false })).toBeVisible();
+      await expect(ruleRows(page, tag)).toContainText(`Has a line with SKU ${sku}`);
+      await expect(ruleRows(page, tag)).toContainText("Urgent");
+
+      await page.goto("/queue/pending");
+      await searchQueue(page, tag);
+      await expect(queueRows).toHaveText([/Newer/, /Older/]);
+      await expect(queueRows.first().getByText("Urgent")).toBeVisible();
+
+      await page.goto("/settings/priority-rules");
+      await page.getByRole("button", { name: `Delete rule “${tag}”` }).click();
+      await page
+        .getByRole("dialog", { name: `Delete rule “${tag}”` })
+        .getByRole("button", { name: "Delete" })
+        .click();
+      await expect(ruleRows(page, tag)).toHaveCount(0);
+
+      await page.goto("/queue/pending");
+      await searchQueue(page, tag);
+      await expect(queueRows).toHaveText([/Older/, /Newer/]);
+    } finally {
+      await deleteCreatedRules();
+    }
+  });
+});
+
+test("an admin edits, disables and reorders priority rules", async ({ page }) => {
+  const tag = trackRules(`E2E ${crypto.randomUUID()}`);
+  await signInAs(page, ["ADMIN"]);
+  await withSettingsLock(async () => {
+    try {
+      for (const name of ["First", "Second"]) {
+        const created = await page.request.post("/api/v1/priority-rules", {
+          data: {
+            idempotencyKey: crypto.randomUUID(),
+            name: `${tag} ${name}`,
+            condition: { type: "shippingMethod", contains: `${tag} ${name}` },
+            priority: 1,
+          },
+        });
+        expect(created.ok()).toBe(true);
+      }
+      await page.goto("/settings/priority-rules");
+      await expect(ruleRows(page, tag)).toHaveText([/First/, /Second/]);
+
+      await page.getByRole("button", { name: `Move “${tag} Second” up` }).click();
+      await expect(ruleRows(page, tag)).toHaveText([/Second/, /First/]);
+
+      await page.getByRole("button", { name: `Edit rule “${tag} First”` }).click();
+      const dialog = page.getByRole("dialog", { name: `Edit rule “${tag} First”` });
+      await dialog.getByText("Order age", { exact: true }).click();
+      await dialog.getByRole("textbox", { name: /Ordered at least/ }).fill("72");
+      await dialog.getByRole("button", { name: "Save" }).click();
+      await expect(dialog).toHaveCount(0);
+      await expect(ruleRows(page, tag).last()).toContainText("Ordered 72 hours ago or more");
+
+      const toggle = page.getByRole("switch", { name: `Enable “${tag} Second”` });
+      // React Aria's switch input is visually hidden, so it can't be clicked directly.
+      await toggle.focus();
+      await page.keyboard.press("Space");
+      await expect(toasts(page).getByText(`Rule “${tag} Second” disabled.`)).toBeVisible();
+
+      await page.reload();
+      await expect(ruleRows(page, tag)).toHaveText([/Second/, /First/]);
+      await expect(page.getByRole("switch", { name: `Enable “${tag} Second”` })).not.toBeChecked();
+    } finally {
+      await deleteCreatedRules();
+    }
+  });
+});
+
+test("a Picker has no Priority rules link and is refused at the page", async ({ page }) => {
+  await signInAs(page, ["PICKER"]);
+  await page.goto("/settings/priority-rules");
+  await expect(page.getByRole("alert")).toHaveText(en.errors.forbidden);
+  await expect(page.getByRole("table", { name: "Priority rules" })).toHaveCount(0);
+  await openNav(page);
+  await expect(page.getByRole("link", { name: "Priority rules" })).toHaveCount(0);
 });

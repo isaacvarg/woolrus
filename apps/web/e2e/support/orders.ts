@@ -31,6 +31,7 @@ export async function createOrder({
   statusChangedAt = new Date(),
   orderedAt = new Date(),
   rushOrderLine = false,
+  sku = "E2E-SKU",
 }: {
   customerName?: string;
   status?: WorkflowStatus;
@@ -40,6 +41,8 @@ export async function createOrder({
   orderedAt?: Date;
   /** Adds a line for a non-physical product, like the store's Rush Order. */
   rushOrderLine?: boolean;
+  /** The first line's SKU, e.g. one a test's priority rule matches. */
+  sku?: string;
 } = {}) {
   const wooOrderId = nextWooId();
   const now = new Date();
@@ -65,7 +68,7 @@ export async function createOrder({
         create: [
           {
             wooLineItemId: wooOrderId,
-            sku: "E2E-SKU",
+            sku,
             name: "E2E item",
             quantity,
             unitPriceCents: 500,

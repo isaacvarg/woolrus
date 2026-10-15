@@ -34,9 +34,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             <Link href="/boxes">{t("nav.boxes")}</Link>
           </li>
           {actor && can(actor, "settings.manage") && (
-            <li>
-              <Link href="/settings">{t("nav.settings")}</Link>
-            </li>
+            <>
+              <li>
+                <Link href="/settings">{t("nav.settings")}</Link>
+              </li>
+              <li>
+                <Link href="/settings/priority-rules">{t("nav.priorityRules")}</Link>
+              </li>
+            </>
           )}
         </nav>
       </div>

@@ -206,12 +206,18 @@ criterion n. Every task ends green for the packages it touches (`pnpm --filter <
     `notifyOrdersChanged` (one `unnest` statement). The worker job runs in a 60 s transaction and disconnects `db`
     on shutdown.
 
-- [ ] **T18: Priority rules admin page** (M)
+- [x] **T18: Priority rules admin page** (M)
   - Acceptance: `/settings/priority-rules` (only for `settings.manage`) has a list, an add/edit dialog, an enable
     toggle, reorder and delete with confirmation. The demo seed adds the matching rules. en/es.
   - Verify: Playwright: adding a rule reorders the Pending queue; a Picker gets forbidden.
   - Files: `settings/priority-rules/{page,rules-manager}.tsx`, `layout.tsx`, `seed-orders.ts`, i18n, e2e.
   - Deps: T17, T13.
+  - Done: `settings/priority-rules/rules-manager.tsx` (one `RuleDialog` for add/edit, `DeleteDialog`, ↑/↓ calling
+    `reorder` with the whole id list); every rule change invalidates `priorityRules` and `orders` keys. New `Switch` in
+    `components/ui/fields.tsx` (its input is visually hidden: e2e toggles it with focus + Space). The seed adds the
+    three demo rules by name (skips taken names). **Any e2e that changes rules or checks a hand-set priority must hold
+    `withSettingsLock`** (a rule change recomputes every open order); `support/priority-rules.ts` `trackRules` +
+    `deleteCreatedRules` (also in `afterAll`, since a timeout skips `finally`).
 
 ## Phase 5: Live and finish
 

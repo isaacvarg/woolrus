@@ -18,7 +18,8 @@
     "ready": "Listos",
     "onHold": "En espera",
     "allOrders": "Todos los pedidos",
-    "queues": "Colas"
+    "queues": "Colas",
+    "priorityRules": "Reglas de prioridad"
   },
   "boxes": {
     "title": "Cajas",
@@ -97,6 +98,50 @@
       "newValue": "Valor nuevo",
       "writeOnly": "Se guarda cifrado. Nadie podrá verlo después de guardarlo; conserva tu propia copia si la necesitas."
     }
+  },
+  "priorityRules": {
+    "title": "Reglas de prioridad",
+    "intro": "Un pedido recibe el nivel más alto entre las reglas activas que cumple, o Normal si no cumple ninguna. El orden de esta lista solo sirve para leerla.",
+    "add": "Añadir regla",
+    "edit": "Editar",
+    "editRule": "Editar la regla «{name}»",
+    "delete": "Eliminar",
+    "deleteRule": "Eliminar la regla «{name}»",
+    "deleteBody": "Los pedidos abiertos que solo cumplían esta regla vuelven al nivel de las reglas restantes.",
+    "rule": "Regla",
+    "name": "Nombre",
+    "level": "Prioridad",
+    "enabled": "Activa",
+    "actions": "Acciones",
+    "enableRule": "Activar «{name}»",
+    "moveUp": "Subir «{name}»",
+    "moveDown": "Bajar «{name}»",
+    "empty": "Aún no hay reglas: todos los pedidos son Normal.",
+    "type": "Se basa en",
+    "types": {
+      "lineItem": "Artículo",
+      "shippingMethod": "Método de envío",
+      "orderAge": "Antigüedad del pedido"
+    },
+    "match": "Comparar por",
+    "matchBy": {
+      "sku": "SKU",
+      "name": "Nombre del artículo"
+    },
+    "contains": "El método de envío contiene",
+    "containsHint": "No distingue mayúsculas y minúsculas, p. ej. Express.",
+    "minHours": "Pedido hace al menos (horas)",
+    "minHoursHint": "De 1 a 720 horas (30 días).",
+    "summary": {
+      "lineItem": "Tiene un artículo con {match, select, sku {SKU} other {nombre}} {value}",
+      "shippingMethod": "El método de envío contiene «{contains}»",
+      "orderAge": "Pedido hace {hours, plural, one {# hora} other {# horas}} o más"
+    },
+    "created": "Regla «{name}» añadida. Se recalculó la prioridad de los pedidos abiertos.",
+    "updated": "Regla «{name}» guardada. Se recalculó la prioridad de los pedidos abiertos.",
+    "deleted": "Regla «{name}» eliminada. Se recalculó la prioridad de los pedidos abiertos.",
+    "enabledToast": "Regla «{name}» activada.",
+    "disabledToast": "Regla «{name}» desactivada."
   },
   "queue": {
     "search": "Buscar pedidos",
