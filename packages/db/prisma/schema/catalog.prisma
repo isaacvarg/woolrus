@@ -15,6 +15,9 @@ model Product {
   stockQuantity      Int?     @map("stock_quantity")
   binLocation        String?  @map("bin_location")
   barcode            String?
+  /// False for products that are sold but never handled on the floor (e.g. Rush Order): workflow gates
+  /// and pick lists skip their lines. Set from WooCommerce's `virtual` flag.
+  physical           Boolean  @default(true)
   // Customs (FR-SHIP-13)
   hsCode             String?  @map("hs_code")
   countryOfOrigin    String?  @map("country_of_origin") @db.Char(2)

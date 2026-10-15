@@ -47,6 +47,7 @@ function toAdminSettings(row: Settings): AdminSettings {
     lumexiaBaseUrl: row.lumexiaBaseUrl,
     syncIntervalMinutes: row.syncIntervalMinutes,
     stationIdleLockMinutes: row.stationIdleLockMinutes,
+    claimExpiryMinutes: row.claimExpiryMinutes,
     stageSlaMinutes: sla.success ? sla.data : {},
     weightDisplay: row.weightDisplay,
     piiRetentionDays: row.piiRetentionDays,
@@ -65,10 +66,9 @@ export async function getSettings(db: Db, actor: Actor): Promise<AdminSettings> 
 
 /** Any signed-in user: the API's `authed` middleware is what requires the session. */
 export async function getPublicSettings(db: Db, _actor: Actor): Promise<PublicSettings> {
-  const { weightDisplay, stationIdleLockMinutes, stageSlaMinutes } = toAdminSettings(
-    await loadSettings(db),
-  );
-  return { weightDisplay, stationIdleLockMinutes, stageSlaMinutes };
+  const { weightDisplay, stationIdleLockMinutes, claimExpiryMinutes, stageSlaMinutes } =
+    toAdminSettings(await loadSettings(db));
+  return { weightDisplay, stationIdleLockMinutes, claimExpiryMinutes, stageSlaMinutes };
 }
 
 /** Partial update; the audit event holds before/after of the fields that actually changed. */

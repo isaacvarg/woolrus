@@ -39,6 +39,8 @@
     },
     "syncInterval": "Intervalo de sincronización (minutos)",
     "stationIdleLock": "Bloqueo de estación por inactividad (minutos)",
+    "claimExpiry": "Vencimiento de la reserva de pedido (minutos)",
+    "claimExpiryHint": "Un pedido reservado queda libre para otros después de este tiempo sin que su titular trabaje en él.",
     "sla": {
       "title": "SLA por etapa (minutos)",
       "hint": "Marca los pedidos que permanecen más tiempo que esto en una etapa. Déjalo vacío para no tener límite.",

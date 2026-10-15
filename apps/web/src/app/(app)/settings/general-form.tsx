@@ -39,6 +39,7 @@ type FormState = {
   shipFrom: Record<AddressField, string>;
   syncIntervalMinutes: number;
   stationIdleLockMinutes: number;
+  claimExpiryMinutes: number;
   sla: Record<Stage, number>;
   weightDisplay: WeightDisplay;
   piiRetentionDays: number;
@@ -54,6 +55,7 @@ function toForm(settings: AdminSettings): FormState {
     >,
     syncIntervalMinutes: settings.syncIntervalMinutes,
     stationIdleLockMinutes: settings.stationIdleLockMinutes,
+    claimExpiryMinutes: settings.claimExpiryMinutes,
     sla: Object.fromEntries(
       stages.map((s) => [s, settings.stageSlaMinutes[s] ?? Number.NaN]),
     ) as Record<Stage, number>,
@@ -77,6 +79,7 @@ function toInput(form: FormState): UpdateSettingsInput {
       : undefined,
     syncIntervalMinutes: form.syncIntervalMinutes,
     stationIdleLockMinutes: form.stationIdleLockMinutes,
+    claimExpiryMinutes: form.claimExpiryMinutes,
     stageSlaMinutes: Object.fromEntries(
       stages.filter((s) => !Number.isNaN(form.sla[s])).map((s) => [s, form.sla[s]]),
     ),
@@ -204,6 +207,17 @@ function GeneralForm({ settings }: { settings: AdminSettings }) {
             formatOptions={{ maximumFractionDigits: 0 }}
             value={form.stationIdleLockMinutes}
             onChange={(stationIdleLockMinutes) => edit({ stationIdleLockMinutes })}
+          />
+          <NumberField
+            label={t("settings.claimExpiry")}
+            description={t("settings.claimExpiryHint")}
+            name="claimExpiryMinutes"
+            isRequired
+            minValue={5}
+            maxValue={480}
+            formatOptions={{ maximumFractionDigits: 0 }}
+            value={form.claimExpiryMinutes}
+            onChange={(claimExpiryMinutes) => edit({ claimExpiryMinutes })}
           />
         </div>
 

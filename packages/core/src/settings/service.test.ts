@@ -30,6 +30,7 @@ describe("settings service", () => {
       lumexiaBaseUrl: null,
       syncIntervalMinutes: 5,
       stationIdleLockMinutes: 10,
+      claimExpiryMinutes: 30,
       stageSlaMinutes: {},
       weightDisplay: "LB_OZ",
       piiRetentionDays: null,
@@ -76,6 +77,7 @@ describe("settings service", () => {
       wooStoreUrl: "https://shop.example.com",
       lumexiaBaseUrl: "https://lumexia.example.com",
       stationIdleLockMinutes: 20,
+      claimExpiryMinutes: 45,
       stageSlaMinutes: { QA: 30 },
       weightDisplay: "LB_DECIMAL",
       piiRetentionDays: 90,
@@ -126,6 +128,7 @@ describe("settings service", () => {
       expect(await getPublicSettings(db, actor)).toEqual({
         weightDisplay: "LB_DECIMAL",
         stationIdleLockMinutes: 10,
+        claimExpiryMinutes: 30,
         stageSlaMinutes: { QA: 30 },
       });
     }

@@ -21,6 +21,8 @@ const config: NextConfig = {
   ],
   serverExternalPackages: ["pino", "pg", "@prisma/adapter-pg"],
   typedRoutes: true,
+  // CLAUDE.md is the agent entry point; stop `next dev` from generating apps/web/AGENTS.md.
+  agentRules: false,
 };
 
 export default withNextIntl(config);

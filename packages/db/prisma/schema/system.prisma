@@ -23,6 +23,8 @@ model Settings {
 
   syncIntervalMinutes    Int           @default(5) @map("sync_interval_minutes")
   stationIdleLockMinutes Int           @default(10) @map("station_idle_lock_minutes")
+  /// A claim on an order lapses this long after the holder last acted on it (FR-WF-07).
+  claimExpiryMinutes     Int           @default(30) @map("claim_expiry_minutes")
   qaMustDifferFromPacker Boolean       @default(false) @map("qa_must_differ_from_packer")
   weightDisplay          WeightDisplay @default(LB_OZ) @map("weight_display")
   /// Per-stage SLA thresholds in minutes, e.g. { "PENDING": 240, "PICKING": 60 } (FR-LIST-05).

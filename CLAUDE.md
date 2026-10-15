@@ -40,4 +40,7 @@ section it implements and updates the status table in `SPEC.md`.
 - Prisma 7 generates the client into `packages/db/src/generated` (`pnpm db:generate`). The init migration ends
   with hand-written constraints that must survive any migration edits.
 - Turborepo runs in strict env mode: a task only sees env vars declared in `turbo.json`.
+- Next.js 16 differs from most training data. Before writing Next code, read the matching guide in
+  `apps/web/node_modules/next/dist/docs/`. `agentRules: false` in `next.config.ts` stops `next dev` from
+  generating `apps/web/AGENTS.md`; don't commit that file.
 - TypeScript is pinned to 6.0.x on purpose (TS 7 isn't supported by the Next/Prisma tooling yet).

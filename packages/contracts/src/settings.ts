@@ -66,6 +66,8 @@ export type WeightDisplay = z.infer<typeof WeightDisplay>;
 
 const SyncIntervalMinutes = z.number().int().min(1).max(60);
 const StationIdleLockMinutes = z.number().int().min(1).max(120);
+/** How long an order claim lasts after the holder last acted on it (FR-WF-07). */
+const ClaimExpiryMinutes = z.number().int().min(5).max(480);
 /** Null keeps customer PII forever (NFR-SEC-06). */
 const PiiRetentionDays = z.number().int().min(30).max(3650).nullable();
 
@@ -89,6 +91,7 @@ export const AdminSettings = z.object({
   lumexiaBaseUrl: z.string().nullable(),
   syncIntervalMinutes: z.number(),
   stationIdleLockMinutes: z.number(),
+  claimExpiryMinutes: z.number(),
   stageSlaMinutes: StageSlaMinutes,
   weightDisplay: WeightDisplay,
   piiRetentionDays: z.number().nullable(),
@@ -101,6 +104,7 @@ export type AdminSettings = z.infer<typeof AdminSettings>;
 export const PublicSettings = AdminSettings.pick({
   weightDisplay: true,
   stationIdleLockMinutes: true,
+  claimExpiryMinutes: true,
   stageSlaMinutes: true,
 });
 export type PublicSettings = z.infer<typeof PublicSettings>;
@@ -112,6 +116,7 @@ export const UpdateSettingsInput = z.object({
   lumexiaBaseUrl: IntegrationUrl.nullable().optional(),
   syncIntervalMinutes: SyncIntervalMinutes.optional(),
   stationIdleLockMinutes: StationIdleLockMinutes.optional(),
+  claimExpiryMinutes: ClaimExpiryMinutes.optional(),
   stageSlaMinutes: StageSlaMinutes.optional(),
   weightDisplay: WeightDisplay.optional(),
   piiRetentionDays: PiiRetentionDays.optional(),
