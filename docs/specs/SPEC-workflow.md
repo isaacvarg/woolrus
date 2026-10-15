@@ -3,7 +3,7 @@
 **Milestone:** M1 · **Depends on:** — (data model only; reads `settings` for SLA and claim expiry) ·
 **Used by:** `store-sync` (creates orders in Pending, sets priority on import), `picking`, `packing`, `qa`,
 `shipping`, `exceptions` (voids change what "active" means for gates), `reporting` (stage events) ·
-**State:** in progress
+**State:** done
 
 Project-wide commands, structure, code style, testing levels and boundaries are in [`../../SPEC.md`](../../SPEC.md);
 this spec only adds what is specific to `workflow`.
