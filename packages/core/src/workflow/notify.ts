@@ -9,3 +9,13 @@ export type OrderChangedEvent = { id: string; status: WorkflowStatus };
 export async function notifyOrderChanged(tx: DbTx, event: OrderChangedEvent): Promise<void> {
   await tx.$executeRaw`SELECT pg_notify(${ORDER_CHANGED_CHANNEL}, ${JSON.stringify(event)})`;
 }
+
+/** One statement for many orders (a priority recompute can touch hundreds). Same commit rules. */
+export async function notifyOrdersChanged(
+  tx: DbTx,
+  events: readonly OrderChangedEvent[],
+): Promise<void> {
+  if (events.length === 0) return;
+  const payloads = events.map((event) => JSON.stringify(event));
+  await tx.$executeRaw`SELECT pg_notify(${ORDER_CHANGED_CHANNEL}, p) FROM unnest(${payloads}::text[]) AS p`;
+}

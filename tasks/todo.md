@@ -191,7 +191,7 @@ criterion n. Every task ends green for the packages it touches (`pnpm --filter <
     items, rules, now)` takes plain `{ shippingMethod, orderedAt }` / `{ sku, name }`, so T17 can pass Prisma rows
     after parsing `condition` with the Zod union. A null SKU never matches; age matches from exactly `minHours`.
 
-- [ ] **T17: Rules service, recompute, job** (M)
+- [x] **T17: Rules service, recompute, job** (M)
   - Acceptance: list/create (idempotent)/update/delete/reorder with `settings.manage`, audited. A change recomputes
     open orders in the same transaction, without a version bump, with a notify. `recomputePriorities` is exported
     for `store-sync`. A pg-boss `orders.recomputePriority` job runs every 5 min in the worker. Contract + router.
@@ -199,6 +199,12 @@ criterion n. Every task ends green for the packages it touches (`pnpm --filter <
   - Files: `packages/core/src/workflow/priority-rules.ts` (+test), `packages/core/src/jobs.ts`,
     `apps/worker/src/main.ts`, `router.ts`.
   - Deps: T16, T10.
+  - Done: `workflow/priority-rules.ts`. CRUD functions take an optional `{ now }`. Create appends at max
+    position + 1; delete/reorder return the full list. Reorder needs exactly the current ids (else `CONFLICT
+    errors.conflict`), audits each moved rule and doesn't recompute. `recomputePriorities(tx, { orderIds?, now? })`
+    covers every non-closed status (held too), uses one `updateMany` per level, and calls the new
+    `notifyOrdersChanged` (one `unnest` statement). The worker job runs in a 60 s transaction and disconnects `db`
+    on shutdown.
 
 - [ ] **T18: Priority rules admin page** (M)
   - Acceptance: `/settings/priority-rules` (only for `settings.manage`) has a list, an add/edit dialog, an enable

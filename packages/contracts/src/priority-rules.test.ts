@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { toFieldErrors } from "./base";
-import { PriorityLevel, PriorityRuleCondition } from "./priority-rules";
+import {
+  CreatePriorityRuleInput,
+  PriorityLevel,
+  PriorityRuleCondition,
+  ReorderPriorityRulesInput,
+  UpdatePriorityRuleInput,
+} from "./priority-rules";
 
 function fieldErrors(input: unknown) {
   const result = PriorityRuleCondition.safeParse(input);
@@ -69,5 +75,51 @@ describe("PriorityLevel", () => {
       false,
       false,
     ]);
+  });
+});
+
+describe("rule inputs", () => {
+  const condition = { type: "orderAge", minHours: 48 };
+  const id = "0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b";
+
+  it("creates an enabled rule by default and requires a name and level", () => {
+    expect(
+      CreatePriorityRuleInput.parse({
+        idempotencyKey: "key-00000001",
+        name: " Old orders ",
+        condition,
+        priority: 1,
+      }),
+    ).toEqual({
+      idempotencyKey: "key-00000001",
+      name: "Old orders",
+      condition,
+      priority: 1,
+      enabled: true,
+    });
+    const missing = CreatePriorityRuleInput.safeParse({
+      idempotencyKey: "key-00000001",
+      condition,
+    });
+    expect(missing.success ? {} : toFieldErrors(missing.error.issues)).toEqual({
+      name: "errors.field.invalid",
+      priority: "errors.field.invalid",
+    });
+  });
+
+  it("updates any subset of fields, with nested condition errors", () => {
+    expect(UpdatePriorityRuleInput.parse({ id, enabled: false })).toEqual({ id, enabled: false });
+    const bad = UpdatePriorityRuleInput.safeParse({
+      id,
+      condition: { type: "orderAge", minHours: 0 },
+    });
+    expect(bad.success ? {} : toFieldErrors(bad.error.issues)).toEqual({
+      "condition.minHours": "errors.field.tooSmall",
+    });
+  });
+
+  it("reorders by a list of distinct ids", () => {
+    expect(ReorderPriorityRulesInput.safeParse({ ids: [id] }).success).toBe(true);
+    expect(ReorderPriorityRulesInput.safeParse({ ids: [id, id] }).success).toBe(false);
   });
 });

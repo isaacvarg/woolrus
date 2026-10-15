@@ -1,4 +1,5 @@
-import { type JobPayloads, queues } from "@woolrus/core";
+import { type JobPayloads, queues, recomputePriorities } from "@woolrus/core";
+import { db } from "@woolrus/db";
 import { createLogger } from "@woolrus/logger";
 import { PgBoss } from "pg-boss";
 
@@ -25,6 +26,19 @@ await boss.work<JobPayloads[typeof queues.ordersSync]>(queues.ordersSync, async 
   log.info({ jobId: job?.id, reason: job?.data.reason }, "orders.sync: not implemented yet");
 });
 
+// Age rules ("older than 2 days") change an order's priority with no event to trigger it.
+await boss.schedule(queues.ordersRecomputePriority, "*/5 * * * *", {});
+
+await boss.work<JobPayloads[typeof queues.ordersRecomputePriority]>(
+  queues.ordersRecomputePriority,
+  async ([job]) => {
+    const { updated } = await db.$transaction((tx) => recomputePriorities(tx), {
+      timeout: 60_000,
+    });
+    log.info({ jobId: job?.id, updated }, "orders.recomputePriority done");
+  },
+);
+
 log.info({ queues: Object.values(queues) }, "worker started");
 
 let stopping = false;
@@ -33,6 +47,7 @@ async function shutdown(signal: string) {
   stopping = true;
   log.info({ signal }, "worker stopping");
   await boss.stop({ graceful: true, timeout: 30_000 });
+  await db.$disconnect();
   process.exit(0);
 }
 process.on("SIGTERM", () => void shutdown("SIGTERM"));

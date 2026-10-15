@@ -2,17 +2,22 @@ import {
   archiveBox,
   clearSecret,
   createBox,
+  createPriorityRule,
+  deletePriorityRule,
   getOrder,
   getOrderHistory,
   getPublicSettings,
   getSettings,
   listBoxes,
   listOrders,
+  listPriorityRules,
   listQueue,
   orderMutations,
   permissionsFor,
   queueCounts,
+  reorderPriorityRules,
   setSecret,
+  updatePriorityRule,
   updateSettings,
 } from "@woolrus/core";
 import { db } from "@woolrus/db";
@@ -96,6 +101,21 @@ export const router = api.router({
     ),
     claimMany: api.orders.claimMany.handler(({ input, context }) =>
       orderMutations.claimMany(db, context.actor, input),
+    ),
+  },
+  priorityRules: {
+    list: api.priorityRules.list.handler(({ context }) => listPriorityRules(db, context.actor)),
+    create: api.priorityRules.create.handler(({ input, context }) =>
+      createPriorityRule(db, context.actor, input),
+    ),
+    update: api.priorityRules.update.handler(({ input, context }) =>
+      updatePriorityRule(db, context.actor, input),
+    ),
+    delete: api.priorityRules.delete.handler(({ input, context }) =>
+      deletePriorityRule(db, context.actor, input),
+    ),
+    reorder: api.priorityRules.reorder.handler(({ input, context }) =>
+      reorderPriorityRules(db, context.actor, input),
     ),
   },
 });
