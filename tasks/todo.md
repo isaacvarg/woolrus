@@ -117,13 +117,17 @@ criterion n. Every task ends green for the packages it touches (`pnpm --filter <
     else's live claim (and `transition()` now refuses it with `claimedByOther`). `recordAudit` takes an optional `at`; workflow passes
     its `now` so history orders correctly under an injected clock. Over `/api/v1`, `statuses=QA` and repeats both parse.
 
-- [ ] **T12: Dev demo orders seed** (S)
+- [x] **T12: Dev demo orders seed** (S)
   - Acceptance: `pnpm db:seed` adds about 30 orders across all statuses in dev (never in production), including a
     non-physical Rush Order product line, an Express shipping method, old orders and one held order. Re-running
     doesn't duplicate them.
   - Verify: run the seed twice in dev; check counts.
   - Files: `packages/db/prisma/seed.ts` (+ `seed-orders.ts`).
   - Deps: T1.
+  - Done: `seedDemoOrders(db)` in `packages/db/prisma/seed-orders.ts`, exported as `@woolrus/db/demo` so
+    `core/src/workflow/demo-orders.test.ts` can check that the seeded orders pass or fail the real gates. 30 orders (ids
+    9,000,001+ so they never collide with Woo), each with a stage-event history; existing ones are skipped, never reset.
+    Each stage has orders ready to complete and blocked ones. Priority is set inline the way T18's rules will compute it.
 
 - [ ] **T13: Nav counts + queue pages** (M)
   - Acceptance: nav entries Pending…Ready, On Hold (with counts) and All Orders. `/queue/[stage]` has search,
