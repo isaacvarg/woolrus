@@ -1,9 +1,10 @@
 import type { Db, DbTx, Order, WorkflowStatus } from "@woolrus/db";
 import { recordAudit } from "../audit";
-import { AppError, notFound } from "../errors";
+import { AppError } from "../errors";
 import { type Actor, assertCan } from "../permissions";
 import { claimExpiryMinutes, isClaimLive } from "./claims";
 import { evaluateGate, loadGateSnapshot } from "./gates";
+import { lockOrder } from "./lock";
 import { ruleFor, type TransitionKind, transitionFor } from "./machine";
 import { notifyOrderChanged } from "./notify";
 
@@ -20,21 +21,7 @@ export type TransitionInput = {
 
 export type TransitionOptions = { now?: Date };
 
-type LockedOrder = Pick<
-  Order,
-  "id" | "status" | "version" | "claimedById" | "claimedAt" | "heldFromStatus"
->;
-
 const activeStatuses: readonly WorkflowStatus[] = ["PENDING", "PICKING", "PACKING", "QA", "READY"];
-
-async function lockOrder(tx: DbTx, orderId: string): Promise<LockedOrder> {
-  const [row] = await tx.$queryRaw<LockedOrder[]>`
-    SELECT id, status::text AS status, version, claimed_by_id AS "claimedById", claimed_at AS "claimedAt",
-           held_from_status::text AS "heldFromStatus"
-    FROM orders WHERE id = ${orderId}::uuid FOR UPDATE`;
-  if (!row) throw notFound();
-  return row;
-}
 
 export async function transition(
   tx: DbTx,
@@ -69,7 +56,7 @@ export async function transition(
   if (move.gate) {
     const unmet = evaluateGate(move.gate, await loadGateSnapshot(tx, orderId));
     if (unmet.length > 0)
-      throw new AppError("CONFLICT", "errors.workflow.gateFailed", undefined, unmet);
+      throw new AppError("CONFLICT", "errors.workflow.gateFailed", undefined, { unmet });
   }
 
   const claims = move.claim === "claims";

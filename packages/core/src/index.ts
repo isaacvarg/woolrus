@@ -12,6 +12,7 @@ export * from "./settings/service";
 export * from "./units";
 export * from "./workflow/claims";
 export * from "./workflow/gates";
+export * from "./workflow/lock";
 export * from "./workflow/machine";
 export * from "./workflow/notify";
 export * from "./workflow/service";

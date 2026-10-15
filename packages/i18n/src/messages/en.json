@@ -118,6 +118,10 @@
       "stale": "This order changed since you loaded it. It has been refreshed; check it and try again.",
       "claimRequired": "Claim this order before completing the stage.",
       "gateFailed": "This stage isn't finished yet.",
+      "claimedByOther": "{name} is working on this order.",
+      "notClaimable": "This order can't be claimed in its current status.",
+      "takeOverConfirm": "Confirm that you want to take this order over.",
+      "claimManyFailed": "Some orders couldn't be claimed, so none were.",
       "gate": {
         "lineNotPicked": "{line} hasn't been picked.",
         "lineOutOfStock": "{line} is out of stock. Void it or pick a substitute first.",

@@ -61,7 +61,7 @@ criterion n. Every task ends green for the packages it touches (`pnpm --filter <
   - Files: `packages/core/src/workflow/service.ts` (+test).
   - Deps: T5.
 
-- [ ] **T7: Claims** (M)
+- [x] **T7: Claims** (M)
   - Acceptance: `claim`, `claimMany` (≤ 50, all or nothing, id-ordered locks), `release`, `takeOver` (needs
     `confirm: true`), `touchClaim`, `isClaimLive` with lazy expiry from settings. Holder's name in the conflict
     error. Audited, no stage event (SC 6).
