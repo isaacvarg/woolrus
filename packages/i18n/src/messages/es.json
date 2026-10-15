@@ -236,6 +236,7 @@
       "takeOver": "Lo tomó de {name}",
       "release": "Liberado",
       "by": "por {name}",
+      "system": "Sincronización con la tienda",
       "at": "en {station}"
     }
   },

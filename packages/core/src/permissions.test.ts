@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { type Actor, assertCan, can, permissionsFor } from "./permissions";
+import { type Actor, assertCan, can, permissionsFor, systemActor } from "./permissions";
 
 const actor = (roles: Actor["roles"]): Actor => ({ userId: "u", roles, stationId: null });
 
@@ -23,5 +23,17 @@ describe("permissions", () => {
   it("lists permissions without duplicates", () => {
     const list = permissionsFor(["PICKER", "PACKER"]);
     expect(new Set(list).size).toBe(list.length);
+  });
+
+  it("lets only admins resolve external changes", () => {
+    expect(can(actor(["ADMIN"]), "order.resolveExternalChange")).toBe(true);
+    for (const role of ["PICKER", "PACKER", "QA", "SHIPPER"] as const) {
+      expect(can(actor([role]), "order.resolveExternalChange")).toBe(false);
+    }
+  });
+
+  it("gives the system actor no user and no station", () => {
+    expect(systemActor).toMatchObject({ userId: null, stationId: null, system: "store-sync" });
+    expect(can(systemActor, "order.cancel")).toBe(true);
   });
 });

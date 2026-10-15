@@ -207,7 +207,10 @@ export const OrderHistoryEntry = z.object({
   fromStatus: WorkflowStatus.nullable(),
   toStatus: WorkflowStatus.nullable(),
   reason: z.string().nullable(),
+  /** Null for store-sync moves (`bySystem`). */
   actorName: z.string().nullable(),
+  /** Made by store sync, not a person: shown as "Store sync". */
+  bySystem: z.boolean(),
   stationName: z.string().nullable(),
   /** Takeovers: whose claim was taken. */
   previousHolderName: z.string().nullable(),

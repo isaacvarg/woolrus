@@ -26,8 +26,15 @@ export const claimPermission: Partial<Record<WorkflowStatus, Permission>> = {
 
 /** Someone who can't claim in any stage is refused before the order is read, so they learn nothing about it. */
 function assertMayClaim(actor: Actor): void {
+  // The system actor has no user to hold a claim.
+  if (actor.userId === null) throw forbidden();
   if (!Object.values(claimPermission).some((permission) => can(actor, permission)))
     throw forbidden();
+}
+
+/** Whether `actor` is the claim's holder. Never true for the system actor, even on an unclaimed order. */
+export function holdsClaim(actor: Actor, claimedById: string | null): boolean {
+  return actor.userId !== null && claimedById === actor.userId;
 }
 
 export async function claimExpiryMinutes(tx: DbTx): Promise<number> {
@@ -67,7 +74,7 @@ async function refusalFor(
   if (order.version !== expectedVersion) {
     return { kind: "CONFLICT", messageKey: "errors.workflow.stale", params: {} };
   }
-  if (live && !takeOver && order.claimedById !== actor.userId) {
+  if (live && !takeOver && !holdsClaim(actor, order.claimedById)) {
     return {
       kind: "CONFLICT",
       messageKey: "errors.workflow.claimedByOther",
@@ -204,7 +211,7 @@ export async function release(
     const order = await lockOrder(tx, orderId);
     if (!isClaimLive(order, expiry, now))
       return tx.order.findUniqueOrThrow({ where: { id: orderId } });
-    if (order.claimedById !== actor.userId && !actor.roles.includes("ADMIN")) throw forbidden();
+    if (!holdsClaim(actor, order.claimedById) && !actor.roles.includes("ADMIN")) throw forbidden();
 
     const updated = await tx.order.update({
       where: { id: orderId },
@@ -233,6 +240,7 @@ export async function touchClaim(
   orderId: string,
   { now = new Date() }: ClaimOptions = {},
 ): Promise<boolean> {
+  if (actor.userId === null) return false;
   const cutoff = new Date(now.getTime() - (await claimExpiryMinutes(tx)) * 60_000);
   const { count } = await tx.order.updateMany({
     where: { id: orderId, claimedById: actor.userId, claimedAt: { gt: cutoff } },

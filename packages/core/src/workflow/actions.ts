@@ -1,7 +1,7 @@
 import type { OrderAction } from "@woolrus/contracts";
 import type { WorkflowStatus } from "@woolrus/db";
 import { type Actor, can } from "../permissions";
-import { claimPermission } from "./claims";
+import { claimPermission, holdsClaim } from "./claims";
 import { canTransition, ruleFor, type TransitionKind } from "./machine";
 
 // What the caller may do to an order, for the detail page's buttons (SPEC-workflow "Reads"). Built
@@ -24,7 +24,7 @@ const completions: readonly { kind: TransitionKind; to: WorkflowStatus }[] = [
 
 export function allowedActions(actor: Actor, order: ActionSubject): OrderAction[] {
   const { status, heldFromStatus, liveClaimHolderId } = order;
-  const mine = liveClaimHolderId === actor.userId;
+  const mine = holdsClaim(actor, liveClaimHolderId);
   const othersClaim = liveClaimHolderId !== null && !mine;
   const allowed = (kind: TransitionKind, to: WorkflowStatus) =>
     can(actor, ruleFor(kind).permission) && canTransition(status, to, kind);

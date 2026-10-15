@@ -1,5 +1,5 @@
 import { createDb, type Db } from "@woolrus/db";
-import type { Actor } from "../src/permissions";
+import type { Actor, UserActor } from "../src/permissions";
 
 export function testDb(): Db {
   return createDb(process.env.TEST_DATABASE_URL);
@@ -13,7 +13,7 @@ export async function resetDb(db: Db): Promise<void> {
   if (tables) await db.$executeRawUnsafe(`TRUNCATE ${tables} RESTART IDENTITY CASCADE`);
 }
 
-export async function createActor(db: Db, roles: Actor["roles"]): Promise<Actor> {
+export async function createActor(db: Db, roles: Actor["roles"]): Promise<UserActor> {
   const user = await db.user.create({
     data: { name: "Test User", email: `${crypto.randomUUID()}@example.test`, roles: [...roles] },
   });

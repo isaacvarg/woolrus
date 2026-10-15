@@ -2,15 +2,15 @@ import type { Db } from "@woolrus/db";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { createActor, resetDb, testDb } from "../../test/db";
 import { createOrder } from "../../test/factories";
-import type { Actor } from "../permissions";
+import { systemActor, type UserActor } from "../permissions";
 import { claim, takeOver } from "./claims";
 import { getOrder, getOrderHistory, listOrders, listQueue, queueCounts } from "./queries";
-import { beginPicking, hold } from "./service";
+import { beginPicking, hold, transition } from "./service";
 
 const db: Db = testDb();
 afterAll(() => db.$disconnect());
 
-let picker: Actor;
+let picker: UserActor;
 beforeEach(async () => {
   await resetDb(db);
   picker = await createActor(db, ["PICKER"]);
@@ -379,6 +379,26 @@ describe("getOrderHistory", () => {
     await expect(
       getOrderHistory(db, picker, { id: "0199e6a0-0000-7000-8000-000000000000" }),
     ).rejects.toMatchObject({ kind: "NOT_FOUND" });
+  });
+
+  it("marks store-sync moves as the system's, and people's as not", async () => {
+    const { order } = await createOrder(db);
+    await beginPicking(db, picker, { orderId: order.id, expectedVersion: 1 });
+    await db.$transaction((tx) =>
+      transition(tx, systemActor, {
+        orderId: order.id,
+        expectedVersion: 2,
+        to: "ON_HOLD",
+        kind: "hold",
+        reason: "Cancelled in store",
+      }),
+    );
+
+    const history = await getOrderHistory(db, picker, { id: order.id });
+    expect(history.map((h) => [h.bySystem, h.actorName])).toEqual([
+      [true, null],
+      [false, "Test User"],
+    ]);
   });
 });
 

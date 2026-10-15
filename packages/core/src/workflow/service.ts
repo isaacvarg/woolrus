@@ -2,7 +2,7 @@ import type { Db, DbTx, Order, WorkflowStatus } from "@woolrus/db";
 import { recordAudit } from "../audit";
 import { AppError } from "../errors";
 import { type Actor, assertCan } from "../permissions";
-import { claimExpiryMinutes, isClaimLive } from "./claims";
+import { claimExpiryMinutes, holdsClaim, isClaimLive } from "./claims";
 import { evaluateGate, loadGateSnapshot } from "./gates";
 import { lockOrder } from "./lock";
 import { ruleFor, type TransitionKind, transitionFor } from "./machine";
@@ -51,12 +51,14 @@ export async function transition(
   }
 
   if (move.claim !== "none") {
+    // The system actor has no user to hold or take a claim, so claim moves are never its to make.
+    if (actor.userId === null) throw new AppError("CONFLICT", "errors.workflow.claimRequired");
     const live = isClaimLive(order, expiryMinutes, now);
-    if (move.claim === "holds" && (!live || order.claimedById !== actor.userId)) {
+    if (move.claim === "holds" && (!live || !holdsClaim(actor, order.claimedById))) {
       throw new AppError("CONFLICT", "errors.workflow.claimRequired");
     }
     // Taking the claim never silently overwrites someone else's live one: that's a takeover.
-    if (move.claim === "claims" && live && order.claimedById !== actor.userId) {
+    if (move.claim === "claims" && live && !holdsClaim(actor, order.claimedById)) {
       throw new AppError("CONFLICT", "errors.workflow.claimedByOther", undefined, {
         params: { name: await holderName(tx, order.claimedById) },
       });

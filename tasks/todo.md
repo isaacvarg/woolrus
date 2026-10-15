@@ -46,7 +46,7 @@ focused tests; checkpoints run the full green set. Add a `Done:` line (2–3 lin
     (`lines` with `id` keeps a line), `cancelOrder`, `refundOrder(id, amount?)`, `addProduct({ variations })`,
     `failNext(method, error, times)`, `calls`, `now()`; each change ticks the clock 1 s.
 
-- [ ] **T3: System actor and the review permission**
+- [x] **T3: System actor and the review permission**
   - `Actor.userId: string | null`, exported `systemActor` (`system: "store-sync"`, roles `[ADMIN]`); audit and stage
     events write `actorId` null; history shows "Store sync" (i18n key) for system rows; new permission
     `order.resolveExternalChange` (Admin only). API middleware can't build a system actor.
@@ -57,6 +57,12 @@ focused tests; checkpoints run the full green set. Add a `Done:` line (2–3 lin
   - Files: `core/src/permissions.ts` (+test), `core/src/audit.ts`, `core/src/workflow/{service,detail}.ts`,
     `contracts/src/orders.ts` (history actor nullable), `i18n` en/es.
   - Deps: none · Size: M
+  - Done: `permissions.ts`: `Actor = UserActor | SystemActor`, `systemActor` (frozen, `userId: null`, ADMIN), new
+    `order.resolveExternalChange` (Admin via `permissions`). Use `holdsClaim(actor, claimedById)` from
+    `workflow/claims.ts` for any claim comparison (null-safe); `transition` refuses every claim move for the system
+    actor (`claimRequired`), `claim`/`takeOver` forbid it. History entries gained `bySystem` (= `actorId` null; users
+    are never deleted) → "Store sync" label. Web `resolveActor` returns `UserActor`; `createActor` in tests too.
+    Surprise: the demo seed writes stage events with a null actor, so demo history now reads "by Store sync".
 
 ### Checkpoint 1
 - [ ] Full green (`pnpm lint && pnpm typecheck && pnpm test && pnpm build`).

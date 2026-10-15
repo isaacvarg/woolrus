@@ -1,7 +1,7 @@
 import type { OrderAction } from "@woolrus/contracts";
 import type { Role, WorkflowStatus } from "@woolrus/db";
 import { describe, expect, it } from "vitest";
-import type { Actor } from "../permissions";
+import { type Actor, systemActor } from "../permissions";
 import { allowedActions } from "./actions";
 
 const me = "0199e6a0-0000-7000-8000-00000000000a";
@@ -80,5 +80,11 @@ describe("allowedActions", () => {
     expect(actions(["PICKER", "PACKER"], "PACKING", "mine")).toEqual(
       sorted("completePacking", "release", "hold"),
     );
+  });
+
+  it("never treats the system actor as the claim holder of an unclaimed order", () => {
+    const subject = { status: "PICKING", heldFromStatus: null, liveClaimHolderId: null } as const;
+    expect(allowedActions(systemActor, subject)).not.toContain("completePicking");
+    expect(allowedActions(systemActor, subject)).not.toContain("release");
   });
 });

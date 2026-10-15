@@ -313,6 +313,7 @@ export async function getOrderHistory(
     ).map((u) => [u.id, displayName(u)]),
   );
 
+  // A null actorId means store sync: people are deactivated, never deleted, so SetNull never fires.
   const entries: OrderHistoryEntry[] = [
     ...stages.map((e) => ({
       id: e.id,
@@ -322,6 +323,7 @@ export async function getOrderHistory(
       toStatus: e.toStatus,
       reason: e.reason,
       actorName: e.actor ? displayName(e.actor) : null,
+      bySystem: e.actorId === null,
       stationName: e.station?.name ?? null,
       previousHolderName: null,
     })),
@@ -336,6 +338,7 @@ export async function getOrderHistory(
         toStatus: null,
         reason: null,
         actorName: a.actor ? displayName(a.actor) : null,
+        bySystem: a.actorId === null,
         stationName: a.station?.name ?? null,
         previousHolderName: previous ? (holders.get(previous) ?? null) : null,
       };

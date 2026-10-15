@@ -31,7 +31,9 @@ export function HistoryPanel({ id }: { id: string }) {
             </div>
             <div className="text-sm opacity-70">
               {format.dateTime(entry.at, { dateStyle: "short", timeStyle: "short" })}
-              {entry.actorName && ` · ${t("order.history.by", { name: entry.actorName })}`}
+              {entry.bySystem
+                ? ` · ${t("order.history.by", { name: t("order.history.system") })}`
+                : entry.actorName && ` · ${t("order.history.by", { name: entry.actorName })}`}
               {entry.stationName && ` · ${t("order.history.at", { station: entry.stationName })}`}
             </div>
             {entry.reason && <p className="mt-1 whitespace-pre-line">{entry.reason}</p>}

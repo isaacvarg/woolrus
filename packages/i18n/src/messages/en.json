@@ -236,6 +236,7 @@
       "takeOver": "Took over from {name}",
       "release": "Released",
       "by": "by {name}",
+      "system": "Store sync",
       "at": "at {station}"
     }
   },
