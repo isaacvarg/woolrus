@@ -13,6 +13,7 @@ export * from "./units";
 export * from "./workflow/claims";
 export * from "./workflow/detail";
 export * from "./workflow/gates";
+export * from "./workflow/live";
 export * from "./workflow/lock";
 export * from "./workflow/machine";
 export * from "./workflow/notify";

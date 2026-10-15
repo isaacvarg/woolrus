@@ -79,7 +79,7 @@ criterion n. Every task ends green for the packages it touches (`pnpm --filter <
     `apps/web/src/server/orpc.ts` (pass `unmet` through).
   - Deps: T6, T7.
 
-- [ ] **T9: SSE live-updates endpoint (risk spike)** (M)
+- [x] **T9: SSE live-updates endpoint (risk spike)** (M)
   - Acceptance: `GET /api/events/orders` refuses signed-out callers and streams `order_changed` events (id + status
     only) within 2 s of a commit, with a 25 s heartbeat. One `LISTEN` client per process, closed on shutdown
     (SC 11). **Ask before adding `pg` to `apps/web` if it isn't already resolvable there.**
@@ -189,3 +189,7 @@ criterion n. Every task ends green for the packages it touches (`pnpm --filter <
 
 ### Checkpoint D (complete)
 - [ ] Every spec success criterion has a test; green + Playwright; ready for `/agent-skills:review`.
+- [ ] **Before opening the PR: sort out the branch.** T3–T8 were committed on `chore/dev-e2e-reload-loop` (on top of
+  `0924a89`, a Next `agentRules` chore), while the plan's branch `workflow/state-machine` stops at T2 (`94794e4`).
+  Decide with the user: move the workflow commits onto `workflow/state-machine` (and split the chore into its own PR),
+  or rename this branch. Don't open the PR until this is settled.
