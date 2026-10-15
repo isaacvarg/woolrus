@@ -65,8 +65,8 @@ focused tests; checkpoints run the full green set. Add a `Done:` line (2–3 lin
     Surprise: the demo seed writes stage events with a null actor, so demo history now reads "by Store sync".
 
 ### Checkpoint 1
-- [ ] Full green (`pnpm lint && pnpm typecheck && pnpm test && pnpm build`).
-- [ ] Live adapter test passes against the dev store.
+- [x] Full green (`pnpm lint && pnpm typecheck && pnpm test && pnpm build`).
+- [x] Live adapter test passes against the dev store.
 - [ ] Review with the user.
 
 ## Phase 2: Import
