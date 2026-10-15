@@ -7,6 +7,7 @@ export * from "./base";
 export * from "./boxes";
 export * from "./me";
 export * from "./orders";
+export * from "./priority-rules";
 export * from "./settings";
 
 /**

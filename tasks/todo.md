@@ -180,12 +180,16 @@ criterion n. Every task ends green for the packages it touches (`pnpm --filter <
 
 ## Phase 4: Priority
 
-- [ ] **T16: Priority evaluator + rule schemas** (S)
+- [x] **T16: Priority evaluator + rule schemas** (S)
   - Acceptance: a Zod discriminated union for `lineItem` / `shippingMethod` / `orderAge`, and a pure
     `computePriority` (highest enabled match, else 0). Rush Order SKU → 2 (SC 10).
   - Verify: unit tests per condition type and boundary.
   - Files: `packages/contracts/src/priority-rules.ts` (+test), `packages/core/src/workflow/priority.ts` (+test).
   - Deps: none (can run in parallel with Phase 2/3).
+  - Done: `PriorityRuleCondition` + `PriorityLevel` (0–2) in contracts, re-exported from the index, with no router
+    object yet (T17 adds `priorityRules` to `contract`). Text fields are trimmed, 1–200 chars. `computePriority(order,
+    items, rules, now)` takes plain `{ shippingMethod, orderedAt }` / `{ sku, name }`, so T17 can pass Prisma rows
+    after parsing `condition` with the Zod union. A null SKU never matches; age matches from exactly `minHours`.
 
 - [ ] **T17: Rules service, recompute, job** (M)
   - Acceptance: list/create (idempotent)/update/delete/reorder with `settings.manage`, audited. A change recomputes
