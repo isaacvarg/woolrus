@@ -169,6 +169,8 @@ export function QueueTable({
                     title={row.slaBreached ? t("queue.slaBreached") : undefined}
                   >
                     {t(`queue.age${age.unit}`, { count: age.count })}
+                    {/* Red alone and a hover title reach neither screen readers nor touch. */}
+                    {row.slaBreached && <span className="sr-only"> {t("queue.slaBreached")}</span>}
                   </td>
                   {onHold ? (
                     <>

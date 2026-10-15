@@ -93,6 +93,14 @@ export async function createOrder({
   return order;
 }
 
+/**
+ * Changes an order the way time does (an SLA passing, a claim expiring): with no `order_changed`
+ * notify, so only a refetch shows it.
+ */
+export async function changeOrderQuietly(id: string, data: { priority: number }) {
+  await db.order.update({ where: { id }, data });
+}
+
 const RUSH_ORDER_WOO_ID = 999_999_999;
 
 /** One shared non-physical product, kept between runs (orders using it are deleted, it isn't). */

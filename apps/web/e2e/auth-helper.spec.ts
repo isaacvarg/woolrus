@@ -42,6 +42,20 @@ test("a deactivated user keeps no access, in the API or the pages", async ({ pag
   await expect(page.getByText("You don't have permission to do that.")).toBeVisible();
 });
 
+test("the order event stream refuses signed-out callers and users who can't read orders", async ({
+  page,
+  request,
+}) => {
+  const signedOut = await request.get("/api/events/orders");
+  expect(signedOut.status()).toBe(401);
+  expect(await signedOut.json()).toEqual({ messageKey: "errors.unauthenticated" });
+
+  await signInAs(page, []);
+  const noRoles = await page.request.get("/api/events/orders");
+  expect(noRoles.status()).toBe(403);
+  expect(await noRoles.json()).toEqual({ messageKey: "errors.forbidden" });
+});
+
 test("a user deactivated while the order event stream is open is cut off at the next heartbeat", async ({
   page,
 }) => {

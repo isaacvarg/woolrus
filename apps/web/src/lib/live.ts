@@ -7,6 +7,11 @@ import { orpc } from "@/lib/orpc";
 
 /** How often order queries refetch while the event stream is down (SPEC-workflow "Live updates"). */
 const POLL_MS = 30_000;
+/**
+ * And while it's up: time changes things with no event (a stage passing its SLA, a claim expiring,
+ * an order crossing an age rule before the next recompute).
+ */
+const REFRESH_MS = 60_000;
 /** Reconnect delays after the stream fails; the last one repeats. */
 const BACKOFF_MS = [1_000, 2_000, 5_000, 10_000, 30_000];
 /** Collects bursts (a priority recompute notifies every open order) into one round of refetches. */
@@ -29,8 +34,8 @@ function invalidateOrders(queryClient: QueryClient, ids: Iterable<string>) {
 
 /**
  * Keeps order queries fresh from `/api/events/orders`. Events only say which order changed; the
- * affected queries refetch. While the stream is down, order queries poll every 30 s instead, and it
- * reconnects with backoff. Mount once per tab (`<OrderEvents />` in the app layout).
+ * affected queries refetch, and every 60 s for what changes with time. While the stream is down,
+ * they poll every 30 s instead, and it reconnects with backoff. Mount once per tab (`<OrderEvents />` in the app layout).
  */
 export function useOrderEvents() {
   const queryClient = useQueryClient();
@@ -40,7 +45,7 @@ export function useOrderEvents() {
     // Evaluated again whenever a query updates; every change of `connected` below invalidates, so
     // the interval switches as soon as the refetch lands.
     queryClient.setQueryDefaults(orpc.orders.key(), {
-      refetchInterval: () => (connected ? false : POLL_MS),
+      refetchInterval: () => (connected ? REFRESH_MS : POLL_MS),
     });
 
     let source: EventSource | undefined;

@@ -1,7 +1,7 @@
 import { expect, type Page, test } from "@playwright/test";
 import en from "@woolrus/i18n/messages/en.json" with { type: "json" };
 import { signInAs } from "./support/auth";
-import { createOrder, deleteCreatedOrders } from "./support/orders";
+import { changeOrderQuietly, createOrder, deleteCreatedOrders } from "./support/orders";
 import { deleteCreatedRules, trackRules } from "./support/priority-rules";
 import { withSettingsLock } from "./support/settings-lock";
 
@@ -70,7 +70,10 @@ test("a queue row shows priority, items, a past-SLA stage age and the claim hold
       await expect(row).toContainText(customerName);
       await expect(row.getByText("Urgent")).toBeVisible();
       await expect(row.getByRole("cell", { name: "3", exact: true })).toBeVisible();
-      await expect(row.getByText("3 d", { exact: true })).toHaveClass(/text-error/);
+      // Said in words too, not only in red: screen readers and touch (no hover title) get it.
+      await expect(
+        row.getByRole("cell", { name: "3 d Past the stage's time limit", exact: true }),
+      ).toHaveClass(/text-error/);
     } finally {
       await page.request.patch("/api/v1/settings", { data: { stageSlaMinutes: before } });
     }
@@ -184,6 +187,27 @@ test("with the event stream down, the queue polls every 30 s until it reconnects
   const connected = page.waitForResponse("**/api/events/orders");
   await page.clock.runFor(60_000);
   expect((await connected).status()).toBe(200);
+});
+
+test("with the event stream up, the queue still refetches every 60 s for changes that send no event", async ({
+  page,
+}) => {
+  const customerName = `E2E ${crypto.randomUUID()}`;
+  const order = await createOrder({ customerName });
+  await page.clock.install();
+  await signInAs(page, ["PICKER"]);
+  const connected = page.waitForResponse("**/api/events/orders");
+  await page.goto("/queue/pending");
+  expect((await connected).status()).toBe(200);
+  await searchQueue(page, customerName);
+  const row = page.getByRole("row", { name: new RegExp(order.number) });
+  await expect(row).toBeVisible();
+
+  await changeOrderQuietly(order.id, { priority: 2 });
+  await page.clock.runFor(50_000);
+  await expect(row.getByText("Urgent")).toHaveCount(0);
+  await page.clock.runFor(15_000);
+  await expect(row.getByText("Urgent")).toBeVisible();
 });
 
 test("a Packer sees the Pending queue without Begin Picking", async ({ page }) => {
