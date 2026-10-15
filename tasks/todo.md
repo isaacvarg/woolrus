@@ -6,7 +6,7 @@ criterion n. Every task ends green for the packages it touches (`pnpm --filter <
 
 ## Phase 1: Foundation
 
-- [ ] **T1: Schema columns + test factories** (S/M)
+- [x] **T1: Schema columns + test factories** (S/M)
   - Acceptance: one migration adds `Settings.claimExpiryMinutes Int @default(30)` and `Product.physical Boolean
     @default(true)`; init constraints untouched. `test/factories.ts` builds orders with lines, voids, packages,
     package items, rates and labels in any status.
