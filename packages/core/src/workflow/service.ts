@@ -46,10 +46,20 @@ export async function transition(
     throw new AppError("CONFLICT", "errors.workflow.illegalTransition");
   }
 
-  if (move.claim === "holds") {
+  if (move.claim !== "none") {
     const live = isClaimLive(order, await claimExpiryMinutes(tx), now);
-    if (!live || order.claimedById !== actor.userId) {
+    if (move.claim === "holds" && (!live || order.claimedById !== actor.userId)) {
       throw new AppError("CONFLICT", "errors.workflow.claimRequired");
+    }
+    // Taking the claim never silently overwrites someone else's live one: that's a takeover.
+    if (move.claim === "claims" && live && order.claimedById !== actor.userId) {
+      const holder = await tx.user.findUnique({
+        where: { id: order.claimedById ?? "" },
+        select: { name: true },
+      });
+      throw new AppError("CONFLICT", "errors.workflow.claimedByOther", undefined, {
+        params: { name: holder?.name ?? "" },
+      });
     }
   }
 

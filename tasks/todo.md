@@ -114,7 +114,7 @@ criterion n. Every task ends green for the packages it touches (`pnpm --filter <
   - Done: `getOrder` → `OrderView` (= `OrderDetail` + addresses, lines, packages, `allowedActions`); `getOrderHistory`
     merges stage events with `order.claim/takeOver/release` audit rows; `listOrders` is raw SQL reusing `searchFilter`,
     number sort is `length, number`. `allowedActions` (actions.ts) is pure; it never offers `beginPicking` over someone
-    else's live claim (the service still allows it, see review note). `recordAudit` takes an optional `at`; workflow passes
+    else's live claim (and `transition()` now refuses it with `claimedByOther`). `recordAudit` takes an optional `at`; workflow passes
     its `now` so history orders correctly under an injected clock. Over `/api/v1`, `statuses=QA` and repeats both parse.
 
 - [ ] **T12: Dev demo orders seed** (S)
@@ -198,7 +198,6 @@ criterion n. Every task ends green for the packages it touches (`pnpm --filter <
 
 ### Checkpoint D (complete)
 - [ ] Every spec success criterion has a test; green + Playwright; ready for `/agent-skills:review`.
-- [ ] **Before opening the PR: sort out the branch.** T3–T8 were committed on `chore/dev-e2e-reload-loop` (on top of
-  `0924a89`, a Next `agentRules` chore), while the plan's branch `workflow/state-machine` stops at T2 (`94794e4`).
-  Decide with the user: move the workflow commits onto `workflow/state-machine` (and split the chore into its own PR),
-  or rename this branch. Don't open the PR until this is settled.
+- [x] **Before opening the PR: sort out the branch.** Settled 2026-10-15: T3–T11 were cherry-picked onto
+  `workflow/state-machine` (the PR branch); the Next `agentRules` chore is alone on `chore/dev-e2e-reload-loop`
+  (PR #15, rebased onto `main`). The pre-split tip is kept locally as `backup/chore-before-split`.

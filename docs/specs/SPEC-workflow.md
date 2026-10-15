@@ -78,7 +78,7 @@ Statuses (`WorkflowStatus`): `PENDING`, `PICKING`, `PACKING`, `QA`, `READY`, `CO
 
 | Transition | Name | Permission | Claim needed | Gate |
 |---|---|---|---|---|
-| PENDING → PICKING | `beginPicking` | `order.pick` | none; the actor claims it | — |
+| PENDING → PICKING | `beginPicking` | `order.pick` | no one else's live claim; the actor claims it | — |
 | PICKING → PACKING | `completePicking` | `order.pick` | actor holds it | **picked** |
 | PACKING → QA | `completePacking` | `order.pack` | actor holds it | **packed** |
 | QA → READY | `completeQa` | `order.qa` | actor holds it | **verified** |

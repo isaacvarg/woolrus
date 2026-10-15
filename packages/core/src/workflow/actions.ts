@@ -31,7 +31,7 @@ export function allowedActions(actor: Actor, order: ActionSubject): OrderAction[
 
   const actions: OrderAction[] = [];
 
-  // The server lets beginPicking overwrite a claim; offering take over instead keeps it deliberate.
+  // Like the server, never over someone else's live claim: that's a takeover.
   if (allowed("beginPicking", "PICKING") && !othersClaim) actions.push("beginPicking");
   for (const { kind, to } of completions) {
     if (mine && allowed(kind, to)) actions.push(kind as OrderAction);

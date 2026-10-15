@@ -84,6 +84,41 @@ describe("beginPicking", () => {
 
     expect(updated.claimedById).toBe(picker.userId);
   });
+
+  it("refuses an order someone else has a live claim on, naming them, and changes nothing", async () => {
+    const [picker, other] = [await createActor(db, ["PICKER"]), await createActor(db, ["PICKER"])];
+    await db.user.update({ where: { id: other.userId }, data: { name: "Ana Ruiz" } });
+    const { order } = await createOrder(db, {
+      claimedById: other.userId,
+      claimedAt: minutesAgo(5),
+    });
+
+    await expect(
+      beginPicking(db, picker, { orderId: order.id, expectedVersion: 1 }),
+    ).rejects.toMatchObject({
+      kind: "CONFLICT",
+      messageKey: "errors.workflow.claimedByOther",
+      params: { name: "Ana Ruiz" },
+    });
+    expect(await db.order.findUniqueOrThrow({ where: { id: order.id } })).toMatchObject({
+      status: "PENDING",
+      version: 1,
+      claimedById: other.userId,
+    });
+    expect(await db.orderStageEvent.count({ where: { orderId: order.id } })).toBe(0);
+  });
+
+  it("begins picking an order the actor already claimed", async () => {
+    const picker = await createActor(db, ["PICKER"]);
+    const { order } = await createOrder(db, {
+      claimedById: picker.userId,
+      claimedAt: minutesAgo(5),
+    });
+
+    const updated = await beginPicking(db, picker, { orderId: order.id, expectedVersion: 1 });
+
+    expect(updated).toMatchObject({ status: "PICKING", claimedById: picker.userId });
+  });
 });
 
 describe("stage completions", () => {
