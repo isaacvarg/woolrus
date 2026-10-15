@@ -152,7 +152,9 @@ its `tx`, so its own writes and the transition commit or roll back together.
 - `claimMany({ orders: [{ id, expectedVersion }] })`, up to 50: all or nothing in one transaction, rows locked in
   id order to avoid deadlocks. Each failure is reported per order. This exists now so batch picking (`picking`)
   can rely on it.
-- `release({ orderId })`: the holder or an Admin.
+- `release({ orderId })`: the holder or an Admin; needs `order.read` even when there's nothing to release.
+- `claim`, `takeOver` and `claimMany` refuse a caller who can't claim in any stage with `FORBIDDEN` before
+  reading the order, so they learn nothing about it.
 - `takeOver({ orderId, expectedVersion, confirm: true })`: same permission as `claim`, and `confirm` must be `true`
   (the UI shows a confirmation naming the current holder). Audited as `order.takeOver` with the previous holder.
 - Claims bump `version` and are audited, but don't write a stage event (the status didn't change).
@@ -165,7 +167,7 @@ Levels: `0` Normal, `1` High, `2` Urgent. `Order.priority` stores the level; the
 
 | `type` | Fields | Matches when |
 |---|---|---|
-| `lineItem` | `match: "sku" \| "name"`, `value` | Any `OrderItem` has that SKU (exact) or name (case-insensitive exact). Covers the store's **Rush Order** product. |
+| `lineItem` | `match: "sku" \| "name"`, `value` | Any `OrderItem` with active quantity left has that SKU (exact) or name (case-insensitive exact). Covers the store's **Rush Order** product; a fully voided Rush Order line no longer counts. |
 | `shippingMethod` | `contains` | `Order.shippingMethod` contains the text (case-insensitive) |
 | `orderAge` | `minHours` (1–720) | `now − orderedAt ≥ minHours` |
 
@@ -205,7 +207,8 @@ Levels: `0` Normal, `1` High, `2` Urgent. `Order.priority` stores the level; the
   `LISTEN` connection per web process fans out to subscribers, with a heartbeat every 25 s. Each heartbeat
   re-checks the session, and the stream ends once it's gone or the user is deactivated.
 - The client invalidates the matching TanStack Query keys (queue lists, counts, that order) on each event. If the
-  stream is down, queries fall back to `refetchInterval: 30s` until it reconnects.
+  stream is down, queries fall back to `refetchInterval: 30s` until it reconnects. While it's up they still
+  refetch every 60 s, for what changes with time and sends no event (SLA breach, claim expiry).
 
 ### API (oRPC, `packages/contracts/src/orders.ts`, `priority-rules.ts`)
 
@@ -308,6 +311,12 @@ queue/**,orders/**,settings/priority-rules/**,settings/**}`, `apps/worker/src/ma
 
 ## Implementation notes (deviations found while building)
 
+- **Lock order:** every claim and transition reads Settings before it locks the order, and a priority recompute
+  locks the orders it changes in id order (as `claimMany` does). Mixed orders deadlocked under real concurrency.
+  `loadSettings` creates the row with `INSERT … ON CONFLICT DO NOTHING`: Prisma's upsert failed two first
+  uses at once with a duplicate key.
+- **Voids and priority:** a fully voided line doesn't match `lineItem` rules. Voids don't trigger a recompute on
+  their own: `exceptions` must call `recomputePriorities(tx, { orderIds })` when it voids or un-voids a line.
 - **verified** also needs at least one package (`noPackages`). Without that, "every package is verified" held for
   an order with none, so it could reach Ready and then fail **shippable**. Found by the SC 3 e2e test.
 - `beginPicking` over someone else's live claim is refused with `claimedByOther`, the same as `claim`. The UI
