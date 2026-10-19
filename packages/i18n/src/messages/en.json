@@ -97,7 +97,25 @@
       "yesClear": "Yes, clear",
       "clearConfirm": "Clear the {name}? The integration stops working until a new value is added.",
       "newValue": "New value",
-      "writeOnly": "Stored encrypted. Nobody can view it after saving, so keep your own copy if you need one."
+      "writeOnly": "Stored encrypted. Nobody can view it after saving, so keep your own copy if you need one.",
+      "urlMoveTitle": "Remove the saved keys?",
+      "urlMoveBody": "The new address is on a different server. Saving it removes the saved {secrets}, so they're never sent there. Add them again for the new address.",
+      "urlMoveConfirm": "Save and remove keys",
+      "savedKeysCleared": "Saved. The keys for the old address were removed: add them for the new one.",
+      "testConnection": "Test connection",
+      "testHint": "Checks the saved store URL and keys.",
+      "testOk": "Connected. The store uses {weight} for weight and {dimension} for dimensions.",
+      "webhook": {
+        "title": "Webhooks",
+        "url": "Delivery URL",
+        "copy": "Copy",
+        "copied": "Copied.",
+        "intro": "Webhooks bring new and changed orders in within seconds. Sync still polls if they stop.",
+        "step1": "In WordPress, open WooCommerce → Settings → Advanced → Webhooks and add a webhook.",
+        "step2": "Status Active, topic “Order created”, API version “WP REST API Integration v3”.",
+        "step3": "Delivery URL: the one above. Secret: the webhook secret saved here.",
+        "step4": "Add a second webhook the same way with the topic “Order updated”."
+      }
     }
   },
   "priorityRules": {

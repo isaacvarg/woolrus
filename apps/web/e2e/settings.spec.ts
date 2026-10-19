@@ -354,3 +354,91 @@ test("saving sends only the fields this form changed, so another admin's change 
     }
   });
 });
+
+test("moving the Lumexia URL to another server asks first, then shows its key as Not set", async ({
+  page,
+}) => {
+  await signInAs(page, ["ADMIN"]);
+  await withSettingsLock(async () => {
+    try {
+      await page.request.patch("/api/v1/settings", {
+        data: { lumexiaBaseUrl: "https://lumexia.example.com/api" },
+      });
+      await page.request.put("/api/v1/settings/secrets/lumexiaApiKey", {
+        data: { value: `e2e-${crypto.randomUUID()}` },
+      });
+      await page.goto("/settings");
+      const lumexia = page.getByRole("region", { name: "Lumexia" });
+      const key = secretRow(page, "Lumexia", "API key");
+      await expect(key.getByText("Set", { exact: true })).toBeVisible();
+
+      // A path change stays on the same server: no question, key kept.
+      await lumexia.getByLabel("API base URL").fill("https://lumexia.example.com/v2");
+      await lumexia.getByRole("button", { name: "Save" }).click();
+      await expect(lumexia.getByRole("status")).toHaveText("Saved.");
+      await expect(key.getByText("Set", { exact: true })).toBeVisible();
+
+      // Another host: cancelling keeps everything as it was.
+      await lumexia.getByLabel("API base URL").fill("https://lx.example.net");
+      await lumexia.getByRole("button", { name: "Save" }).click();
+      const dialog = page.getByRole("dialog", { name: "Remove the saved keys?" });
+      await expect(dialog).toContainText("API key");
+      await dialog.getByRole("button", { name: "Cancel" }).click();
+      await expect(dialog).toHaveCount(0);
+      await expect(key.getByText("Set", { exact: true })).toBeVisible();
+
+      await lumexia.getByRole("button", { name: "Save" }).click();
+      await dialog.getByRole("button", { name: "Save and remove keys" }).click();
+      await expect(lumexia.getByRole("status")).toHaveText(
+        en.settings.integrations.savedKeysCleared,
+      );
+      await expect(key.getByText("Not set", { exact: true })).toBeVisible();
+      await page.reload();
+      await expect(lumexia.getByLabel("API base URL")).toHaveValue("https://lx.example.net");
+      await expect(key.getByText("Not set", { exact: true })).toBeVisible();
+    } finally {
+      await page.request.delete("/api/v1/settings/secrets/lumexiaApiKey");
+      await page.request.patch("/api/v1/settings", { data: { lumexiaBaseUrl: null } });
+    }
+  });
+});
+
+test("the WooCommerce card shows the webhook delivery URL and setup steps", async ({ page }) => {
+  await signInAs(page, ["ADMIN"]);
+  await page.goto("/settings");
+  const woo = page.getByRole("region", { name: "WooCommerce" });
+  const origin = new URL(page.url()).origin;
+  await expect(woo.getByText(`${origin}/api/webhooks/woocommerce`)).toBeVisible();
+  await expect(woo.getByRole("listitem")).toHaveCount(4);
+});
+
+// Test connection talks to the real dev store, which CI doesn't have.
+test.describe("Test connection (dev stack)", () => {
+  test.skip(!process.env.E2E_DEV_STACK, "needs the dev store (E2E_DEV_STACK=1)");
+
+  test("reports the store's units", async ({ page }) => {
+    await signInAs(page, ["ADMIN"]);
+    await page.goto("/settings");
+    const woo = page.getByRole("region", { name: "WooCommerce" });
+    await woo.getByRole("button", { name: "Test connection" }).click();
+    await expect(woo.getByText(/^Connected\. The store uses lbs for weight/)).toBeVisible();
+  });
+
+  test("explains a wrong consumer secret in the user's language", async ({ page }) => {
+    await signInAs(page, ["ADMIN"]);
+    await withSettingsLock(async () => {
+      try {
+        await page.request.put("/api/v1/settings/secrets/wooConsumerSecret", {
+          data: { value: "cs_wrong_e2e" },
+        });
+        await page.goto("/settings");
+        const woo = page.getByRole("region", { name: "WooCommerce" });
+        await woo.getByRole("button", { name: "Test connection" }).click();
+        await expect(woo.getByText(en.errors.sync.unauthorized)).toBeVisible();
+      } finally {
+        // The dev stack's Woo sync falls back on .env only while this secret is unset.
+        await page.request.delete("/api/v1/settings/secrets/wooConsumerSecret");
+      }
+    });
+  });
+});

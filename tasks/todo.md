@@ -297,7 +297,7 @@ focused tests; checkpoints run the full green set. Add a `Done:` line (2–3 lin
     `urlSecrets` maps each URL field to its secrets. A move = origin change or removal; setting a URL where there was
     none keeps secrets saved earlier. One `secret.clear` audit per secret (`after: { secret, reason: "urlChanged" }`).
 
-- [ ] **T16: Integrations card: Test connection, webhook URL, URL-change confirm**
+- [x] **T16: Integrations card: Test connection, webhook URL, URL-change confirm**
   - WooCommerce card gets Test connection (translated result), the webhook URL with copy button and setup steps, and
     a confirm dialog when a URL origin change will clear saved keys (Lumexia card gets the confirm too).
   - Acceptance: Test connection shows OK with units against the dev store and a translated error with a wrong
@@ -305,6 +305,11 @@ focused tests; checkpoints run the full green set. Add a `Done:` line (2–3 lin
   - Verify: `pnpm --filter @woolrus/web build`; extend `apps/web/e2e/settings.spec.ts`.
   - Files: `apps/web/src/app/(app)/settings/**` (integrations card), `apps/web/e2e/settings.spec.ts`, `i18n` en/es.
   - Deps: T13, T15 · Size: M
+  - Done: `settings/integrations.tsx`: `UrlForm` confirms in a `Dialog` when `movesServer(saved, next)` and the
+    integration has saved secrets (mirrors core); `StoreTools` (Woo card only) has Test connection and the webhook URL
+    from `window.location.origin` + steps. e2e in `settings.spec.ts`; Test connection tests need `E2E_DEV_STACK=1`
+    and a `pnpm dev` server (`next start` is production: no `.env` fallback, so the store reads as not configured).
+    Gotcha: the existing "replacing a secret" e2e deletes `wooWebhookSecret` on the shared dev DB.
 
 - [ ] **T17: E2E, docs and status**
   - `apps/web/e2e/sync.spec.ts` (SC 13): Test connection OK → Sync orders now → dev store's processing orders in

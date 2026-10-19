@@ -2,9 +2,10 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { AdminSettings, SecretName } from "@woolrus/contracts";
-import { useTranslations } from "next-intl";
+import { useFormatter, useTranslations } from "next-intl";
 import { useEffect, useId, useRef, useState } from "react";
 import { Form } from "react-aria-components";
+import { Dialog } from "@/components/ui/dialog";
 import { Button, TextField } from "@/components/ui/fields";
 import { useErrorMessage, useFieldErrors } from "@/lib/errors";
 import { orpc } from "@/lib/orpc";
@@ -39,7 +40,13 @@ export function IntegrationsSection() {
       <h2 className="text-2xl font-bold">{t("settings.integrations.title")}</h2>
       {integrations.map(({ id, url, secrets }) => (
         <IntegrationCard key={id} name={t(`settings.integrations.names.${id}`)}>
-          {url && <UrlForm field={url} saved={settings.data[url]} />}
+          {url && (
+            <UrlForm
+              field={url}
+              saved={settings.data[url]}
+              savedSecrets={secrets.filter((s) => settings.data.secrets[s]?.configured)}
+            />
+          )}
           <div className="divide-y divide-base-200">
             {secrets.map((secret) => (
               <SecretRow
@@ -49,6 +56,7 @@ export function IntegrationsSection() {
               />
             ))}
           </div>
+          {id === "woocommerce" && <StoreTools />}
         </IntegrationCard>
       ))}
     </div>
@@ -69,22 +77,50 @@ function IntegrationCard({ name, children }: { name: string; children: React.Rea
   );
 }
 
-function UrlForm({ field, saved }: { field: UrlField; saved: string | null }) {
+const originOf = (url: string | null) => (url && URL.canParse(url) ? new URL(url).origin : null);
+
+/**
+ * Whether saving `next` moves the URL to another server, so the server clears the saved keys
+ * (mirrors `updateSettings`: an origin change or a removal; a first URL is not a move).
+ */
+function movesServer(saved: string | null, next: string | null): boolean {
+  if (saved === null) return false;
+  if (next === null) return true;
+  const origin = originOf(next);
+  // An invalid URL is refused by the server and clears nothing.
+  return origin !== null && origin !== originOf(saved);
+}
+
+function UrlForm({
+  field,
+  saved,
+  savedSecrets,
+}: {
+  field: UrlField;
+  saved: string | null;
+  /** This integration's secrets that are set: the ones a move would clear. */
+  savedSecrets: SecretName[];
+}) {
   const t = useTranslations();
+  const format = useFormatter();
   const errorMessage = useErrorMessage();
   const fieldErrors = useFieldErrors();
   const applySettings = useApplySettings();
   const [value, setValue] = useState(saved ?? "");
+  const [confirming, setConfirming] = useState(false);
 
   const save = useMutation(
     orpc.settings.update.mutationOptions({
-      onSuccess: (updated) => {
+      onSuccess: ({ clearedSecrets: _, ...updated }) => {
         setValue(updated[field] ?? "");
+        setConfirming(false);
         applySettings(updated);
       },
     }),
   );
   const errors = fieldErrors(save.error);
+  const next = value.trim() === "" ? null : value.trim();
+  const submit = () => save.mutate({ [field]: next });
 
   return (
     <Form
@@ -92,8 +128,8 @@ function UrlForm({ field, saved }: { field: UrlField; saved: string | null }) {
       validationErrors={errors}
       onSubmit={(event) => {
         event.preventDefault();
-        const url = value.trim();
-        save.mutate({ [field]: url === "" ? null : url });
+        if (savedSecrets.length > 0 && movesServer(saved, next)) setConfirming(true);
+        else submit();
       }}
     >
       <div className="min-w-64 flex-1">
@@ -117,9 +153,106 @@ function UrlForm({ field, saved }: { field: UrlField; saved: string | null }) {
         </p>
       )}
       <p role="status" className="basis-full text-success">
-        {save.isSuccess ? t("settings.integrations.saved") : ""}
+        {save.isSuccess
+          ? save.data.clearedSecrets.length > 0
+            ? t("settings.integrations.savedKeysCleared")
+            : t("settings.integrations.saved")
+          : ""}
       </p>
+      <Dialog
+        title={t("settings.integrations.urlMoveTitle")}
+        isOpen={confirming}
+        onOpenChange={setConfirming}
+      >
+        {(close) => (
+          <>
+            <p>
+              {t("settings.integrations.urlMoveBody", {
+                secrets: format.list(
+                  savedSecrets.map((s) => t(`settings.integrations.secrets.${s}`)),
+                  { type: "conjunction" },
+                ),
+              })}
+            </p>
+            <div className="flex justify-end gap-2">
+              <Button className="btn-ghost" autoFocus onPress={close}>
+                {t("common.cancel")}
+              </Button>
+              <Button className="btn-error" isPending={save.isPending} onPress={submit}>
+                {t("settings.integrations.urlMoveConfirm")}
+              </Button>
+            </div>
+          </>
+        )}
+      </Dialog>
     </Form>
+  );
+}
+
+/** Test connection and the webhook setup, under the WooCommerce card's keys. */
+function StoreTools() {
+  const t = useTranslations("settings.integrations");
+  const errorMessage = useErrorMessage();
+  const message = useTranslations();
+  const test = useMutation(orpc.sync.testConnection.mutationOptions());
+  const [copied, setCopied] = useState(false);
+  // Rendered only on the client (the settings query isn't prefetched), so window is there.
+  const webhookUrl = `${window.location.origin}/api/webhooks/woocommerce`;
+
+  return (
+    <div className="space-y-4 border-t border-base-200 pt-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <Button className="btn-outline" isPending={test.isPending} onPress={() => test.mutate({})}>
+          {t("testConnection")}
+        </Button>
+        <span className="text-sm text-base-content/70">{t("testHint")}</span>
+        <div aria-live="polite" className="basis-full">
+          {test.data?.ok === true && (
+            <p className="text-success">
+              {t("testOk", {
+                weight: test.data.units.weight,
+                dimension: test.data.units.dimension,
+              })}
+            </p>
+          )}
+          {test.data?.ok === false && (
+            <p className="text-error">
+              {message.has(test.data.messageKey)
+                ? message(test.data.messageKey as never)
+                : message("errors.internal")}
+            </p>
+          )}
+          {test.error && <p className="text-error">{errorMessage(test.error)}</p>}
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <h4 className="font-semibold">{t("webhook.title")}</h4>
+        <p className="text-sm text-base-content/70">{t("webhook.intro")}</p>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm font-medium">{t("webhook.url")}:</span>
+          <code className="rounded bg-base-200 px-2 py-1 text-sm break-all">{webhookUrl}</code>
+          <Button
+            className="btn-ghost btn-sm"
+            onPress={async () => {
+              await navigator.clipboard.writeText(webhookUrl);
+              setCopied(true);
+            }}
+          >
+            {t("webhook.copy")}
+          </Button>
+          <span role="status" className="text-sm text-success">
+            {copied ? t("webhook.copied") : ""}
+          </span>
+        </div>
+        <ol className="list-decimal space-y-1 pl-6 text-sm">
+          <li>{t("webhook.step1")}</li>
+          <li>{t("webhook.step2")}</li>
+          <li>{t("webhook.step3")}</li>
+          <li>{t("webhook.step4")}</li>
+        </ol>
+      </div>
+    </div>
   );
 }
 

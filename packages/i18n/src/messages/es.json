@@ -97,7 +97,25 @@
       "yesClear": "Sí, borrar",
       "clearConfirm": "¿Borrar «{name}»? La integración dejará de funcionar hasta que se agregue un valor nuevo.",
       "newValue": "Valor nuevo",
-      "writeOnly": "Se guarda cifrado. Nadie podrá verlo después de guardarlo; conserva tu propia copia si la necesitas."
+      "writeOnly": "Se guarda cifrado. Nadie podrá verlo después de guardarlo; conserva tu propia copia si la necesitas.",
+      "urlMoveTitle": "¿Eliminar las claves guardadas?",
+      "urlMoveBody": "La dirección nueva está en otro servidor. Al guardarla se eliminan {secrets}, para que nunca se envíen allí. Vuelve a agregarlas para la dirección nueva.",
+      "urlMoveConfirm": "Guardar y eliminar claves",
+      "savedKeysCleared": "Guardado. Se eliminaron las claves de la dirección anterior: agrégalas para la nueva.",
+      "testConnection": "Probar conexión",
+      "testHint": "Comprueba la URL y las claves guardadas de la tienda.",
+      "testOk": "Conectado. La tienda usa {weight} para el peso y {dimension} para las dimensiones.",
+      "webhook": {
+        "title": "Webhooks",
+        "url": "URL de entrega",
+        "copy": "Copiar",
+        "copied": "Copiado.",
+        "intro": "Los webhooks traen los pedidos nuevos y modificados en segundos. Si dejan de llegar, la sincronización sigue consultando.",
+        "step1": "En WordPress, abre WooCommerce → Ajustes → Avanzado → Webhooks y agrega un webhook.",
+        "step2": "Estado Activo, tema «Pedido creado», versión de API «WP REST API Integration v3».",
+        "step3": "URL de entrega: la de arriba. Secreto: el secreto del webhook guardado aquí.",
+        "step4": "Agrega un segundo webhook igual con el tema «Pedido actualizado»."
+      }
     }
   },
   "priorityRules": {
