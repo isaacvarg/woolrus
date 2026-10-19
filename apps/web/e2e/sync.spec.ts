@@ -63,7 +63,8 @@ test("an admin queues a products sync from the Sync page and it shows in the log
   test.skip(!process.env.E2E_DEV_STACK, "needs the worker and the dev store (E2E_DEV_STACK=1)");
   await expect.poll(newestProductsRun, { timeout: 30_000 }).not.toBe(before);
   const log = page.getByRole("table", { name: "Sync log" });
-  await expect(log.getByRole("row").nth(1)).toContainText("Products");
+  // Not necessarily the top row: a scheduled orders poll may have started since.
+  await expect(log.getByRole("row").filter({ hasText: "Products" }).first()).toBeVisible();
 });
 
 // SC 13: the journey against the dev store (`pnpm stack:up`, `pnpm dev` with the worker). CI has
