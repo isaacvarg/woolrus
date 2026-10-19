@@ -165,6 +165,10 @@ export type OrderAddress = z.infer<typeof OrderAddress>;
 export const PickStatus = z.enum(["PENDING", "PICKED", "OUT_OF_STOCK", "SUBSTITUTED"]);
 export type PickStatus = z.infer<typeof PickStatus>;
 
+/** A variation attribute ("Size: 8oz") or a customer's product option ("Specific Delivery Window?: No"). */
+export const LineAttribute = z.object({ name: z.string(), option: z.string() });
+export type LineAttribute = z.infer<typeof LineAttribute>;
+
 export const OrderLine = z.object({
   id: Id,
   name: z.string(),
@@ -178,6 +182,8 @@ export const OrderLine = z.object({
   pickStatus: PickStatus,
   pickedQuantity: z.number().int(),
   substitutionNote: z.string().nullable(),
+  /** What the floor needs to pick the right thing: size, pack, and options chosen at checkout. */
+  attributes: z.array(LineAttribute),
 });
 export type OrderLine = z.infer<typeof OrderLine>;
 

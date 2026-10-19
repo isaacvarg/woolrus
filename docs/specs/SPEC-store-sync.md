@@ -381,5 +381,6 @@ Checked and not an issue: `_order_number` equals `number` on every order; no lin
 
 ## Open questions
 
-None open. Follow-ups from the decisions above: show line attributes on the order page and pick list (5), net
-shipping-discount fees out of `shippingChargedCents` (8), priority-rule conditions on line options (5, `workflow`).
+None open. Done here: line attributes on the order page (5; `OrderLine.attributes`) and shipping charged net of
+shipping-discount fees (8). Left for other modules: attributes on the pick list (`picking`) and priority-rule
+conditions on line options (5, `workflow`).

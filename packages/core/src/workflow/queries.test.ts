@@ -265,6 +265,33 @@ describe("getOrder", () => {
     expect(view.packages[0]?.boxName).toMatch(/^Box /);
   });
 
+  it("returns each line's size and options, and none for stored JSON that isn't a list of them", async () => {
+    const { order } = await createOrder(db, {
+      lines: [
+        {
+          name: "Avocado Body Butter Base | 450lb Drum",
+          attributes: [
+            { name: "No Liftgate Confirmation", option: "Agree." },
+            { name: "Add Batch Priority Pass", option: "Current Lead Time: 1 - 2 Weeks" },
+          ],
+        },
+        { name: "Old shape", attributes: { size: "8oz" } },
+        { name: "Plain" },
+      ],
+    });
+
+    const lines = (await getOrder(db, picker, { id: order.id })).lines;
+
+    expect(lines.map((l) => l.attributes)).toEqual([
+      [
+        { name: "No Liftgate Confirmation", option: "Agree." },
+        { name: "Add Batch Priority Pass", option: "Current Lead Time: 1 - 2 Weeks" },
+      ],
+      [],
+      [],
+    ]);
+  });
+
   it("treats a line without a product row as physical", async () => {
     const { order } = await createOrder(db, { lines: [{ noProduct: true }] });
     expect((await getOrder(db, picker, { id: order.id })).lines[0]?.physical).toBe(true);

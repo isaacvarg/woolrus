@@ -87,12 +87,26 @@ export type MappedVariation = MappedCatalogFields & {
   attributes: ItemAttribute[];
 };
 
+/** Fee lines the store uses to take money off shipping, matched by name. */
+const SHIPPING_DISCOUNT_FEE = /shipping discount$/i;
+
 export function mapOrder(order: WooOrder): MappedOrder {
   const cents = (value: string | null, field: string) =>
     value === null ? 0 : decimalOr(`order ${order.id}: ${field}`, () => toCents(value));
   const shippingAddress = toAddress(order.shipping);
   const billingAddress = toAddress(order.billing);
   const methods = order.shippingLines.map((s) => s.methodTitle).filter((t) => t !== null);
+  const shippingLines = order.shippingLines.reduce(
+    (sum, s, i) => sum + cents(s.total, `shipping_lines.${i}.total`),
+    0,
+  );
+  // The store refunds shipping with negative fees ("Free Shipping Discount", "Courtesy Shipping
+  // Discount"): what the customer paid for shipping is net of them (SPEC-store-sync decision 8).
+  const shippingDiscounts = order.feeLines.reduce(
+    (sum, f, i) =>
+      SHIPPING_DISCOUNT_FEE.test(f.name ?? "") ? sum + cents(f.total, `fee_lines.${i}.total`) : sum,
+    0,
+  );
 
   return {
     wooOrderId: order.id,
@@ -107,10 +121,7 @@ export function mapOrder(order: WooOrder): MappedOrder {
     customerNote: order.customerNote,
     paymentMethod: order.paymentMethodTitle,
     totalCents: cents(order.total, "total"),
-    shippingChargedCents: order.shippingLines.reduce(
-      (sum, s, i) => sum + cents(s.total, `shipping_lines.${i}.total`),
-      0,
-    ),
+    shippingChargedCents: Math.max(0, shippingLines + shippingDiscounts),
     shippingMethod: methods.length > 0 ? methods.join(", ") : null,
     refundedCents: order.refunds.reduce(
       (sum, r, i) => sum + Math.abs(cents(r.total, `refunds.${i}.total`)),

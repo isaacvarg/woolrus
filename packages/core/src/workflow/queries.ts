@@ -1,4 +1,5 @@
 import {
+  LineAttribute,
   type OrderAddress,
   type OrderHistoryEntry,
   type OrderListPage,
@@ -10,6 +11,7 @@ import {
   StageSlaMinutes,
 } from "@woolrus/contracts";
 import { type DbTx, Prisma, type WorkflowStatus } from "@woolrus/db";
+import { z } from "zod";
 import { AppError, notFound } from "../errors";
 import { type Actor, assertCan } from "../permissions";
 import { loadSettings } from "../settings/service";
@@ -201,6 +203,14 @@ function toAddress(json: Prisma.JsonValue): OrderAddress {
   return address;
 }
 
+const StoredAttributes = z.array(LineAttribute);
+
+/** Stored JSON that isn't a list of attributes (older shape, hand edits) reads as none. */
+function toAttributes(stored: Prisma.JsonValue): LineAttribute[] {
+  const parsed = StoredAttributes.safeParse(stored);
+  return parsed.success ? parsed.data : [];
+}
+
 /** One order for its detail page, with the buttons the caller may use. */
 export async function getOrder(
   db: DbTx,
@@ -253,6 +263,7 @@ export async function getOrder(
       pickStatus: i.pickStatus,
       pickedQuantity: i.pickedQuantity,
       substitutionNote: i.substitutionNote,
+      attributes: toAttributes(i.attributes),
     })),
     packages: order.packages.map((p) => ({
       id: p.id,

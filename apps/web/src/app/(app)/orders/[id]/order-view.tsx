@@ -126,6 +126,18 @@ function OrderLines({ order }: { order: Order }) {
             <tr key={line.id} className={line.physical ? "h-16" : "h-16 opacity-60"}>
               <td>
                 <div className="font-semibold">{line.name}</div>
+                {line.attributes.length > 0 && (
+                  // Size, pack and checkout options, as the store names them (store data, not UI text).
+                  <dl className="mt-1 space-y-0.5 text-sm">
+                    {line.attributes.map((a, i) => (
+                      // biome-ignore lint/suspicious/noArrayIndexKey: names can repeat; order is fixed
+                      <div key={i}>
+                        <dt className="inline text-base-content/70">{a.name}:</dt>{" "}
+                        <dd className="inline font-medium">{a.option}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                )}
                 {!line.physical && (
                   <span className="badge badge-ghost badge-sm">{t("order.notPhysical")}</span>
                 )}

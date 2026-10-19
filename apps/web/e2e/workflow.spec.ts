@@ -256,6 +256,20 @@ test("the detail page shows the header, read-only lines and the history", async 
   await expect(historyPanel(page).getByRole("listitem").first()).toContainText("E2E PICKER");
 });
 
+test("a line shows its size and the options chosen at checkout", async ({ page }) => {
+  const order = await createOrder({
+    attributes: [
+      { name: "Size", option: "16oz" },
+      { name: "Specific Delivery Window?", option: "No" },
+    ],
+  });
+  await signInAs(page, ["PICKER"]);
+  await page.goto(`/orders/${order.id}`);
+  const line = page.getByRole("table", { name: "Items" }).getByRole("row", { name: /E2E item/ });
+  await expect(line.getByRole("term")).toHaveText(["Size:", "Specific Delivery Window?:"]);
+  await expect(line.getByRole("definition")).toHaveText(["16oz", "No"]);
+});
+
 test("a completion refused by its gate shows what's missing", async ({ page }) => {
   const order = await createOrder();
   await signInAs(page, ["PICKER"]);
@@ -544,7 +558,8 @@ test("an admin edits, disables and reorders priority rules", async ({ page }) =>
 test("a Picker has no Priority rules link and is refused at the page", async ({ page }) => {
   await signInAs(page, ["PICKER"]);
   await page.goto("/settings/priority-rules");
-  await expect(page.getByRole("alert")).toHaveText(en.errors.forbidden);
+  // By text: Next's route announcer is an (empty) alert too.
+  await expect(page.getByRole("alert").filter({ hasText: en.errors.forbidden })).toBeVisible();
   await expect(page.getByRole("table", { name: "Priority rules" })).toHaveCount(0);
   await openNav(page);
   await expect(page.getByRole("link", { name: "Priority rules" })).toHaveCount(0);

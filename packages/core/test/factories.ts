@@ -26,6 +26,8 @@ export type LineSpec = {
   voids?: { quantity: number; undone?: boolean }[];
   /** Line has no product row (deleted in Woo). */
   noProduct?: boolean;
+  /** Variation attributes and product options, as sync stores them (raw JSON). */
+  attributes?: unknown;
 };
 
 export type PackageSpec = {
@@ -156,6 +158,7 @@ async function createLine(db: Db, orderId: string, line: LineSpec): Promise<Orde
       pickStatus,
       pickedQuantity: line.pickedQuantity ?? (picked ? quantity : 0),
       pickedAt: picked ? new Date() : null,
+      ...(line.attributes === undefined ? {} : { attributes: line.attributes as never }),
     },
   });
 

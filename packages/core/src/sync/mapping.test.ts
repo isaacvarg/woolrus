@@ -129,6 +129,31 @@ describe("mapOrder", () => {
     });
   });
 
+  it("takes the store's shipping-discount fees off shipping charged, and no other fee", () => {
+    // As on the production store: a fee line refunds all or part of the UPS charge (decision 8).
+    const ups = (total: string) => [{ method_title: "UPS Ground", total }];
+    const fee = (name: string, total: string) => ({ name, total, tax_status: "none" });
+
+    const free = order(2, {
+      shipping_lines: ups("107.19"),
+      fee_lines: [fee("Free Shipping Discount", "-107.19")],
+    });
+    expect(mapOrder(free).shippingChargedCents).toBe(0);
+
+    const courtesy = order(2, {
+      shipping_lines: ups("26.90"),
+      fee_lines: [fee("Courtesy Shipping Discount", "-8.07"), fee("Handling", "5.00")],
+    });
+    expect(mapOrder(courtesy).shippingChargedCents).toBe(1883);
+
+    // A discount larger than the shipping charged never makes it negative.
+    const over = order(2, {
+      shipping_lines: ups("10.00"),
+      fee_lines: [fee("Free Shipping Discount", "-12.00")],
+    });
+    expect(mapOrder(over).shippingChargedCents).toBe(0);
+  });
+
   it("adds up refunds as a positive refunded total", () => {
     const mapped = mapOrder(
       order(2, {

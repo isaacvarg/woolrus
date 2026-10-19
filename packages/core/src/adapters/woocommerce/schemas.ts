@@ -128,6 +128,8 @@ const orderSchema = z
         total: s.total,
       })),
     ),
+    // Older payloads and some fixtures omit it; nothing is lost by reading it as none.
+    fee_lines: z.array(z.object({ name: text, total: decimal })).default([]),
     line_items: z.array(lineItemSchema),
     refunds: z.array(z.object({ id: z.number().int(), total: decimal })),
     meta_data: z.array(metaSchema),
@@ -145,6 +147,7 @@ const orderSchema = z
     billing: o.billing,
     shipping: o.shipping,
     shippingLines: o.shipping_lines,
+    feeLines: o.fee_lines,
     lineItems: o.line_items,
     refunds: o.refunds,
     metaData: o.meta_data,
