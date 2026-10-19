@@ -52,26 +52,27 @@ The contract between two modules belongs in the **provider's** spec.
 
 ### Status
 
-Update this table in the same PR that changes a module's state.
+Update this table in the same PR that changes a module's state. Each module's spec issue on GitHub tracks its
+tickets (see *Work tracking* in `CLAUDE.md`).
 States: `not started` → `spec draft` → `spec approved` → `planned` → `in progress` → `done`.
 
-| Module | Milestone | Spec | State |
-|---|---|---|---|
-| `settings` | M1 | [SPEC-settings](docs/specs/SPEC-settings.md) | done |
-| `store-sync` | M1 | [SPEC-store-sync](docs/specs/SPEC-store-sync.md) | done |
-| `workflow` | M1 | [SPEC-workflow](docs/specs/SPEC-workflow.md) | done |
-| `identity` | M2 | — | not started |
-| `notes` | M2 | — | not started |
-| `picking` | M2 | — | not started |
-| `packing` | M2 | — | not started |
-| `exceptions` | M3 | — | not started |
-| `carriers` | M4 | — | not started |
-| `qa` | M4 | — | not started |
-| `shipping` | M4 | — | not started |
-| `operations` | M4 | — | not started |
-| `lumexia` | M5 | — | not started |
-| `returns` | M5 | — | not started |
-| `reporting` | M5 | — | not started |
+| Module | Milestone | Spec | Issue | State |
+|---|---|---|---|---|
+| `settings` | M1 | [SPEC-settings](docs/specs/SPEC-settings.md) | [#18](https://github.com/isaacvarg/woolrus/issues/18) | done |
+| `store-sync` | M1 | [SPEC-store-sync](docs/specs/SPEC-store-sync.md) | [#19](https://github.com/isaacvarg/woolrus/issues/19) | done |
+| `workflow` | M1 | [SPEC-workflow](docs/specs/SPEC-workflow.md) | [#20](https://github.com/isaacvarg/woolrus/issues/20) | done |
+| `identity` | M2 | — | [#21](https://github.com/isaacvarg/woolrus/issues/21) | not started |
+| `notes` | M2 | — | [#22](https://github.com/isaacvarg/woolrus/issues/22) | not started |
+| `picking` | M2 | — | [#23](https://github.com/isaacvarg/woolrus/issues/23) | not started |
+| `packing` | M2 | — | [#24](https://github.com/isaacvarg/woolrus/issues/24) | not started |
+| `exceptions` | M3 | — | [#25](https://github.com/isaacvarg/woolrus/issues/25) | not started |
+| `carriers` | M4 | — | [#26](https://github.com/isaacvarg/woolrus/issues/26) | not started |
+| `qa` | M4 | — | [#27](https://github.com/isaacvarg/woolrus/issues/27) | not started |
+| `shipping` | M4 | — | [#28](https://github.com/isaacvarg/woolrus/issues/28) | not started |
+| `operations` | M4 | — | [#29](https://github.com/isaacvarg/woolrus/issues/29) | not started |
+| `lumexia` | M5 | — | [#30](https://github.com/isaacvarg/woolrus/issues/30) | not started |
+| `returns` | M5 | — | [#31](https://github.com/isaacvarg/woolrus/issues/31) | not started |
+| `reporting` | M5 | — | [#32](https://github.com/isaacvarg/woolrus/issues/32) | not started |
 
 **Next up:** pick the first module in roadmap order whose dependencies are `done` and whose own state isn't `done`.
 
@@ -125,7 +126,7 @@ packages/core/test/          test helpers (testDb, resetDb, createActor)
 packages/db/prisma/schema/   Prisma schema, one file per area; migrations alongside
 packages/i18n/src/messages/  en.json, es.json (identical key sets, enforced by a test)
 docs/                        decisions.md, srs.md, specs/
-tasks/                       plan.md + todo.md for the module in progress
+.claude/commands/            project slash commands (/ticket)
 ```
 
 ## Code style

@@ -8,29 +8,53 @@ Rebuild of v1 (kept at git tag `v1-legacy`; don't copy from it).
 1. Read [`SPEC.md`](SPEC.md): the capability map, the roadmap, the status table, and the project-wide commands,
    code style, testing strategy and boundaries. Those rules apply to all work.
 2. Find the module to work on: the one the user names, or **next up** per `SPEC.md` (first module in roadmap order
-   whose dependencies are `done`).
+   whose dependencies are `done`). On GitHub that's the first open `spec` issue, in milestone order, with no open
+   blockers.
 3. Load only what that module needs: its spec in `docs/specs/SPEC-<module-id>.md`, the SRS sections it cites in
    [`docs/srs.md`](docs/srs.md), and the code it touches. [`docs/decisions.md`](docs/decisions.md) is the
    authority when sources disagree.
-4. If `tasks/plan.md` / `tasks/todo.md` exist, they belong to the module in progress — continue from the first
-   unchecked task. Read the `Done:` notes under the finished tasks it depends on before opening code.
-5. When a task is done, add a `Done:` line under it in `tasks/todo.md` (2–3 lines): where the code landed, the
-   helpers the next tasks should reuse, and anything surprising. It saves the next session from re-exploring.
+4. If the module's spec issue has open tickets, continue with `/ticket` (no number picks the next unblocked one).
+   It reads the `Done:` comments on the closed tickets it depends on before opening code.
+5. When a ticket is done, `/ticket` comments a `Done:` note on it (2–3 lines: where the code landed, the helpers
+   the next tickets should reuse, anything surprising) and closes it. It saves the next session from re-exploring.
 
-## Workflow (addyosmani/agent-skills)
+## Work tracking (GitHub Issues)
+
+Work is tracked on GitHub, mirroring `SPEC.md`:
+
+- **Milestones** `M1`…`M5` are the roadmap milestones.
+- **Spec issues** (`[spec] <module-id>: …`, labels `spec` + `module:<module-id>`): one per module, in its
+  milestone. The body points at `docs/specs/SPEC-<module-id>.md`, which stays the source of truth; never copy the
+  spec into the issue. Native "blocked by" links follow the roadmap order. Label `spec approved` once the spec is
+  approved; close the issue when the module ships.
+- **Tickets** are sub-issues of their spec issue: vertical slices, each with acceptance criteria and native
+  "blocked by" links to the tickets that gate it. Give each one the `module:<module-id>` label and the milestone.
+
+The `SPEC.md` status table stays the summary and links each module's spec issue.
+
+## Workflow (agent-skills + Matt Pocock's skills)
 
 Each module goes through gated phases. **Stop for the user's approval at the end of each phase.**
 
 | Phase | Skill | Output |
 |---|---|---|
-| Specify | `/agent-skills:spec` | `docs/specs/SPEC-<module-id>.md`, status `spec draft` → `spec approved` |
-| Plan + tasks | `/agent-skills:plan` | `tasks/plan.md`, `tasks/todo.md`, status `planned` |
-| Implement | `/agent-skills:build` (TDD, one task at a time) | code + tests, status `in progress` |
+| Specify | `/agent-skills:spec` | `docs/specs/SPEC-<module-id>.md`, status `spec draft` → `spec approved`, spec issue labelled `spec approved` |
+| Tickets | `/to-tickets #<spec issue>` | ticket sub-issues with blocking links, status `planned` |
+| Implement | `/ticket [n]` (the `/agent-skills:build` loop, one ticket per run) | code + tests, ticket closed with a `Done:` comment, status `in progress` |
 | Review | `/agent-skills:review` | findings fixed |
-| Ship | `/agent-skills:ship`, then a PR | status `done`; `tasks/` cleared for the next module |
+| Ship | `/agent-skills:ship`, then a PR | status `done`; spec issue closed |
+
+Use `/ticket`, not Matt's `/implement`: it keeps the agent-skills build loop. `/to-tickets` reads its tracker
+setup from `docs/agents/`.
 
 One module per branch and PR where practical (`<module-id>/<short-description>`). Each PR links to the spec
-section it implements and updates the status table in `SPEC.md`.
+section it implements, lists the tickets it carries, closes its spec issue when the module ships (`Closes #<n>`),
+and updates the status table in `SPEC.md`.
+
+## Agent skills
+
+Matt Pocock's skills are used for `/to-tickets` only; its config is in `docs/agents/`. Every other phase uses
+agent-skills, so don't use `/implement`, `/to-spec`, `/triage`, or Matt's `tdd` and `code-review` skills.
 
 ## Things that bite
 
