@@ -53,6 +53,9 @@ export type OrderVersionInput = z.infer<typeof OrderVersionInput>;
 export const OrderReasonInput = OrderVersionInput.extend({ reason: Reason });
 export type OrderReasonInput = z.infer<typeof OrderReasonInput>;
 
+export const DismissExternalChangeInput = OrderReasonInput;
+export type DismissExternalChangeInput = z.infer<typeof DismissExternalChangeInput>;
+
 export const ForceStatusInput = OrderReasonInput.extend({ to: WorkflowStatus });
 export type ForceStatusInput = z.infer<typeof ForceStatusInput>;
 
@@ -139,6 +142,8 @@ export const OrderAction = z.enum([
   "claim",
   "release",
   "takeOver",
+  /** Apply or dismiss a change made in the store (SPEC-store-sync "Reviewing a flagged change"). */
+  "resolveExternalChange",
 ]);
 export type OrderAction = z.infer<typeof OrderAction>;
 
@@ -187,8 +192,49 @@ export const OrderPackageSummary = z.object({
 });
 export type OrderPackageSummary = z.infer<typeof OrderPackageSummary>;
 
+const change = <T extends z.ZodType>(value: T) => z.object({ from: value, to: value });
+
+const ChangedLine = z.object({
+  wooLineItemId: z.number().int(),
+  name: z.string(),
+  sku: z.string().nullable(),
+  quantity: z.number().int(),
+});
+
+/**
+ * What the store changed since Woolrus last took its version (old → new per field). `refunds` is
+ * the refunded total in cents. `status` is never applied by Apply.
+ */
+export const ExternalChangeDiff = z.object({
+  status: change(z.string()).optional(),
+  shippingAddress: change(OrderAddress).optional(),
+  billingAddress: change(OrderAddress).optional(),
+  customerNote: change(z.string().nullable()).optional(),
+  shippingMethod: change(z.string().nullable()).optional(),
+  customer: change(z.object({ name: z.string(), email: z.string().nullable() })).optional(),
+  refunds: change(z.number().int()).optional(),
+  lines: z.object({
+    added: z.array(ChangedLine),
+    removed: z.array(ChangedLine),
+    quantity: z.array(
+      z.object({
+        wooLineItemId: z.number().int(),
+        name: z.string(),
+        from: z.number().int(),
+        to: z.number().int(),
+      }),
+    ),
+  }),
+});
+export type ExternalChangeDiff = z.infer<typeof ExternalChangeDiff>;
+
+/** A flagged store change. The store's raw data stays on the server. */
+export const ExternalChange = z.object({ detectedAt: z.date(), diff: ExternalChangeDiff });
+export type ExternalChange = z.infer<typeof ExternalChange>;
+
 /** The order detail page: the order plus what's in it and what the caller may do. */
 export const OrderView = OrderDetail.extend({
+  externalChange: ExternalChange.nullable(),
   customerEmail: z.string().nullable(),
   customerNote: z.string().nullable(),
   shippingAddress: OrderAddress,
@@ -327,6 +373,22 @@ export const orders = {
     })
     .input(ForceStatusInput)
     .output(OrderDetail),
+
+  externalChange: {
+    apply: move(
+      "external-change/apply",
+      "Apply a change made in the store; refused if it would undo floor work (admin)",
+    ),
+    dismiss: base
+      .route({
+        method: "POST",
+        path: "/orders/{id}/external-change/dismiss",
+        tags,
+        summary: "Dismiss a change made in the store, with a reason (admin)",
+      })
+      .input(DismissExternalChangeInput)
+      .output(OrderDetail),
+  },
 
   claim: move("claim", "Claim an order"),
   release: base

@@ -99,6 +99,14 @@ export const router = api.router({
     takeOver: api.orders.takeOver.handler(({ input, context }) =>
       orderMutations.takeOver(db, context.actor, input),
     ),
+    externalChange: {
+      apply: api.orders.externalChange.apply.handler(({ input, context }) =>
+        orderMutations.applyExternalChange(db, context.actor, input),
+      ),
+      dismiss: api.orders.externalChange.dismiss.handler(({ input, context }) =>
+        orderMutations.dismissExternalChange(db, context.actor, input),
+      ),
+    },
     claimMany: api.orders.claimMany.handler(({ input, context }) =>
       orderMutations.claimMany(db, context.actor, input),
     ),

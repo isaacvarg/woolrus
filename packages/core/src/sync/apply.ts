@@ -193,39 +193,51 @@ async function applyInPlace(
 ): Promise<void> {
   const updated = await tx.order.update({
     where: { id: orderId },
-    data: {
-      ...fromStore,
-      customerName: incoming.customerName,
-      customerEmail: incoming.customerEmail,
-      shippingAddress: incoming.shippingAddress,
-      billingAddress: incoming.billingAddress,
-      customerNote: incoming.customerNote,
-      paymentMethod: incoming.paymentMethod,
-      shippingMethod: incoming.shippingMethod,
-      totalCents: incoming.totalCents,
-      shippingChargedCents: incoming.shippingChargedCents,
-      version: { increment: 1 },
-    },
+    data: { ...fromStore, ...headerFields(incoming), version: { increment: 1 } },
   });
-
   // Untouched means nothing hangs off these lines (no picks, packages, voids, notes, issues).
-  const removed = diff.lines.removed.map((line) => line.wooLineItemId);
+  await writeLineChanges(tx, orderId, incoming, diff.lines);
+
+  await audit(tx, orderId, "order.externalChange.applied", diff, now);
+  await recomputePriorities(tx, { orderIds: [orderId], now });
+  await notifyOrderChanged(tx, { id: orderId, status: updated.status });
+}
+
+/** The order fields a store edit replaces outright: who, where, the note and the money. */
+export function headerFields(incoming: IncomingOrder) {
+  return {
+    customerName: incoming.customerName,
+    customerEmail: incoming.customerEmail,
+    shippingAddress: incoming.shippingAddress,
+    billingAddress: incoming.billingAddress,
+    customerNote: incoming.customerNote,
+    paymentMethod: incoming.paymentMethod,
+    shippingMethod: incoming.shippingMethod,
+    totalCents: incoming.totalCents,
+    shippingChargedCents: incoming.shippingChargedCents,
+  } satisfies Prisma.OrderUpdateInput;
+}
+
+/** Removes, re-quantifies and adds lines as `lines` says. The caller has checked they can take it. */
+export async function writeLineChanges(
+  tx: DbTx,
+  orderId: string,
+  incoming: IncomingOrder,
+  lines: ChangeSummary["lines"],
+): Promise<void> {
+  const removed = lines.removed.map((line) => line.wooLineItemId);
   if (removed.length > 0) {
     await tx.orderItem.deleteMany({ where: { orderId, wooLineItemId: { in: removed } } });
   }
-  for (const { wooLineItemId, to } of diff.lines.quantity) {
+  for (const { wooLineItemId, to } of lines.quantity) {
     await tx.orderItem.update({ where: { wooLineItemId }, data: { quantity: to } });
   }
-  const added = new Set(diff.lines.added.map((line) => line.wooLineItemId));
+  const added = new Set(lines.added.map((line) => line.wooLineItemId));
   await createLines(
     tx,
     orderId,
     incoming.items.filter((item) => added.has(item.wooLineItemId)),
   );
-
-  await audit(tx, orderId, "order.externalChange.applied", diff, now);
-  await recomputePriorities(tx, { orderIds: [orderId], now });
-  await notifyOrderChanged(tx, { id: orderId, status: updated.status });
 }
 
 async function audit(

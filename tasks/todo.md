@@ -169,7 +169,7 @@ focused tests; checkpoints run the full green set. Add a `Done:` line (2–3 lin
     reasons are message keys `sync.reason.imported` / `sync.reason.cancelledInStore` (spec said
     `errors.sync.cancelledInStore`); web shows them via `useReasonText()` in `apps/web/src/lib/reasons.ts`.
 
-- [ ] **T9: Apply / Dismiss in core and API**
+- [x] **T9: Apply / Dismiss in core and API**
   - `applyExternalChange` / `dismissExternalChange` (`order.resolveExternalChange`, `expectedVersion`, dismiss reason
     required); line absorbability rules with an unmet list (`errors.sync.cannotApply`); header fields always apply;
     status never applied. Contract + router `orders.externalChange.{apply,dismiss}`; `getOrder` gains
@@ -180,6 +180,12 @@ focused tests; checkpoints run the full green set. Add a `Done:` line (2–3 lin
   - Files: `core/src/sync/review.ts` (+test), `core/src/workflow/detail.ts`, `contracts/src/orders.ts`,
     `apps/web/src/server/router.ts`, `i18n` en/es.
   - Deps: T3, T8 · Size: M
+  - Done: `sync/review.ts` `applyExternalChange` / `dismissExternalChange` (return `Order`; API shape via
+    `orderMutations.{apply,dismiss}ExternalChange`) and `externalChangeOf(order)` → `{ detectedAt, diff } | null`.
+    `OrderView.externalChange` is now that object (mutations' `OrderDetail` keeps the boolean); new action
+    `resolveExternalChange` in `allowedActions` when flagged. Unmet keys `errors.sync.unmet.*`; a non-flagged order →
+    `errors.sync.notFlagged`. `apply.ts` exports `headerFields` / `writeLineChanges`. Dismiss keeps the order; the
+    store's version is re-diffed only on its next edit.
 
 - [ ] **T10: External-change banner on order detail**
   - Warning banner listing changes in words (old → new, per field and line), Apply / Dismiss (reason dialog) for

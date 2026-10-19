@@ -325,7 +325,16 @@
       "rateLimited": "WooCommerce is limiting requests. Sync will try again shortly.",
       "badResponse": "WooCommerce sent a response Woolrus couldn't read.",
       "notConfigured": "WooCommerce isn't set up yet. Add the store URL and keys in Settings → Integrations.",
-      "importFailed": "The order couldn't be saved. Sync will try it again on the next run."
+      "importFailed": "The order couldn't be saved. Sync will try it again on the next run.",
+      "notFlagged": "This order has no store change to review. It has been refreshed.",
+      "cannotApply": "This store change can't be applied without undoing work on the floor.",
+      "unmet": {
+        "belowPicked": "{line}: the store wants {to}, but {picked} are already picked.",
+        "belowPacked": "{line}: the store wants {to}, but {packed} are already packed.",
+        "lineVoided": "{line} has voided units. Resolve the void before lowering the quantity.",
+        "removedStarted": "{line} was removed in the store but is already picked or packed. Unpack or unpick it first.",
+        "removedHasRecords": "{line} was removed in the store but has notes, issues or voids on it."
+      }
     }
   }
 }

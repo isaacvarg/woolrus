@@ -13,6 +13,7 @@ import { type DbTx, Prisma, type WorkflowStatus } from "@woolrus/db";
 import { AppError, notFound } from "../errors";
 import { type Actor, assertCan } from "../permissions";
 import { loadSettings } from "../settings/service";
+import { externalChangeOf } from "../sync/review";
 import { allowedActions } from "./actions";
 import { toOrderDetails } from "./detail";
 import { liveLabelStatuses } from "./gates";
@@ -232,8 +233,10 @@ export async function getOrder(
 
   const [detail] = await toOrderDetails(db, [order], { now });
   if (!detail) throw notFound();
+  const externalChange = externalChangeOf(order);
   return {
     ...detail,
+    externalChange,
     customerEmail: order.customerEmail,
     customerNote: order.customerNote,
     shippingAddress: toAddress(order.shippingAddress),
@@ -263,6 +266,7 @@ export async function getOrder(
       status: order.status,
       heldFromStatus: order.heldFromStatus,
       liveClaimHolderId: detail.claim?.userId ?? null,
+      externalChange: externalChange !== null,
     }),
   };
 }

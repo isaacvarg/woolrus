@@ -325,7 +325,16 @@
       "rateLimited": "WooCommerce está limitando las solicitudes. La sincronización lo intentará de nuevo en breve.",
       "badResponse": "WooCommerce envió una respuesta que Woolrus no pudo leer.",
       "notConfigured": "WooCommerce aún no está configurado. Agrega la URL de la tienda y las claves en Configuración → Integraciones.",
-      "importFailed": "No se pudo guardar el pedido. La sincronización lo intentará de nuevo en la próxima ejecución."
+      "importFailed": "No se pudo guardar el pedido. La sincronización lo intentará de nuevo en la próxima ejecución.",
+      "notFlagged": "Este pedido no tiene cambios de la tienda por revisar. Se ha actualizado.",
+      "cannotApply": "Este cambio de la tienda no se puede aplicar sin deshacer trabajo del almacén.",
+      "unmet": {
+        "belowPicked": "{line}: la tienda pide {to}, pero ya hay {picked} recogidos.",
+        "belowPacked": "{line}: la tienda pide {to}, pero ya hay {packed} empacados.",
+        "lineVoided": "{line} tiene unidades anuladas. Resuelve la anulación antes de bajar la cantidad.",
+        "removedStarted": "{line} se eliminó en la tienda, pero ya está recogido o empacado. Desempácalo o deshaz la recogida primero.",
+        "removedHasRecords": "{line} se eliminó en la tienda, pero tiene notas, incidencias o anulaciones."
+      }
     }
   }
 }

@@ -13,6 +13,8 @@ export type ActionSubject = {
   heldFromStatus: WorkflowStatus | null;
   /** The holder of a live claim; null when unclaimed or expired. */
   liveClaimHolderId: string | null;
+  /** A store change is flagged for review. */
+  externalChange?: boolean;
 };
 
 /** The stage completions, which need the actor's live claim. */
@@ -51,5 +53,8 @@ export function allowedActions(actor: Actor, order: ActionSubject): OrderAction[
   if (allowed("cancel", "CANCELLED")) actions.push("cancel");
   // Force can reach any other status; the dialog picks which.
   if (can(actor, "order.forceStatus")) actions.push("forceStatus");
+  if (order.externalChange && can(actor, "order.resolveExternalChange")) {
+    actions.push("resolveExternalChange");
+  }
   return actions;
 }
