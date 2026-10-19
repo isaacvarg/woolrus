@@ -100,15 +100,15 @@ function secretRow(page: Page, card: string, secret: string) {
 test("replacing a secret marks it set without showing it, and clearing unsets it", async ({
   page,
 }) => {
-  // Not a secret the dev stack's Woo sync relies on.
+  // Not a secret the dev stack relies on: the Woo webhook secret is what its webhooks are signed with.
   const value = `e2e-${crypto.randomUUID()}-${LEAK_TAIL}`;
   await signInAs(page, ["ADMIN"]);
   const apiResponses = recordApiResponses(page);
   await withSettingsLock(async () => {
     try {
-      await page.request.delete("/api/v1/settings/secrets/wooWebhookSecret");
+      await page.request.delete("/api/v1/settings/secrets/lumexiaApiKey");
       await page.goto("/settings");
-      const row = secretRow(page, "WooCommerce", "Webhook secret");
+      const row = secretRow(page, "Lumexia", "API key");
       await expect(row.getByText("Not set", { exact: true })).toBeVisible();
 
       // Keyboard focus follows the row: into the field, back to the button that opened it.
@@ -137,7 +137,7 @@ test("replacing a secret marks it set without showing it, and clearing unsets it
       expect(received).not.toContain(value);
       expect(received).not.toContain(LEAK_TAIL);
     } finally {
-      await page.request.delete("/api/v1/settings/secrets/wooWebhookSecret");
+      await page.request.delete("/api/v1/settings/secrets/lumexiaApiKey");
     }
   });
 });
