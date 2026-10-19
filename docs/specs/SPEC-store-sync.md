@@ -77,7 +77,8 @@ export interface StoreAdapter {
 - `http.ts`: built on Node `fetch` (no new dependency). Basic auth with the consumer key/secret, `per_page=100`,
   dates as GMT (`dates_are_gmt=true`), 30 s timeout. Retries 429, 5xx and network failures (connection,
   timeout) up to 3 times with exponential backoff, honouring `Retry-After` (capped at 60 s). Test connection uses
-  a 10 s timeout and no retries, since someone is waiting. Never logs credentials or customer data; logs method,
+  a 10 s timeout and no retries, since someone is waiting. Never follows redirects (a 3xx is `notWooCommerce`), so
+  a store URL can't bounce requests to another host. Never logs credentials or customer data; logs method,
   path, status, duration.
 - Failures are a typed `StoreError` with a kind: `unauthorized` (401/403), `notFound`, `unreachable` (DNS,
   connection, timeout), `notWooCommerce` (no `/wp-json/wc/v3` index), `rateLimited`, `badResponse` (schema
@@ -128,7 +129,12 @@ export interface StoreAdapter {
      are skipped.
    - **Known order**, `date_modified_gmt` < `wooModifiedAt`, or equal with an identical payload: skipped
      (idempotent, FR-SYNC-02). Woo's modified time has one-second resolution, so an equal time with a different
-     payload is an edit made in the same second as the version imported, and counts as newer.
+     payload is an edit made in the same second as the version imported, and counts as newer **only if it was
+     fetched after the stored copy** (`syncedAt` is the fetch time): two copies from that second can arrive out of
+     order when a webhook job and a poll, or two webhook jobs, overlap.
+   - Whether to create or update is decided again under the per-order lock, so a newer copy that loses the race
+     to create the order is applied as a change instead of being dropped.
+   - Products and variations are written in id order, so concurrent imports sharing products can't deadlock.
    - **Known order, newer:** change detection (next section).
    - A failure rolls back that order only, adds a `SyncRunError` (`externalId`, message key + detail), and the run
      continues.
@@ -157,6 +163,11 @@ packages, voids, quality issues or notes.
 | Partial refund (refunds present, status unchanged) | **Flag** (voiding is `exceptions`' job) | **Flag** | flag only |
 | Any other status change (e.g. `completed`, `on-hold` in the store) | **Flag** | **Flag** | flag only |
 
+- **The store catching up is not a change** (decided 2026-10-19): on a `COMPLETED` order, store status
+  `completed`; on a `CANCELLED` order, store status `cancelled` / `refunded` / `failed` and any refund. These come
+  from Woolrus itself (`shipping` pushes Completed, `exceptions` refunds) and only update `wooStatus` and the
+  payload. Other changes on terminal orders are still flagged.
+
 - `wooStatus`, `wooModifiedAt` and `rawPayload` always take the incoming values; they're informational.
 - **Flag** = set `externalChangeDetectedAt` and `externalChangeSummary` = `{ diff, incoming, baseline }` (the
   mapped incoming order without its raw payload, and the stored `wooStatus` / refunded cents the diff started from,
@@ -171,13 +182,16 @@ packages, voids, quality issues or notes.
 | Function | Permission | Effect |
 |---|---|---|
 | `applyExternalChange(db, actor, { orderId, expectedVersion })` | `order.resolveExternalChange` (new, Admin) | Applies the stored `incoming` to the order, clears the flag, audits before/after |
-| `dismissExternalChange(db, actor, { orderId, expectedVersion, reason })` | same | Clears the flag without changing the order; reason required; audited |
+| `dismissExternalChange(db, actor, { orderId, expectedVersion, reason })` | same | Clears the flag without changing the order; reason required; audited. Remembers the dismissed store version (`externalChangeSummary = { dismissed }`, no `detectedAt`): later store edits flag again only if a tracked field differs from it, so plugin edits (export flags, invoice numbers) don't bring the flag back. When they do flag, the diff is still "stored vs. latest" |
 
 Applying never corrupts work already done. Header fields (addresses, note, customer, shipping method) always apply.
 A line change applies only if the line can absorb it, otherwise Apply fails with `CONFLICT` /
 `errors.sync.cannotApply` and an unmet list, like a workflow gate:
-- **added line:** always (`pickStatus` `PENDING`; the order's next gate will ask for it to be picked/packed);
-- **quantity up:** always;
+- **added line** and **quantity up:** while the order is Pending, Picking or Packing (or On Hold from one of
+  them): the Picking and Packing gates then ask for the extra units. Past Packing (QA, Ready, Completed,
+  Cancelled, or On Hold from those) they're refused (`errors.sync.unmet.pastPacking`): the QA and Ready gates check
+  packages and labels, not line quantities, so the order would ship short. The admin forces it back to Packing
+  first, or dismisses;
 - **quantity down:** only to ≥ max(`pickedQuantity`, Σ packed quantity), and only if the line has no voids;
 - **removed line:** only if nothing is picked or packed and nothing (notes, issues, voids) hangs off it.
 
@@ -381,6 +395,19 @@ the earlier open questions and raised new ones. Decided with the user:
    just goes unused and can be switched off when convenient. No double-label risk.
 
 Checked and not an issue: `_order_number` equals `number` on every order; no lines point at deleted products.
+
+## Known limits (accepted at ship, 2026-10-19)
+
+From the ship review; none affects correctness of what's stored, and each has a natural owner:
+- A captured signed webhook body can be replayed with new delivery ids: each one only refetches the order from the
+  store. Rate limiting the webhook path belongs at the reverse proxy (`operations`).
+- Store responses aren't size-capped.
+- In development only, env credentials can follow a moved store URL (production reads Settings only).
+- The `localhost` URL exemption applies in production too (admin-only setting).
+- A worker crash leaves its `SyncRun` RUNNING; a sweep belongs with `operations`' health checks.
+- The first import pages by offset: an order leaving `processing` mid-run could be skipped (54 orders today, one
+  page).
+- Inbound webhook payloads and `rawPayload` keep customer data until `operations` adds the PII purge.
 
 ## Open questions
 

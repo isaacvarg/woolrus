@@ -215,6 +215,18 @@ describe("WooCommerce HTTP adapter", () => {
       expect(await kindOf(setup(reply).adapter.listOrders({ page: 1 }))).toBe(kind);
     });
 
+    it("never follows a redirect: the URL must be the store itself", async () => {
+      // A redirect could lead off the https-only store URL, e.g. to an internal address.
+      const redirect = new Response(null, {
+        status: 302,
+        headers: { location: "http://169.254.169.254/latest" },
+      });
+      const { adapter, calls } = setup(redirect);
+      expect(await kindOf(adapter.ping())).toBe("notWooCommerce");
+      expect(calls).toHaveLength(1);
+      expect(calls[0]?.init.redirect).toBe("manual");
+    });
+
     it("reports a non-WooCommerce site on ping", async () => {
       expect(await kindOf(setup(html(200)).adapter.ping())).toBe("notWooCommerce");
       expect(await kindOf(setup(json({ namespace: "wp/v2" })).adapter.ping())).toBe(

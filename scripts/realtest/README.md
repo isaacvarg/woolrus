@@ -38,6 +38,7 @@ customers' names and addresses: keep it on this machine and drop it when done (`
   the nav indicator work, and the worker polls the store every sync interval (GET only). Stop your
   usual `pnpm dev` first (one `next dev` per folder). Don't use `pnpm dev` with an overridden
   `DATABASE_URL`: turbo's strict env mode drops it and the apps use the dev database.
+- `dev` and `web` listen on 127.0.0.1 only, so the real customer data isn't reachable from the network.
 - When finished, also ask the store admin to revoke the key.
 
 ## For the store admin

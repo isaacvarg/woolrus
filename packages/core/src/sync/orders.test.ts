@@ -26,6 +26,36 @@ const poll = (now?: Date) => run({ type: "ORDERS_POLL", now });
 const HOUR = 60 * 60 * 1000;
 const later = (ms: number) => new Date(store.now().getTime() + ms);
 
+/**
+ * `store` with one method held open: it calls through at once (so the copy it returns is from now),
+ * then waits for `release()` before answering. `reached` resolves once the call was made.
+ */
+function held(target: FakeStoreAdapter, method: "getOrder" | "getProducts") {
+  let reachedNow!: () => void;
+  const reached = new Promise<void>((resolve) => {
+    reachedNow = resolve;
+  });
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const wrapped = new Proxy(target, {
+    get(t, key) {
+      if (key === method) {
+        return async (arg: never) => {
+          const answer = await (t[method] as (a: never) => Promise<unknown>)(arg);
+          reachedNow();
+          await gate;
+          return answer;
+        };
+      }
+      const value = Reflect.get(t, key);
+      return typeof value === "function" ? value.bind(t) : value;
+    },
+  });
+  return { store: wrapped, reached, release };
+}
+
 describe("syncOrders: first import (SC 1)", () => {
   it("imports all 230 processing orders over 3 pages, and skips other statuses", async () => {
     for (let i = 0; i < 230; i++) store.addOrder();
@@ -409,6 +439,61 @@ describe("syncOrders: later polls (SC 2, SC 3 retry)", () => {
     expect(order.customerNote).toBe("Leave at the back door");
     // And the same version again is still skipped.
     expect(await poll(store.now())).toMatchObject({ updated: 0, skipped: 1 });
+  });
+
+  it("never lets an older copy from the same second overwrite a newer one fetched after it", async () => {
+    const woo = store.addOrder();
+    await poll(store.now());
+    const sameSecond = (woo.raw as { date_modified_gmt: string }).date_modified_gmt;
+    store.editOrder(woo.id, { customer_note: "First", date_modified_gmt: sameSecond });
+
+    // A slow webhook job: it fetches the "First" copy now and hands it over only later.
+    const slow = held(store, "getOrder");
+    const late = syncOrders(db, slow.store, {
+      type: "ORDERS_WEBHOOK",
+      orderIds: [woo.id],
+      now: store.now(),
+    });
+    await slow.reached;
+    await new Promise((resolve) => setTimeout(resolve, 5));
+
+    // Meanwhile the store changes again within the same second, and a faster job imports that.
+    store.editOrder(woo.id, { customer_note: "Second", date_modified_gmt: sameSecond });
+    await run({ type: "ORDERS_WEBHOOK", orderIds: [woo.id], now: store.now() });
+    slow.release();
+
+    expect(await late).toMatchObject({ updated: 0, skipped: 1 });
+    const order = await db.order.findUniqueOrThrow({ where: { wooOrderId: woo.id } });
+    expect(order.customerNote).toBe("Second");
+  });
+
+  it("a newer copy that loses the race to create the order is still applied", async () => {
+    const woo = store.addOrder();
+    // Both jobs find the order unknown, then wait while fetching its products.
+    const older = held(store, "getProducts");
+    const olderRun = syncOrders(db, older.store, {
+      type: "ORDERS_WEBHOOK",
+      orderIds: [woo.id],
+      now: store.now(),
+    });
+    await older.reached;
+    store.editOrder(woo.id, { customer_note: "Newer" });
+    const newer = held(store, "getProducts");
+    const newerRun = syncOrders(db, newer.store, {
+      type: "ORDERS_WEBHOOK",
+      orderIds: [woo.id],
+      now: store.now(),
+    });
+    await newer.reached;
+
+    older.release();
+    expect(await olderRun).toMatchObject({ imported: 1 });
+    newer.release();
+    expect(await newerRun).toMatchObject({ imported: 0, updated: 1 });
+
+    const order = await db.order.findUniqueOrThrow({ where: { wooOrderId: woo.id } });
+    expect(order.customerNote).toBe("Newer");
+    expect(await db.orderItem.count()).toBe(1);
   });
 
   it("records the store's latest modified time and payload on a known order", async () => {

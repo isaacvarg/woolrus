@@ -423,22 +423,22 @@ test.describe("Test connection (dev stack)", () => {
     await woo.getByRole("button", { name: "Test connection" }).click();
     await expect(woo.getByText(/^Connected\. The store uses lbs for weight/)).toBeVisible();
   });
+});
 
-  test("explains a wrong consumer secret in the user's language", async ({ page }) => {
-    await signInAs(page, ["ADMIN"]);
-    await withSettingsLock(async () => {
-      try {
-        await page.request.put("/api/v1/settings/secrets/wooConsumerSecret", {
-          data: { value: "cs_wrong_e2e" },
-        });
-        await page.goto("/settings");
-        const woo = page.getByRole("region", { name: "WooCommerce" });
-        await woo.getByRole("button", { name: "Test connection" }).click();
-        await expect(woo.getByText(en.errors.sync.unauthorized)).toBeVisible();
-      } finally {
-        // The dev stack's Woo sync falls back on .env only while this secret is unset.
-        await page.request.delete("/api/v1/settings/secrets/wooConsumerSecret");
-      }
-    });
-  });
+test("Test connection explains a refused key in the user's language", async ({ page }) => {
+  // The server half (a 401 from the store → errors.sync.unauthorized) is covered by core's tests.
+  // Saving a wrong key here would break the shared dev stack's sync for everyone, so the answer is
+  // stubbed and only the card's translation is checked.
+  await page.route(/\/rpc\/sync\/testConnection/, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ json: { ok: false, messageKey: "errors.sync.unauthorized" } }),
+    }),
+  );
+  await signInAs(page, ["ADMIN"]);
+  await page.goto("/settings");
+  const woo = page.getByRole("region", { name: "WooCommerce" });
+  await woo.getByRole("button", { name: "Test connection" }).click();
+  await expect(woo.getByText(en.errors.sync.unauthorized)).toBeVisible();
 });

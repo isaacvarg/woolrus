@@ -26,6 +26,44 @@ test("the sync API refuses anonymous calls", async ({ request }) => {
   expect(await response.json()).toMatchObject({ data: { messageKey: "errors.unauthenticated" } });
 });
 
+// The route reads the raw body itself (the signature is over its exact bytes); these need no store.
+test.describe("the WooCommerce webhook route", () => {
+  const url = "/api/webhooks/woocommerce";
+  const orderHeaders = {
+    "content-type": "application/json",
+    "x-wc-webhook-topic": "order.created",
+    "x-wc-webhook-delivery-id": "e2e-unsigned",
+  };
+
+  test("answers WooCommerce's creation ping", async ({ request }) => {
+    const response = await request.post(url, {
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      data: "webhook_id=42",
+    });
+    expect(response.status()).toBe(200);
+    expect(await response.json()).toEqual({ outcome: "ping" });
+  });
+
+  test("refuses an unsigned or wrongly signed delivery", async ({ request }) => {
+    const body = JSON.stringify({ id: 1 });
+    for (const signature of [undefined, Buffer.alloc(32, 1).toString("base64")]) {
+      const response = await request.post(url, {
+        headers: { ...orderHeaders, ...(signature ? { "x-wc-webhook-signature": signature } : {}) },
+        data: body,
+      });
+      expect(response.status()).toBe(401);
+    }
+  });
+
+  test("refuses a body over 1 MB without reading it all", async ({ request }) => {
+    const response = await request.post(url, {
+      headers: orderHeaders,
+      data: Buffer.alloc(1024 * 1024 + 1, "a"),
+    });
+    expect(response.status()).toBe(413);
+  });
+});
+
 test("a Picker sees when sync last ran but has no Sync link and is refused at /sync", async ({
   page,
 }) => {

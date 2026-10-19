@@ -418,7 +418,8 @@
         "belowPacked": "{line}: the store wants {to}, but {packed} are already packed.",
         "lineVoided": "{line} has voided units. Resolve the void before lowering the quantity.",
         "removedStarted": "{line} was removed in the store but is already picked or packed. Unpack or unpick it first.",
-        "removedHasRecords": "{line} was removed in the store but has notes, issues or voids on it."
+        "removedHasRecords": "{line} was removed in the store but has notes, issues or voids on it.",
+        "pastPacking": "{line}: the order is already past Packing, so an added or larger line would ship without being picked and packed. Force it back to Packing first, or dismiss."
       }
     }
   }

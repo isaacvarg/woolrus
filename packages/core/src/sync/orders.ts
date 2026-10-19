@@ -87,12 +87,12 @@ async function runSync(
 
   try {
     const units = await store.getUnits();
-    for await (const order of ordersToSync(store, plan)) {
+    for await (const fetched of ordersToSync(store, plan)) {
       try {
-        counts[await importOrder(db, store, units, order, now)] += 1;
+        counts[await importOrder(db, store, units, fetched, now)] += 1;
       } catch (error) {
         counts.failed += 1;
-        await recordRunError(db, runId, order.id, error);
+        await recordRunError(db, runId, fetched.woo.id, error);
       }
     }
   } catch (error) {
@@ -127,12 +127,19 @@ async function pollPlan(db: Db): Promise<FetchPlan> {
   return { modifiedAfter: new Date(last.startedAt.getTime() - POLL_OVERLAP_MS), retryIds };
 }
 
-async function* ordersToSync(store: StoreAdapter, plan: FetchPlan): AsyncGenerator<WooOrder> {
+/**
+ * A store copy of an order and when it was asked for. Woo's modified time has one-second
+ * resolution, so for two copies from the same second the fetch time says which is newer.
+ */
+type Fetched = { woo: WooOrder; fetchedAt: Date };
+
+async function* ordersToSync(store: StoreAdapter, plan: FetchPlan): AsyncGenerator<Fetched> {
   if ("orderIds" in plan) {
     // Fetched from the store: a webhook body is never trusted as data. A missing order is skipped.
     for (const id of plan.orderIds) {
-      const order = await store.getOrder(id);
-      if (order) yield order;
+      const fetchedAt = new Date();
+      const woo = await store.getOrder(id);
+      if (woo) yield { woo, fetchedAt };
     }
     return;
   }
@@ -141,9 +148,9 @@ async function* ordersToSync(store: StoreAdapter, plan: FetchPlan): AsyncGenerat
     return;
   }
   const seen = new Set<number>();
-  for await (const order of pages(store, { modifiedAfter: plan.modifiedAfter })) {
-    seen.add(order.id);
-    yield order;
+  for await (const fetched of pages(store, { modifiedAfter: plan.modifiedAfter })) {
+    seen.add(fetched.woo.id);
+    yield fetched;
   }
   const retry = plan.retryIds.filter((id) => !seen.has(id));
   if (retry.length > 0) yield* pages(store, { include: retry });
@@ -152,74 +159,67 @@ async function* ordersToSync(store: StoreAdapter, plan: FetchPlan): AsyncGenerat
 async function* pages(
   store: StoreAdapter,
   query: Omit<ListOrdersQuery, "page">,
-): AsyncGenerator<WooOrder> {
+): AsyncGenerator<Fetched> {
   let totalPages = 1;
   for (let page = 1; page <= totalPages; page++) {
+    const fetchedAt = new Date();
     const result = await store.listOrders({ ...query, page });
     totalPages = result.totalPages;
-    yield* result.orders;
+    for (const woo of result.orders) yield { woo, fetchedAt };
   }
 }
 
+/**
+ * Creates the order, or runs change detection on it (FR-SYNC-10). Decided again under the
+ * WooCommerce order's lock: a webhook and a poll can fetch the same order at once, and whichever
+ * commits second must still land if its copy is the newer one.
+ */
 async function importOrder(
   db: Db,
   store: StoreAdapter,
   units: StoreUnits,
-  woo: WooOrder,
+  { woo, fetchedAt }: Fetched,
   now: Date,
 ): Promise<"imported" | "updated" | "skipped"> {
   const order = mapOrder(woo);
   const known = await findKnown(db, order.wooOrderId);
-  if (known) {
-    return isNewVersion(order, known) ? updateKnown(db, store, units, order, now) : "skipped";
-  }
   // Only paid orders ready to fulfil come in; others wait until the store moves them to processing.
-  if (order.wooStatus !== "processing") return "skipped";
+  if (known ? !isNewVersion(order, fetchedAt, known) : order.wooStatus !== "processing") {
+    return "skipped";
+  }
 
-  const catalog = await fetchOrderCatalog(db, store, units, order, now);
-  return db.$transaction(async (tx) => {
-    // A webhook and a poll may import the same order at once; the second waits here, then skips.
-    await lockWooOrder(tx, order.wooOrderId);
-    if (await findKnown(tx, order.wooOrderId)) return "skipped";
-    await createOrder(tx, order, catalog, now);
-    return "imported";
-  });
-}
-
-/** A known order the store modified since: change detection decides what happens (FR-SYNC-10). */
-async function updateKnown(
-  db: Db,
-  store: StoreAdapter,
-  units: StoreUnits,
-  order: MappedOrder,
-  now: Date,
-): Promise<"updated" | "skipped"> {
-  // Products of added lines, so applying the change (now or on review) needs no HTTP.
+  // The order's products (an edit's added lines too), so the transaction needs no HTTP.
   const catalog = await fetchOrderCatalog(db, store, units, order, now);
   return db.$transaction(async (tx) => {
     await lockWooOrder(tx, order.wooOrderId);
-    const known = await findKnown(tx, order.wooOrderId);
-    if (!known || !isNewVersion(order, known)) return "skipped";
+    const current = await findKnown(tx, order.wooOrderId);
+    if (!current) {
+      await createOrder(tx, order, catalog, now, fetchedAt);
+      return "imported";
+    }
+    if (!isNewVersion(order, fetchedAt, current)) return "skipped";
     await upsertCatalog(tx, catalog, now);
-    await reconcileKnownOrder(tx, known.id, order, now);
+    await reconcileKnownOrder(tx, current.id, order, now, fetchedAt);
     return "updated";
   });
 }
 
 /**
- * Idempotency (FR-SYNC-02): a store version we've already seen changes nothing. WooCommerce's
- * modified time has one-second resolution, so an edit in the same second as the version last
- * imported has an equal time: then the payload decides.
+ * Idempotency (FR-SYNC-02): a store version we've already seen changes nothing. Woo's modified time
+ * has one-second resolution, so an equal time is a new version only if the copy differs and was
+ * fetched after the one stored (`syncedAt`): two copies from that second can arrive out of order.
  */
 function isNewVersion(
   order: MappedOrder,
-  known: { wooModifiedAt: Date; rawPayload: Prisma.JsonValue },
+  fetchedAt: Date,
+  known: { wooModifiedAt: Date; rawPayload: Prisma.JsonValue; syncedAt: Date },
 ): boolean {
   const incoming = order.wooModifiedAt.getTime();
   const stored = known.wooModifiedAt.getTime();
+  if (incoming !== stored) return incoming > stored;
   return (
-    incoming > stored ||
-    (incoming === stored && !isDeepStrictEqual(order.rawPayload, known.rawPayload))
+    fetchedAt.getTime() > known.syncedAt.getTime() &&
+    !isDeepStrictEqual(order.rawPayload, known.rawPayload)
   );
 }
 
@@ -230,7 +230,7 @@ async function lockWooOrder(tx: DbTx, wooOrderId: number): Promise<void> {
 function findKnown(db: Db | DbTx, wooOrderId: number) {
   return db.order.findUnique({
     where: { wooOrderId },
-    select: { id: true, wooModifiedAt: true, rawPayload: true },
+    select: { id: true, wooModifiedAt: true, rawPayload: true, syncedAt: true },
   });
 }
 
@@ -239,10 +239,11 @@ async function createOrder(
   { items, refundedCents: _, ...fields }: MappedOrder,
   catalog: FetchedCatalog,
   now: Date,
+  fetchedAt: Date,
 ): Promise<void> {
   await upsertCatalog(tx, catalog, now);
   const order = await tx.order.create({
-    data: { ...fields, status: "PENDING", statusChangedAt: now, syncedAt: now },
+    data: { ...fields, status: "PENDING", statusChangedAt: now, syncedAt: fetchedAt },
   });
   await createLines(tx, order.id, items);
 

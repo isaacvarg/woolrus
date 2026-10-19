@@ -298,17 +298,60 @@ describe("other store changes", () => {
     expect(summaryOf(after)?.diff.status).toEqual({ from: "processing", to: "on-hold" });
   });
 
-  it.each(["COMPLETED", "CANCELLED"] as const)("a %s order is only flagged", async (status) => {
-    const { woo, order } = await imported({ status });
-    store.cancelOrder(woo.id);
-    store.editOrder(woo.id, { shipping: newStreet });
+  it.each([
+    ["COMPLETED", "cancelled"],
+    ["CANCELLED", "completed"],
+  ] as const)(
+    "a %s order is only flagged, with a status that isn't its own (%s)",
+    async (status, to) => {
+      const { woo, order } = await imported({ status });
+      store.editOrder(woo.id, { status: to, shipping: newStreet });
+
+      await poll();
+
+      const after = await reload(order.id);
+      expect(after.status).toBe(status);
+      expect(after.shippingAddress).toEqual(order.shippingAddress);
+      expect(after.stageEvents).toHaveLength(1);
+      expect(summaryOf(after)?.diff).toMatchObject({
+        status: { to },
+        shippingAddress: { to: { address1: "9 New Rd" } },
+      });
+    },
+  );
+
+  // Once `shipping` pushes Completed, or `exceptions` refunds a cancelled order, the store is only
+  // catching up with Woolrus: nothing to review.
+  it.each([
+    ["COMPLETED", (id: number) => store.editOrder(id, { status: "completed" })],
+    ["CANCELLED", (id: number) => store.cancelOrder(id)],
+    ["CANCELLED", (id: number) => store.refundOrder(id)],
+  ] as const)(
+    "a %s order isn't flagged when the store reaches the same end",
+    async (status, edit) => {
+      const { woo, order } = await imported({ status });
+      const changed = edit(woo.id);
+
+      await poll();
+
+      const after = await reload(order.id);
+      expect(after).toMatchObject({
+        status,
+        externalChangeDetectedAt: null,
+        wooStatus: changed.status,
+        version: order.version,
+      });
+    },
+  );
+
+  it("a completed order whose address changes in the store is still flagged", async () => {
+    const { woo, order } = await imported({ status: "COMPLETED" });
+    store.editOrder(woo.id, { status: "completed", shipping: newStreet });
 
     await poll();
 
-    const after = await reload(order.id);
-    expect(after.status).toBe(status);
-    expect(after.shippingAddress).toEqual(order.shippingAddress);
-    expect(after.stageEvents).toHaveLength(1);
-    expect(summaryOf(after)?.diff).toMatchObject({ status: { to: "cancelled" } });
+    const diff = summaryOf(await reload(order.id))?.diff;
+    expect(diff?.status).toBeUndefined();
+    expect(diff?.shippingAddress).toMatchObject({ to: { address1: "9 New Rd" } });
   });
 });

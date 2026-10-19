@@ -67,8 +67,12 @@ export async function fetchOrderCatalog(
  * written, so customs, Lumexia and (unless the store sends one) barcode stay as the warehouse set them.
  */
 export async function upsertCatalog(tx: DbTx, catalog: FetchedCatalog, now: Date): Promise<void> {
+  // In id order: imports run concurrently (webhook jobs, a poll), and two orders sharing products
+  // in opposite line order would otherwise lock their rows in opposite order and deadlock.
+  const products = [...catalog.products].sort((a, b) => a.wooProductId - b.wooProductId);
+  const variations = [...catalog.variations].sort((a, b) => a.wooVariationId - b.wooVariationId);
   const productRowIds = new Map<number, string>();
-  for (const product of catalog.products) {
+  for (const product of products) {
     const data = { ...product, syncedAt: now };
     const row = await tx.product.upsert({
       where: { wooProductId: product.wooProductId },
@@ -78,7 +82,7 @@ export async function upsertCatalog(tx: DbTx, catalog: FetchedCatalog, now: Date
     });
     productRowIds.set(product.wooProductId, row.id);
   }
-  for (const { wooProductId, ...variation } of catalog.variations) {
+  for (const { wooProductId, ...variation } of variations) {
     const productId = productRowIds.get(wooProductId);
     if (!productId) continue;
     const data = { ...variation, productId, syncedAt: now };

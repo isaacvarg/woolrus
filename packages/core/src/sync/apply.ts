@@ -37,6 +37,13 @@ export type ExternalChangeSummary = {
 };
 type Baseline = { wooStatus: string; refundedCents: number };
 
+/**
+ * Stored in `externalChangeSummary` after an admin's Dismiss (the flag itself cleared): the store
+ * version they saw and kept out. Later store edits flag again only if they change a tracked field
+ * relative to it, so plugin noise (export flags, invoice numbers) doesn't bring the flag back.
+ */
+export type DismissedSummary = { dismissed: IncomingOrder };
+
 export type ChangeOutcome = "unchanged" | "cleared" | "cancelled" | "applied" | "held" | "flagged";
 
 /** Store statuses that mean "don't ship this". */
@@ -45,12 +52,16 @@ const cancelledInStore: ReadonlySet<string> = new Set(["cancelled", "refunded", 
 /** Reason on the cancel / hold stage events and the hold: a message key, translated for display. */
 export const CANCELLED_IN_STORE_REASON = "sync.reason.cancelledInStore";
 
-/** Call under the WooCommerce order's advisory lock, with the products of `incoming` written. */
+/**
+ * Call under the WooCommerce order's advisory lock, with the products of `incoming` written.
+ * `fetchedAt` (when the store copy was asked for) becomes `syncedAt`, which orders same-second copies.
+ */
 export async function reconcileKnownOrder(
   tx: DbTx,
   orderId: string,
   incoming: MappedOrder,
   now: Date,
+  fetchedAt: Date,
 ): Promise<ChangeOutcome> {
   // Settings before the order lock, as the workflow does, so the two can't deadlock.
   const expiryMinutes = await claimExpiryMinutes(tx);
@@ -86,15 +97,22 @@ export async function reconcileKnownOrder(
     items: order.items,
     ...baseline,
   };
-  const diff = diffOrder(stored, incoming);
+  const diff = withoutOwnEnd(diffOrder(stored, incoming), order.status);
+  const dismissed = flagged ? null : dismissedOf(order.externalChangeSummary);
   // Informational: always the store's latest.
   const fromStore = {
     wooStatus: incoming.wooStatus,
     wooModifiedAt: incoming.wooModifiedAt,
     rawPayload: incoming.rawPayload,
-    syncedAt: now,
+    syncedAt: fetchedAt,
   };
   const clearFlag = { externalChangeDetectedAt: null, externalChangeSummary: Prisma.DbNull };
+
+  // Nothing new since the admin dismissed it: follow the store informationally, keep the memory.
+  if (dismissed && !hasChanges(diffOrder(dismissed, incoming))) {
+    await tx.order.update({ where: { id: orderId }, data: fromStore });
+    return "unchanged";
+  }
 
   if (!hasChanges(diff)) {
     if (!flagged) {
@@ -254,6 +272,28 @@ async function audit(
     ...(diff ? { after: diff as unknown as Prisma.InputJsonValue } : {}),
     at,
   });
+}
+
+/**
+ * Drops what is only the store catching up with Woolrus's own end state: Completed pushed by
+ * `shipping`, or a cancelled order refunded by `exceptions`. Anything else still needs a person.
+ */
+function withoutOwnEnd(diff: ChangeSummary, status: string): ChangeSummary {
+  if (status === "COMPLETED" && diff.status?.to === "completed") {
+    const { status: _, ...rest } = diff;
+    return rest;
+  }
+  if (status === "CANCELLED") {
+    const { status: to, refunds: _, ...rest } = diff;
+    return to && !cancelledInStore.has(to.to) ? { ...rest, status: to } : rest;
+  }
+  return diff;
+}
+
+/** The store version an admin dismissed, as a diff baseline (its refunds from the stored total). */
+function dismissedOf(summary: Prisma.JsonValue): DiffableOrder | null {
+  const dismissed = (summary as Partial<DismissedSummary> | null)?.dismissed;
+  return dismissed ? { ...dismissed, refundedCents: dismissed.refundedCents ?? 0 } : null;
 }
 
 function baselineOf(summary: Prisma.JsonValue): Baseline | null {

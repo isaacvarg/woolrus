@@ -231,6 +231,61 @@ describe("applyExternalChange", () => {
     expect(after).toEqual(order);
   });
 
+  // The QA and Ready gates check packages and labels, not line quantities: a line added there would
+  // ship without anyone picking or packing it.
+  const pastPacking: [string, Record<string, unknown>][] = [
+    ["QA", { status: "QA" }],
+    ["Ready", { status: "READY" }],
+    ["On Hold from QA", { status: "ON_HOLD", heldFromStatus: "QA", holdReason: "Check" }],
+    ["Completed", { status: "COMPLETED" }],
+  ];
+
+  it.each(pastPacking)("refuses adding or raising lines once %s", async (_name, data) => {
+    const order = await flagged(
+      {
+        shipping: newStreet,
+        lines: [{ id: 1, quantity: 4 }, { id: 2 }, { id: 3, name: "Product 3" }],
+      },
+      (_lines, id) => db.order.update({ where: { id }, data }),
+    );
+
+    await expect(
+      applyExternalChange(db, admin, { orderId: order.id, expectedVersion: order.version }),
+    ).rejects.toMatchObject({
+      kind: "CONFLICT",
+      messageKey: "errors.sync.cannotApply",
+      unmet: [
+        { messageKey: "errors.sync.unmet.pastPacking", params: { line: "Product 1" } },
+        { messageKey: "errors.sync.unmet.pastPacking", params: { line: "Product 3" } },
+      ],
+    });
+    expect(await reload(order.id)).toEqual(order);
+  });
+
+  it("still applies header fields and lowered quantities in QA", async () => {
+    const order = await flagged(
+      { shipping: newStreet, lines: [{ id: 1, quantity: 2 }, { id: 2 }] },
+      (_l, id) => db.order.update({ where: { id }, data: { status: "QA" } }),
+    );
+
+    await applyExternalChange(db, admin, { orderId: order.id, expectedVersion: order.version });
+
+    const after = await reload(order.id);
+    expect(after.shippingAddress).toMatchObject({ address1: "9 New Rd" });
+    expect(after.items[0]?.quantity).toBe(2);
+  });
+
+  it("adds a line while the order is still in Packing", async () => {
+    const order = await flagged(
+      { lines: [{ id: 1, quantity: 3 }, { id: 2 }, { id: 3, name: "Product 3" }] },
+      (_l, id) => db.order.update({ where: { id }, data: { status: "PACKING" } }),
+    );
+
+    await applyExternalChange(db, admin, { orderId: order.id, expectedVersion: order.version });
+
+    expect((await reload(order.id)).items.map((i) => i.wooLineItemId)).toEqual([1, 2, 3]);
+  });
+
   it("refuses a stale version", async () => {
     const order = await flagged({ shipping: newStreet });
 
@@ -263,16 +318,46 @@ describe("dismissExternalChange", () => {
     const after = await reload(order.id);
     expect(after).toMatchObject({
       externalChangeDetectedAt: null,
-      externalChangeSummary: null,
+      // Remembered so the same change doesn't flag again; not a flag (no detectedAt).
+      externalChangeSummary: { dismissed: { shippingAddress: { address1: "9 New Rd" } } },
       shippingAddress: order.shippingAddress,
       version: order.version + 1,
     });
+    expect((await getOrder(db, admin, { id: order.id })).externalChange).toBeNull();
     const audit = await db.auditEvent.findFirstOrThrow({
       where: { entityId: order.id, action: "order.externalChange.dismissed" },
     });
     expect(audit.actorId).toBe(admin.userId);
     expect(audit.after).toMatchObject({ reason: "Customer called, keep the old address" });
     expect(audit.before).toMatchObject({ shippingAddress: { to: { address1: "9 New Rd" } } });
+  });
+
+  it("stays dismissed through unrelated store edits, and flags again on a new change", async () => {
+    const order = await flagged({ shipping: newStreet });
+    await dismissExternalChange(db, admin, {
+      orderId: order.id,
+      expectedVersion: order.version,
+      reason: "Keep the old address",
+    });
+
+    // Plugins touch orders all the time (export flags, invoice numbers): no tracked change.
+    store.editOrder(order.wooOrderId, {
+      meta_data: [{ id: 9, key: "_shipstation_exported", value: "yes" }],
+    });
+    await poll();
+    expect((await reload(order.id)).externalChangeDetectedAt).toBeNull();
+
+    store.editOrder(order.wooOrderId, { customer_note: "Ring twice" });
+    await poll();
+    const again = await reload(order.id);
+    expect(again.externalChangeDetectedAt).not.toBeNull();
+    // Still "stored vs the store's latest": the dismissed address shows too, so nothing is hidden.
+    expect(again.externalChangeSummary).toMatchObject({
+      diff: {
+        customerNote: { to: "Ring twice" },
+        shippingAddress: { to: { address1: "9 New Rd" } },
+      },
+    });
   });
 
   it("needs a reason", async () => {

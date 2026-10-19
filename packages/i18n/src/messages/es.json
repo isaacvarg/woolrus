@@ -418,7 +418,8 @@
         "belowPacked": "{line}: la tienda pide {to}, pero ya hay {packed} empacados.",
         "lineVoided": "{line} tiene unidades anuladas. Resuelve la anulación antes de bajar la cantidad.",
         "removedStarted": "{line} se eliminó en la tienda, pero ya está recogido o empacado. Desempácalo o deshaz la recogida primero.",
-        "removedHasRecords": "{line} se eliminó en la tienda, pero tiene notas, incidencias o anulaciones."
+        "removedHasRecords": "{line} se eliminó en la tienda, pero tiene notas, incidencias o anulaciones.",
+        "pastPacking": "{line}: el pedido ya pasó Empaque, así que una línea nueva o mayor se enviaría sin surtir ni empacar. Regrésalo a Empaque primero, o descarta el cambio."
       }
     }
   }

@@ -6,7 +6,12 @@ import { type Actor, assertCan } from "../permissions";
 import { lockOrder } from "../workflow/lock";
 import { notifyOrderChanged } from "../workflow/notify";
 import { recomputePriorities } from "../workflow/priority-rules";
-import { type ExternalChangeSummary, headerFields, writeLineChanges } from "./apply";
+import {
+  type DismissedSummary,
+  type ExternalChangeSummary,
+  headerFields,
+  writeLineChanges,
+} from "./apply";
 import type { ChangeSummary } from "./changes";
 
 // An admin's Apply / Dismiss of a flagged store change (SPEC-store-sync "Reviewing a flagged
@@ -27,7 +32,7 @@ export async function applyExternalChange(
     const { order, summary } = await lockFlagged(tx, orderId, expectedVersion);
     const { diff, incoming } = summary;
 
-    const unmet = await unabsorbable(tx, orderId, diff.lines);
+    const unmet = await unabsorbable(tx, order, diff.lines);
     if (unmet.length > 0) {
       throw new AppError("CONFLICT", "errors.sync.cannotApply", undefined, { unmet });
     }
@@ -70,9 +75,15 @@ export async function dismissExternalChange(
   }
   return db.$transaction(async (tx) => {
     const { summary } = await lockFlagged(tx, orderId, expectedVersion);
+    // The flag goes; the dismissed store version stays, so only a newer change flags again.
+    const dismissed: DismissedSummary = { dismissed: summary.incoming };
     const updated = await tx.order.update({
       where: { id: orderId },
-      data: { ...clearFlag, version: { increment: 1 } },
+      data: {
+        externalChangeDetectedAt: null,
+        externalChangeSummary: dismissed as unknown as Prisma.InputJsonValue,
+        version: { increment: 1 },
+      },
     });
     await recordAudit(tx, actor, {
       entityType: "Order",
@@ -96,6 +107,9 @@ export function externalChangeOf(
   return { detectedAt: order.externalChangeDetectedAt, diff: summary.diff };
 }
 
+/** Statuses whose remaining gates never compare line quantities with what was picked and packed. */
+const pastPacking: ReadonlySet<string> = new Set(["QA", "READY", "COMPLETED", "CANCELLED"]);
+
 const clearFlag = { externalChangeDetectedAt: null, externalChangeSummary: Prisma.DbNull };
 
 async function lockFlagged(tx: DbTx, orderId: string, expectedVersion: number) {
@@ -115,14 +129,30 @@ async function lockFlagged(tx: DbTx, orderId: string, expectedVersion: number) {
  */
 async function unabsorbable(
   tx: DbTx,
-  orderId: string,
+  order: Pick<Order, "id" | "status" | "heldFromStatus">,
   lines: ChangeSummary["lines"],
 ): Promise<UnmetCondition[]> {
+  const unmet = (key: string, params: UnmetCondition["params"]): UnmetCondition => ({
+    messageKey: `errors.sync.unmet.${key}` as UnmetCondition["messageKey"],
+    params,
+  });
+  const found: UnmetCondition[] = [];
+
+  // More to ship is only caught by the Picking and Packing gates; QA and Ready check packages and
+  // labels, not quantities, so past Packing an added or raised line would ship short.
+  const stage = order.status === "ON_HOLD" ? order.heldFromStatus : order.status;
+  if (stage && pastPacking.has(stage)) {
+    for (const q of lines.quantity.filter((q) => q.to > q.from)) {
+      found.push(unmet("pastPacking", { line: q.name }));
+    }
+    for (const added of lines.added) found.push(unmet("pastPacking", { line: added.name }));
+  }
+
   const lowered = lines.quantity.filter((q) => q.to < q.from);
   const ids = [...lowered, ...lines.removed].map((l) => l.wooLineItemId);
-  if (ids.length === 0) return [];
+  if (ids.length === 0) return found;
   const rows = await tx.orderItem.findMany({
-    where: { orderId, wooLineItemId: { in: ids } },
+    where: { orderId: order.id, wooLineItemId: { in: ids } },
     select: {
       wooLineItemId: true,
       name: true,
@@ -133,12 +163,6 @@ async function unabsorbable(
     },
   });
   const byWooId = new Map(rows.map((row) => [row.wooLineItemId, row]));
-  const unmet = (key: string, params: UnmetCondition["params"]): UnmetCondition => ({
-    messageKey: `errors.sync.unmet.${key}` as UnmetCondition["messageKey"],
-    params,
-  });
-
-  const found: UnmetCondition[] = [];
   for (const { wooLineItemId, to } of lowered) {
     const row = byWooId.get(wooLineItemId);
     if (!row) continue;

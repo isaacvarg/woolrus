@@ -84,11 +84,12 @@ case "${1:-}" in
     if (exec 3<>/dev/tcp/127.0.0.1/3000) 2>/dev/null; then
       die "port 3000 is in use: stop your other \`pnpm dev\` first (one next dev per folder)"
     fi
-    echo "realtest: web http://localhost:3000 + worker on $DB_NAME against $REALTEST_WOO_URL"
+    echo "realtest: web http://127.0.0.1:3000 (this machine only) + worker on $DB_NAME against $REALTEST_WOO_URL"
     echo "realtest: the worker polls the store every sync interval (GET only); Ctrl-C stops both"
     trap 'kill 0' EXIT
     pnpm --dir "$ROOT" --filter @woolrus/worker dev &
-    pnpm --dir "$ROOT" --filter @woolrus/web dev &
+    # Only this machine: the database holds real customers' names and addresses.
+    pnpm --dir "$ROOT" --filter @woolrus/web exec next dev --port 3000 --hostname 127.0.0.1 &
     wait
     ;;
   web)
@@ -96,7 +97,7 @@ case "${1:-}" in
     # address; the magic link is printed here.
     pnpm --dir "$ROOT" --filter @woolrus/web build
     export BETTER_AUTH_URL="http://localhost:$WEB_PORT"
-    pnpm --dir "$ROOT" --filter @woolrus/web exec next start --port "$WEB_PORT"
+    pnpm --dir "$ROOT" --filter @woolrus/web exec next start --port "$WEB_PORT" --hostname 127.0.0.1
     ;;
   down)
     read -r -p "Drop $DB_NAME and the store data in it? [y/N] " answer

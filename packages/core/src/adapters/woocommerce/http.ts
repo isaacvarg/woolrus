@@ -87,6 +87,9 @@ export function createStoreAdapter(
       try {
         response = await doFetch(url, {
           headers: { authorization, accept: "application/json" },
+          // Never follow: a redirect could lead off the https-only store URL (to an internal
+          // address, say), and the store's REST API doesn't redirect.
+          redirect: "manual",
           signal: AbortSignal.timeout(timeoutMs),
         });
       } catch (error) {
@@ -118,6 +121,7 @@ export function createStoreAdapter(
         throw new StoreError(kind, `GET ${path}: ${status}`, status);
       };
       if (status === 401 || status === 403) return fail("unauthorized");
+      if (status >= 300 && status < 400) return fail("notWooCommerce");
 
       // A WooCommerce answer is always JSON; an HTML page means some other site is at that URL.
       const isJson = response.headers.get("content-type")?.includes("json") ?? false;
