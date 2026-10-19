@@ -40,6 +40,9 @@ store_env() {
   : "${REALTEST_WOO_URL:?set REALTEST_WOO_URL in .env.realtest}"
   : "${REALTEST_WOO_CONSUMER_KEY:?set REALTEST_WOO_CONSUMER_KEY in .env.realtest}"
   : "${REALTEST_WOO_CONSUMER_SECRET:?set REALTEST_WOO_CONSUMER_SECRET in .env.realtest}"
+  # The adapter adds /wp-json/wc/v3 itself; the URL is the site's address, as in WooCommerce settings.
+  [[ "$REALTEST_WOO_URL" != *"/wp-json"* ]] ||
+    die "REALTEST_WOO_URL is the store's address (e.g. https://shop.example.com), without /wp-json/…"
   export WOO_URL="$REALTEST_WOO_URL"
   export WOO_CONSUMER_KEY="$REALTEST_WOO_CONSUMER_KEY"
   export WOO_CONSUMER_SECRET="$REALTEST_WOO_CONSUMER_SECRET"
