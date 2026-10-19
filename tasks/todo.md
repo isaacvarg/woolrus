@@ -241,8 +241,12 @@ focused tests; checkpoints run the full green set. Add a `Done:` line (2–3 lin
     `pnpm sync:products` runs it from a shell. Fake gained `editProduct` / `removeProduct`.
 
 ### Checkpoint 4
-- [ ] Full green.
-- [ ] Dev stack: with the webhook registered in the dev store, a new order there appears in Pending within seconds.
+- [x] Full green.
+- [x] Dev stack: with the webhook registered in the dev store, a new order there appears in Pending within seconds.
+  - Done: order 23 reached Pending 1.5 s after creation; an order whose delivery was lost came in on the next poll.
+    The store calls the app at the Docker gateway (`http://172.19.0.1:3000/api/webhooks/woocommerce`), which needs
+    a host firewall rule for the compose bridge on :3000. `setup.sh` installs a local-only mu-plugin: private URL
+    and port 3000 allowed, and synchronous delivery (WP-Cron's loopback to :8090 can't work in the container).
 
 ## Phase 5: Admin surfaces and finish
 

@@ -30,6 +30,20 @@ if ( wp_get_environment_type() === 'local' && str_contains( $_SERVER['REQUEST_UR
 }
 PHP
 
+# WooCommerce delivers webhooks with wp_safe_remote_*, which refuses private addresses and ports other
+# than 80/443/8080. Locally the app is the Docker host (e.g. http://172.19.0.1:3000), so allow both.
+# Woo also queues deliveries for WP-Cron, whose loopback to WP_URL (:8090) can't work inside the
+# container, so deliver as the order is saved instead.
+cat > wp-content/mu-plugins/woolrus-dev-webhooks.php <<'PHP'
+<?php
+// Woolrus local development only: let webhooks reach the app on the Docker host's dev port, at once.
+if ( wp_get_environment_type() === 'local' ) {
+	add_filter( 'http_request_host_is_external', '__return_true' );
+	add_filter( 'http_allowed_safe_ports', fn ( $ports ) => array_merge( $ports, array( 3000 ) ) );
+	add_filter( 'woocommerce_webhook_deliver_async', '__return_false' );
+}
+PHP
+
 # US store: pounds, inches, dollars.
 wp option update woocommerce_weight_unit lbs >/dev/null
 wp option update woocommerce_dimension_unit in >/dev/null
