@@ -348,15 +348,38 @@ SyncRunError and InboundWebhook already have every column). Needing one means as
 3. **Integration URL change:** an origin change clears that integration's stored secrets.
 4. **Cron endpoint:** dropped. Sync runs on the worker schedule, from the admin button and from `pnpm sync:pull`.
 
+## Decisions (2026-10-19, from a read-only pull of the production store)
+
+A read-only pull (`scripts/realtest/`: 54 processing orders, 133 lines, 115 products, 99 variations) answered
+the earlier open questions and raised new ones. Decided with the user:
+
+1. **Bins:** the store keeps no bin locations, and none are added for now. Sync still reads `_bin_location` meta
+   if it ever appears (harmless); pick lists sort without bins (`picking` spec).
+2. **Bundles / ACF:** closed. Production has only simple and variable products (`woobt_*` is a "frequently
+   bought together" upsell, not a bundle) and orders carry no ACF data. The `bundled_by` support stays.
+3. **Rush Order:** confirmed virtual (SKU `RUSH`), so it imports with `physical = false`.
+4. **First import:** import every `processing` order (54 today, the oldest 30 days old).
+5. **Line options and sizes:** variation attributes (container size, pack) and the options-plugin choices
+   ("Assistance Lowering the Pallets?", "No Liftgate Confirmation", "Specific Delivery Window?", "Add Batch
+   Priority Pass") are already stored in `OrderItem.attributes`. They're shown under each line on the order page
+   and pick list, and priority rules can match them (e.g. Batch Priority Pass raises priority). The display is a
+   small follow-up here; option matching extends `workflow`'s priority-rule conditions.
+6. **Freight (pallet) orders:** 400–500 lb drums go through the floor flow (pick, pack, QA) in Woolrus, and the
+   LTL shipment is booked by hand and recorded (carrier, PRO number) instead of buying a label. Detailed in
+   `carriers` / `shipping`.
+7. **Weights and dimensions:** weights are kept in WooCommerce, on the variation for variable products (every
+   physical line has one); sync keeps them current. Dimensions are never kept, so there is no automatic box
+   suggestion (`packing` spec: the packer picks the box).
+8. **Shipping charged:** `shippingChargedCents` = Σ `shipping_lines` **minus** fee lines named
+   "… Shipping Discount" (the store's "Free Shipping Discount" and "Courtesy Shipping Discount"), so #26230 records
+   $0.00 and #26237 $18.83. Other fees stay in `rawPayload` only.
+9. **ShipStation:** today orders reach ShipStation through its own WooCommerce import because labels are bought
+   there. After go-live staff stop using ShipStation's screens and labels are bought through Woolrus, so that import
+   just goes unused and can be switched off when convenient. No double-label risk.
+
+Checked and not an issue: `_order_number` equals `number` on every order; no lines point at deleted products.
+
 ## Open questions
 
-1. **Bin location source:** WooCommerce has no bin field. Which product meta key holds it in the production store
-   (a plugin such as ATUM, or a custom field), or should bins be warehouse-only and edited in Woolrus? Until
-   answered, bins are read from meta key `_bin_location` if present, else left untouched.
-2. **Bundles and ACF (decisions.md open item):** does the production store use Product Bundles / composite
-   products, and do orders carry ACF fields we need? Answering needs a read-only look at a few real orders: either
-   read-only API keys for the production store (an ask-first action) or an exported sample. Until then
-   `bundleParentId` is set only from `bundled_by` meta.
-3. **Rush Order `virtual` (from SPEC-workflow):** confirmed when we first sync real products.
-4. **Initial import window:** importing every `processing` order on the first production run might pull in old
-   stuck orders. Import them all (default), or only those created in the last N days?
+None open. Follow-ups from the decisions above: show line attributes on the order page and pick list (5), net
+shipping-discount fees out of `shippingChargedCents` (8), priority-rule conditions on line options (5, `workflow`).

@@ -35,12 +35,14 @@ SELECT p.name, p.sku, count(i.id) AS lines
 FROM products p LEFT JOIN order_items i ON i.product_id = p.id
 WHERE NOT p.physical GROUP BY p.id ORDER BY 3 DESC LIMIT 20;
 
-\echo '== Open question 3: most-ordered physical products with no weight (check virtual flags)'
-SELECT p.name, p.sku, count(i.id) AS lines
-FROM products p JOIN order_items i ON i.product_id = p.id
-WHERE p.physical AND p.weight_oz IS NULL GROUP BY p.id ORDER BY 3 DESC LIMIT 15;
+\echo '== Physical lines with no weight (variant weight first, then the product)'
+SELECT i.name, p.sku, count(*) AS lines
+FROM order_items i JOIN products p ON p.id = i.product_id
+LEFT JOIN product_variations v ON v.id = i.variation_id
+WHERE p.physical AND coalesce(v.weight_oz, p.weight_oz) IS NULL
+GROUP BY 1, 2 ORDER BY 3 DESC LIMIT 15;
 
-\echo '== Catalog completeness'
+\echo '== Catalog completeness (products; variable products keep weight on their variations)'
 SELECT count(*) AS products,
        count(*) FILTER (WHERE weight_oz IS NULL) AS no_weight,
        count(*) FILTER (WHERE length_in IS NULL) AS no_dimensions,
