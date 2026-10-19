@@ -3,7 +3,8 @@ import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { resetDb, testDb } from "../../test/db";
 import { StoreError } from "../adapters/woocommerce/errors";
 import { FakeStoreAdapter } from "../adapters/woocommerce/fake";
-import { syncOrders } from "./orders";
+import { withSyncLock } from "./lock";
+import { type SyncOrdersOptions, syncOrders } from "./orders";
 
 const db: Db = testDb();
 afterAll(() => db.$disconnect());
@@ -14,7 +15,16 @@ beforeEach(async () => {
   store = new FakeStoreAdapter();
 });
 
-const poll = () => syncOrders(db, store, { type: "ORDERS_POLL" });
+/** A run that wasn't refused by the lock (every test here expects it to get the lock). */
+async function run(options: SyncOrdersOptions) {
+  const result = await syncOrders(db, store, options);
+  if (result.status === "alreadyRunning") throw new Error("unexpected alreadyRunning");
+  return result;
+}
+
+const poll = (now?: Date) => run({ type: "ORDERS_POLL", now });
+const HOUR = 60 * 60 * 1000;
+const later = (ms: number) => new Date(store.now().getTime() + ms);
 
 describe("syncOrders: first import (SC 1)", () => {
   it("imports all 230 processing orders over 3 pages, and skips other statuses", async () => {
@@ -310,11 +320,171 @@ describe("syncOrders: the run log (SC 4)", () => {
   it("fails with notConfigured when there is no WooCommerce config", async () => {
     const result = await syncOrders(db, null, { type: "ORDERS_POLL" });
 
+    if (result.status === "alreadyRunning") throw new Error("unexpected alreadyRunning");
     expect(result.status).toBe("FAILED");
     expect(await db.syncRun.findUniqueOrThrow({ where: { id: result.runId } })).toMatchObject({
       type: "ORDERS_POLL",
       status: "FAILED",
       error: "errors.sync.notConfigured",
     });
+  });
+});
+
+describe("syncOrders: later polls (SC 2, SC 3 retry)", () => {
+  it("asks for orders modified since the last finished poll started, minus 10 minutes", async () => {
+    const first = later(HOUR);
+    await poll(first);
+    store.calls.length = 0;
+
+    await poll(later(2 * HOUR));
+
+    const listed = store.calls.filter((c) => c.method === "listOrders").map((c) => c.args[0]);
+    expect(listed).toEqual([
+      { modifiedAfter: new Date(first.getTime() - 10 * 60 * 1000), page: 1 },
+    ]);
+  });
+
+  it("starts over from every processing order while no poll has finished", async () => {
+    store.failNext("getUnits", new StoreError("unreachable"));
+    await poll(later(HOUR));
+    store.calls.length = 0;
+
+    await poll(later(2 * HOUR));
+
+    expect(store.calls.find((c) => c.method === "listOrders")?.args[0]).toEqual({
+      status: "processing",
+      page: 1,
+    });
+  });
+
+  it("imports a new order created after the last poll, and nothing twice", async () => {
+    store.addOrder();
+    await poll(store.now());
+    const next = store.addOrder();
+
+    const result = await poll(store.now());
+
+    expect(result).toMatchObject({ status: "SUCCEEDED", imported: 1, failed: 0 });
+    expect(await db.order.count()).toBe(2);
+    expect(await db.order.count({ where: { wooOrderId: next.id } })).toBe(1);
+  });
+
+  it("running the poll twice leaves one order and one set of lines", async () => {
+    store.addOrder({ lines: [{}, {}] });
+
+    await poll(store.now());
+    const second = await poll(store.now());
+
+    expect(second).toMatchObject({ imported: 0, skipped: 1 });
+    expect(await db.order.count()).toBe(1);
+    expect(await db.orderItem.count()).toBe(2);
+    expect(await db.orderStageEvent.count()).toBe(1);
+  });
+
+  it("leaves a known order alone when the store hasn't modified it since", async () => {
+    const woo = store.addOrder();
+    await poll(store.now());
+    const before = await db.order.findUniqueOrThrow({ where: { wooOrderId: woo.id } });
+
+    await poll(store.now());
+
+    const after = await db.order.findUniqueOrThrow({ where: { wooOrderId: woo.id } });
+    expect(after.updatedAt).toEqual(before.updatedAt);
+  });
+
+  it("records the store's latest status, modified time and payload on a known order", async () => {
+    const woo = store.addOrder();
+    await poll(store.now());
+    const edited = store.editOrder(woo.id, { status: "on-hold" });
+
+    await poll(store.now());
+
+    const order = await db.order.findUniqueOrThrow({ where: { wooOrderId: woo.id } });
+    expect(order).toMatchObject({
+      wooStatus: "on-hold",
+      wooModifiedAt: edited.dateModifiedGmt,
+      status: "PENDING",
+      version: 1,
+    });
+    expect(order.rawPayload).toMatchObject({ status: "on-hold" });
+  });
+
+  it("retries the ids that failed in the last poll, even outside its window", async () => {
+    const woo = store.addOrder();
+    store.failNext("getProducts", new StoreError("unreachable"));
+    const first = await poll(later(HOUR));
+    expect(first.failed).toBe(1);
+    store.calls.length = 0;
+
+    const second = await poll(later(2 * HOUR));
+
+    expect(store.calls.filter((c) => c.method === "listOrders").map((c) => c.args[0])).toEqual([
+      { modifiedAfter: expect.any(Date), page: 1 },
+      { include: [woo.id], page: 1 },
+    ]);
+    expect(second).toMatchObject({ status: "SUCCEEDED", imported: 1 });
+    expect(await db.order.count({ where: { wooOrderId: woo.id } })).toBe(1);
+  });
+});
+
+describe("syncOrders: single orders and the run lock (SC 2, SC 8)", () => {
+  it("imports just the given orders, fetched from the store", async () => {
+    store.addOrder();
+    const wanted = store.addOrder();
+
+    const result = await run({ type: "ORDERS_WEBHOOK", orderIds: [wanted.id, 999_999] });
+
+    expect(result).toMatchObject({ status: "SUCCEEDED", imported: 1, failed: 0 });
+    expect(await db.order.findMany({ select: { wooOrderId: true } })).toEqual([
+      { wooOrderId: wanted.id },
+    ]);
+    expect(await db.syncRun.findFirstOrThrow()).toMatchObject({ type: "ORDERS_WEBHOOK" });
+    expect(store.calls.some((c) => c.method === "listOrders")).toBe(false);
+  });
+
+  it("a poll and a single-order import at the same time leave one order and one line set", async () => {
+    const woo = store.addOrder({ lines: [{}, {}] });
+
+    const results = await Promise.all([
+      poll(store.now()),
+      run({ type: "ORDERS_WEBHOOK", orderIds: [woo.id] }),
+    ]);
+
+    expect(results.map((r) => r.failed)).toEqual([0, 0]);
+    expect(results.reduce((sum, r) => sum + r.imported, 0)).toBe(1);
+    expect(await db.order.count()).toBe(1);
+    expect(await db.orderItem.count()).toBe(2);
+    expect(await db.orderStageEvent.count()).toBe(1);
+  });
+
+  it("returns alreadyRunning and writes nothing while another poll holds the lock", async () => {
+    store.addOrder();
+    const other = testDb();
+    let result: unknown;
+    try {
+      await withSyncLock(other, "orders", async () => {
+        result = await syncOrders(db, store, { type: "ORDERS_POLL" });
+      });
+    } finally {
+      await other.$disconnect();
+    }
+
+    expect(result).toEqual({ status: "alreadyRunning" });
+    expect(await db.syncRun.count()).toBe(0);
+    expect(await db.order.count()).toBe(0);
+  });
+
+  it("single-order imports don't wait for the poll lock", async () => {
+    const woo = store.addOrder();
+    const other = testDb();
+    try {
+      await withSyncLock(other, "orders", async () => {
+        await run({ type: "ORDERS_WEBHOOK", orderIds: [woo.id] });
+      });
+    } finally {
+      await other.$disconnect();
+    }
+
+    expect(await db.order.count()).toBe(1);
   });
 });

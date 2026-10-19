@@ -1,9 +1,10 @@
 import type { Db, DbTx, Prisma, SyncStatus } from "@woolrus/db";
-import type { StoreAdapter, WooOrder } from "../adapters/woocommerce/adapter";
+import type { ListOrdersQuery, StoreAdapter, WooOrder } from "../adapters/woocommerce/adapter";
 import { recordAudit } from "../audit";
 import { systemActor } from "../permissions";
 import { notifyOrderChanged } from "../workflow/notify";
 import { recomputePriorities } from "../workflow/priority-rules";
+import { withSyncLock } from "./lock";
 import { type MappedOrder, mapOrder, type StoreUnits } from "./mapping";
 import { type FetchedCatalog, fetchOrderCatalog, upsertCatalog } from "./products-upsert";
 import { finishRun, recordRunError, runErrorKey, startRun } from "./runs";
@@ -11,12 +12,19 @@ import { finishRun, recordRunError, runErrorKey, startRun } from "./runs";
 // Order import (SPEC-store-sync "Import"). Each order commits or rolls back on its own (FR-SYNC-03),
 // so one bad order never blocks the rest, and the run records which ones failed and why.
 
-export type SyncOrdersOptions = { type: "ORDERS_POLL" | "ORDERS_WEBHOOK"; now?: Date };
+export type SyncOrdersOptions = {
+  type: "ORDERS_POLL" | "ORDERS_WEBHOOK";
+  /** Fetch just these orders (webhooks), instead of the poll's window. */
+  orderIds?: number[];
+  now?: Date;
+};
 
 export type SyncOrdersResult = {
   runId: string;
   status: SyncStatus;
   imported: number;
+  /** Known orders whose informational fields (`wooStatus`, `wooModifiedAt`, payload) moved on. */
+  updated: number;
   skipped: number;
   failed: number;
 };
@@ -24,18 +32,37 @@ export type SyncOrdersResult = {
 /** First argument of the two-key advisory lock taken per WooCommerce order id. */
 const ORDER_LOCK_NAMESPACE = 4_201_002;
 
-/** `store` is null when WooCommerce isn't configured: the run is logged as failed. */
+/** Each poll's window reaches this far before the last one started, for clock skew with the store. */
+const POLL_OVERLAP_MS = 10 * 60 * 1000;
+
+/**
+ * Polls take the `orders` sync lock and return `alreadyRunning` (writing nothing) while another poll
+ * holds it; single-order runs only take the per-order lock, so a webhook never waits behind a poll.
+ * `store` is null when WooCommerce isn't configured: the run is logged as failed.
+ */
 export async function syncOrders(
   db: Db,
   store: StoreAdapter | null,
-  { type, now = new Date() }: SyncOrdersOptions,
+  options: SyncOrdersOptions,
+): Promise<SyncOrdersResult | { status: "alreadyRunning" }> {
+  if (options.orderIds) return runSync(db, store, options);
+  const locked = await withSyncLock(db, "orders", () => runSync(db, store, options));
+  return locked.acquired ? locked.result : { status: "alreadyRunning" };
+}
+
+async function runSync(
+  db: Db,
+  store: StoreAdapter | null,
+  { type, orderIds, now = new Date() }: SyncOrdersOptions,
 ): Promise<SyncOrdersResult> {
+  // Read before this run's row exists, so the window comes from the previous poll.
+  const plan = orderIds ? ({ orderIds } as const) : await pollPlan(db);
   const runId = await startRun(db, type, now);
-  const counts = { imported: 0, skipped: 0, failed: 0 };
+  const counts = { imported: 0, updated: 0, skipped: 0, failed: 0 };
   const finish = async (status: SyncStatus, error?: unknown) => {
     await finishRun(db, runId, {
       status,
-      processed: counts.imported + counts.skipped,
+      processed: counts.imported + counts.updated + counts.skipped,
       failed: counts.failed,
       ...(error === undefined ? {} : { error: runErrorKey(error) }),
     });
@@ -54,7 +81,7 @@ export async function syncOrders(
 
   try {
     const units = await store.getUnits();
-    for await (const order of processingOrders(store)) {
+    for await (const order of ordersToSync(store, plan)) {
       try {
         counts[await importOrder(db, store, units, order, now)] += 1;
       } catch (error) {
@@ -70,11 +97,59 @@ export async function syncOrders(
   return finish(counts.failed > 0 ? "PARTIAL" : "SUCCEEDED");
 }
 
-/** Every `processing` order, page by page. */
-async function* processingOrders(store: StoreAdapter): AsyncGenerator<WooOrder> {
+type FetchPlan =
+  | { orderIds: number[] }
+  /** No poll has finished yet: every `processing` order. */
+  | { first: true }
+  | { modifiedAfter: Date; retryIds: number[] };
+
+/**
+ * Later polls take everything modified since the last finished poll started (any status, so
+ * cancellations are seen), plus the ids that failed in it. A FAILED run doesn't count as finished:
+ * it may have missed pages, so the next window still starts from the run before it.
+ */
+async function pollPlan(db: Db): Promise<FetchPlan> {
+  const last = await db.syncRun.findFirst({
+    where: { type: "ORDERS_POLL", status: { in: ["SUCCEEDED", "PARTIAL"] } },
+    orderBy: { startedAt: "desc" },
+    select: { startedAt: true, errors: { select: { externalId: true } } },
+  });
+  if (!last) return { first: true };
+  const retryIds = [...new Set(last.errors.map((e) => Number(e.externalId)))].filter(
+    Number.isInteger,
+  );
+  return { modifiedAfter: new Date(last.startedAt.getTime() - POLL_OVERLAP_MS), retryIds };
+}
+
+async function* ordersToSync(store: StoreAdapter, plan: FetchPlan): AsyncGenerator<WooOrder> {
+  if ("orderIds" in plan) {
+    // Fetched from the store: a webhook body is never trusted as data. A missing order is skipped.
+    for (const id of plan.orderIds) {
+      const order = await store.getOrder(id);
+      if (order) yield order;
+    }
+    return;
+  }
+  if ("first" in plan) {
+    yield* pages(store, { status: "processing" });
+    return;
+  }
+  const seen = new Set<number>();
+  for await (const order of pages(store, { modifiedAfter: plan.modifiedAfter })) {
+    seen.add(order.id);
+    yield order;
+  }
+  const retry = plan.retryIds.filter((id) => !seen.has(id));
+  if (retry.length > 0) yield* pages(store, { include: retry });
+}
+
+async function* pages(
+  store: StoreAdapter,
+  query: Omit<ListOrdersQuery, "page">,
+): AsyncGenerator<WooOrder> {
   let totalPages = 1;
   for (let page = 1; page <= totalPages; page++) {
-    const result = await store.listOrders({ status: "processing", page });
+    const result = await store.listOrders({ ...query, page });
     totalPages = result.totalPages;
     yield* result.orders;
   }
@@ -86,24 +161,56 @@ async function importOrder(
   units: StoreUnits,
   woo: WooOrder,
   now: Date,
-): Promise<"imported" | "skipped"> {
+): Promise<"imported" | "updated" | "skipped"> {
   const order = mapOrder(woo);
+  const known = await findKnown(db, order.wooOrderId);
+  if (known) return isNewer(order, known) ? updateKnown(db, order) : "skipped";
   // Only paid orders ready to fulfil come in; others wait until the store moves them to processing.
   if (order.wooStatus !== "processing") return "skipped";
-  if (await isKnown(db, order.wooOrderId)) return "skipped";
 
   const catalog = await fetchOrderCatalog(db, store, units, order, now);
   return db.$transaction(async (tx) => {
     // A webhook and a poll may import the same order at once; the second waits here, then skips.
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(${ORDER_LOCK_NAMESPACE}::int, ${order.wooOrderId}::int)`;
-    if (await isKnown(tx, order.wooOrderId)) return "skipped";
+    await lockWooOrder(tx, order.wooOrderId);
+    if (await findKnown(tx, order.wooOrderId)) return "skipped";
     await createOrder(tx, order, catalog, now);
     return "imported";
   });
 }
 
-async function isKnown(db: Db | DbTx, wooOrderId: number): Promise<boolean> {
-  return (await db.order.count({ where: { wooOrderId } })) > 0;
+/**
+ * A known order the store modified since. For now only the informational fields follow the store;
+ * change detection (diff, auto-apply, hold, flag) builds on this in T8.
+ */
+async function updateKnown(db: Db, order: MappedOrder): Promise<"updated" | "skipped"> {
+  return db.$transaction(async (tx) => {
+    await lockWooOrder(tx, order.wooOrderId);
+    const known = await findKnown(tx, order.wooOrderId);
+    if (!known || !isNewer(order, known)) return "skipped";
+    await tx.order.update({
+      where: { wooOrderId: order.wooOrderId },
+      data: {
+        wooStatus: order.wooStatus,
+        wooModifiedAt: order.wooModifiedAt,
+        rawPayload: order.rawPayload,
+        syncedAt: new Date(),
+      },
+    });
+    return "updated";
+  });
+}
+
+/** Idempotency (FR-SYNC-02): a store version we've already seen changes nothing. */
+function isNewer(order: MappedOrder, known: { wooModifiedAt: Date }): boolean {
+  return order.wooModifiedAt.getTime() > known.wooModifiedAt.getTime();
+}
+
+async function lockWooOrder(tx: DbTx, wooOrderId: number): Promise<void> {
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(${ORDER_LOCK_NAMESPACE}::int, ${wooOrderId}::int)`;
+}
+
+function findKnown(db: Db | DbTx, wooOrderId: number) {
+  return db.order.findUnique({ where: { wooOrderId }, select: { wooModifiedAt: true } });
 }
 
 async function createOrder(

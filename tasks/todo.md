@@ -91,7 +91,7 @@ focused tests; checkpoints run the full green set. Add a `Done:` line (2–3 lin
     run errors are `"<key>"` or `"<key>: <detail>"` (Prisma errors give their code only, never the message). A page
     failure fails the whole run (so T5's watermark can't move past unseen orders). Fake lists newest first.
 
-- [ ] **T5: Incremental polling, idempotency and the run lock**
+- [x] **T5: Incremental polling, idempotency and the run lock**
   - Watermark (last finished poll start − 10 min, `modified_after`, any status) + `include=` refetch of the previous
     run's failed ids; skip when `date_modified_gmt ≤ wooModifiedAt`; `withSyncLock(db, "orders"|"products", fn)`
     with `pg_try_advisory_lock`; `alreadyRunning` result writes nothing; webhook-type single-order path
@@ -101,6 +101,12 @@ focused tests; checkpoints run the full green set. Add a `Done:` line (2–3 lin
   - Verify: `pnpm --filter @woolrus/core test -- sync/orders sync/lock`.
   - Files: `core/src/sync/{orders,lock}.ts` (+tests).
   - Deps: T4 · Size: M
+  - Done: `sync/lock.ts` `withSyncLock(db, "orders"|"products", fn)` → `{ acquired, result }`; it holds
+    `pg_try_advisory_xact_lock` in one open transaction (≤ 1 h), not a session lock, because Prisma's pool can't
+    unlock on the same connection. `syncOrders` returns `{ status: "alreadyRunning" }` for a refused poll;
+    `orderIds` runs skip the run lock. Known + newer orders go through `updateKnown` (only `wooStatus`,
+    `wooModifiedAt`, `rawPayload` for now; result count `updated`): T8 replaces its body with change detection.
+    Tests drive the window with `now: store.now()` / `later(ms)` because the fake's clock is 2026-10-01.
 
 - [ ] **T6: Worker jobs, interval, CLI and `enqueue`**
   - Spike first: pg-boss `send` with the Prisma transaction as executor (`enqueue(tx, queue, payload)` in core;
