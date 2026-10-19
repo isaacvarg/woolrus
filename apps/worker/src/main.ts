@@ -1,4 +1,11 @@
-import { type JobPayloads, queues, recomputePriorities } from "@woolrus/core";
+import {
+  configuredStore,
+  JOBS_SCHEMA,
+  type JobPayloads,
+  pollIfDue,
+  queues,
+  recomputePriorities,
+} from "@woolrus/core";
 import { db } from "@woolrus/db";
 import { createLogger } from "@woolrus/logger";
 import { PgBoss } from "pg-boss";
@@ -8,8 +15,7 @@ const log = createLogger({ module: "main" });
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) throw new Error("DATABASE_URL is not set");
 
-// pg-boss keeps its tables in their own schema, separate from Prisma's.
-const boss = new PgBoss({ connectionString, schema: "pgboss" });
+const boss = new PgBoss({ connectionString, schema: JOBS_SCHEMA });
 boss.on("error", (err) => log.error({ err }, "pg-boss error"));
 
 await boss.start();
@@ -18,12 +24,19 @@ for (const name of Object.values(queues)) {
   await boss.createQueue(name);
 }
 
-// FR-SYNC-09: poll WooCommerce on a schedule; webhooks (FR-SYNC-11) enqueue the same job.
-await boss.schedule(queues.ordersSync, "*/5 * * * *", { reason: "schedule" });
+// FR-SYNC-09: tick every minute; `pollIfDue` polls once `syncIntervalMinutes` have passed, so a
+// changed interval needs no rescheduling. "Sync now" enqueues a manual job, which always polls.
+await boss.schedule(queues.ordersSync, "* * * * *", { reason: "schedule" });
+
+const storeLog = createLogger({ module: "woocommerce" });
+const store = () =>
+  configuredStore(db, { log: (entry) => storeLog.debug(entry, "woocommerce request") });
 
 await boss.work<JobPayloads[typeof queues.ordersSync]>(queues.ordersSync, async ([job]) => {
-  // Placeholder until the WooCommerce adapter lands.
-  log.info({ jobId: job?.id, reason: job?.data.reason }, "orders.sync: not implemented yet");
+  const reason = job?.data.reason ?? "schedule";
+  const result = await pollIfDue(db, await store(), { reason });
+  if (result.status !== "notDue")
+    log.info({ jobId: job?.id, reason, ...result }, "orders.sync done");
 });
 
 // Age rules ("older than 2 days") change an order's priority with no event to trigger it.

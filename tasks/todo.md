@@ -108,7 +108,7 @@ focused tests; checkpoints run the full green set. Add a `Done:` line (2–3 lin
     `wooModifiedAt`, `rawPayload` for now; result count `updated`): T8 replaces its body with change detection.
     Tests drive the window with `now: store.now()` / `later(ms)` because the fake's clock is 2026-10-01.
 
-- [ ] **T6: Worker jobs, interval, CLI and `enqueue`**
+- [x] **T6: Worker jobs, interval, CLI and `enqueue`**
   - Spike first: pg-boss `send` with the Prisma transaction as executor (`enqueue(tx, queue, payload)` in core;
     add `pg-boss` to `@woolrus/core`). Queues `orders.webhook`, `products.sync` added to `jobs.ts`. Worker: 1-minute
     `orders.sync` tick, pure `isPollDue(lastStart, intervalMinutes, now)`, manual always runs; `pnpm sync:pull` /
@@ -120,6 +120,12 @@ focused tests; checkpoints run the full green set. Add a `Done:` line (2–3 lin
   - Files: `core/src/{jobs,enqueue}.ts`, `core/package.json`, `apps/worker/src/{main,cli}.ts`,
     `apps/worker/package.json`, root `package.json`.
   - Deps: T5 · Size: M
+  - Done: `core/src/enqueue.ts` `enqueue(tx, queue, payload, { singletonKey? })`: a never-started `PgBoss` on a
+    Prisma adapter (`tx.$queryRawUnsafe`), built per call; checked on the dev stack (commit → 1 job, rollback → 0).
+    `sync/schedule.ts`: `isPollDue`, `pollIfDue(db, store, { reason })` (any-status last start counts) and
+    `configuredStore(db, opts)`. Worker ticks `orders.sync` every minute; `apps/worker/src/cli.ts` (`pnpm sync:pull`,
+    built to `dist/cli.mjs`). Gotcha: the env fallback for Woo keys needs `NODE_ENV=development`, now set in the
+    worker's `dev` and `sync:pull` scripts. `orders.webhook` / `products.sync` queues exist with no handler yet.
 
 ### Checkpoint 2
 - [ ] Full green.
