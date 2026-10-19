@@ -25,6 +25,8 @@ export type StoreHttpOptions = {
   sleep?: (ms: number) => Promise<void>;
   log?: (entry: StoreRequestLog) => void;
   timeoutMs?: number;
+  /** Retries of 429, 5xx and network failures (default 3). 0 when someone is waiting on the answer. */
+  retries?: number;
 };
 
 const PER_PAGE = 100;
@@ -44,6 +46,7 @@ export function createStoreAdapter(
   const sleep = options.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
   const log = options.log ?? (() => {});
   const timeoutMs = options.timeoutMs ?? 30_000;
+  const maxRetries = options.retries ?? MAX_RETRIES;
 
   const base = new URL(config.url);
   const apiPath = `${base.pathname.replace(/\/+$/, "")}/wp-json/wc/v3`;
@@ -77,7 +80,7 @@ export function createStoreAdapter(
           attempt,
           ...(error ? { error } : {}),
         });
-      const retry = attempt <= MAX_RETRIES;
+      const retry = attempt <= maxRetries;
       const backoff = BASE_BACKOFF_MS * 2 ** (attempt - 1);
 
       let response: Response;

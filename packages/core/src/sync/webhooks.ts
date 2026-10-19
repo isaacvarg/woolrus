@@ -45,9 +45,13 @@ export async function receiveWooWebhook(
     return result(200, "ping");
   }
 
+  // Shape first: a request that can't be signed is refused before any database read or decryption,
+  // so junk traffic at a public URL costs next to nothing.
+  const signature = signatureBytes(headers.get("x-wc-webhook-signature"));
+  if (!signature) return result(401, "unauthorized");
   const { woocommerce } = await getIntegrationConfig(db);
   const secret = woocommerce?.webhookSecret;
-  if (!secret || !signatureMatches(rawBody, headers.get("x-wc-webhook-signature"), secret)) {
+  if (!secret || !signatureMatches(rawBody, signature, secret)) {
     return result(401, "unauthorized");
   }
   if (!topic || !ORDER_TOPICS.has(topic)) return result(200, "ignored");
@@ -105,12 +109,17 @@ export async function processWooWebhook(
   });
 }
 
-/** `X-WC-Webhook-Signature` is base64 HMAC-SHA256 of the raw body, compared in constant time. */
-function signatureMatches(rawBody: Buffer, header: string | null, secret: string): boolean {
-  if (!header) return false;
-  const expected = createHmac("sha256", secret).update(rawBody).digest();
-  const given = Buffer.from(header.trim(), "base64");
-  return given.byteLength === expected.byteLength && timingSafeEqual(given, expected);
+const HMAC_SHA256_BYTES = 32;
+
+/** `X-WC-Webhook-Signature` decoded, if it has the shape of a base64 HMAC-SHA256. */
+function signatureBytes(header: string | null): Buffer | null {
+  const given = header ? Buffer.from(header.trim(), "base64") : null;
+  return given?.byteLength === HMAC_SHA256_BYTES ? given : null;
+}
+
+/** The HMAC-SHA256 of the raw body under `secret`, compared in constant time. */
+function signatureMatches(rawBody: Buffer, given: Buffer, secret: string): boolean {
+  return timingSafeEqual(given, createHmac("sha256", secret).update(rawBody).digest());
 }
 
 /** The order payload, as long as it names an order id. Kept as received for the inbox. */

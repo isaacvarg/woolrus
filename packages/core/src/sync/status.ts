@@ -210,7 +210,10 @@ export async function requestSync(
   );
 }
 
-/** Test connection waits on the store while the admin watches, so it gives up sooner than sync. */
+/**
+ * Test connection waits on the store while the admin watches, so it gives up sooner than sync and
+ * doesn't retry: an unreachable store answers in 10 s, not ~45 s of retries and backoff.
+ */
 const TEST_TIMEOUT_MS = 10_000;
 
 /**
@@ -221,7 +224,7 @@ export async function testStoreConnection(
   db: Db,
   actor: Actor,
   connect: (db: Db) => Promise<StoreAdapter | null> = (db) =>
-    configuredStore(db, { timeoutMs: TEST_TIMEOUT_MS }),
+    configuredStore(db, { timeoutMs: TEST_TIMEOUT_MS, retries: 0 }),
 ): Promise<TestConnectionResult> {
   assertCan(actor, "settings.manage");
   try {

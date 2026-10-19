@@ -110,6 +110,29 @@ describe("receiveWooWebhook", () => {
     expect(await db.inboundWebhook.count()).toBe(0);
   });
 
+  it("refuses an unsigned or malformed signature before reading settings", async () => {
+    // Settings that can't be read: any request that gets as far as the secret throws.
+    vi.stubEnv("SETTINGS_ENCRYPTION_KEY", Buffer.alloc(32, 9).toString("base64"));
+    await db.settings.create({ data: { id: 1, wooWebhookSecretEnc: "v1:not:a:ciphertext" } });
+
+    for (const signature of [
+      null,
+      "",
+      "not base64 of a sha256",
+      Buffer.alloc(31).toString("base64"),
+    ]) {
+      expect(await receiveWooWebhook(db, delivery({ id: 1 }, { signature }))).toEqual({
+        status: 401,
+        outcome: "unauthorized",
+      });
+    }
+    // A well-formed signature does need the secret, so it gets that far (and fails loudly).
+    await expect(
+      receiveWooWebhook(db, delivery({ id: 1 }, { signature: sign("x") })),
+    ).rejects.toThrow();
+    expect(await db.inboundWebhook.count()).toBe(0);
+  });
+
   it("answers WooCommerce's creation ping with 200 and stores nothing", async () => {
     const headers = new Headers({ "content-type": "application/x-www-form-urlencoded" });
     const result = await receiveWooWebhook(db, {

@@ -75,8 +75,10 @@ export interface StoreAdapter {
 ```
 
 - `http.ts`: built on Node `fetch` (no new dependency). Basic auth with the consumer key/secret, `per_page=100`,
-  dates as GMT (`dates_are_gmt=true`), 30 s timeout. Retries 429 and 5xx up to 3 times with exponential backoff,
-  honouring `Retry-After`. Never logs credentials or customer data; logs method, path, status, duration.
+  dates as GMT (`dates_are_gmt=true`), 30 s timeout. Retries 429, 5xx and network failures (connection,
+  timeout) up to 3 times with exponential backoff, honouring `Retry-After` (capped at 60 s). Test connection uses
+  a 10 s timeout and no retries, since someone is waiting. Never logs credentials or customer data; logs method,
+  path, status, duration.
 - Failures are a typed `StoreError` with a kind: `unauthorized` (401/403), `notFound`, `unreachable` (DNS,
   connection, timeout), `notWooCommerce` (no `/wp-json/wc/v3` index), `rateLimited`, `badResponse` (schema
   mismatch). Each maps to an `errors.sync.*` message key.
@@ -205,7 +207,8 @@ middleware can never produce a system actor.
   headers and calls `receiveWooWebhook(db, { headers, rawBody })`, which:
   - answers `200` to WooCommerce's ping on webhook creation (form body `webhook_id=…`, no signature);
   - rejects with `401` when `wooWebhookSecret` isn't configured or `X-WC-Webhook-Signature` ≠ base64
-    HMAC-SHA256(rawBody, secret) (constant-time compare);
+    HMAC-SHA256(rawBody, secret) (constant-time compare); a missing or malformed signature is refused before
+    settings are read;
   - ignores topics other than `order.created` / `order.updated` with `200`;
   - inserts an `InboundWebhook` (`source: "woocommerce"`, `deliveryId` = `X-WC-Webhook-Delivery-ID`, `topic`,
     `payload`) and enqueues `orders.webhook { inboundWebhookId }` in the same transaction; a duplicate delivery
@@ -219,7 +222,7 @@ middleware can never produce a system actor.
 | Queue | Payload | Trigger |
 |---|---|---|
 | `orders.sync` (exists) | `{ reason: "schedule" \| "manual" }` | worker tick every minute; runs only when `syncIntervalMinutes` has passed since the last poll started, so changing the interval needs no rescheduling (FR-SYNC-09). Manual runs always go |
-| `orders.webhook` (new) | `{ inboundWebhookId }` | webhook receiver |
+| `orders.webhook` (new) | `{ inboundWebhookId }` | webhook receiver; up to 4 at once, polled every 0.5 s (the per-order lock serialises the same order) |
 | `products.sync` (new) | `{ reason: "schedule" \| "manual" }` | nightly, and the Sync page |
 
 - **One at a time:** `withSyncLock(db, "orders" | "products", fn)` takes a Postgres advisory lock

@@ -8,7 +8,7 @@ import dimensionUnit from "./__fixtures__/setting-dimension-unit.json" with { ty
 import weightUnit from "./__fixtures__/setting-weight-unit.json" with { type: "json" };
 import variations from "./__fixtures__/variations-12.json" with { type: "json" };
 import { StoreError, type StoreErrorKind, storeErrorMessageKey } from "./errors";
-import { createStoreAdapter, type StoreRequestLog } from "./http";
+import { createStoreAdapter, type StoreHttpOptions, type StoreRequestLog } from "./http";
 
 const config = {
   url: "https://shop.example.test/",
@@ -32,6 +32,10 @@ const html = (status: number) =>
 
 /** An adapter whose fetch answers from `replies` in order (the last one repeats). */
 function setup(...replies: Reply[]) {
+  return setupWith({}, ...replies);
+}
+
+function setupWith(options: StoreHttpOptions, ...replies: Reply[]) {
   const calls: Call[] = [];
   const sleeps: number[] = [];
   const logs: StoreRequestLog[] = [];
@@ -46,6 +50,7 @@ function setup(...replies: Reply[]) {
       sleeps.push(ms);
     },
     log: (entry) => logs.push(entry),
+    ...options,
   });
   return { adapter, calls, sleeps, logs };
 }
@@ -177,6 +182,13 @@ describe("WooCommerce HTTP adapter", () => {
       const { adapter, calls } = setup(new TypeError("fetch failed"), timeout);
       expect(await kindOf(adapter.listOrders({ page: 1 }))).toBe("unreachable");
       expect(calls).toHaveLength(4);
+    });
+
+    it("tries once when retries are off (Test connection, with someone waiting)", async () => {
+      const failing = setupWith({ retries: 0 }, new TypeError("fetch failed"));
+      expect(await kindOf(failing.adapter.listOrders({ page: 1 }))).toBe("unreachable");
+      expect(failing.calls).toHaveLength(1);
+      expect(failing.sleeps).toEqual([]);
     });
 
     it("does not retry a 401", async () => {

@@ -42,11 +42,17 @@ await boss.work<JobPayloads[typeof queues.ordersSync]>(queues.ordersSync, async 
 });
 
 // FR-SYNC-11: one job per stored delivery; the order is refetched from the store, not the payload.
-await boss.work<JobPayloads[typeof queues.ordersWebhook]>(queues.ordersWebhook, async ([job]) => {
-  if (!job) return;
-  await processWooWebhook(db, await store(), job.data.inboundWebhookId);
-  log.info({ jobId: job.id, inboundWebhookId: job.data.inboundWebhookId }, "orders.webhook done");
-});
+// A bulk edit in the store sends a burst, so poll often and run a few at once: the per-order
+// advisory lock serialises two deliveries for the same order.
+await boss.work<JobPayloads[typeof queues.ordersWebhook]>(
+  queues.ordersWebhook,
+  { pollingIntervalSeconds: 0.5, localConcurrency: 4 },
+  async ([job]) => {
+    if (!job) return;
+    await processWooWebhook(db, await store(), job.data.inboundWebhookId);
+    log.info({ jobId: job.id, inboundWebhookId: job.data.inboundWebhookId }, "orders.webhook done");
+  },
+);
 
 // FR-SYNC-12: the catalog nightly at 03:00 server time, and on "Sync products now".
 await boss.schedule(
