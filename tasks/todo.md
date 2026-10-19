@@ -207,11 +207,11 @@ focused tests; checkpoints run the full green set. Add a `Done:` line (2–3 lin
 - [x] Full green.
 - [x] Dev stack: cancel an untouched order in the dev store → it leaves the queue; cancel a picking order → On Hold
       with the banner; edit an address on a picking order → banner → Apply works.
-- [ ] Review with the user.
+- [x] Review with the user.
 
 ## Phase 4: Webhooks and catalog
 
-- [ ] **T11: Webhook receiver**
+- [x] **T11: Webhook receiver**
   - `receiveWooWebhook(db, { headers, rawBody })`: ping → 200; no secret or bad `X-WC-Webhook-Signature`
     (base64 HMAC-SHA256, constant-time) → 401; other topics → 200 ignored; 1 MB limit; `InboundWebhook` insert +
     `enqueue(orders.webhook)` in one transaction; duplicate delivery id → 200, no job. Route
@@ -221,6 +221,11 @@ focused tests; checkpoints run the full green set. Add a `Done:` line (2–3 lin
   - Verify: `pnpm --filter @woolrus/core test -- sync/webhooks`; curl a signed payload at the dev server.
   - Files: `core/src/sync/webhooks.ts` (+test), route, `apps/worker/src/main.ts`.
   - Deps: T5, T6 · Size: M
+  - Done: `sync/webhooks.ts` `receiveWooWebhook(db, { headers, rawBody: Buffer })` → `{ status, outcome }` (also
+    400 for no delivery id / bad JSON / no order id, 413 over `WEBHOOK_MAX_BYTES`); `processWooWebhook(db, store,
+    id)` is the worker's `orders.webhook` handler. Route `app/api/webhooks/woocommerce/route.ts` reads the body
+    with a byte cap. Test global setup now installs pg-boss + queues, so `enqueue` is testable (jobs aren't reset:
+    filter by payload). The secret is only read when the whole Woo config is set (URL + keys), else 401.
 
 - [ ] **T12: Product catalog sync**
   - `syncProducts(db, store)` (`SyncRun` `PRODUCTS`, under `withSyncLock("products")`): page all products, fetch

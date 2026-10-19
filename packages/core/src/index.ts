@@ -17,6 +17,7 @@ export * from "./sync/lock";
 export * from "./sync/orders";
 export * from "./sync/review";
 export * from "./sync/schedule";
+export * from "./sync/webhooks";
 export * from "./units";
 export * from "./workflow/actions";
 export * from "./workflow/claims";

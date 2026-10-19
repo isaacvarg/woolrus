@@ -3,6 +3,7 @@ import {
   JOBS_SCHEMA,
   type JobPayloads,
   pollIfDue,
+  processWooWebhook,
   queues,
   recomputePriorities,
 } from "@woolrus/core";
@@ -37,6 +38,13 @@ await boss.work<JobPayloads[typeof queues.ordersSync]>(queues.ordersSync, async 
   const result = await pollIfDue(db, await store(), { reason });
   if (result.status !== "notDue")
     log.info({ jobId: job?.id, reason, ...result }, "orders.sync done");
+});
+
+// FR-SYNC-11: one job per stored delivery; the order is refetched from the store, not the payload.
+await boss.work<JobPayloads[typeof queues.ordersWebhook]>(queues.ordersWebhook, async ([job]) => {
+  if (!job) return;
+  await processWooWebhook(db, await store(), job.data.inboundWebhookId);
+  log.info({ jobId: job.id, inboundWebhookId: job.data.inboundWebhookId }, "orders.webhook done");
 });
 
 // Age rules ("older than 2 days") change an order's priority with no event to trigger it.
