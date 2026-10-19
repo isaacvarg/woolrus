@@ -135,7 +135,7 @@ focused tests; checkpoints run the full green set. Add a `Done:` line (2–3 lin
 
 ## Phase 3: Store-side changes
 
-- [ ] **T7: Order diff and the untouched predicate (pure)**
+- [x] **T7: Order diff and the untouched predicate (pure)**
   - `diffOrder(stored, incoming)` → `ChangeSummary` (status, addresses, note, customer, shipping method, lines
     added/removed/quantity, refunds); untracked meta differences produce an empty diff. `isUntouched(snapshot)`
     per the spec (PENDING, no live claim, nothing picked, no packages/voids/issues/notes).
@@ -144,6 +144,12 @@ focused tests; checkpoints run the full green set. Add a `Done:` line (2–3 lin
   - Verify: `pnpm --filter @woolrus/core test -- sync/changes`.
   - Files: `core/src/sync/changes.ts` (+test).
   - Deps: T2 · Size: S
+  - Done: `sync/changes.ts`: `diffOrder(stored, incoming)` over `DiffableOrder` (a `Pick` of `MappedOrder` + lines),
+    `hasChanges(diff)`, `isUntouched(snapshot, claimExpiryMinutes, now)` (any void/note/issue row counts, undone too).
+    `refunds` is `{ from, to }` refunded cents, not per line: Woo's order payload has no refund lines (spec said
+    `lineItems[]`). `mapOrder` gained `refundedCents` (createOrder strips it). **For T8:** `wooStatus` and
+    `rawPayload` always follow the store, so a re-diff while flagged must not take its "stored" status/refunds from
+    them; keep the baseline (e.g. in `externalChangeSummary`) or the status change vanishes from the second diff.
 
 - [ ] **T8: Change rules during import**
   - Known-and-newer orders run the spec's change table: untouched + cancelled/refunded/failed → `transition(cancel)`

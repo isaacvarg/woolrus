@@ -215,7 +215,7 @@ function findKnown(db: Db | DbTx, wooOrderId: number) {
 
 async function createOrder(
   tx: DbTx,
-  { items, ...fields }: MappedOrder,
+  { items, refundedCents: _, ...fields }: MappedOrder,
   catalog: FetchedCatalog,
   now: Date,
 ): Promise<void> {
@@ -240,7 +240,7 @@ async function createOrder(
   });
 
   const lineIds = new Map<number, string>();
-  for (const { wooProductId, wooVariationId, bundleParentWooLineItemId: _, ...line } of items) {
+  for (const { wooProductId, wooVariationId, bundleParentWooLineItemId: __, ...line } of items) {
     const item = await tx.orderItem.create({
       data: {
         ...line,

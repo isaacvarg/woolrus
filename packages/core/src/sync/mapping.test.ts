@@ -50,6 +50,7 @@ describe("mapOrder", () => {
       totalCents: 5400,
       shippingChargedCents: 600,
       shippingMethod: "Standard",
+      refundedCents: 0,
       orderedAt: new Date("2026-10-14T21:04:28Z"),
       wooModifiedAt: new Date("2026-10-14T21:04:28Z"),
       rawPayload: raw,
@@ -126,6 +127,18 @@ describe("mapOrder", () => {
       shippingChargedCents: 0,
       shippingMethod: null,
     });
+  });
+
+  it("adds up refunds as a positive refunded total", () => {
+    const mapped = mapOrder(
+      order(2, {
+        refunds: [
+          { id: 90, reason: "", total: "-8.00" },
+          { id: 91, reason: "", total: "-0.10" },
+        ],
+      }),
+    );
+    expect(mapped.refundedCents).toBe(810);
   });
 
   it("takes the customer name from billing when the shipping name is empty", () => {

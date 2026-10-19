@@ -50,6 +50,8 @@ export type MappedOrder = {
   totalCents: number;
   shippingChargedCents: number;
   shippingMethod: string | null;
+  /** Refunded so far, positive (Woo sends refund totals negative). Not stored: diffed from the payload. */
+  refundedCents: number;
   orderedAt: Date;
   wooModifiedAt: Date;
   rawPayload: Prisma.InputJsonValue;
@@ -110,6 +112,10 @@ export function mapOrder(order: WooOrder): MappedOrder {
       0,
     ),
     shippingMethod: methods.length > 0 ? methods.join(", ") : null,
+    refundedCents: order.refunds.reduce(
+      (sum, r, i) => sum + Math.abs(cents(r.total, `refunds.${i}.total`)),
+      0,
+    ),
     orderedAt: order.dateCreatedGmt,
     wooModifiedAt: order.dateModifiedGmt,
     rawPayload: order.raw as Prisma.InputJsonValue,
