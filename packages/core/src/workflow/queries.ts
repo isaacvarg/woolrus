@@ -1,4 +1,5 @@
 import {
+  LineAttribute,
   type OrderAddress,
   type OrderHistoryEntry,
   type OrderListPage,
@@ -10,9 +11,11 @@ import {
   StageSlaMinutes,
 } from "@woolrus/contracts";
 import { type DbTx, Prisma, type WorkflowStatus } from "@woolrus/db";
+import { z } from "zod";
 import { AppError, notFound } from "../errors";
 import { type Actor, assertCan } from "../permissions";
 import { loadSettings } from "../settings/service";
+import { externalChangeOf } from "../sync/review";
 import { allowedActions } from "./actions";
 import { toOrderDetails } from "./detail";
 import { liveLabelStatuses } from "./gates";
@@ -200,6 +203,14 @@ function toAddress(json: Prisma.JsonValue): OrderAddress {
   return address;
 }
 
+const StoredAttributes = z.array(LineAttribute);
+
+/** Stored JSON that isn't a list of attributes (older shape, hand edits) reads as none. */
+function toAttributes(stored: Prisma.JsonValue): LineAttribute[] {
+  const parsed = StoredAttributes.safeParse(stored);
+  return parsed.success ? parsed.data : [];
+}
+
 /** One order for its detail page, with the buttons the caller may use. */
 export async function getOrder(
   db: DbTx,
@@ -232,8 +243,10 @@ export async function getOrder(
 
   const [detail] = await toOrderDetails(db, [order], { now });
   if (!detail) throw notFound();
+  const externalChange = externalChangeOf(order);
   return {
     ...detail,
+    externalChange,
     customerEmail: order.customerEmail,
     customerNote: order.customerNote,
     shippingAddress: toAddress(order.shippingAddress),
@@ -250,6 +263,7 @@ export async function getOrder(
       pickStatus: i.pickStatus,
       pickedQuantity: i.pickedQuantity,
       substitutionNote: i.substitutionNote,
+      attributes: toAttributes(i.attributes),
     })),
     packages: order.packages.map((p) => ({
       id: p.id,
@@ -263,6 +277,7 @@ export async function getOrder(
       status: order.status,
       heldFromStatus: order.heldFromStatus,
       liveClaimHolderId: detail.claim?.userId ?? null,
+      externalChange: externalChange !== null,
     }),
   };
 }
@@ -313,6 +328,7 @@ export async function getOrderHistory(
     ).map((u) => [u.id, displayName(u)]),
   );
 
+  // A null actorId means store sync: people are deactivated, never deleted, so SetNull never fires.
   const entries: OrderHistoryEntry[] = [
     ...stages.map((e) => ({
       id: e.id,
@@ -322,6 +338,7 @@ export async function getOrderHistory(
       toStatus: e.toStatus,
       reason: e.reason,
       actorName: e.actor ? displayName(e.actor) : null,
+      bySystem: e.actorId === null,
       stationName: e.station?.name ?? null,
       previousHolderName: null,
     })),
@@ -336,6 +353,7 @@ export async function getOrderHistory(
         toStatus: null,
         reason: null,
         actorName: a.actor ? displayName(a.actor) : null,
+        bySystem: a.actorId === null,
         stationName: a.station?.name ?? null,
         previousHolderName: previous ? (holders.get(previous) ?? null) : null,
       };

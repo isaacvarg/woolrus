@@ -8,15 +8,20 @@ import {
   getOrderHistory,
   getPublicSettings,
   getSettings,
+  getSyncStatus,
   listBoxes,
   listOrders,
   listPriorityRules,
   listQueue,
+  listSyncRunErrors,
+  listSyncRuns,
   orderMutations,
   permissionsFor,
   queueCounts,
   reorderPriorityRules,
+  requestSync,
   setSecret,
+  testStoreConnection,
   updatePriorityRule,
   updateSettings,
 } from "@woolrus/core";
@@ -99,8 +104,27 @@ export const router = api.router({
     takeOver: api.orders.takeOver.handler(({ input, context }) =>
       orderMutations.takeOver(db, context.actor, input),
     ),
+    externalChange: {
+      apply: api.orders.externalChange.apply.handler(({ input, context }) =>
+        orderMutations.applyExternalChange(db, context.actor, input),
+      ),
+      dismiss: api.orders.externalChange.dismiss.handler(({ input, context }) =>
+        orderMutations.dismissExternalChange(db, context.actor, input),
+      ),
+    },
     claimMany: api.orders.claimMany.handler(({ input, context }) =>
       orderMutations.claimMany(db, context.actor, input),
+    ),
+  },
+  sync: {
+    status: api.sync.status.handler(({ context }) => getSyncStatus(db, context.actor)),
+    runs: api.sync.runs.handler(({ input, context }) => listSyncRuns(db, context.actor, input)),
+    runErrors: api.sync.runErrors.handler(({ input, context }) =>
+      listSyncRunErrors(db, context.actor, input),
+    ),
+    run: api.sync.run.handler(({ input, context }) => requestSync(db, context.actor, input)),
+    testConnection: api.sync.testConnection.handler(({ context }) =>
+      testStoreConnection(db, context.actor),
     ),
   },
   priorityRules: {

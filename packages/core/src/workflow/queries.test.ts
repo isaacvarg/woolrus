@@ -2,15 +2,15 @@ import type { Db } from "@woolrus/db";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { createActor, resetDb, testDb } from "../../test/db";
 import { createOrder } from "../../test/factories";
-import type { Actor } from "../permissions";
+import { systemActor, type UserActor } from "../permissions";
 import { claim, takeOver } from "./claims";
 import { getOrder, getOrderHistory, listOrders, listQueue, queueCounts } from "./queries";
-import { beginPicking, hold } from "./service";
+import { beginPicking, hold, transition } from "./service";
 
 const db: Db = testDb();
 afterAll(() => db.$disconnect());
 
-let picker: Actor;
+let picker: UserActor;
 beforeEach(async () => {
   await resetDb(db);
   picker = await createActor(db, ["PICKER"]);
@@ -265,6 +265,33 @@ describe("getOrder", () => {
     expect(view.packages[0]?.boxName).toMatch(/^Box /);
   });
 
+  it("returns each line's size and options, and none for stored JSON that isn't a list of them", async () => {
+    const { order } = await createOrder(db, {
+      lines: [
+        {
+          name: "Avocado Body Butter Base | 450lb Drum",
+          attributes: [
+            { name: "No Liftgate Confirmation", option: "Agree." },
+            { name: "Add Batch Priority Pass", option: "Current Lead Time: 1 - 2 Weeks" },
+          ],
+        },
+        { name: "Old shape", attributes: { size: "8oz" } },
+        { name: "Plain" },
+      ],
+    });
+
+    const lines = (await getOrder(db, picker, { id: order.id })).lines;
+
+    expect(lines.map((l) => l.attributes)).toEqual([
+      [
+        { name: "No Liftgate Confirmation", option: "Agree." },
+        { name: "Add Batch Priority Pass", option: "Current Lead Time: 1 - 2 Weeks" },
+      ],
+      [],
+      [],
+    ]);
+  });
+
   it("treats a line without a product row as physical", async () => {
     const { order } = await createOrder(db, { lines: [{ noProduct: true }] });
     expect((await getOrder(db, picker, { id: order.id })).lines[0]?.physical).toBe(true);
@@ -379,6 +406,26 @@ describe("getOrderHistory", () => {
     await expect(
       getOrderHistory(db, picker, { id: "0199e6a0-0000-7000-8000-000000000000" }),
     ).rejects.toMatchObject({ kind: "NOT_FOUND" });
+  });
+
+  it("marks store-sync moves as the system's, and people's as not", async () => {
+    const { order } = await createOrder(db);
+    await beginPicking(db, picker, { orderId: order.id, expectedVersion: 1 });
+    await db.$transaction((tx) =>
+      transition(tx, systemActor, {
+        orderId: order.id,
+        expectedVersion: 2,
+        to: "ON_HOLD",
+        kind: "hold",
+        reason: "Cancelled in store",
+      }),
+    );
+
+    const history = await getOrderHistory(db, picker, { id: order.id });
+    expect(history.map((h) => [h.bySystem, h.actorName])).toEqual([
+      [true, null],
+      [false, "Test User"],
+    ]);
   });
 });
 

@@ -32,6 +32,7 @@ export async function createOrder({
   orderedAt = new Date(),
   rushOrderLine = false,
   sku = "E2E-SKU",
+  attributes = [],
 }: {
   customerName?: string;
   status?: WorkflowStatus;
@@ -43,6 +44,8 @@ export async function createOrder({
   rushOrderLine?: boolean;
   /** The first line's SKU, e.g. one a test's priority rule matches. */
   sku?: string;
+  /** The first line's size and checkout options, as sync stores them. */
+  attributes?: { name: string; option: string }[];
 } = {}) {
   const wooOrderId = nextWooId();
   const now = new Date();
@@ -72,6 +75,7 @@ export async function createOrder({
             name: "E2E item",
             quantity,
             unitPriceCents: 500,
+            attributes,
           },
           ...(rushOrder
             ? [

@@ -6,12 +6,14 @@ import { useFormatter, useTranslations } from "next-intl";
 import { useId } from "react";
 import { useErrorMessage } from "@/lib/errors";
 import { orpc } from "@/lib/orpc";
+import { useReasonText } from "@/lib/reasons";
 
 /** Who moved the order, when and why (FR-WF-05), newest first. */
 export function HistoryPanel({ id }: { id: string }) {
   const t = useTranslations();
   const format = useFormatter();
   const errorMessage = useErrorMessage();
+  const reasonText = useReasonText();
   const headingId = useId();
   const history = useQuery(orpc.orders.history.queryOptions({ input: { id } }));
 
@@ -31,10 +33,12 @@ export function HistoryPanel({ id }: { id: string }) {
             </div>
             <div className="text-sm opacity-70">
               {format.dateTime(entry.at, { dateStyle: "short", timeStyle: "short" })}
-              {entry.actorName && ` · ${t("order.history.by", { name: entry.actorName })}`}
+              {entry.bySystem
+                ? ` · ${t("order.history.by", { name: t("order.history.system") })}`
+                : entry.actorName && ` · ${t("order.history.by", { name: entry.actorName })}`}
               {entry.stationName && ` · ${t("order.history.at", { station: entry.stationName })}`}
             </div>
-            {entry.reason && <p className="mt-1 whitespace-pre-line">{entry.reason}</p>}
+            {entry.reason && <p className="mt-1 whitespace-pre-line">{reasonText(entry.reason)}</p>}
           </li>
         ))}
       </ol>

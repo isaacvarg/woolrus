@@ -124,6 +124,13 @@ export const UpdateSettingsInput = z.object({
 });
 export type UpdateSettingsInput = z.infer<typeof UpdateSettingsInput>;
 
+/**
+ * An update's result. `clearedSecrets` names the secrets it removed because an integration URL
+ * changed origin (scheme, host or port): saved keys never follow a URL to another server.
+ */
+export const UpdateSettingsResult = AdminSettings.extend({ clearedSecrets: z.array(SecretName) });
+export type UpdateSettingsResult = z.infer<typeof UpdateSettingsResult>;
+
 /** Write-only: the value is never returned by any procedure. */
 export const SetSecretInput = z.object({
   name: SecretName,
@@ -156,7 +163,7 @@ export const settings = {
   update: base
     .route({ method: "PATCH", path: "/settings", tags: ["Settings"], summary: "Update settings" })
     .input(UpdateSettingsInput)
-    .output(AdminSettings),
+    .output(UpdateSettingsResult),
 
   setSecret: base
     .route({

@@ -1,4 +1,13 @@
-import { type JobPayloads, queues, recomputePriorities } from "@woolrus/core";
+import {
+  configuredStore,
+  JOBS_SCHEMA,
+  type JobPayloads,
+  pollIfDue,
+  processWooWebhook,
+  queues,
+  recomputePriorities,
+  syncProducts,
+} from "@woolrus/core";
 import { db } from "@woolrus/db";
 import { createLogger } from "@woolrus/logger";
 import { PgBoss } from "pg-boss";
@@ -8,8 +17,7 @@ const log = createLogger({ module: "main" });
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) throw new Error("DATABASE_URL is not set");
 
-// pg-boss keeps its tables in their own schema, separate from Prisma's.
-const boss = new PgBoss({ connectionString, schema: "pgboss" });
+const boss = new PgBoss({ connectionString, schema: JOBS_SCHEMA });
 boss.on("error", (err) => log.error({ err }, "pg-boss error"));
 
 await boss.start();
@@ -18,12 +26,45 @@ for (const name of Object.values(queues)) {
   await boss.createQueue(name);
 }
 
-// FR-SYNC-09: poll WooCommerce on a schedule; webhooks (FR-SYNC-11) enqueue the same job.
-await boss.schedule(queues.ordersSync, "*/5 * * * *", { reason: "schedule" });
+// FR-SYNC-09: tick every minute; `pollIfDue` polls once `syncIntervalMinutes` have passed, so a
+// changed interval needs no rescheduling. "Sync now" enqueues a manual job, which always polls.
+await boss.schedule(queues.ordersSync, "* * * * *", { reason: "schedule" });
+
+const storeLog = createLogger({ module: "woocommerce" });
+const store = () =>
+  configuredStore(db, { log: (entry) => storeLog.debug(entry, "woocommerce request") });
 
 await boss.work<JobPayloads[typeof queues.ordersSync]>(queues.ordersSync, async ([job]) => {
-  // Placeholder until the WooCommerce adapter lands.
-  log.info({ jobId: job?.id, reason: job?.data.reason }, "orders.sync: not implemented yet");
+  const reason = job?.data.reason ?? "schedule";
+  const result = await pollIfDue(db, await store(), { reason });
+  if (result.status !== "notDue")
+    log.info({ jobId: job?.id, reason, ...result }, "orders.sync done");
+});
+
+// FR-SYNC-11: one job per stored delivery; the order is refetched from the store, not the payload.
+// A bulk edit in the store sends a burst, so poll often and run a few at once: the per-order
+// advisory lock serialises two deliveries for the same order.
+await boss.work<JobPayloads[typeof queues.ordersWebhook]>(
+  queues.ordersWebhook,
+  { pollingIntervalSeconds: 0.5, localConcurrency: 4 },
+  async ([job]) => {
+    if (!job) return;
+    await processWooWebhook(db, await store(), job.data.inboundWebhookId);
+    log.info({ jobId: job.id, inboundWebhookId: job.data.inboundWebhookId }, "orders.webhook done");
+  },
+);
+
+// FR-SYNC-12: the catalog nightly at 03:00 server time, and on "Sync products now".
+await boss.schedule(
+  queues.productsSync,
+  "0 3 * * *",
+  { reason: "schedule" },
+  { tz: Intl.DateTimeFormat().resolvedOptions().timeZone },
+);
+
+await boss.work<JobPayloads[typeof queues.productsSync]>(queues.productsSync, async ([job]) => {
+  const result = await syncProducts(db, await store());
+  log.info({ jobId: job?.id, reason: job?.data.reason, ...result }, "products.sync done");
 });
 
 // Age rules ("older than 2 days") change an order's priority with no event to trigger it.

@@ -1,0 +1,31 @@
+{
+  "id": "woocommerce_weight_unit",
+  "label": "Weight unit",
+  "description": "This controls what unit you will define weights in.",
+  "type": "select",
+  "default": "lbs",
+  "options": {
+    "kg": "kg",
+    "g": "g",
+    "lbs": "lbs",
+    "oz": "oz"
+  },
+  "tip": "This controls what unit you will define weights in.",
+  "value": "lbs",
+  "group_id": "products",
+  "_links": {
+    "self": [
+      {
+        "href": "https://localhost:8090/wp-json/wc/v3/settings/products/woocommerce_weight_unit",
+        "targetHints": {
+          "allow": ["GET", "POST", "PUT", "PATCH"]
+        }
+      }
+    ],
+    "collection": [
+      {
+        "href": "https://localhost:8090/wp-json/wc/v3/settings/products"
+      }
+    ]
+  }
+}

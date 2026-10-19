@@ -16,11 +16,12 @@ import { Button, Radio, RadioGroup, TextField } from "@/components/ui/fields";
 import { toast } from "@/components/ui/toast";
 import { useErrorMessage } from "@/lib/errors";
 import { client, orpc } from "@/lib/orpc";
+import { useReasonText } from "@/lib/reasons";
 
-type Unmet = { messageKey: string; params: Record<string, string | number> };
+export type Unmet = { messageKey: string; params: Record<string, string | number> };
 
 /** What a refused gate still needs, from the error's `data.unmet` (see AppErrorData). */
-function unmetOf(error: unknown): Unmet[] | null {
+export function unmetOf(error: unknown): Unmet[] | null {
   if (!(error instanceof ORPCError)) return null;
   const unmet = (error.data as { unmet?: Unmet[] } | undefined)?.unmet;
   return unmet?.length ? unmet : null;
@@ -48,6 +49,7 @@ const moves = [
  */
 export function OrderActions({ order, userId }: { order: OrderView; userId: string | null }) {
   const t = useTranslations();
+  const reasonText = useReasonText();
   const format = useFormatter();
   const errorMessage = useErrorMessage();
   const queryClient = useQueryClient();
@@ -161,7 +163,7 @@ export function OrderActions({ order, userId }: { order: OrderView; userId: stri
         <p className="alert alert-warning">
           {t("order.onHold", {
             status: order.heldFromStatus ? t(`status.${order.heldFromStatus}`) : "—",
-            reason: order.holdReason,
+            reason: reasonText(order.holdReason),
           })}
         </p>
       )}
@@ -259,7 +261,7 @@ export function OrderActions({ order, userId }: { order: OrderView; userId: stri
  * A button opening a dialog that asks for a reason (hold, cancel), and for force also the status
  * to move to: any status but the current one.
  */
-function ReasonDialog({
+export function ReasonDialog({
   action,
   title,
   buttonClass,
@@ -267,7 +269,7 @@ function ReasonDialog({
   current,
   onSubmit,
 }: {
-  action: "hold" | "cancel" | "forceStatus";
+  action: "hold" | "cancel" | "forceStatus" | "dismissExternalChange";
   title: string;
   buttonClass: string;
   isPending: boolean;

@@ -1,5 +1,6 @@
 import type {
   ClaimManyInput,
+  DismissExternalChangeInput,
   ForceStatusInput,
   OrderDetail,
   OrderReasonInput,
@@ -8,6 +9,7 @@ import type {
 } from "@woolrus/contracts";
 import type { Db, DbTx, Order } from "@woolrus/db";
 import type { Actor } from "../permissions";
+import { applyExternalChange, dismissExternalChange } from "../sync/review";
 import { claim, claimExpiryMinutes, claimMany, isClaimLive, release, takeOver } from "./claims";
 import { displayName, nameFields } from "./people";
 import {
@@ -96,6 +98,10 @@ export const orderMutations = {
     detailOf(db, release(db, actor, { orderId: id })),
   takeOver: (db: Db, actor: Actor, { id, ...input }: TakeOverInput) =>
     detailOf(db, takeOver(db, actor, { orderId: id, ...input })),
+  applyExternalChange: (db: Db, actor: Actor, { id, expectedVersion }: OrderVersionInput) =>
+    detailOf(db, applyExternalChange(db, actor, { orderId: id, expectedVersion })),
+  dismissExternalChange: (db: Db, actor: Actor, { id, ...input }: DismissExternalChangeInput) =>
+    detailOf(db, dismissExternalChange(db, actor, { orderId: id, ...input })),
   claimMany: async (db: Db, actor: Actor, input: ClaimManyInput) =>
     toOrderDetails(db, await claimMany(db, actor, input)),
 };

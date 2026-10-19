@@ -19,7 +19,8 @@
     "onHold": "On Hold",
     "allOrders": "All Orders",
     "queues": "Queues",
-    "priorityRules": "Priority rules"
+    "priorityRules": "Priority rules",
+    "sync": "Sync"
   },
   "boxes": {
     "title": "Boxes",
@@ -96,7 +97,25 @@
       "yesClear": "Yes, clear",
       "clearConfirm": "Clear the {name}? The integration stops working until a new value is added.",
       "newValue": "New value",
-      "writeOnly": "Stored encrypted. Nobody can view it after saving, so keep your own copy if you need one."
+      "writeOnly": "Stored encrypted. Nobody can view it after saving, so keep your own copy if you need one.",
+      "urlMoveTitle": "Remove the saved keys?",
+      "urlMoveBody": "The new address is on a different server. Saving it removes the saved {secrets}, so they're never sent there. Add them again for the new address.",
+      "urlMoveConfirm": "Save and remove keys",
+      "savedKeysCleared": "Saved. The keys for the old address were removed: add them for the new one.",
+      "testConnection": "Test connection",
+      "testHint": "Checks the saved store URL and keys.",
+      "testOk": "Connected. The store uses {weight} for weight and {dimension} for dimensions.",
+      "webhook": {
+        "title": "Webhooks",
+        "url": "Delivery URL",
+        "copy": "Copy",
+        "copied": "Copied.",
+        "intro": "Webhooks bring new and changed orders in within seconds. Sync still polls if they stop.",
+        "step1": "In WordPress, open WooCommerce → Settings → Advanced → Webhooks and add a webhook.",
+        "step2": "Status Active, topic “Order created”, API version “WP REST API Integration v3”.",
+        "step3": "Delivery URL: the one above. Secret: the webhook secret saved here.",
+        "step4": "Add a second webhook the same way with the topic “Order updated”."
+      }
     }
   },
   "priorityRules": {
@@ -212,7 +231,9 @@
       "forceStatus": "Force status",
       "claim": "Claim",
       "release": "Release",
-      "takeOver": "Take over"
+      "takeOver": "Take over",
+      "applyExternalChange": "Apply changes",
+      "dismissExternalChange": "Dismiss"
     },
     "moved": "Order {number} is now in {status}.",
     "claimed": "You claimed order {number}.",
@@ -236,7 +257,30 @@
       "takeOver": "Took over from {name}",
       "release": "Released",
       "by": "by {name}",
+      "system": "Store sync",
       "at": "at {station}"
+    },
+    "externalChange": {
+      "title": "Changed in the store",
+      "detected": "WooCommerce changed this order {time}. Nothing has been changed here yet.",
+      "statusNote": "Status changes are handled with Cancel / Resume, not Apply.",
+      "fromTo": "{from} → {to}",
+      "none": "(none)",
+      "lineAdded": "Added: {line} × {quantity}",
+      "lineRemoved": "Removed: {line} × {quantity}",
+      "lineQuantity": "{line}: {from} → {to}",
+      "dismissTitle": "Dismiss the store's changes",
+      "applied": "Applied the store's changes to order {number}.",
+      "dismissed": "Dismissed the store's changes on order {number}.",
+      "field": {
+        "status": "Store status",
+        "customer": "Customer",
+        "shippingAddress": "Ship to",
+        "billingAddress": "Billing address",
+        "customerNote": "Customer note",
+        "shippingMethod": "Shipping",
+        "refunds": "Refunded"
+      }
     }
   },
   "orders": {
@@ -258,6 +302,54 @@
     "COMPLETED": "Completed",
     "ON_HOLD": "On Hold",
     "CANCELLED": "Cancelled"
+  },
+  "sync": {
+    "reason": {
+      "imported": "Imported from WooCommerce",
+      "cancelledInStore": "Cancelled in the store"
+    },
+    "indicator": {
+      "synced": "Synced {time}",
+      "justNow": "Synced just now",
+      "failing": "Sync failing",
+      "late": "Sync late",
+      "never": "Not synced yet",
+      "lastSuccess": "Last success {time}"
+    },
+    "page": {
+      "title": "Sync",
+      "intro": "Orders sync on a schedule and from store webhooks. Use these buttons to run a sync right away.",
+      "syncOrders": "Sync orders now",
+      "syncProducts": "Sync products now",
+      "queued": "Sync queued. It shows in the log when the worker starts it.",
+      "lastWebhook": "Last webhook received",
+      "noWebhook": "None yet",
+      "runs": "Sync log",
+      "type": "Type",
+      "status": "Status",
+      "processed": "Processed",
+      "failed": "Failed",
+      "started": "Started",
+      "duration": "Duration",
+      "showErrors": "Show errors",
+      "hideErrors": "Hide errors",
+      "record": "WooCommerce id",
+      "error": "Error",
+      "noErrors": "No record-level errors.",
+      "loadMore": "Load more"
+    },
+    "type": {
+      "ORDERS_POLL": "Orders",
+      "ORDERS_WEBHOOK": "Order webhook",
+      "PRODUCTS": "Products",
+      "CARRIERS": "Carriers"
+    },
+    "runStatus": {
+      "RUNNING": "Running",
+      "SUCCEEDED": "Succeeded",
+      "PARTIAL": "Partial",
+      "FAILED": "Failed"
+    }
   },
   "errors": {
     "unauthenticated": "Please sign in to continue.",
@@ -308,6 +400,26 @@
         "packageLiveLabel": "Package {package} has a label that must be voided first.",
         "notReady": "The order isn't Ready.",
         "noPackages": "The order has no packages."
+      }
+    },
+    "sync": {
+      "unauthorized": "WooCommerce refused the consumer key or secret. Check them in Settings → Integrations.",
+      "notFound": "WooCommerce couldn't find that record.",
+      "unreachable": "WooCommerce couldn't be reached. Check the store URL and that the store is up.",
+      "notWooCommerce": "That URL doesn't look like a WooCommerce store (no REST API v3 found).",
+      "rateLimited": "WooCommerce is limiting requests. Sync will try again shortly.",
+      "badResponse": "WooCommerce sent a response Woolrus couldn't read.",
+      "notConfigured": "WooCommerce isn't set up yet. Add the store URL and keys in Settings → Integrations.",
+      "importFailed": "The order couldn't be saved. Sync will try it again on the next run.",
+      "notFlagged": "This order has no store change to review. It has been refreshed.",
+      "cannotApply": "This store change can't be applied without undoing work on the floor.",
+      "unmet": {
+        "belowPicked": "{line}: the store wants {to}, but {picked} are already picked.",
+        "belowPacked": "{line}: the store wants {to}, but {packed} are already packed.",
+        "lineVoided": "{line} has voided units. Resolve the void before lowering the quantity.",
+        "removedStarted": "{line} was removed in the store but is already picked or packed. Unpack or unpick it first.",
+        "removedHasRecords": "{line} was removed in the store but has notes, issues or voids on it.",
+        "pastPacking": "{line}: the order is already past Packing, so an added or larger line would ship without being picked and packed. Force it back to Packing first, or dismiss."
       }
     }
   }

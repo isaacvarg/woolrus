@@ -17,9 +17,18 @@ const BACKOFF_MS = [1_000, 2_000, 5_000, 10_000, 30_000];
 /** Collects bursts (a priority recompute notifies every open order) into one round of refetches. */
 const BATCH_MS = 100;
 
-/** Every list of orders depends on any order, so these refetch on each event. */
+/**
+ * Every list of orders depends on any order, so these refetch on each event. So does the nav's
+ * sync status: an import or a store change arrives as order events.
+ */
 function invalidateLists(queryClient: QueryClient) {
-  for (const key of [orpc.orders.queue.key(), orpc.orders.counts.key(), orpc.orders.list.key()]) {
+  const keys = [
+    orpc.orders.queue.key(),
+    orpc.orders.counts.key(),
+    orpc.orders.list.key(),
+    orpc.sync.status.key(),
+  ];
+  for (const key of keys) {
     void queryClient.invalidateQueries({ queryKey: key });
   }
 }

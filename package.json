@@ -17,8 +17,11 @@
     "db:deploy": "pnpm --filter @woolrus/db migrate:deploy",
     "db:seed": "pnpm --filter @woolrus/db seed",
     "db:studio": "pnpm --filter @woolrus/db studio",
+    "sync:pull": "pnpm --filter @woolrus/worker sync:pull",
+    "sync:products": "pnpm --filter @woolrus/worker sync:products",
     "stack:up": "docker compose -f docker/compose.dev.yml up -d",
-    "stack:down": "docker compose -f docker/compose.dev.yml down"
+    "stack:down": "docker compose -f docker/compose.dev.yml down",
+    "jobs:install": "pnpm --filter @woolrus/worker jobs:install"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.15",

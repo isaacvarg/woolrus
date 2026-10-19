@@ -19,7 +19,8 @@
     "onHold": "En espera",
     "allOrders": "Todos los pedidos",
     "queues": "Colas",
-    "priorityRules": "Reglas de prioridad"
+    "priorityRules": "Reglas de prioridad",
+    "sync": "Sincronización"
   },
   "boxes": {
     "title": "Cajas",
@@ -96,7 +97,25 @@
       "yesClear": "Sí, borrar",
       "clearConfirm": "¿Borrar «{name}»? La integración dejará de funcionar hasta que se agregue un valor nuevo.",
       "newValue": "Valor nuevo",
-      "writeOnly": "Se guarda cifrado. Nadie podrá verlo después de guardarlo; conserva tu propia copia si la necesitas."
+      "writeOnly": "Se guarda cifrado. Nadie podrá verlo después de guardarlo; conserva tu propia copia si la necesitas.",
+      "urlMoveTitle": "¿Eliminar las claves guardadas?",
+      "urlMoveBody": "La dirección nueva está en otro servidor. Al guardarla se eliminan {secrets}, para que nunca se envíen allí. Vuelve a agregarlas para la dirección nueva.",
+      "urlMoveConfirm": "Guardar y eliminar claves",
+      "savedKeysCleared": "Guardado. Se eliminaron las claves de la dirección anterior: agrégalas para la nueva.",
+      "testConnection": "Probar conexión",
+      "testHint": "Comprueba la URL y las claves guardadas de la tienda.",
+      "testOk": "Conectado. La tienda usa {weight} para el peso y {dimension} para las dimensiones.",
+      "webhook": {
+        "title": "Webhooks",
+        "url": "URL de entrega",
+        "copy": "Copiar",
+        "copied": "Copiado.",
+        "intro": "Los webhooks traen los pedidos nuevos y modificados en segundos. Si dejan de llegar, la sincronización sigue consultando.",
+        "step1": "En WordPress, abre WooCommerce → Ajustes → Avanzado → Webhooks y agrega un webhook.",
+        "step2": "Estado Activo, tema «Pedido creado», versión de API «WP REST API Integration v3».",
+        "step3": "URL de entrega: la de arriba. Secreto: el secreto del webhook guardado aquí.",
+        "step4": "Agrega un segundo webhook igual con el tema «Pedido actualizado»."
+      }
     }
   },
   "priorityRules": {
@@ -212,7 +231,9 @@
       "forceStatus": "Forzar estado",
       "claim": "Reclamar",
       "release": "Liberar",
-      "takeOver": "Tomar el pedido"
+      "takeOver": "Tomar el pedido",
+      "applyExternalChange": "Aplicar cambios",
+      "dismissExternalChange": "Descartar"
     },
     "moved": "El pedido {number} está ahora en {status}.",
     "claimed": "Reclamaste el pedido {number}.",
@@ -236,7 +257,30 @@
       "takeOver": "Lo tomó de {name}",
       "release": "Liberado",
       "by": "por {name}",
+      "system": "Sincronización con la tienda",
       "at": "en {station}"
+    },
+    "externalChange": {
+      "title": "Cambiado en la tienda",
+      "detected": "WooCommerce cambió este pedido {time}. Aquí todavía no se ha cambiado nada.",
+      "statusNote": "Los cambios de estado se manejan con Cancelar / Reanudar, no con Aplicar.",
+      "fromTo": "{from} → {to}",
+      "none": "(ninguno)",
+      "lineAdded": "Agregado: {line} × {quantity}",
+      "lineRemoved": "Eliminado: {line} × {quantity}",
+      "lineQuantity": "{line}: {from} → {to}",
+      "dismissTitle": "Descartar los cambios de la tienda",
+      "applied": "Se aplicaron los cambios de la tienda al pedido {number}.",
+      "dismissed": "Se descartaron los cambios de la tienda en el pedido {number}.",
+      "field": {
+        "status": "Estado en la tienda",
+        "customer": "Cliente",
+        "shippingAddress": "Enviar a",
+        "billingAddress": "Dirección de facturación",
+        "customerNote": "Nota del cliente",
+        "shippingMethod": "Envío",
+        "refunds": "Reembolsado"
+      }
     }
   },
   "orders": {
@@ -258,6 +302,54 @@
     "COMPLETED": "Completado",
     "ON_HOLD": "En espera",
     "CANCELLED": "Cancelado"
+  },
+  "sync": {
+    "reason": {
+      "imported": "Importado desde WooCommerce",
+      "cancelledInStore": "Cancelado en la tienda"
+    },
+    "indicator": {
+      "synced": "Sincronizado {time}",
+      "justNow": "Sincronizado hace un momento",
+      "failing": "La sincronización falla",
+      "late": "Sincronización atrasada",
+      "never": "Aún sin sincronizar",
+      "lastSuccess": "Último éxito {time}"
+    },
+    "page": {
+      "title": "Sincronización",
+      "intro": "Los pedidos se sincronizan según el horario y con los webhooks de la tienda. Usa estos botones para sincronizar ahora mismo.",
+      "syncOrders": "Sincronizar pedidos ahora",
+      "syncProducts": "Sincronizar productos ahora",
+      "queued": "Sincronización en cola. Aparece en el registro cuando el worker la inicia.",
+      "lastWebhook": "Último webhook recibido",
+      "noWebhook": "Ninguno aún",
+      "runs": "Registro de sincronización",
+      "type": "Tipo",
+      "status": "Estado",
+      "processed": "Procesados",
+      "failed": "Fallidos",
+      "started": "Inicio",
+      "duration": "Duración",
+      "showErrors": "Ver errores",
+      "hideErrors": "Ocultar errores",
+      "record": "Id de WooCommerce",
+      "error": "Error",
+      "noErrors": "Sin errores por registro.",
+      "loadMore": "Cargar más"
+    },
+    "type": {
+      "ORDERS_POLL": "Pedidos",
+      "ORDERS_WEBHOOK": "Webhook de pedido",
+      "PRODUCTS": "Productos",
+      "CARRIERS": "Transportistas"
+    },
+    "runStatus": {
+      "RUNNING": "En curso",
+      "SUCCEEDED": "Correcta",
+      "PARTIAL": "Parcial",
+      "FAILED": "Fallida"
+    }
   },
   "errors": {
     "unauthenticated": "Inicia sesión para continuar.",
@@ -308,6 +400,26 @@
         "packageLiveLabel": "El paquete {package} tiene una etiqueta que primero debe anularse.",
         "notReady": "El pedido no está Listo.",
         "noPackages": "El pedido no tiene paquetes."
+      }
+    },
+    "sync": {
+      "unauthorized": "WooCommerce rechazó la clave o el secreto del consumidor. Revísalos en Configuración → Integraciones.",
+      "notFound": "WooCommerce no encontró ese registro.",
+      "unreachable": "No se pudo conectar con WooCommerce. Revisa la URL de la tienda y que esté en línea.",
+      "notWooCommerce": "Esa URL no parece una tienda WooCommerce (no se encontró la API REST v3).",
+      "rateLimited": "WooCommerce está limitando las solicitudes. La sincronización lo intentará de nuevo en breve.",
+      "badResponse": "WooCommerce envió una respuesta que Woolrus no pudo leer.",
+      "notConfigured": "WooCommerce aún no está configurado. Agrega la URL de la tienda y las claves en Configuración → Integraciones.",
+      "importFailed": "No se pudo guardar el pedido. La sincronización lo intentará de nuevo en la próxima ejecución.",
+      "notFlagged": "Este pedido no tiene cambios de la tienda por revisar. Se ha actualizado.",
+      "cannotApply": "Este cambio de la tienda no se puede aplicar sin deshacer trabajo del almacén.",
+      "unmet": {
+        "belowPicked": "{line}: la tienda pide {to}, pero ya hay {picked} recogidos.",
+        "belowPacked": "{line}: la tienda pide {to}, pero ya hay {packed} empacados.",
+        "lineVoided": "{line} tiene unidades anuladas. Resuelve la anulación antes de bajar la cantidad.",
+        "removedStarted": "{line} se eliminó en la tienda, pero ya está recogido o empacado. Desempácalo o deshaz la recogida primero.",
+        "removedHasRecords": "{line} se eliminó en la tienda, pero tiene notas, incidencias o anulaciones.",
+        "pastPacking": "{line}: el pedido ya pasó Empaque, así que una línea nueva o mayor se enviaría sin surtir ni empacar. Regrésalo a Empaque primero, o descarta el cambio."
       }
     }
   }

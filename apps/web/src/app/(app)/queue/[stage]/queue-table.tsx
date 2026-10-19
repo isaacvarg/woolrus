@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/fields";
 import { toast } from "@/components/ui/toast";
 import { useErrorMessage } from "@/lib/errors";
 import { orpc } from "@/lib/orpc";
+import { useReasonText } from "@/lib/reasons";
 
 const SEARCH_DEBOUNCE_MS = 250;
 
@@ -34,6 +35,7 @@ export function QueueTable({
   canBeginPicking: boolean;
 }) {
   const t = useTranslations();
+  const reasonText = useReasonText();
   const format = useFormatter();
   const router = useRouter();
   const errorMessage = useErrorMessage();
@@ -175,7 +177,7 @@ export function QueueTable({
                   {onHold ? (
                     <>
                       <td>{row.heldFromStatus && t(`status.${row.heldFromStatus}`)}</td>
-                      <td>{row.holdReason}</td>
+                      <td>{row.holdReason && reasonText(row.holdReason)}</td>
                     </>
                   ) : (
                     <td>{row.claim?.userName}</td>

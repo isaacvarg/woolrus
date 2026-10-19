@@ -1,7 +1,7 @@
 import type { OrderAction } from "@woolrus/contracts";
 import type { WorkflowStatus } from "@woolrus/db";
 import { type Actor, can } from "../permissions";
-import { claimPermission } from "./claims";
+import { claimPermission, holdsClaim } from "./claims";
 import { canTransition, ruleFor, type TransitionKind } from "./machine";
 
 // What the caller may do to an order, for the detail page's buttons (SPEC-workflow "Reads"). Built
@@ -13,6 +13,8 @@ export type ActionSubject = {
   heldFromStatus: WorkflowStatus | null;
   /** The holder of a live claim; null when unclaimed or expired. */
   liveClaimHolderId: string | null;
+  /** A store change is flagged for review. */
+  externalChange?: boolean;
 };
 
 /** The stage completions, which need the actor's live claim. */
@@ -24,7 +26,7 @@ const completions: readonly { kind: TransitionKind; to: WorkflowStatus }[] = [
 
 export function allowedActions(actor: Actor, order: ActionSubject): OrderAction[] {
   const { status, heldFromStatus, liveClaimHolderId } = order;
-  const mine = liveClaimHolderId === actor.userId;
+  const mine = holdsClaim(actor, liveClaimHolderId);
   const othersClaim = liveClaimHolderId !== null && !mine;
   const allowed = (kind: TransitionKind, to: WorkflowStatus) =>
     can(actor, ruleFor(kind).permission) && canTransition(status, to, kind);
@@ -51,5 +53,8 @@ export function allowedActions(actor: Actor, order: ActionSubject): OrderAction[
   if (allowed("cancel", "CANCELLED")) actions.push("cancel");
   // Force can reach any other status; the dialog picks which.
   if (can(actor, "order.forceStatus")) actions.push("forceStatus");
+  if (order.externalChange && can(actor, "order.resolveExternalChange")) {
+    actions.push("resolveExternalChange");
+  }
   return actions;
 }

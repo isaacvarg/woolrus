@@ -5,11 +5,33 @@ import { AppError } from "./errors";
  * Who is acting. Every service function takes one; there is no ambient "current user".
  * `stationId` is set when the action came from a shared floor station.
  */
-export type Actor = {
+export type UserActor = {
   userId: string;
   roles: readonly Role[];
   stationId: string | null;
+  system?: undefined;
 };
+
+/** Background jobs acting on their own (SPEC-store-sync "System actor"). Never built from a request. */
+export type SystemActor = {
+  userId: null;
+  roles: readonly Role[];
+  stationId: null;
+  system: "store-sync";
+};
+
+export type Actor = UserActor | SystemActor;
+
+/**
+ * Store sync's actor: audit rows and stage events get a null actorId and history shows "Store sync".
+ * Claims compare user ids, so it never holds or takes one.
+ */
+export const systemActor: SystemActor = Object.freeze({
+  userId: null,
+  roles: Object.freeze(["ADMIN"] as const),
+  stationId: null,
+  system: "store-sync",
+});
 
 export const permissions = [
   "box.read",
@@ -21,6 +43,7 @@ export const permissions = [
   "order.hold",
   "order.cancel",
   "order.forceStatus",
+  "order.resolveExternalChange",
   "label.purchase",
   "label.print",
   "label.void",

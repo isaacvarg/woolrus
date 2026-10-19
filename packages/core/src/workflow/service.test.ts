@@ -2,7 +2,8 @@ import type { Db, Role } from "@woolrus/db";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { createActor, resetDb, testDb } from "../../test/db";
 import { createOrder } from "../../test/factories";
-import { claim } from "./claims";
+import { systemActor } from "../permissions";
+import { claim, touchClaim } from "./claims";
 import {
   beginPicking,
   cancel,
@@ -695,5 +696,55 @@ describe("history and audit (SC 8)", () => {
     });
     expect(audit.map((a) => a.action)).toEqual(["order.hold", "order.resume", "order.cancel"]);
     expect(audit[2]?.after).toMatchObject({ status: "CANCELLED", reason: "Customer cancelled" });
+  });
+});
+
+describe("system actor (store-sync)", () => {
+  it("cancels an untouched order with a null actor on the stage event and the audit row", async () => {
+    const { order } = await createOrder(db);
+
+    await db.$transaction((tx) =>
+      transition(tx, systemActor, {
+        orderId: order.id,
+        expectedVersion: 1,
+        to: "CANCELLED",
+        kind: "cancel",
+        reason: "Cancelled in store",
+      }),
+    );
+
+    expect(await db.orderStageEvent.findMany({ where: { orderId: order.id } })).toMatchObject([
+      { fromStatus: "PENDING", toStatus: "CANCELLED", actorId: null, stationId: null },
+    ]);
+    expect(await db.auditEvent.findMany({ where: { entityId: order.id } })).toMatchObject([
+      { action: "order.cancel", actorId: null, stationId: null },
+    ]);
+  });
+
+  it("never holds a claim: completions are refused, even on an unclaimed order", async () => {
+    const picker = await createActor(db, ["PICKER"]);
+    const { order: claimed } = await readyToComplete("PICKING", picker.userId);
+    const { order: unclaimed } = await createOrder(db, {
+      status: "PICKING",
+      lines: [{ name: "Tee", quantity: 1, pickStatus: "PICKED" }],
+    });
+
+    for (const order of [claimed, unclaimed]) {
+      await expect(
+        completePicking(db, systemActor, { orderId: order.id, expectedVersion: 1 }),
+      ).rejects.toMatchObject({ messageKey: "errors.workflow.claimRequired" });
+    }
+  });
+
+  it("never takes a claim", async () => {
+    const { order } = await createOrder(db);
+
+    await expect(
+      beginPicking(db, systemActor, { orderId: order.id, expectedVersion: 1 }),
+    ).rejects.toMatchObject({ messageKey: "errors.workflow.claimRequired" });
+    await expect(
+      claim(db, systemActor, { orderId: order.id, expectedVersion: 1 }),
+    ).rejects.toMatchObject({ kind: "FORBIDDEN" });
+    expect(await db.$transaction((tx) => touchClaim(tx, systemActor, order.id))).toBe(false);
   });
 });

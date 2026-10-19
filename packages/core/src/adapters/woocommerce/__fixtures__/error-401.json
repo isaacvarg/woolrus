@@ -1,0 +1,7 @@
+{
+  "code": "woocommerce_rest_cannot_view",
+  "message": "Sorry, you cannot list resources.",
+  "data": {
+    "status": 401
+  }
+}

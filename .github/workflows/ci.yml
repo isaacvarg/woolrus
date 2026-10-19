@@ -43,6 +43,9 @@ jobs:
       - run: pnpm typecheck
       - name: Migrations apply cleanly and match the schema
         run: pnpm db:deploy && pnpm --filter @woolrus/db migrate:check
+      # Web enqueues jobs (Sync now, webhooks); without a worker, nothing else creates pg-boss's tables.
+      - name: Job queue tables
+        run: pnpm jobs:install
       - run: pnpm test
       - run: pnpm build
       - name: End-to-end smoke tests
