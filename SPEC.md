@@ -58,7 +58,7 @@ States: `not started` → `spec draft` → `spec approved` → `planned` → `in
 | Module | Milestone | Spec | State |
 |---|---|---|---|
 | `settings` | M1 | [SPEC-settings](docs/specs/SPEC-settings.md) | done |
-| `store-sync` | M1 | [SPEC-store-sync](docs/specs/SPEC-store-sync.md) | in progress |
+| `store-sync` | M1 | [SPEC-store-sync](docs/specs/SPEC-store-sync.md) | done |
 | `workflow` | M1 | [SPEC-workflow](docs/specs/SPEC-workflow.md) | done |
 | `identity` | M2 | — | not started |
 | `notes` | M2 | — | not started |

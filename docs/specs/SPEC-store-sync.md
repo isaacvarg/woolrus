@@ -3,7 +3,7 @@
 **Milestone:** M1 · **Depends on:** `settings` (WooCommerce config), `workflow` data model and transition service
 · **Used by:** every floor module (orders and products to work on), `shipping` (reuses the WooCommerce adapter for
 the Completed + tracking push), `exceptions` (refunds, FR-VOID-07), `operations` (adapter health check) ·
-**State:** in progress
+**State:** done
 
 Project-wide commands, structure, code style, testing levels and boundaries are in [`../../SPEC.md`](../../SPEC.md);
 this spec only adds what is specific to `store-sync`.
