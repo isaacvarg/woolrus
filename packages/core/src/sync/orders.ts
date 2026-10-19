@@ -1,9 +1,11 @@
-import type { Db, DbTx, Prisma, SyncStatus } from "@woolrus/db";
+import type { Db, DbTx, SyncStatus } from "@woolrus/db";
 import type { ListOrdersQuery, StoreAdapter, WooOrder } from "../adapters/woocommerce/adapter";
 import { recordAudit } from "../audit";
 import { systemActor } from "../permissions";
 import { notifyOrderChanged } from "../workflow/notify";
 import { recomputePriorities } from "../workflow/priority-rules";
+import { reconcileKnownOrder } from "./apply";
+import { createLines } from "./lines";
 import { withSyncLock } from "./lock";
 import { type MappedOrder, mapOrder, type StoreUnits } from "./mapping";
 import { type FetchedCatalog, fetchOrderCatalog, upsertCatalog } from "./products-upsert";
@@ -31,6 +33,9 @@ export type SyncOrdersResult = {
 
 /** First argument of the two-key advisory lock taken per WooCommerce order id. */
 const ORDER_LOCK_NAMESPACE = 4_201_002;
+
+/** Stage-event reason for an import: a message key, translated where history is shown. */
+const IMPORTED_REASON = "sync.reason.imported";
 
 /** Each poll's window reaches this far before the last one started, for clock skew with the store. */
 const POLL_OVERLAP_MS = 10 * 60 * 1000;
@@ -164,7 +169,7 @@ async function importOrder(
 ): Promise<"imported" | "updated" | "skipped"> {
   const order = mapOrder(woo);
   const known = await findKnown(db, order.wooOrderId);
-  if (known) return isNewer(order, known) ? updateKnown(db, order) : "skipped";
+  if (known) return isNewer(order, known) ? updateKnown(db, store, units, order, now) : "skipped";
   // Only paid orders ready to fulfil come in; others wait until the store moves them to processing.
   if (order.wooStatus !== "processing") return "skipped";
 
@@ -178,24 +183,22 @@ async function importOrder(
   });
 }
 
-/**
- * A known order the store modified since. For now only the informational fields follow the store;
- * change detection (diff, auto-apply, hold, flag) builds on this in T8.
- */
-async function updateKnown(db: Db, order: MappedOrder): Promise<"updated" | "skipped"> {
+/** A known order the store modified since: change detection decides what happens (FR-SYNC-10). */
+async function updateKnown(
+  db: Db,
+  store: StoreAdapter,
+  units: StoreUnits,
+  order: MappedOrder,
+  now: Date,
+): Promise<"updated" | "skipped"> {
+  // Products of added lines, so applying the change (now or on review) needs no HTTP.
+  const catalog = await fetchOrderCatalog(db, store, units, order, now);
   return db.$transaction(async (tx) => {
     await lockWooOrder(tx, order.wooOrderId);
     const known = await findKnown(tx, order.wooOrderId);
     if (!known || !isNewer(order, known)) return "skipped";
-    await tx.order.update({
-      where: { wooOrderId: order.wooOrderId },
-      data: {
-        wooStatus: order.wooStatus,
-        wooModifiedAt: order.wooModifiedAt,
-        rawPayload: order.rawPayload,
-        syncedAt: new Date(),
-      },
-    });
+    await upsertCatalog(tx, catalog, now);
+    await reconcileKnownOrder(tx, known.id, order, now);
     return "updated";
   });
 }
@@ -210,7 +213,7 @@ async function lockWooOrder(tx: DbTx, wooOrderId: number): Promise<void> {
 }
 
 function findKnown(db: Db | DbTx, wooOrderId: number) {
-  return db.order.findUnique({ where: { wooOrderId }, select: { wooModifiedAt: true } });
+  return db.order.findUnique({ where: { wooOrderId }, select: { id: true, wooModifiedAt: true } });
 }
 
 async function createOrder(
@@ -220,53 +223,20 @@ async function createOrder(
   now: Date,
 ): Promise<void> {
   await upsertCatalog(tx, catalog, now);
-  const productIds = await rowIds(
-    tx.product.findMany({
-      where: { wooProductId: { in: items.flatMap((i) => i.wooProductId ?? []) } },
-      select: { id: true, wooProductId: true },
-    }),
-    (p) => p.wooProductId,
-  );
-  const variationIds = await rowIds(
-    tx.productVariation.findMany({
-      where: { wooVariationId: { in: items.flatMap((i) => i.wooVariationId ?? []) } },
-      select: { id: true, wooVariationId: true },
-    }),
-    (v) => v.wooVariationId,
-  );
-
   const order = await tx.order.create({
     data: { ...fields, status: "PENDING", statusChangedAt: now, syncedAt: now },
   });
-
-  const lineIds = new Map<number, string>();
-  for (const { wooProductId, wooVariationId, bundleParentWooLineItemId: __, ...line } of items) {
-    const item = await tx.orderItem.create({
-      data: {
-        ...line,
-        // Meta values are whatever JSON the store sent.
-        metaData: line.metaData as Prisma.InputJsonValue,
-        orderId: order.id,
-        productId: wooProductId === null ? null : (productIds.get(wooProductId) ?? null),
-        variationId: wooVariationId === null ? null : (variationIds.get(wooVariationId) ?? null),
-      },
-      select: { id: true },
-    });
-    lineIds.set(line.wooLineItemId, item.id);
-  }
-  // Bundle parents can come after their children in the list, so they're linked once all exist.
-  for (const line of items) {
-    const parentId = line.bundleParentWooLineItemId && lineIds.get(line.bundleParentWooLineItemId);
-    if (!parentId) continue;
-    await tx.orderItem.update({
-      where: { id: lineIds.get(line.wooLineItemId) },
-      data: { bundleParentId: parentId },
-    });
-  }
+  await createLines(tx, order.id, items);
 
   // Import has no prior status, so it writes the first stage event itself rather than `transition`.
   await tx.orderStageEvent.create({
-    data: { orderId: order.id, fromStatus: null, toStatus: "PENDING", reason: "imported", at: now },
+    data: {
+      orderId: order.id,
+      fromStatus: null,
+      toStatus: "PENDING",
+      reason: IMPORTED_REASON,
+      at: now,
+    },
   });
   await recordAudit(tx, systemActor, {
     entityType: "Order",
@@ -277,11 +247,4 @@ async function createOrder(
   });
   await recomputePriorities(tx, { orderIds: [order.id], now });
   await notifyOrderChanged(tx, { id: order.id, status: order.status });
-}
-
-async function rowIds<T extends { id: string }>(
-  rows: Promise<T[]>,
-  key: (row: T) => number,
-): Promise<Map<number, string>> {
-  return new Map((await rows).map((row) => [key(row), row.id]));
 }

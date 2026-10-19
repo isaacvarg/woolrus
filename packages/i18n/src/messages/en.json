@@ -260,6 +260,12 @@
     "ON_HOLD": "On Hold",
     "CANCELLED": "Cancelled"
   },
+  "sync": {
+    "reason": {
+      "imported": "Imported from WooCommerce",
+      "cancelledInStore": "Cancelled in the store"
+    }
+  },
   "errors": {
     "unauthenticated": "Please sign in to continue.",
     "forbidden": "You don't have permission to do that.",

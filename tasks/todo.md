@@ -151,7 +151,7 @@ focused tests; checkpoints run the full green set. Add a `Done:` line (2–3 lin
     `rawPayload` always follow the store, so a re-diff while flagged must not take its "stored" status/refunds from
     them; keep the baseline (e.g. in `externalChangeSummary`) or the status change vanishes from the second diff.
 
-- [ ] **T8: Change rules during import**
+- [x] **T8: Change rules during import**
   - Known-and-newer orders run the spec's change table: untouched + cancelled/refunded/failed → `transition(cancel)`
     with `systemActor`; started + cancelled → hold ("Cancelled in store") + flag; untouched + edits → apply in place
     (lines added/removed/re-quantified, priority recomputed, audited `order.externalChange.applied`); otherwise flag
@@ -161,6 +161,13 @@ focused tests; checkpoints run the full green set. Add a `Done:` line (2–3 lin
   - Verify: `pnpm --filter @woolrus/core test -- sync/orders sync/apply`.
   - Files: `core/src/sync/{orders,apply}.ts` (+tests).
   - Deps: T5, T7 · Size: M
+  - Done: `sync/apply.ts` `reconcileKnownOrder(tx, orderId, incoming, now)` (called from `updateKnown` under the Woo
+    order lock, after the incoming order's products are upserted, so T9 needs no HTTP). Summary JSON is
+    `ExternalChangeSummary { diff, incoming (no rawPayload; dates as ISO strings), baseline: { wooStatus,
+    refundedCents } }`; T9 must parse dates back. Store reverting a flagged change clears the flag. Lines are made by
+    `sync/lines.ts` `createLines(tx, orderId, items)` (links existing bundle parents too); reuse it in Apply. System
+    reasons are message keys `sync.reason.imported` / `sync.reason.cancelledInStore` (spec said
+    `errors.sync.cancelledInStore`); web shows them via `useReasonText()` in `apps/web/src/lib/reasons.ts`.
 
 - [ ] **T9: Apply / Dismiss in core and API**
   - `applyExternalChange` / `dismissExternalChange` (`order.resolveExternalChange`, `expectedVersion`, dismiss reason

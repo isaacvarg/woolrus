@@ -16,6 +16,7 @@ import { Button, Radio, RadioGroup, TextField } from "@/components/ui/fields";
 import { toast } from "@/components/ui/toast";
 import { useErrorMessage } from "@/lib/errors";
 import { client, orpc } from "@/lib/orpc";
+import { useReasonText } from "@/lib/reasons";
 
 type Unmet = { messageKey: string; params: Record<string, string | number> };
 
@@ -48,6 +49,7 @@ const moves = [
  */
 export function OrderActions({ order, userId }: { order: OrderView; userId: string | null }) {
   const t = useTranslations();
+  const reasonText = useReasonText();
   const format = useFormatter();
   const errorMessage = useErrorMessage();
   const queryClient = useQueryClient();
@@ -161,7 +163,7 @@ export function OrderActions({ order, userId }: { order: OrderView; userId: stri
         <p className="alert alert-warning">
           {t("order.onHold", {
             status: order.heldFromStatus ? t(`status.${order.heldFromStatus}`) : "—",
-            reason: order.holdReason,
+            reason: reasonText(order.holdReason),
           })}
         </p>
       )}

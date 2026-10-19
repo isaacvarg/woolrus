@@ -133,7 +133,7 @@ describe("syncOrders: first import (SC 1)", () => {
     expect(order.shippingAddress).toMatchObject({ name: "Ana Lopez", city: "Springfield" });
     expect(order.rawPayload).toMatchObject({ id: woo.id, number: "A-100" });
     expect(order.stageEvents).toMatchObject([
-      { fromStatus: null, toStatus: "PENDING", actorId: null, reason: "imported" },
+      { fromStatus: null, toStatus: "PENDING", actorId: null, reason: "sync.reason.imported" },
     ]);
 
     const [soapLine, rushLine, teeLine, goneLine] = order.items;
@@ -392,21 +392,17 @@ describe("syncOrders: later polls (SC 2, SC 3 retry)", () => {
     expect(after.updatedAt).toEqual(before.updatedAt);
   });
 
-  it("records the store's latest status, modified time and payload on a known order", async () => {
+  it("records the store's latest modified time and payload on a known order", async () => {
     const woo = store.addOrder();
     await poll(store.now());
-    const edited = store.editOrder(woo.id, { status: "on-hold" });
+    const edited = store.editOrder(woo.id, { meta_data: [{ id: 3, key: "_note", value: "x" }] });
 
-    await poll(store.now());
+    const result = await poll(store.now());
 
+    expect(result).toMatchObject({ updated: 1 });
     const order = await db.order.findUniqueOrThrow({ where: { wooOrderId: woo.id } });
-    expect(order).toMatchObject({
-      wooStatus: "on-hold",
-      wooModifiedAt: edited.dateModifiedGmt,
-      status: "PENDING",
-      version: 1,
-    });
-    expect(order.rawPayload).toMatchObject({ status: "on-hold" });
+    expect(order).toMatchObject({ wooModifiedAt: edited.dateModifiedGmt, version: 1 });
+    expect(order.rawPayload).toMatchObject({ meta_data: [{ key: "_note" }] });
   });
 
   it("retries the ids that failed in the last poll, even outside its window", async () => {
