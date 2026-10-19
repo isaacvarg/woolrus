@@ -187,7 +187,7 @@ focused tests; checkpoints run the full green set. Add a `Done:` line (2–3 lin
     `errors.sync.notFlagged`. `apply.ts` exports `headerFields` / `writeLineChanges`. Dismiss keeps the order; the
     store's version is re-diffed only on its next edit.
 
-- [ ] **T10: External-change banner on order detail**
+- [x] **T10: External-change banner on order detail**
   - Warning banner listing changes in words (old → new, per field and line), Apply / Dismiss (reason dialog) for
     users allowed to; unmet list when refused; "status changes are handled with Cancel / Resume" note when the diff
     has a status change. Tablet-sized targets; en + es.
@@ -197,6 +197,11 @@ focused tests; checkpoints run the full green set. Add a `Done:` line (2–3 lin
     picking, run sync, review); covered by e2e in T17.
   - Files: `apps/web/src/app/(app)/orders/[id]/{page,external-change-banner}.tsx`, `i18n` en/es.
   - Deps: T9 · Size: S/M
+  - Done: `orders/[id]/external-change-banner.tsx` (mounted under the header in `order-view.tsx`); buttons show on
+    `allowedActions` `resolveExternalChange`. Reuses `ReasonDialog` / `unmetOf` (now exported from
+    `order-actions.tsx`); `formatAddress` moved to `orders/[id]/address.ts`. Checked on the dev stack (order 15):
+    refusal list, Apply, Dismiss. Gotchas: DaisyUI `.alert` is a column grid, so add `flex flex-col` to stack its
+    content; a Woo REST PUT that only touches lines + shipping may not bump `date_modified_gmt`, so sync misses it.
 
 ### Checkpoint 3
 - [ ] Full green.

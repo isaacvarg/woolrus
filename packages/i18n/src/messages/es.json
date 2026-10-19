@@ -212,7 +212,9 @@
       "forceStatus": "Forzar estado",
       "claim": "Reclamar",
       "release": "Liberar",
-      "takeOver": "Tomar el pedido"
+      "takeOver": "Tomar el pedido",
+      "applyExternalChange": "Aplicar cambios",
+      "dismissExternalChange": "Descartar"
     },
     "moved": "El pedido {number} está ahora en {status}.",
     "claimed": "Reclamaste el pedido {number}.",
@@ -238,6 +240,28 @@
       "by": "por {name}",
       "system": "Sincronización con la tienda",
       "at": "en {station}"
+    },
+    "externalChange": {
+      "title": "Cambiado en la tienda",
+      "detected": "WooCommerce cambió este pedido {time}. Aquí todavía no se ha cambiado nada.",
+      "statusNote": "Los cambios de estado se manejan con Cancelar / Reanudar, no con Aplicar.",
+      "fromTo": "{from} → {to}",
+      "none": "(ninguno)",
+      "lineAdded": "Agregado: {line} × {quantity}",
+      "lineRemoved": "Eliminado: {line} × {quantity}",
+      "lineQuantity": "{line}: {from} → {to}",
+      "dismissTitle": "Descartar los cambios de la tienda",
+      "applied": "Se aplicaron los cambios de la tienda al pedido {number}.",
+      "dismissed": "Se descartaron los cambios de la tienda en el pedido {number}.",
+      "field": {
+        "status": "Estado en la tienda",
+        "customer": "Cliente",
+        "shippingAddress": "Enviar a",
+        "billingAddress": "Dirección de facturación",
+        "customerNote": "Nota del cliente",
+        "shippingMethod": "Envío",
+        "refunds": "Reembolsado"
+      }
     }
   },
   "orders": {

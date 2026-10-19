@@ -212,7 +212,9 @@
       "forceStatus": "Force status",
       "claim": "Claim",
       "release": "Release",
-      "takeOver": "Take over"
+      "takeOver": "Take over",
+      "applyExternalChange": "Apply changes",
+      "dismissExternalChange": "Dismiss"
     },
     "moved": "Order {number} is now in {status}.",
     "claimed": "You claimed order {number}.",
@@ -238,6 +240,28 @@
       "by": "by {name}",
       "system": "Store sync",
       "at": "at {station}"
+    },
+    "externalChange": {
+      "title": "Changed in the store",
+      "detected": "WooCommerce changed this order {time}. Nothing has been changed here yet.",
+      "statusNote": "Status changes are handled with Cancel / Resume, not Apply.",
+      "fromTo": "{from} → {to}",
+      "none": "(none)",
+      "lineAdded": "Added: {line} × {quantity}",
+      "lineRemoved": "Removed: {line} × {quantity}",
+      "lineQuantity": "{line}: {from} → {to}",
+      "dismissTitle": "Dismiss the store's changes",
+      "applied": "Applied the store's changes to order {number}.",
+      "dismissed": "Dismissed the store's changes on order {number}.",
+      "field": {
+        "status": "Store status",
+        "customer": "Customer",
+        "shippingAddress": "Ship to",
+        "billingAddress": "Billing address",
+        "customerNote": "Customer note",
+        "shippingMethod": "Shipping",
+        "refunds": "Refunded"
+      }
     }
   },
   "orders": {

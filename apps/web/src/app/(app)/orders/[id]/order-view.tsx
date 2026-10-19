@@ -1,10 +1,12 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import type { OrderView as Order, OrderAddress } from "@woolrus/contracts";
+import type { OrderView as Order } from "@woolrus/contracts";
 import { useFormatter, useTranslations } from "next-intl";
 import { useErrorMessage } from "@/lib/errors";
 import { orpc } from "@/lib/orpc";
+import { formatAddress } from "./address";
+import { ExternalChangeBanner } from "./external-change-banner";
 import { HistoryPanel } from "./history-panel";
 import { OrderActions } from "./order-actions";
 
@@ -27,6 +29,7 @@ export function OrderView({ id, userId }: { id: string; userId: string | null })
   return (
     <section className="mx-auto max-w-6xl space-y-6">
       <OrderHeader order={order.data} />
+      <ExternalChangeBanner order={order.data} />
       <OrderActions order={order.data} userId={userId} />
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
@@ -102,16 +105,6 @@ function OrderHeader({ order }: { order: Order }) {
       </dl>
     </header>
   );
-}
-
-function formatAddress(address: OrderAddress): string {
-  const cityLine = [address.city, [address.state, address.postalCode].filter(Boolean).join(" ")]
-    .filter(Boolean)
-    .join(", ");
-  return [address.name, address.company, address.address1, address.address2, cityLine]
-    .concat(address.country ?? [])
-    .filter(Boolean)
-    .join(" · ");
 }
 
 function OrderLines({ order }: { order: Order }) {
