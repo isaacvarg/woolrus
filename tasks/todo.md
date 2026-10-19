@@ -204,8 +204,8 @@ focused tests; checkpoints run the full green set. Add a `Done:` line (2–3 lin
     content; a Woo REST PUT that only touches lines + shipping may not bump `date_modified_gmt`, so sync misses it.
 
 ### Checkpoint 3
-- [ ] Full green.
-- [ ] Dev stack: cancel an untouched order in the dev store → it leaves the queue; cancel a picking order → On Hold
+- [x] Full green.
+- [x] Dev stack: cancel an untouched order in the dev store → it leaves the queue; cancel a picking order → On Hold
       with the banner; edit an address on a picking order → banner → Apply works.
 - [ ] Review with the user.
 
