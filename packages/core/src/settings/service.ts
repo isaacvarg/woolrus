@@ -7,6 +7,7 @@ import {
   ShipFromAddress,
   StageSlaMinutes,
   type UpdateSettingsInput,
+  type UpdateSettingsResult,
 } from "@woolrus/contracts";
 import type { Db, DbTx, Prisma, Settings } from "@woolrus/db";
 import { recordAudit } from "../audit";
@@ -28,6 +29,26 @@ const secretColumns = {
   shipstationApiKey: "shipstationApiKeyEnc",
   lumexiaApiKey: "lumexiaApiKeyEnc",
 } as const satisfies Record<SecretName, keyof Settings>;
+
+/** Each integration URL and the secrets that only make sense for the server it points at. */
+const urlSecrets = {
+  wooStoreUrl: ["wooConsumerKey", "wooConsumerSecret", "wooWebhookSecret"],
+  lumexiaBaseUrl: ["lumexiaApiKey"],
+} as const satisfies Partial<Record<keyof UpdateSettingsInput, readonly SecretName[]>>;
+
+const origin = (url: string | null) => (url === null ? null : new URL(url).origin);
+
+/**
+ * The URLs in `patch` that point somewhere else than before: a different origin (scheme, host,
+ * port), or removed. Setting a URL where there was none isn't a move: keys saved before it were
+ * entered for whatever URL comes first.
+ */
+function movedUrls(current: Settings, patch: UpdateSettingsInput) {
+  return (Object.keys(urlSecrets) as (keyof typeof urlSecrets)[]).filter((field) => {
+    const next = patch[field];
+    return next !== undefined && current[field] !== null && origin(current[field]) !== origin(next);
+  });
+}
 
 /** The settings row, created with defaults on first use. */
 export async function loadSettings(tx: DbTx): Promise<Settings> {
@@ -74,25 +95,36 @@ export async function getPublicSettings(db: Db, _actor: Actor): Promise<PublicSe
   return { weightDisplay, stationIdleLockMinutes, claimExpiryMinutes, stageSlaMinutes };
 }
 
-/** Partial update; the audit event holds before/after of the fields that actually changed. */
+/**
+ * Partial update; the audit event holds before/after of the fields that actually changed. Moving an
+ * integration URL to another origin clears that integration's secrets in the same transaction, so
+ * a changed URL can't receive keys meant for the old server (decisions 2026-10-15).
+ */
 export async function updateSettings(
   db: Db,
   actor: Actor,
   patch: UpdateSettingsInput,
-): Promise<AdminSettings> {
+): Promise<UpdateSettingsResult> {
   assertCan(actor, "settings.manage");
   return db.$transaction(async (tx) => {
-    const current = toAdminSettings(await loadSettings(tx));
+    const row = await loadSettings(tx);
+    const current = toAdminSettings(row);
     const changed = (Object.keys(patch) as (keyof UpdateSettingsInput)[]).filter(
       (key) =>
         patch[key] !== undefined && JSON.stringify(patch[key]) !== JSON.stringify(current[key]),
     );
-    if (changed.length === 0) return current;
+    if (changed.length === 0) return { ...current, clearedSecrets: [] };
 
+    const cleared = movedUrls(row, patch)
+      .flatMap((field) => urlSecrets[field])
+      .filter((name) => row[secretColumns[name]] !== null);
     const before = Object.fromEntries(changed.map((key) => [key, current[key]]));
     const after = Object.fromEntries(changed.map((key) => [key, patch[key]]));
     const updated = toAdminSettings(
-      await tx.settings.update({ where: { id: SETTINGS_ID }, data: after }),
+      await tx.settings.update({
+        where: { id: SETTINGS_ID },
+        data: { ...after, ...Object.fromEntries(cleared.map((n) => [secretColumns[n], null])) },
+      }),
     );
     await recordAudit(tx, actor, {
       entityType: "Settings",
@@ -101,7 +133,15 @@ export async function updateSettings(
       before: before as Prisma.InputJsonObject,
       after: after as Prisma.InputJsonObject,
     });
-    return updated;
+    for (const secret of cleared) {
+      await recordAudit(tx, actor, {
+        entityType: "Settings",
+        entityId: String(SETTINGS_ID),
+        action: "secret.clear",
+        after: { secret, reason: "urlChanged" },
+      });
+    }
+    return { ...updated, clearedSecrets: cleared };
   });
 }
 

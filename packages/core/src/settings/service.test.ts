@@ -1,7 +1,7 @@
 import type { Db } from "@woolrus/db";
-import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createActor, resetDb, testDb } from "../../test/db";
-import { getPublicSettings, getSettings, updateSettings } from "./service";
+import { getPublicSettings, getSettings, setSecret, updateSettings } from "./service";
 
 const db: Db = testDb();
 afterAll(() => db.$disconnect());
@@ -86,8 +86,9 @@ describe("settings service", () => {
 
     const updated = await updateSettings(db, admin, { syncIntervalMinutes: 15 });
 
-    const expected = { ...earlier, syncIntervalMinutes: 15 };
-    expect(updated).toEqual(expected);
+    const { clearedSecrets, ...settings } = earlier;
+    const expected = { ...settings, syncIntervalMinutes: 15 };
+    expect(updated).toEqual({ ...expected, clearedSecrets });
     expect(await getSettings(db, admin)).toEqual(expected);
   });
 
@@ -145,5 +146,101 @@ describe("settings service", () => {
       messageKey: "errors.forbidden",
     });
     expect(await db.auditEvent.count()).toBe(0);
+  });
+});
+
+// Changing where an integration points must not send its saved keys to the new place
+// (SPEC-store-sync "Settings follow-up", SC 11).
+describe("integration URL origin changes", () => {
+  beforeEach(() => {
+    vi.stubEnv("SETTINGS_ENCRYPTION_KEY", Buffer.alloc(32, 3).toString("base64"));
+  });
+  afterEach(() => vi.unstubAllEnvs());
+
+  const wooSecrets = ["wooConsumerKey", "wooConsumerSecret", "wooWebhookSecret"] as const;
+
+  async function withWooSecrets(url: string | null) {
+    const admin = await createActor(db, ["ADMIN"]);
+    if (url) await updateSettings(db, admin, { wooStoreUrl: url });
+    for (const name of [...wooSecrets, "lumexiaApiKey", "shipstationApiKey"] as const) {
+      await setSecret(db, admin, { name, value: `value-of-${name}` });
+    }
+    return admin;
+  }
+
+  /** One transaction's audit rows share a timestamp, so they come back in secret-name order. */
+  const clearAudits = async () =>
+    (await db.auditEvent.findMany({ where: { action: "secret.clear" } })).sort((a, b) =>
+      JSON.stringify(a.after).localeCompare(JSON.stringify(b.after)),
+    );
+
+  it.each([
+    ["host", "https://other.example.com"],
+    ["scheme", "http://shop.localhost"],
+    ["port", "https://shop.example.com:8443"],
+  ])("a %s change clears the WooCommerce secrets, audited", async (_what, next) => {
+    const start = next.startsWith("http:") ? "https://shop.localhost" : "https://shop.example.com";
+    const admin = await withWooSecrets(start);
+
+    const result = await updateSettings(db, admin, { wooStoreUrl: next });
+
+    expect(result.clearedSecrets).toEqual([...wooSecrets]);
+    expect(result.wooStoreUrl).toBe(next);
+    for (const name of wooSecrets) expect(result.secrets[name]).toEqual({ configured: false });
+    // Other integrations keep theirs.
+    expect(result.secrets.lumexiaApiKey).toEqual({ configured: true });
+    expect(result.secrets.shipstationApiKey).toEqual({ configured: true });
+    const audits = await clearAudits();
+    expect(audits.map((a) => a.after)).toEqual(
+      wooSecrets.map((secret) => ({ secret, reason: "urlChanged" })),
+    );
+    expect(audits.every((a) => a.actorId === admin.userId)).toBe(true);
+  });
+
+  it("a path-only change keeps the secrets", async () => {
+    const admin = await withWooSecrets("https://shop.example.com");
+    const result = await updateSettings(db, admin, {
+      wooStoreUrl: "https://shop.example.com/store",
+    });
+    expect(result.clearedSecrets).toEqual([]);
+    for (const name of wooSecrets) expect(result.secrets[name]).toEqual({ configured: true });
+    expect(await clearAudits()).toHaveLength(0);
+  });
+
+  it("keeps secrets saved before the first URL, and clears them when the URL is removed", async () => {
+    const admin = await withWooSecrets(null);
+    const first = await updateSettings(db, admin, { wooStoreUrl: "https://shop.example.com" });
+    expect(first.clearedSecrets).toEqual([]);
+    expect(first.secrets.wooConsumerKey).toEqual({ configured: true });
+
+    const removed = await updateSettings(db, admin, { wooStoreUrl: null });
+    expect(removed.clearedSecrets).toEqual([...wooSecrets]);
+    expect(removed.secrets.wooConsumerKey).toEqual({ configured: false });
+  });
+
+  it("reports nothing cleared when no secret was set", async () => {
+    const admin = await createActor(db, ["ADMIN"]);
+    await updateSettings(db, admin, { wooStoreUrl: "https://shop.example.com" });
+    const result = await updateSettings(db, admin, { wooStoreUrl: "https://other.example.com" });
+    expect(result.clearedSecrets).toEqual([]);
+    expect(await clearAudits()).toHaveLength(0);
+  });
+
+  it("does the same for Lumexia, leaving WooCommerce alone", async () => {
+    const admin = await withWooSecrets("https://shop.example.com");
+    await updateSettings(db, admin, { lumexiaBaseUrl: "https://lumexia.example.com/api" });
+
+    const path = await updateSettings(db, admin, {
+      lumexiaBaseUrl: "https://lumexia.example.com/v2",
+    });
+    expect(path.clearedSecrets).toEqual([]);
+
+    const host = await updateSettings(db, admin, { lumexiaBaseUrl: "https://lx.example.net" });
+    expect(host.clearedSecrets).toEqual(["lumexiaApiKey"]);
+    expect(host.secrets.lumexiaApiKey).toEqual({ configured: false });
+    expect(host.secrets.wooConsumerKey).toEqual({ configured: true });
+    expect((await clearAudits()).map((a) => a.after)).toEqual([
+      { secret: "lumexiaApiKey", reason: "urlChanged" },
+    ]);
   });
 });

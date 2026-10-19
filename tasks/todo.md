@@ -285,7 +285,7 @@ focused tests; checkpoints run the full green set. Add a `Done:` line (2–3 lin
     after contract changes (500 on new `/api/v1` paths, RPC fine): verify on `next start` (`web-prod` in
     `.claude/launch.json`, :3100). The tablet nav drawer stays open after a link click, so tests `goto` instead.
 
-- [ ] **T15: URL origin change clears secrets**
+- [x] **T15: URL origin change clears secrets**
   - `updateSettings`: origin change (scheme + host + port) of `wooStoreUrl` / `lumexiaBaseUrl` with secrets set
     clears that integration's secrets in the same transaction, audits `secret.clear` with `reason: "urlChanged"`,
     returns the cleared names. Path-only change keeps them.
@@ -293,6 +293,9 @@ focused tests; checkpoints run the full green set. Add a `Done:` line (2–3 lin
   - Verify: `pnpm --filter @woolrus/core test -- settings/service`.
   - Files: `core/src/settings/service.ts` (+test), `contracts/src/settings.ts` (cleared names in output).
   - Deps: none · Size: S
+  - Done: `settings/service.ts` `updateSettings` returns `UpdateSettingsResult` (`AdminSettings` + `clearedSecrets`);
+    `urlSecrets` maps each URL field to its secrets. A move = origin change or removal; setting a URL where there was
+    none keeps secrets saved earlier. One `secret.clear` audit per secret (`after: { secret, reason: "urlChanged" }`).
 
 - [ ] **T16: Integrations card: Test connection, webhook URL, URL-change confirm**
   - WooCommerce card gets Test connection (translated result), the webhook URL with copy button and setup steps, and
