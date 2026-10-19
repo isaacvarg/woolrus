@@ -6,6 +6,7 @@ import {
   processWooWebhook,
   queues,
   recomputePriorities,
+  syncProducts,
 } from "@woolrus/core";
 import { db } from "@woolrus/db";
 import { createLogger } from "@woolrus/logger";
@@ -45,6 +46,19 @@ await boss.work<JobPayloads[typeof queues.ordersWebhook]>(queues.ordersWebhook, 
   if (!job) return;
   await processWooWebhook(db, await store(), job.data.inboundWebhookId);
   log.info({ jobId: job.id, inboundWebhookId: job.data.inboundWebhookId }, "orders.webhook done");
+});
+
+// FR-SYNC-12: the catalog nightly at 03:00 server time, and on "Sync products now".
+await boss.schedule(
+  queues.productsSync,
+  "0 3 * * *",
+  { reason: "schedule" },
+  { tz: Intl.DateTimeFormat().resolvedOptions().timeZone },
+);
+
+await boss.work<JobPayloads[typeof queues.productsSync]>(queues.productsSync, async ([job]) => {
+  const result = await syncProducts(db, await store());
+  log.info({ jobId: job?.id, reason: job?.data.reason, ...result }, "products.sync done");
 });
 
 // Age rules ("older than 2 days") change an order's priority with no event to trigger it.

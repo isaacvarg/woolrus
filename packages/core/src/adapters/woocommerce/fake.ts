@@ -183,6 +183,25 @@ export class FakeStoreAdapter implements StoreAdapter {
     return parseProduct(structuredClone(product));
   }
 
+  /** Changes raw product fields; `variations` replaces a variation's fields by id. */
+  editProduct(id: number, input: FakeProductInput): WooProduct {
+    const product = this.#products.get(id);
+    if (!product) throw new Error(`FakeStoreAdapter: no product ${id}`);
+    const { variations, ...fields } = input;
+    Object.assign(product, fields);
+    for (const patch of variations ?? []) {
+      const child = this.#variations.get(id)?.find((v) => v.id === patch.id);
+      if (child) Object.assign(child, patch);
+    }
+    return parseProduct(structuredClone(product));
+  }
+
+  /** Deletes a product (and its variations) from the store. */
+  removeProduct(id: number): void {
+    this.#products.delete(id);
+    this.#variations.delete(id);
+  }
+
   // ---- StoreAdapter --------------------------------------------------------------------------
 
   async ping(): Promise<void> {

@@ -227,7 +227,7 @@ focused tests; checkpoints run the full green set. Add a `Done:` line (2–3 lin
     with a byte cap. Test global setup now installs pg-boss + queues, so `enqueue` is testable (jobs aren't reset:
     filter by payload). The secret is only read when the whole Woo config is set (URL + keys), else 401.
 
-- [ ] **T12: Product catalog sync**
+- [x] **T12: Product catalog sync**
   - `syncProducts(db, store)` (`SyncRun` `PRODUCTS`, under `withSyncLock("products")`): page all products, fetch
     variations for variable ones, upsert; never delete; never overwrite customs, Lumexia, or barcode (unless the
     store sends one). Worker: `products.sync` nightly 03:00 + manual.
@@ -235,6 +235,10 @@ focused tests; checkpoints run the full green set. Add a `Done:` line (2–3 lin
   - Verify: `pnpm --filter @woolrus/core test -- sync/products`; `pnpm sync:products` on the dev stack.
   - Files: `core/src/sync/products.ts` (+test), `apps/worker/src/{main,cli}.ts`.
   - Deps: T2, T6 · Size: S/M
+  - Done: `sync/products.ts` `syncProducts(db, store | null, { now })` → `{ runId, status, processed, failed }` or
+    `alreadyRunning`; one transaction per product (+ its variations) via `upsertCatalog`, so a bad product is a
+    `SyncRunError` and the run goes `PARTIAL`. Worker schedules `products.sync` at 03:00 in the server's timezone;
+    `pnpm sync:products` runs it from a shell. Fake gained `editProduct` / `removeProduct`.
 
 ### Checkpoint 4
 - [ ] Full green.

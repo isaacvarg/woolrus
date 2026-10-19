@@ -15,6 +15,7 @@ export * from "./settings/integration";
 export * from "./settings/service";
 export * from "./sync/lock";
 export * from "./sync/orders";
+export * from "./sync/products";
 export * from "./sync/review";
 export * from "./sync/schedule";
 export * from "./sync/webhooks";

@@ -8,7 +8,8 @@
     "build": "tsdown",
     "start": "node dist/main.mjs",
     "typecheck": "tsc",
-    "sync:pull": "NODE_ENV=development tsx --env-file-if-exists=../../.env src/cli.ts pull"
+    "sync:pull": "NODE_ENV=development tsx --env-file-if-exists=../../.env src/cli.ts pull",
+    "sync:products": "NODE_ENV=development tsx --env-file-if-exists=../../.env src/cli.ts products"
   },
   "dependencies": {
     "@woolrus/core": "workspace:*",
