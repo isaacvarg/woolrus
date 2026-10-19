@@ -8,6 +8,7 @@
 #   scripts/realtest/realtest.sh pull      import the store's processing orders (+ their products)
 #   scripts/realtest/realtest.sh products  sync the whole product catalog
 #   scripts/realtest/realtest.sh report    summarise what came in
+#   scripts/realtest/realtest.sh dev       web (:3000) + worker in dev mode on it: Sync now, Test connection
 #   scripts/realtest/realtest.sh web       browse it at http://localhost:3300 (production build)
 #   scripts/realtest/realtest.sh down      drop the database (deletes the imported customer data)
 set -euo pipefail
@@ -75,6 +76,20 @@ case "${1:-}" in
     ;;
   report)
     psql "$REALTEST_DATABASE_URL" -v ON_ERROR_STOP=1 -P pager=off -f "$HERE/report.sql"
+    ;;
+  dev)
+    # Web and worker started directly, not through `pnpm dev`: turbo's strict env mode would drop
+    # the exports above and both apps would fall back to the dev database in .env.
+    store_env
+    if (exec 3<>/dev/tcp/127.0.0.1/3000) 2>/dev/null; then
+      die "port 3000 is in use: stop your other \`pnpm dev\` first (one next dev per folder)"
+    fi
+    echo "realtest: web http://localhost:3000 + worker on $DB_NAME against $REALTEST_WOO_URL"
+    echo "realtest: the worker polls the store every sync interval (GET only); Ctrl-C stops both"
+    trap 'kill 0' EXIT
+    pnpm --dir "$ROOT" --filter @woolrus/worker dev &
+    pnpm --dir "$ROOT" --filter @woolrus/web dev &
+    wait
     ;;
   web)
     # A production build: `next dev` can't run twice in one folder. Sign in with an ADMIN_EMAILS

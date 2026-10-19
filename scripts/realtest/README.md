@@ -24,7 +24,8 @@ customers' names and addresses: keep it on this machine and drop it when done (`
    scripts/realtest/realtest.sh pull       # import the processing orders and their products
    scripts/realtest/realtest.sh products   # optional: the whole catalog (stock, bins, weights)
    scripts/realtest/realtest.sh report     # summary for the open questions
-   scripts/realtest/realtest.sh web        # optional: browse it at http://localhost:3300
+   scripts/realtest/realtest.sh dev        # optional: the app on it at http://localhost:3000, with a worker
+   scripts/realtest/realtest.sh web        # optional: browse it at http://localhost:3300 (no worker)
    scripts/realtest/realtest.sh down       # drop the database when finished
    ```
 
@@ -33,7 +34,10 @@ customers' names and addresses: keep it on this machine and drop it when done (`
   cancellations as they would appear on the floor).
 - `web` serves a production build on :3300 against `woolrus_realtest`. Sign in with an address in
   `ADMIN_EMAILS` (root `.env`); the magic link is printed in that terminal.
-- Don't run the worker against this database: there's no schedule here, only the commands above.
+- `dev` runs web and worker in dev mode on `woolrus_realtest`, so Sync orders now, Test connection and
+  the nav indicator work, and the worker polls the store every sync interval (GET only). Stop your
+  usual `pnpm dev` first (one `next dev` per folder). Don't use `pnpm dev` with an overridden
+  `DATABASE_URL`: turbo's strict env mode drops it and the apps use the dev database.
 - When finished, also ask the store admin to revoke the key.
 
 ## For the store admin
