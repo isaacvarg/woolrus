@@ -119,7 +119,8 @@ export class FakeStoreAdapter implements StoreAdapter {
       });
       if (fields.total === undefined) order.total = orderTotal(order);
     }
-    order.date_modified_gmt = this.#tick();
+    // A `date_modified_gmt` in the patch stands for an edit within the same second (Woo's resolution).
+    order.date_modified_gmt = fields.date_modified_gmt ?? this.#tick();
     return parseOrder(structuredClone(order));
   }
 

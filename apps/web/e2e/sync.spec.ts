@@ -69,6 +69,8 @@ test("an admin queues a products sync from the Sync page and it shows in the log
 // neither, so these run only with E2E_DEV_STACK=1.
 test.describe("against the dev store", () => {
   test.skip(!process.env.E2E_DEV_STACK, "needs the worker and the dev store (E2E_DEV_STACK=1)");
+  // The worker takes webhook jobs one at a time, every 2 s; parallel projects queue behind each other.
+  test.slow();
   // One store order per test; the projects run in parallel, so names are unique.
   const storeOrders: number[] = [];
   test.afterEach(async () => {
@@ -131,7 +133,7 @@ test.describe("against the dev store", () => {
 
     await page.goto(`/orders/${order.id}`);
     const banner = page.getByRole("region", { name: "Changed in the store" });
-    await expect(banner).toBeVisible({ timeout: 30_000 });
+    await expect(banner).toBeVisible({ timeout: 60_000 });
     await expect(banner).toContainText("99 New Street");
   });
 });

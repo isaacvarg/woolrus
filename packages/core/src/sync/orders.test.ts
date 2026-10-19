@@ -392,6 +392,25 @@ describe("syncOrders: later polls (SC 2, SC 3 retry)", () => {
     expect(after.updatedAt).toEqual(before.updatedAt);
   });
 
+  it("catches an edit made in the same second as the version it last imported", async () => {
+    // WooCommerce's modified time has one-second resolution: equal times can still differ in content.
+    const woo = store.addOrder();
+    await poll(store.now());
+    const sameSecond = (woo.raw as { date_modified_gmt: string }).date_modified_gmt;
+    store.editOrder(woo.id, {
+      customer_note: "Leave at the back door",
+      date_modified_gmt: sameSecond,
+    });
+
+    const result = await poll(store.now());
+
+    expect(result).toMatchObject({ updated: 1 });
+    const order = await db.order.findUniqueOrThrow({ where: { wooOrderId: woo.id } });
+    expect(order.customerNote).toBe("Leave at the back door");
+    // And the same version again is still skipped.
+    expect(await poll(store.now())).toMatchObject({ updated: 0, skipped: 1 });
+  });
+
   it("records the store's latest modified time and payload on a known order", async () => {
     const woo = store.addOrder();
     await poll(store.now());

@@ -1,4 +1,5 @@
-import type { Db, DbTx, SyncStatus } from "@woolrus/db";
+import { isDeepStrictEqual } from "node:util";
+import type { Db, DbTx, Prisma, SyncStatus } from "@woolrus/db";
 import type { ListOrdersQuery, StoreAdapter, WooOrder } from "../adapters/woocommerce/adapter";
 import { recordAudit } from "../audit";
 import { systemActor } from "../permissions";
@@ -169,7 +170,9 @@ async function importOrder(
 ): Promise<"imported" | "updated" | "skipped"> {
   const order = mapOrder(woo);
   const known = await findKnown(db, order.wooOrderId);
-  if (known) return isNewer(order, known) ? updateKnown(db, store, units, order, now) : "skipped";
+  if (known) {
+    return isNewVersion(order, known) ? updateKnown(db, store, units, order, now) : "skipped";
+  }
   // Only paid orders ready to fulfil come in; others wait until the store moves them to processing.
   if (order.wooStatus !== "processing") return "skipped";
 
@@ -196,16 +199,28 @@ async function updateKnown(
   return db.$transaction(async (tx) => {
     await lockWooOrder(tx, order.wooOrderId);
     const known = await findKnown(tx, order.wooOrderId);
-    if (!known || !isNewer(order, known)) return "skipped";
+    if (!known || !isNewVersion(order, known)) return "skipped";
     await upsertCatalog(tx, catalog, now);
     await reconcileKnownOrder(tx, known.id, order, now);
     return "updated";
   });
 }
 
-/** Idempotency (FR-SYNC-02): a store version we've already seen changes nothing. */
-function isNewer(order: MappedOrder, known: { wooModifiedAt: Date }): boolean {
-  return order.wooModifiedAt.getTime() > known.wooModifiedAt.getTime();
+/**
+ * Idempotency (FR-SYNC-02): a store version we've already seen changes nothing. WooCommerce's
+ * modified time has one-second resolution, so an edit in the same second as the version last
+ * imported has an equal time: then the payload decides.
+ */
+function isNewVersion(
+  order: MappedOrder,
+  known: { wooModifiedAt: Date; rawPayload: Prisma.JsonValue },
+): boolean {
+  const incoming = order.wooModifiedAt.getTime();
+  const stored = known.wooModifiedAt.getTime();
+  return (
+    incoming > stored ||
+    (incoming === stored && !isDeepStrictEqual(order.rawPayload, known.rawPayload))
+  );
 }
 
 async function lockWooOrder(tx: DbTx, wooOrderId: number): Promise<void> {
@@ -213,7 +228,10 @@ async function lockWooOrder(tx: DbTx, wooOrderId: number): Promise<void> {
 }
 
 function findKnown(db: Db | DbTx, wooOrderId: number) {
-  return db.order.findUnique({ where: { wooOrderId }, select: { id: true, wooModifiedAt: true } });
+  return db.order.findUnique({
+    where: { wooOrderId },
+    select: { id: true, wooModifiedAt: true, rawPayload: true },
+  });
 }
 
 async function createOrder(
