@@ -1,15 +1,25 @@
-import { configuredStore, pollIfDue, syncProducts } from "@woolrus/core";
+import { configuredStore, installJobs, pollIfDue, syncProducts } from "@woolrus/core";
 import { db } from "@woolrus/db";
 
 // `pnpm sync:pull` / `pnpm sync:products` (FR-SYNC-08): the same runs as the worker and the Sync
 // page, from a shell. They take the same locks, so they report "already running" rather than
 // overlapping a worker run.
 
-const usage = "usage: cli pull|products";
+const usage = "usage: cli pull|products|install-jobs";
 const [command] = process.argv.slice(2);
-if (command !== "pull" && command !== "products") {
+if (command !== "pull" && command !== "products" && command !== "install-jobs") {
   console.error(usage);
   process.exit(2);
+}
+
+// `pnpm jobs:install`: pg-boss's tables and queues without a worker (CI, before web enqueues).
+if (command === "install-jobs") {
+  const url = process.env.DATABASE_URL;
+  if (!url) throw new Error("DATABASE_URL is not set");
+  await installJobs(url);
+  console.log("jobs: installed");
+  await db.$disconnect();
+  process.exit(0);
 }
 
 try {

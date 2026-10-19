@@ -6,6 +6,7 @@ export * from "./boxes/service";
 export * from "./enqueue";
 export * from "./errors";
 export * from "./idempotency";
+export * from "./install-jobs";
 export * from "./jobs";
 export * from "./permissions";
 export * from "./settings/crypto";

@@ -1,8 +1,7 @@
 import { execSync } from "node:child_process";
 import path from "node:path";
 import { config } from "dotenv";
-import { PgBoss } from "pg-boss";
-import { JOBS_SCHEMA, queues } from "../src/jobs";
+import { installJobs } from "../src/install-jobs";
 
 /** Points tests at TEST_DATABASE_URL and brings its schema, and pg-boss's, up to date. */
 export default async function setup() {
@@ -17,13 +16,5 @@ export default async function setup() {
   });
 
   // `enqueue` needs pg-boss's tables and queues, which the worker creates in real deployments.
-  const boss = new PgBoss({
-    connectionString: url,
-    schema: JOBS_SCHEMA,
-    supervise: false,
-    schedule: false,
-  });
-  await boss.start();
-  for (const name of Object.values(queues)) await boss.createQueue(name);
-  await boss.stop({ graceful: false });
+  await installJobs(url);
 }
