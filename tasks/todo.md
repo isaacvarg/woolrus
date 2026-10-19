@@ -311,7 +311,7 @@ focused tests; checkpoints run the full green set. Add a `Done:` line (2–3 lin
     and a `pnpm dev` server (`next start` is production: no `.env` fallback, so the store reads as not configured).
     Gotcha: the existing "replacing a secret" e2e deletes `wooWebhookSecret` on the shared dev DB.
 
-- [ ] **T17: E2E, docs and status**
+- [x] **T17: E2E, docs and status**
   - `apps/web/e2e/sync.spec.ts` (SC 13): Test connection OK → Sync orders now → dev store's processing orders in
     Pending, nav shows fresh time; a signed webhook for an edited, started order shows the banner. Edit
     `docs/decisions.md` (cron endpoint dropped, URL change clears secrets, pg-boss in core) and `SPEC-settings.md`
@@ -321,8 +321,17 @@ focused tests; checkpoints run the full green set. Add a `Done:` line (2–3 lin
   - Files: `apps/web/e2e/sync.spec.ts`, `docs/decisions.md`, `docs/specs/SPEC-settings.md`,
     `docs/specs/SPEC-store-sync.md`, `SPEC.md`.
   - Deps: all · Size: M
+  - Done: `e2e/sync.spec.ts` "against the dev store" (gated on `E2E_DEV_STACK=1`; takes the settings lock) with
+    helpers in `e2e/support/woo.ts` (dev-store orders, signed deliveries, decrypted saved webhook secret, cleanup).
+    It found a real bug, fixed in `sync/orders.ts`: Woo's modified time has 1 s resolution, so an edit in the same
+    second as the imported version was skipped; equal times now compare payloads (`isNewVersion`). Docs:
+    decisions.md, SPEC-settings.md, SPEC-store-sync.md, SPEC.md status `in progress`.
 
 ### Checkpoint 5 (complete)
-- [ ] Every success criterion in the spec has a test.
-- [ ] Full green + Playwright.
+- [x] Every success criterion in the spec has a test. SC 1–4 `sync/orders.test.ts`; SC 5 `sync/apply.test.ts`;
+      SC 6 `sync/review.test.ts`; SC 7 `sync/webhooks.test.ts`; SC 8 `sync/schedule.test.ts` + `orders.test.ts`
+      (lock); SC 9 `sync/products.test.ts`; SC 10 `sync/status.test.ts`, `review.test.ts`, `e2e/sync.spec.ts`
+      (401); SC 11 `settings/service.test.ts`; SC 12 `adapters/woocommerce/*.test.ts`; SC 13 `e2e/sync.spec.ts`.
+- [x] Full green + Playwright: 96 passed / 10 skipped on a production build (CI-like), 106 passed with
+      `E2E_DEV_STACK=1` on a dev server (two Chromium "Page crashed" under memory pressure passed on rerun).
 - [ ] Ready for `/agent-skills:review`.

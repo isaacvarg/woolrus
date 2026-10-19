@@ -68,7 +68,7 @@ module one typed, safe way to read that configuration.
 |---|---|---|
 | `getSettings(db, actor)` | `settings.manage` | `AdminSettings`: every field except secret values; each secret appears as `{ configured: boolean }`, with no part of the value |
 | `getPublicSettings(db, actor)` | any signed-in user | `PublicSettings`: `weightDisplay`, `stationIdleLockMinutes`, `stageSlaMinutes` |
-| `updateSettings(db, actor, patch)` | `settings.manage` | `AdminSettings`. Partial: omitted fields are untouched. Audited with before/after of the changed non-secret fields |
+| `updateSettings(db, actor, patch)` | `settings.manage` | `UpdateSettingsResult` (`AdminSettings` + `clearedSecrets`). Partial: omitted fields are untouched. Audited with before/after of the changed non-secret fields. An integration URL moving to another origin clears that integration's secrets (below) |
 | `setSecret(db, actor, { name, value })` | `settings.manage` | `AdminSettings`. Audited as `secret.set` with the name only, never the value |
 | `clearSecret(db, actor, { name })` | `settings.manage` | `AdminSettings`. Audited as `secret.clear` |
 | `getIntegrationConfig(db, integration)` | none (server-internal, **not** exposed through the API) | `{ woocommerce: { url, consumerKey, consumerSecret, webhookSecret } \| null, shipstation: … , lumexia: … }`, decrypted |
@@ -79,6 +79,11 @@ module one typed, safe way to read that configuration.
   `WOO_CONSUMER_KEY`, `WOO_CONSUMER_SECRET`, …) for any value not set in Settings. That keeps the zero-config dev
   stack working. In production the env vars are ignored and Settings is the only source.
 - The settings row is created on first read if it's missing (the seed creates it too).
+- **URL moves clear secrets** (added by `store-sync`, decisions.md 2026-10-15): when `wooStoreUrl` or
+  `lumexiaBaseUrl` changes origin (scheme + host + port) or is removed, the same transaction clears that
+  integration's secrets (`wooConsumerKey`, `wooConsumerSecret`, `wooWebhookSecret`; `lumexiaApiKey`), writes one
+  `secret.clear` audit per secret with `reason: "urlChanged"`, and lists them in `clearedSecrets`. A path-only change
+  keeps them, and so does setting a URL where there was none (keys saved first were meant for it).
 
 ### Validation (contracts)
 
@@ -117,7 +122,8 @@ No output schema has a field that can carry a secret value.
   It saves with one button and shows field-level errors from message keys.
 - **Integrations:** a card per integration (WooCommerce, ShipStation, Lumexia) with the URL field where relevant.
   Each secret shows as "Set" or "Not set", with Replace and Clear actions. Replacing opens an empty write-only
-  field; current values are never pre-filled.
+  field; current values are never pre-filled. Saving a URL that moves to another server while keys are saved asks
+  first ("Remove the saved keys?"); afterwards they show as Not set.
 - Built with the React Aria + daisyUI primitives in `components/ui`, and every string is in both catalogs.
 
 ### Files expected to change

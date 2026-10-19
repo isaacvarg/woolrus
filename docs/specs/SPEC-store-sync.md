@@ -3,7 +3,7 @@
 **Milestone:** M1 · **Depends on:** `settings` (WooCommerce config), `workflow` data model and transition service
 · **Used by:** every floor module (orders and products to work on), `shipping` (reuses the WooCommerce adapter for
 the Completed + tracking push), `exceptions` (refunds, FR-VOID-07), `operations` (adapter health check) ·
-**State:** planned
+**State:** in progress
 
 Project-wide commands, structure, code style, testing levels and boundaries are in [`../../SPEC.md`](../../SPEC.md);
 this spec only adds what is specific to `store-sync`.
@@ -124,7 +124,9 @@ export interface StoreAdapter {
      `OrderItem`s, an `OrderStageEvent` (`null → PENDING`, reason `imported`), an audit event, then
      `recomputePriorities(tx, { orderIds: [id] })` and `notifyOrderChanged`. Unknown orders in any other status
      are skipped.
-   - **Known order**, `date_modified_gmt` ≤ `wooModifiedAt`: skipped (idempotent, FR-SYNC-02).
+   - **Known order**, `date_modified_gmt` < `wooModifiedAt`, or equal with an identical payload: skipped
+     (idempotent, FR-SYNC-02). Woo's modified time has one-second resolution, so an equal time with a different
+     payload is an edit made in the same second as the version imported, and counts as newer.
    - **Known order, newer:** change detection (next section).
    - A failure rolls back that order only, adds a `SyncRunError` (`externalId`, message key + detail), and the run
      continues.
@@ -139,7 +141,8 @@ workflow already treats such lines as physical.
 
 `diffOrder(stored, incoming)` (pure) compares the tracked fields and returns a `ChangeSummary`:
 `{ status?: { from, to }, shippingAddress?, billingAddress?, customerNote?, shippingMethod?, customer?,
-lines: { added[], removed[], quantity[{ wooLineItemId, from, to }] }, refunds?: { totalCents, lineItems[] } }`.
+lines: { added[], removed[], quantity[{ wooLineItemId, from, to }] }, refunds?: { from, to } }` (refunded cents:
+Woo's order payload carries refund totals, not refunded lines).
 Untracked differences (meta noise) only update `rawPayload` and `wooModifiedAt`.
 
 An order is **untouched** when it's `PENDING`, has no live claim, no line has `pickedQuantity > 0`, and it has no
@@ -147,14 +150,15 @@ packages, voids, quality issues or notes.
 
 | Change in the store | Untouched order | Order in progress (any other non-terminal status) | `COMPLETED` / `CANCELLED` |
 |---|---|---|---|
-| Status → `cancelled`, `refunded` or `failed` | **Cancel** via `transition(kind: "cancel")`, reason `errors.sync.cancelledInStore` | **Hold** (reason "Cancelled in store") unless already On Hold, and **flag** | flag only |
+| Status → `cancelled`, `refunded` or `failed` | **Cancel** via `transition(kind: "cancel")`, reason `sync.reason.cancelledInStore` | **Hold** (reason "Cancelled in store") unless already On Hold, and **flag** | flag only |
 | Address, note, customer, shipping method, line edits | **Apply** in place (lines added / removed / re-quantified), recompute priority | **Flag** | flag only |
 | Partial refund (refunds present, status unchanged) | **Flag** (voiding is `exceptions`' job) | **Flag** | flag only |
 | Any other status change (e.g. `completed`, `on-hold` in the store) | **Flag** | **Flag** | flag only |
 
 - `wooStatus`, `wooModifiedAt` and `rawPayload` always take the incoming values; they're informational.
-- **Flag** = set `externalChangeDetectedAt` and `externalChangeSummary` = `{ diff, incoming }` (the mapped
-  incoming order). A later change while flagged recomputes the diff against the stored order, so the summary is
+- **Flag** = set `externalChangeDetectedAt` and `externalChangeSummary` = `{ diff, incoming, baseline }` (the
+  mapped incoming order without its raw payload, and the stored `wooStatus` / refunded cents the diff started from,
+  since those columns follow the store). A later change while flagged recomputes the diff against the stored order, so the summary is
   always "stored vs. latest store version", never a stack of partial diffs. Flagging bumps `version` (the floor's
   screen should refresh to show the banner) and notifies.
 - Auto-apply, auto-cancel and auto-hold are written by the **system actor** (below), audited as
@@ -218,8 +222,9 @@ middleware can never produce a system actor.
 | `orders.webhook` (new) | `{ inboundWebhookId }` | webhook receiver |
 | `products.sync` (new) | `{ reason: "schedule" \| "manual" }` | nightly, and the Sync page |
 
-- **One at a time:** `withSyncLock(db, "orders" | "products", fn)` takes a Postgres session advisory lock
-  (`pg_try_advisory_lock`), so the worker, the CLI and a manual run never overlap. Webhook jobs use the per-order
+- **One at a time:** `withSyncLock(db, "orders" | "products", fn)` takes a Postgres advisory lock
+  (`pg_try_advisory_xact_lock`, held by one open transaction for the run, up to 1 h: Prisma's pool can't release a
+  session lock on the connection that took it), so the worker, the CLI and a manual run never overlap. Webhook jobs use the per-order
   lock only, so they're never blocked behind a long poll.
 - **Enqueueing from web:** `@woolrus/core` gains `enqueue(tx, queue, payload)` using pg-boss's `send` with the
   caller's transaction as executor, so a job is only visible if the change that caused it commits. This adds
@@ -234,10 +239,10 @@ middleware can never produce a system actor.
 
 | Procedure | Route | Permission | Returns |
 |---|---|---|---|
-| `sync.status` | `GET /sync/status` | `order.read` | last `ORDERS_POLL` start/finish/status, last webhook received, `stale` (no successful poll for 3 × interval, or the last one failed) |
-| `sync.runs` | `GET /sync/runs` | `settings.manage` | runs, newest first, cursor-paged, with failed count; filter by type |
-| `sync.runErrors` | `GET /sync/runs/{id}/errors` | `settings.manage` | the run's `SyncRunError`s |
-| `sync.run` | `POST /sync/run` | `settings.manage` | enqueues `orders.sync` or `products.sync` (`{ target }`); idempotent on `idempotencyKey` |
+| `sync.status` | `GET /sync/status` | `order.read` | last `ORDERS_POLL` start/finish/status, last success, last webhook received, interval, `stale`: `"failing"` (the last finished poll failed), `"late"` (no successful poll — `SUCCEEDED` or `PARTIAL` — for 3 × interval) or null |
+| `sync.runs` | `GET /sync/runs` | `settings.manage` | runs, newest first, cursor-paged, with counts and the whole-run error as `errorKey` + `errorDetail`; filter by type |
+| `sync.runErrors` | `GET /sync/runs/{id}/errors` | `settings.manage` | the run's `SyncRunError`s as message key + detail, with the order (`id`, `number`) when the WooCommerce id is an imported order |
+| `sync.run` | `POST /sync/run` | `settings.manage` | enqueues a manual `orders.sync` or `products.sync` (`{ target }`), audited `sync.request`; returns `{ target, queued }`; idempotent on `idempotencyKey` |
 | `sync.testConnection` | `POST /sync/test-connection` | `settings.manage` | `{ ok: true, units }` or `{ ok: false, messageKey }` |
 | `orders.externalChange.apply` | `POST /orders/{id}/external-change/apply` | `order.resolveExternalChange` | order detail |
 | `orders.externalChange.dismiss` | `POST /orders/{id}/external-change/dismiss` | `order.resolveExternalChange` | order detail |
@@ -247,15 +252,16 @@ middleware can never produce a system actor.
 
 ### Settings follow-up (`packages/core/src/settings/service.ts`)
 
-`updateSettings`: when `wooStoreUrl` or `lumexiaBaseUrl` changes **origin** (scheme + host + port) and that
-integration has secrets set, the same transaction clears them and writes `secret.clear` audit events with
-`reason: "urlChanged"`. The response lists the cleared names; the Integrations card confirms before saving ("This
-removes the saved keys") and shows them as Not set afterwards. A path-only change keeps the secrets.
+`updateSettings`: when `wooStoreUrl` or `lumexiaBaseUrl` changes **origin** (scheme + host + port), or is removed,
+and that integration has secrets set, the same transaction clears them and writes `secret.clear` audit events with
+`reason: "urlChanged"`. The response lists the cleared names (`clearedSecrets`); the Integrations card confirms
+before saving ("Remove the saved keys?") and shows them as Not set afterwards. A path-only change keeps the secrets,
+and so does setting a URL where there was none.
 
 ### UI
 
 - **Nav (everyone):** "Synced 3 min ago" under the queue list, from `sync.status`, refreshed with the live-update
-  stream; red with "Sync failing" / "Sync late" when `stale` (FR-SYNC-07).
+  stream and every minute; red with "Sync failing" / "Sync late" (or "Not synced yet") when `stale` (FR-SYNC-07).
 - **Sync page** `/sync` (Admin): **Sync orders now** and **Sync products now**; a table of runs (type, status,
   processed, failed, started, duration) with expandable errors (WooCommerce id linked to the order when it
   exists); last webhook received.
@@ -316,7 +322,7 @@ SyncRunError and InboundWebhook already have every column). Needing one means as
 12. **Adapter:** recorded dev-store fixtures parse and map; 429 then 200 succeeds after a retry honouring
     `Retry-After`; 401 → `unauthorized`; a non-Woo URL → `notWooCommerce`. A live test against the dev store
     (`WOO_LIVE=1`, skipped in CI) runs `ping`, `getUnits` and one page of orders.
-13. **E2E (desktop, dev stack):** an admin presses Test connection (OK), then Sync orders now; the seeded
+13. **E2E (desktop, dev stack; `E2E_DEV_STACK=1`, skipped in CI, which has no store or worker):** an admin presses Test connection (OK), then Sync orders now; the seeded
     processing orders appear in the Pending queue and the nav shows a fresh sync time. A signed request to the
     webhook route for an order edited in the dev store shows the external-change banner on its detail page.
 14. Green: `pnpm lint && pnpm typecheck && pnpm test && pnpm build`, plus the Playwright suite.

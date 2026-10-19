@@ -21,7 +21,7 @@ in the same PR as the code.
 | Floor client | Touch-first PWA on rugged Android tablets | Bluetooth scanners in HID (keyboard) mode work in the browser. Offline is not a hard requirement. |
 | Native Android | Later, technology undecided | The API is built for it now: OpenAPI spec, bearer tokens, idempotent mutations. |
 | Redis | Not used | Postgres covers jobs (pg-boss), pub/sub (LISTEN/NOTIFY) and sessions at this scale; jobs can be enqueued in the same transaction as the data change. |
-| Background jobs | pg-boss in `apps/worker`, schema `pgboss` | Queue names and payloads in `@woolrus/core` (`jobs.ts`). |
+| Background jobs | pg-boss in `apps/worker`, schema `pgboss` | Queue names and payloads in `@woolrus/core` (`jobs.ts`). `@woolrus/core` depends on pg-boss too: `enqueue(tx, …)` inserts a job on the caller's Prisma transaction, so web can queue work that exists only if its change commits (2026-10-15). |
 | Live updates | Postgres LISTEN/NOTIFY → Server-Sent Events | Not built yet (FR-LIST-06). |
 
 ## Stack
@@ -86,6 +86,13 @@ positive quantities and dimensions, single-row settings. **Keep them when editin
 
 - **WooCommerce:** REST v3 only (no WPGraphQL / WooGraphQL Pro) + `order.created`/`order.updated` webhooks with
   polling as fallback. Auth is basic auth with a consumer key/secret (HTTPS in production).
+- **No sync cron endpoint** (2026-10-15): FR-SYNC-08's `POST /api/sync/pull` + `SYNC_SECRET` is replaced by the
+  worker's schedule (a 1-minute tick honouring `Settings.syncIntervalMinutes`), the admin's **Sync orders now**
+  and `pnpm sync:pull`. No shared secret to leak, and nothing outside the app can start a sync.
+- **Integration URL moves clear secrets** (2026-10-15): when `wooStoreUrl` or `lumexiaBaseUrl` changes origin
+  (scheme, host or port) or is removed, that integration's saved secrets are cleared in the same update (audited
+  `secret.clear`, reason `urlChanged`), so keys never follow a URL to another server. A path-only change, or a
+  first URL where there was none, keeps them.
 - **ShipStation:** API v2. **Lumexia:** its REST API with a scoped API key. **Storage:** S3-compatible (RustFS).
   Each sits behind an adapter interface in core so it can be swapped.
 
