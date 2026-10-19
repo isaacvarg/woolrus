@@ -250,7 +250,7 @@ focused tests; checkpoints run the full green set. Add a `Done:` line (2–3 lin
 
 ## Phase 5: Admin surfaces and finish
 
-- [ ] **T13: Sync API**
+- [x] **T13: Sync API**
   - Core reads/commands + contract + router: `sync.status` (`order.read`; last poll, last webhook, `stale` = no
     successful poll for 3 × interval or last failed), `sync.runs` (cursor, type filter), `sync.runErrors`,
     `sync.run` (`{ target: "orders"|"products" }`, idempotency key, enqueues), `sync.testConnection`
@@ -261,6 +261,12 @@ focused tests; checkpoints run the full green set. Add a `Done:` line (2–3 lin
   - Files: `core/src/sync/status.ts` (+test), `contracts/src/sync.ts`, `contracts/src/index.ts`,
     `apps/web/src/server/router.ts`.
   - Deps: T5, T6 · Size: M
+  - Done: `sync/status.ts`: `getSyncStatus` (`stale: "failing" | "late" | null`; PARTIAL counts as success, a
+    RUNNING poll is looked past), `listSyncRuns` (cursor on startedAt+id; `errorKey`/`errorDetail` split from
+    `"<key>: <detail>"`), `listSyncRunErrors` (`order: { id, number }` for imported orders, never for PRODUCTS runs),
+    `requestSync` (idempotent, enqueues `{ reason: "manual" }`, audits `sync.request`, returns `{ target, queued }`),
+    `testStoreConnection(db, actor, connect?)` (10 s timeout; StoreError/AppError → `{ ok: false, messageKey }`).
+    Contract `SyncType` includes the DB's `CARRIERS`. Signed-out 401 is middleware: assert it in T17's e2e.
 
 - [ ] **T14: Nav indicator and Sync page**
   - Nav "Synced n min ago" from `sync.status`, refreshed on the live stream, red "Sync failing" / "Sync late" when
