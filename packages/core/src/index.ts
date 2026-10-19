@@ -12,6 +12,7 @@ export { encryptionKey } from "./settings/env";
 export * from "./settings/format";
 export * from "./settings/integration";
 export * from "./settings/service";
+export * from "./sync/orders";
 export * from "./units";
 export * from "./workflow/actions";
 export * from "./workflow/claims";

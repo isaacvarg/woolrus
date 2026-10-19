@@ -317,7 +317,9 @@
       "unreachable": "No se pudo conectar con WooCommerce. Revisa la URL de la tienda y que esté en línea.",
       "notWooCommerce": "Esa URL no parece una tienda WooCommerce (no se encontró la API REST v3).",
       "rateLimited": "WooCommerce está limitando las solicitudes. La sincronización lo intentará de nuevo en breve.",
-      "badResponse": "WooCommerce envió una respuesta que Woolrus no pudo leer."
+      "badResponse": "WooCommerce envió una respuesta que Woolrus no pudo leer.",
+      "notConfigured": "WooCommerce aún no está configurado. Agrega la URL de la tienda y las claves en Configuración → Integraciones.",
+      "importFailed": "No se pudo guardar el pedido. La sincronización lo intentará de nuevo en la próxima ejecución."
     }
   }
 }

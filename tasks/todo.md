@@ -67,11 +67,11 @@ focused tests; checkpoints run the full green set. Add a `Done:` line (2–3 lin
 ### Checkpoint 1
 - [x] Full green (`pnpm lint && pnpm typecheck && pnpm test && pnpm build`).
 - [x] Live adapter test passes against the dev store.
-- [ ] Review with the user.
+- [x] Review with the user.
 
 ## Phase 2: Import
 
-- [ ] **T4: First import of new orders**
+- [x] **T4: First import of new orders**
   - `syncOrders(db, store, { type })` first-run path: write `SyncRun`, fetch every `processing` order, fetch and
     refresh referenced products/variations (24 h staleness) outside the transaction, then per order in one
     transaction under `pg_advisory_xact_lock(wooOrderId)`: upsert products, create `Order` (`PENDING`) +
@@ -84,6 +84,12 @@ focused tests; checkpoints run the full green set. Add a `Done:` line (2–3 lin
   - Files: `core/src/sync/{orders,products-upsert,runs}.ts`, `orders.test.ts`, `core/test/factories.ts` (fake
     helpers), `core/src/index.ts`.
   - Deps: T2, T3 · Size: M/L
+  - Done: `sync/orders.ts` `syncOrders(db, store | null, { type, now })` → `{ runId, status, imported, skipped,
+    failed }` (null store = `notConfigured`). Known orders are skipped for now: T5/T8 hook in at `importOrder`. Per
+    order: `fetchOrderCatalog` (outside tx, 24 h freshness) then `upsertCatalog` in the tx (`products-upsert.ts`);
+    lock is `pg_advisory_xact_lock(4201002, wooOrderId)`. `runs.ts`: `startRun`/`finishRun`/`recordRunError`;
+    run errors are `"<key>"` or `"<key>: <detail>"` (Prisma errors give their code only, never the message). A page
+    failure fails the whole run (so T5's watermark can't move past unseen orders). Fake lists newest first.
 
 - [ ] **T5: Incremental polling, idempotency and the run lock**
   - Watermark (last finished poll start − 10 min, `modified_after`, any status) + `include=` refetch of the previous
