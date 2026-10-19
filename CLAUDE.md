@@ -51,6 +51,22 @@ One module per branch and PR where practical (`<module-id>/<short-description>`)
 section it implements, lists the tickets it carries, closes its spec issue when the module ships (`Closes #<n>`),
 and updates the status table in `SPEC.md`.
 
+## Agent skills
+
+### Issue tracker
+
+GitHub Issues on `isaacvarg/woolrus` via `gh`: one spec issue per module, tickets as its sub-issues. See
+`docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The five default roles, each label string equal to its role name. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context, using the project's own docs (`docs/decisions.md`, `docs/srs.md`, `docs/specs/`); no `GLOSSARY.md`
+or `docs/adr/`. See `docs/agents/domain.md`.
+
 ## Things that bite
 
 - `.env` lives at the repo root and is loaded by every app; copy from `.env.example`.
