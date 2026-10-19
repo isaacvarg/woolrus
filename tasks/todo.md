@@ -128,8 +128,8 @@ focused tests; checkpoints run the full green set. Add a `Done:` line (2–3 lin
     worker's `dev` and `sync:pull` scripts. `orders.webhook` / `products.sync` queues exist with no handler yet.
 
 ### Checkpoint 2
-- [ ] Full green.
-- [ ] Dev stack: worker imports the dev store's orders into the Pending queue within the interval; they show in
+- [x] Full green.
+- [x] Dev stack: worker imports the dev store's orders into the Pending queue within the interval; they show in
       `/queue/pending` with products, priority and item counts.
 - [ ] Review with the user.
 
