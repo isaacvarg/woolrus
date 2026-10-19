@@ -44,8 +44,8 @@ Each module goes through gated phases. **Stop for the user's approval at the end
 | Review | `/agent-skills:review` | findings fixed |
 | Ship | `/agent-skills:ship`, then a PR | status `done`; spec issue closed |
 
-Use `/ticket`, not Matt's `/implement`: it keeps the agent-skills build loop. `/to-tickets` and Matt's other
-tracker skills read the tracker setup written by `/setup-matt-pocock-skills`.
+Use `/ticket`, not Matt's `/implement`: it keeps the agent-skills build loop. `/to-tickets` reads its tracker
+setup from `docs/agents/`.
 
 One module per branch and PR where practical (`<module-id>/<short-description>`). Each PR links to the spec
 section it implements, lists the tickets it carries, closes its spec issue when the module ships (`Closes #<n>`),
@@ -53,19 +53,8 @@ and updates the status table in `SPEC.md`.
 
 ## Agent skills
 
-### Issue tracker
-
-GitHub Issues on `isaacvarg/woolrus` via `gh`: one spec issue per module, tickets as its sub-issues. See
-`docs/agents/issue-tracker.md`.
-
-### Triage labels
-
-The five default roles, each label string equal to its role name. See `docs/agents/triage-labels.md`.
-
-### Domain docs
-
-Single-context, using the project's own docs (`docs/decisions.md`, `docs/srs.md`, `docs/specs/`); no `GLOSSARY.md`
-or `docs/adr/`. See `docs/agents/domain.md`.
+Matt Pocock's skills are used for `/to-tickets` only; its config is in `docs/agents/`. Every other phase uses
+agent-skills, so don't use `/implement`, `/to-spec`, `/triage`, or Matt's `tdd` and `code-review` skills.
 
 ## Things that bite
 
