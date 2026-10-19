@@ -268,7 +268,7 @@ focused tests; checkpoints run the full green set. Add a `Done:` line (2–3 lin
     `testStoreConnection(db, actor, connect?)` (10 s timeout; StoreError/AppError → `{ ok: false, messageKey }`).
     Contract `SyncType` includes the DB's `CARRIERS`. Signed-out 401 is middleware: assert it in T17's e2e.
 
-- [ ] **T14: Nav indicator and Sync page**
+- [x] **T14: Nav indicator and Sync page**
   - Nav "Synced n min ago" from `sync.status`, refreshed on the live stream, red "Sync failing" / "Sync late" when
     stale (FR-SYNC-07). `/sync` (Admin, nav entry): Sync orders now / Sync products now, runs table with expandable
     errors (Woo id links to the order when it exists), last webhook received. en + es.
@@ -278,6 +278,12 @@ focused tests; checkpoints run the full green set. Add a `Done:` line (2–3 lin
   - Files: `apps/web/src/app/(app)/layout.tsx`, `apps/web/src/app/(app)/sync/{page,sync-runs}.tsx`, nav component,
     `i18n` en/es.
   - Deps: T13 · Size: M
+  - Done: `(app)/sync-indicator.tsx` (in the layout under the queues; `useNow` + 60 s refetch; `lib/live.ts` now
+    invalidates `sync.status` on every order event), `(app)/sync/{page,sync-runs}.tsx` (infinite runs query, 2 s
+    refresh while running or just queued, errors per run on expand). e2e in `e2e/sync.spec.ts`; the worker-dependent
+    check runs only with `E2E_DEV_STACK=1`. Gotchas: a long-running `next dev` can serve a stale REST route table
+    after contract changes (500 on new `/api/v1` paths, RPC fine): verify on `next start` (`web-prod` in
+    `.claude/launch.json`, :3100). The tablet nav drawer stays open after a link click, so tests `goto` instead.
 
 - [ ] **T15: URL origin change clears secrets**
   - `updateSettings`: origin change (scheme + host + port) of `wooStoreUrl` / `lumexiaBaseUrl` with secrets set

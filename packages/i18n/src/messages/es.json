@@ -19,7 +19,8 @@
     "onHold": "En espera",
     "allOrders": "Todos los pedidos",
     "queues": "Colas",
-    "priorityRules": "Reglas de prioridad"
+    "priorityRules": "Reglas de prioridad",
+    "sync": "Sincronización"
   },
   "boxes": {
     "title": "Cajas",
@@ -288,6 +289,48 @@
     "reason": {
       "imported": "Importado desde WooCommerce",
       "cancelledInStore": "Cancelado en la tienda"
+    },
+    "indicator": {
+      "synced": "Sincronizado {time}",
+      "justNow": "Sincronizado hace un momento",
+      "failing": "La sincronización falla",
+      "late": "Sincronización atrasada",
+      "never": "Aún sin sincronizar",
+      "lastSuccess": "Último éxito {time}"
+    },
+    "page": {
+      "title": "Sincronización",
+      "intro": "Los pedidos se sincronizan según el horario y con los webhooks de la tienda. Usa estos botones para sincronizar ahora mismo.",
+      "syncOrders": "Sincronizar pedidos ahora",
+      "syncProducts": "Sincronizar productos ahora",
+      "queued": "Sincronización en cola. Aparece en el registro cuando el worker la inicia.",
+      "lastWebhook": "Último webhook recibido",
+      "noWebhook": "Ninguno aún",
+      "runs": "Registro de sincronización",
+      "type": "Tipo",
+      "status": "Estado",
+      "processed": "Procesados",
+      "failed": "Fallidos",
+      "started": "Inicio",
+      "duration": "Duración",
+      "showErrors": "Ver errores",
+      "hideErrors": "Ocultar errores",
+      "record": "Id de WooCommerce",
+      "error": "Error",
+      "noErrors": "Sin errores por registro.",
+      "loadMore": "Cargar más"
+    },
+    "type": {
+      "ORDERS_POLL": "Pedidos",
+      "ORDERS_WEBHOOK": "Webhook de pedido",
+      "PRODUCTS": "Productos",
+      "CARRIERS": "Transportistas"
+    },
+    "runStatus": {
+      "RUNNING": "En curso",
+      "SUCCEEDED": "Correcta",
+      "PARTIAL": "Parcial",
+      "FAILED": "Fallida"
     }
   },
   "errors": {

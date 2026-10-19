@@ -19,7 +19,8 @@
     "onHold": "On Hold",
     "allOrders": "All Orders",
     "queues": "Queues",
-    "priorityRules": "Priority rules"
+    "priorityRules": "Priority rules",
+    "sync": "Sync"
   },
   "boxes": {
     "title": "Boxes",
@@ -288,6 +289,48 @@
     "reason": {
       "imported": "Imported from WooCommerce",
       "cancelledInStore": "Cancelled in the store"
+    },
+    "indicator": {
+      "synced": "Synced {time}",
+      "justNow": "Synced just now",
+      "failing": "Sync failing",
+      "late": "Sync late",
+      "never": "Not synced yet",
+      "lastSuccess": "Last success {time}"
+    },
+    "page": {
+      "title": "Sync",
+      "intro": "Orders sync on a schedule and from store webhooks. Use these buttons to run a sync right away.",
+      "syncOrders": "Sync orders now",
+      "syncProducts": "Sync products now",
+      "queued": "Sync queued. It shows in the log when the worker starts it.",
+      "lastWebhook": "Last webhook received",
+      "noWebhook": "None yet",
+      "runs": "Sync log",
+      "type": "Type",
+      "status": "Status",
+      "processed": "Processed",
+      "failed": "Failed",
+      "started": "Started",
+      "duration": "Duration",
+      "showErrors": "Show errors",
+      "hideErrors": "Hide errors",
+      "record": "WooCommerce id",
+      "error": "Error",
+      "noErrors": "No record-level errors.",
+      "loadMore": "Load more"
+    },
+    "type": {
+      "ORDERS_POLL": "Orders",
+      "ORDERS_WEBHOOK": "Order webhook",
+      "PRODUCTS": "Products",
+      "CARRIERS": "Carriers"
+    },
+    "runStatus": {
+      "RUNNING": "Running",
+      "SUCCEEDED": "Succeeded",
+      "PARTIAL": "Partial",
+      "FAILED": "Failed"
     }
   },
   "errors": {
