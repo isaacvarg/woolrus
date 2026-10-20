@@ -21,7 +21,8 @@
     "queues": "Colas",
     "priorityRules": "Reglas de prioridad",
     "sync": "Sincronización",
-    "users": "Usuarios"
+    "users": "Usuarios",
+    "stations": "Estaciones"
   },
   "navFooter": {
     "preferences": "Preferencias",
@@ -467,6 +468,15 @@
       "deactivated": "Tu cuenta está desactivada. Pide a un administrador que la reactive.",
       "signInFailed": "No se pudo iniciar sesión. Inténtalo de nuevo.",
       "linkInvalid": "Ese enlace ha vencido o ya se usó. Pide uno nuevo."
+    },
+    "stations": {
+      "nameTaken": "Ya hay una estación con ese nombre.",
+      "nameTooLong": "Usa como máximo 40 caracteres.",
+      "personalOnly": "Registra una estación desde tu propia sesión, no desde una estación."
+    },
+    "station": {
+      "locked": "Esta estación está bloqueada. Desbloquéala para continuar.",
+      "unknown": "Este dispositivo ya no es una estación."
     }
   },
   "emails": {
@@ -561,6 +571,35 @@
       "accepted": "Aceptada",
       "revoked": "Revocada"
     }
+  },
+  "station": {
+    "locked": "Bloqueada",
+    "prompt": "Desbloquea con tu PIN o credencial para empezar."
+  },
+  "stations": {
+    "title": "Estaciones",
+    "name": "Nombre",
+    "currentUser": "Usuario actual",
+    "lastSeen": "Última actividad",
+    "status": "Estado",
+    "active": "Activa",
+    "revoked": "Revocada",
+    "never": "Nunca",
+    "nobody": "—",
+    "actions": "Acciones",
+    "actionsFor": "Acciones para {name}",
+    "register": "Convertir este dispositivo en estación",
+    "registerTitle": "Convertir este dispositivo en estación",
+    "registerBody": "Se cerrará tu sesión en este dispositivo y mostrará la pantalla de bloqueo de la estación. El personal la desbloquea con su PIN o credencial.",
+    "registerSubmit": "Convertir en estación",
+    "rename": "Renombrar",
+    "renameTitle": "Renombrar {name}",
+    "revoke": "Revocar",
+    "revokeTitle": "¿Revocar {name}?",
+    "revokeBody": "El dispositivo vuelve a la página de inicio de sesión y quien esté en él queda bloqueado.",
+    "none": "Todavía no hay estaciones.",
+    "renamed": "Estación renombrada.",
+    "revokedToast": "{name} revocada."
   },
   "signIn": {
     "title": "Iniciar sesión",

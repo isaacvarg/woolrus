@@ -21,7 +21,8 @@
     "queues": "Queues",
     "priorityRules": "Priority rules",
     "sync": "Sync",
-    "users": "Users"
+    "users": "Users",
+    "stations": "Stations"
   },
   "navFooter": {
     "preferences": "Preferences",
@@ -467,6 +468,15 @@
       "deactivated": "Your account is deactivated. Ask an admin to reactivate it.",
       "signInFailed": "Sign-in didn't work. Try again.",
       "linkInvalid": "That sign-in link has expired or was already used. Ask for a new one."
+    },
+    "stations": {
+      "nameTaken": "There's already a station with that name.",
+      "nameTooLong": "Use at most 40 characters.",
+      "personalOnly": "Register a station from your own sign-in, not from a station."
+    },
+    "station": {
+      "locked": "This station is locked. Unlock it to continue.",
+      "unknown": "This device is no longer a station."
     }
   },
   "emails": {
@@ -561,6 +571,35 @@
       "accepted": "Accepted",
       "revoked": "Revoked"
     }
+  },
+  "station": {
+    "locked": "Locked",
+    "prompt": "Unlock with your PIN or badge to start."
+  },
+  "stations": {
+    "title": "Stations",
+    "name": "Name",
+    "currentUser": "Current user",
+    "lastSeen": "Last seen",
+    "status": "Status",
+    "active": "Active",
+    "revoked": "Revoked",
+    "never": "Never",
+    "nobody": "—",
+    "actions": "Actions",
+    "actionsFor": "Actions for {name}",
+    "register": "Make this device a station",
+    "registerTitle": "Make this device a station",
+    "registerBody": "You'll be signed out on this device, and it will show the station lock screen. Staff then unlock it with their PIN or badge.",
+    "registerSubmit": "Make it a station",
+    "rename": "Rename",
+    "renameTitle": "Rename {name}",
+    "revoke": "Revoke",
+    "revokeTitle": "Revoke {name}?",
+    "revokeBody": "The device goes back to the sign-in page, and whoever is on it is locked out.",
+    "none": "No stations yet.",
+    "renamed": "Station renamed.",
+    "revokedToast": "{name} revoked."
   },
   "signIn": {
     "title": "Sign in",

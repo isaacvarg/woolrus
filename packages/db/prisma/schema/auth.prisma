@@ -181,13 +181,15 @@ enum StationLockReason {
 
 /// One stretch of a user being the active user on a station.
 model StationActivation {
-  id        String              @id @default(uuid(7)) @db.Uuid
-  stationId String              @map("station_id") @db.Uuid
-  userId    String              @map("user_id") @db.Uuid
-  method    StationUnlockMethod
-  startedAt DateTime            @default(now()) @map("started_at") @db.Timestamptz(3)
-  endedAt   DateTime?           @map("ended_at") @db.Timestamptz(3)
-  endReason StationLockReason?  @map("end_reason")
+  id             String              @id @default(uuid(7)) @db.Uuid
+  stationId      String              @map("station_id") @db.Uuid
+  userId         String              @map("user_id") @db.Uuid
+  method         StationUnlockMethod
+  startedAt      DateTime            @default(now()) @map("started_at") @db.Timestamptz(3)
+  endedAt        DateTime?           @map("ended_at") @db.Timestamptz(3)
+  endReason      StationLockReason?  @map("end_reason")
+  /// Last pointer, key or scan input; idle lock compares it with Settings.stationIdleLockMinutes.
+  lastActivityAt DateTime            @default(now()) @map("last_activity_at") @db.Timestamptz(3)
 
   station Station @relation(fields: [stationId], references: [id], onDelete: Cascade)
   user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)

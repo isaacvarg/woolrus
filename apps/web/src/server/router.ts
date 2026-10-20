@@ -19,6 +19,7 @@ import {
   listOrders,
   listPriorityRules,
   listQueue,
+  listStations,
   listSyncRunErrors,
   listSyncRuns,
   listUsers,
@@ -26,14 +27,18 @@ import {
   permissionsFor,
   queueCounts,
   reactivateUser,
+  registerStation,
+  renameStation,
   reorderPriorityRules,
   requestSync,
   resendInvitation,
   revokeBadge,
   revokeInvitation,
+  revokeStation,
   sendTestEmail,
   setPin,
   setSecret,
+  stationStatus,
   testStoreConnection,
   updatePreferences,
   updatePriorityRule,
@@ -42,12 +47,14 @@ import {
 } from "@woolrus/core";
 import { db } from "@woolrus/db";
 import { preferenceCookie } from "@/lib/preferences";
+import { auth } from "./auth";
 import { badgeQrSvg } from "./badge";
 import { env } from "./env";
-import { api } from "./orpc";
+import { api, implementer, stationApi } from "./orpc";
+import { stationCookie } from "./station-cookie";
 
 // Thin by design: parse (done by the contract), call core, return. No rules live here.
-export const router = api.router({
+export const router = implementer.router({
   me: {
     get: api.me.get.handler(({ context: { user, actor } }) => ({
       id: user.id,
@@ -210,6 +217,29 @@ export const router = api.router({
     revoke: api.invitations.revoke.handler(({ input, context }) =>
       revokeInvitation(db, context.actor, input),
     ),
+  },
+  stations: {
+    list: api.stations.list.handler(({ context }) => listStations(db, context.actor)),
+    // The device becomes the station: it gets the station cookie, and the admin's own session on
+    // it ends. The token goes only into the cookie, never the body.
+    register: api.stations.register.handler(async ({ input, context }) => {
+      const { station, token } = await registerStation(db, context.actor, input);
+      context.resHeaders?.append("Set-Cookie", stationCookie(token));
+      const signedOut = await auth().api.signOut({ headers: context.headers, returnHeaders: true });
+      for (const cookie of signedOut.headers.getSetCookie()) {
+        context.resHeaders?.append("Set-Cookie", cookie);
+      }
+      return station;
+    }),
+    rename: api.stations.rename.handler(({ input, context }) =>
+      renameStation(db, context.actor, input),
+    ),
+    revoke: api.stations.revoke.handler(({ input, context }) =>
+      revokeStation(db, context.actor, input),
+    ),
+  },
+  station: {
+    status: stationApi.station.status.handler(({ context }) => stationStatus(db, context.station)),
   },
 });
 

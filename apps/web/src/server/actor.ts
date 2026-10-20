@@ -1,8 +1,9 @@
-import type { UserActor } from "@woolrus/core";
-import { db, type User } from "@woolrus/db";
+import { findStationByToken, type UserActor } from "@woolrus/core";
+import { db, type Station, type User } from "@woolrus/db";
 import { headers } from "next/headers";
 import { cache } from "react";
 import { auth } from "./auth";
+import { stationToken } from "./station-cookie";
 
 /**
  * The one rule for who is acting: the session (cookie or bearer token) must belong to an active
@@ -16,6 +17,20 @@ export async function resolveActor(
   const user = session ? await db.user.findUnique({ where: { id: session.user.id } }) : null;
   if (!user?.active) return null;
   return { user, actor: { userId: user.id, roles: user.roles, stationId: null } };
+}
+
+/**
+ * What the station cookie says about this device: no cookie, an active station, or a cookie whose
+ * station is gone (revoked), which the caller should clear. Until a user unlocks it (later
+ * ticket), a station acts as nobody: requests get `errors.station.locked`.
+ */
+export async function resolveStationDevice(
+  requestHeaders: Headers,
+): Promise<{ kind: "none" } | { kind: "station"; station: Station } | { kind: "stale" }> {
+  const token = stationToken(requestHeaders);
+  if (!token) return { kind: "none" };
+  const station = await findStationByToken(db, token);
+  return station ? { kind: "station", station } : { kind: "stale" };
 }
 
 /** The session for the current request, shared by the layout and page of one render. */

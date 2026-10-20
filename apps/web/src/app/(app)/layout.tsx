@@ -1,9 +1,10 @@
 import { can } from "@woolrus/core";
+import { headers } from "next/headers";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 import { OrderEvents } from "@/lib/live";
-import { currentActor, currentSession, currentUser } from "@/server/actor";
+import { currentActor, currentSession, currentUser, resolveStationDevice } from "@/server/actor";
 import { DrawerNav } from "./drawer-nav";
 import { NavFooter } from "./nav-footer";
 import { QueueNav } from "./queue-nav";
@@ -13,7 +14,12 @@ import { SyncIndicator } from "./sync-indicator";
 // keeps signed-out users on the sign-in page.
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const session = await currentSession();
-  if (!session) redirect("/sign-in");
+  // A station device never shows the personal sign-in page: it shows its lock screen, which also
+  // forgets a revoked station's cookie. A personal session on a station device wins.
+  if (!session) {
+    const device = await resolveStationDevice(await headers());
+    redirect(device.kind === "none" ? "/sign-in" : "/station");
+  }
   const actor = await currentActor();
   const user = await currentUser();
   const t = await getTranslations();
@@ -47,6 +53,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           {actor && can(actor, "user.manage") && (
             <li>
               <Link href="/users">{t("nav.users")}</Link>
+            </li>
+          )}
+          {actor && can(actor, "station.manage") && (
+            <li>
+              <Link href="/stations">{t("nav.stations")}</Link>
             </li>
           )}
           {actor && can(actor, "settings.manage") && (
