@@ -36,7 +36,10 @@
     },
     "collapseSidebar": "Contraer barra lateral",
     "expandSidebar": "Expandir barra lateral",
-    "logOut": "Cerrar sesión"
+    "logOut": "Cerrar sesión",
+    "lock": "Bloquear",
+    "switchUser": "Cambiar de usuario",
+    "station": "Estación: {name}"
   },
   "boxes": {
     "title": "Cajas",
@@ -476,7 +479,11 @@
     },
     "station": {
       "locked": "Esta estación está bloqueada. Desbloquéala para continuar.",
-      "unknown": "Este dispositivo ya no es una estación."
+      "unknown": "Este dispositivo ya no es una estación.",
+      "badPin": "Ese PIN no es correcto.",
+      "pinLocked": "Demasiados PIN incorrectos. Vuelve a intentarlo a las {until, time, short}.",
+      "badBadge": "No se reconoce esa credencial.",
+      "notStation": "Solo se puede bloquear una estación."
     }
   },
   "emails": {
@@ -574,7 +581,18 @@
   },
   "station": {
     "locked": "Bloqueada",
-    "prompt": "Desbloquea con tu PIN o credencial para empezar."
+    "prompt": "Toca tu nombre e introduce tu PIN, o escanea tu credencial.",
+    "choose": "¿Quién está trabajando?",
+    "enterPin": "PIN de {name}",
+    "pinDigit": "Dígito {n}",
+    "clear": "Borrar todo",
+    "backspace": "Borrar",
+    "cancel": "Volver",
+    "unlock": "Desbloquear",
+    "badge": "Credencial",
+    "noTiles": "Nadie tiene PIN todavía. Escanea tu credencial o pide a un administrador que te asigne un PIN.",
+    "activeUser": "{name} está en esta estación.",
+    "keepWorking": "Seguir como {name}"
   },
   "stations": {
     "title": "Estaciones",

@@ -29,6 +29,8 @@ export const Me = z.object({
   theme: Theme,
   sidebarCollapsed: z.boolean(),
   stationId: Id.nullable(),
+  /** The station this request acts from, if any: the nav shows it, and Lock instead of Log out. */
+  stationName: z.string().nullable(),
 });
 export type Me = z.infer<typeof Me>;
 

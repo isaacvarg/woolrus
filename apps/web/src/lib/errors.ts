@@ -11,6 +11,17 @@ function errorData(
     : undefined;
 }
 
+// Times travel as ISO strings ("try again at {until, time, short}"); ICU formats only Dates.
+const isoTime = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/;
+function revive(params: object): never {
+  return Object.fromEntries(
+    Object.entries(params).map(([name, value]) => [
+      name,
+      typeof value === "string" && isoTime.test(value) ? new Date(value) : value,
+    ]),
+  ) as never;
+}
+
 /** Translates any API error into the user's language using the error's message key. */
 export function useErrorMessage() {
   const t = useTranslations();
@@ -19,7 +30,7 @@ export function useErrorMessage() {
     // and `params` for messages that name something ("{name} is working on this order.").
     const { messageKey: key, params } = errorData(error) ?? {};
     if (typeof key === "string" && t.has(key)) {
-      return t(key, typeof params === "object" && params !== null ? (params as never) : undefined);
+      return t(key, typeof params === "object" && params !== null ? revive(params) : undefined);
     }
     return t("errors.internal");
   };

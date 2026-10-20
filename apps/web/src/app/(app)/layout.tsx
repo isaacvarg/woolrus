@@ -4,24 +4,24 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 import { OrderEvents } from "@/lib/live";
-import { currentActor, currentSession, currentUser, resolveStationDevice } from "@/server/actor";
+import { currentActor, currentStation, currentUser, resolveStationDevice } from "@/server/actor";
 import { DrawerNav } from "./drawer-nav";
 import { NavFooter } from "./nav-footer";
 import { QueueNav } from "./queue-nav";
 import { SyncIndicator } from "./sync-indicator";
 
-// Everything under (app) requires a session. The API enforces auth independently; this only
-// keeps signed-out users on the sign-in page.
+// Everything under (app) requires someone acting: a personal session or an unlocked station. The
+// API enforces auth independently; this only keeps everyone else on the sign-in or lock screen.
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const session = await currentSession();
+  const actor = await currentActor();
   // A station device never shows the personal sign-in page: it shows its lock screen, which also
   // forgets a revoked station's cookie. A personal session on a station device wins.
-  if (!session) {
+  if (!actor) {
     const device = await resolveStationDevice(await headers());
     redirect(device.kind === "none" ? "/sign-in" : "/station");
   }
-  const actor = await currentActor();
   const user = await currentUser();
+  const station = await currentStation();
   const t = await getTranslations();
   // A collapsed sidebar on desktop behaves like the tablet drawer: hidden behind the menu button.
   const collapsed = user?.sidebarCollapsed ?? false;
@@ -50,17 +50,17 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <li className="mt-4">
             <Link href="/boxes">{t("nav.boxes")}</Link>
           </li>
-          {actor && can(actor, "user.manage") && (
+          {can(actor, "user.manage") && (
             <li>
               <Link href="/users">{t("nav.users")}</Link>
             </li>
           )}
-          {actor && can(actor, "station.manage") && (
+          {can(actor, "station.manage") && (
             <li>
               <Link href="/stations">{t("nav.stations")}</Link>
             </li>
           )}
-          {actor && can(actor, "settings.manage") && (
+          {can(actor, "settings.manage") && (
             <>
               <li>
                 <Link href="/settings">{t("nav.settings")}</Link>
@@ -77,6 +77,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             <NavFooter
               name={user.name}
               email={user.email}
+              stationName={station?.name ?? null}
               preferences={{
                 locale: user.locale,
                 theme: user.theme,

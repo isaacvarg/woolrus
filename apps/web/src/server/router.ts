@@ -23,6 +23,7 @@ import {
   listSyncRunErrors,
   listSyncRuns,
   listUsers,
+  lockStation,
   orderMutations,
   permissionsFor,
   queueCounts,
@@ -40,6 +41,8 @@ import {
   setSecret,
   stationStatus,
   testStoreConnection,
+  unlockWithBadge,
+  unlockWithPin,
   updatePreferences,
   updatePriorityRule,
   updateSettings,
@@ -56,7 +59,7 @@ import { stationCookie } from "./station-cookie";
 // Thin by design: parse (done by the contract), call core, return. No rules live here.
 export const router = implementer.router({
   me: {
-    get: api.me.get.handler(({ context: { user, actor } }) => ({
+    get: api.me.get.handler(({ context: { user, actor, station } }) => ({
       id: user.id,
       name: user.name,
       email: user.email,
@@ -67,6 +70,7 @@ export const router = implementer.router({
       theme: user.theme,
       sidebarCollapsed: user.sidebarCollapsed,
       stationId: actor.stationId,
+      stationName: station?.name ?? null,
     })),
     updatePreferences: api.me.updatePreferences.handler(async ({ input, context }) => {
       const preferences = await updatePreferences(db, context.actor, input);
@@ -240,6 +244,16 @@ export const router = implementer.router({
   },
   station: {
     status: stationApi.station.status.handler(({ context }) => stationStatus(db, context.station)),
+    unlockPin: stationApi.station.unlockPin.handler(({ input, context }) =>
+      unlockWithPin(db, context.station, input),
+    ),
+    unlockBadge: stationApi.station.unlockBadge.handler(({ input, context }) =>
+      unlockWithBadge(db, context.station, input),
+    ),
+    lock: api.station.lock.handler(async ({ context }) => {
+      await lockStation(db, context.actor);
+      return { ok: true as const };
+    }),
   },
 });
 

@@ -36,7 +36,10 @@
     },
     "collapseSidebar": "Collapse sidebar",
     "expandSidebar": "Expand sidebar",
-    "logOut": "Log out"
+    "logOut": "Log out",
+    "lock": "Lock",
+    "switchUser": "Switch user",
+    "station": "Station: {name}"
   },
   "boxes": {
     "title": "Boxes",
@@ -476,7 +479,11 @@
     },
     "station": {
       "locked": "This station is locked. Unlock it to continue.",
-      "unknown": "This device is no longer a station."
+      "unknown": "This device is no longer a station.",
+      "badPin": "That PIN isn't right.",
+      "pinLocked": "Too many wrong PINs. Try again at {until, time, short}.",
+      "badBadge": "That badge isn't recognized.",
+      "notStation": "Only a station can be locked."
     }
   },
   "emails": {
@@ -574,7 +581,18 @@
   },
   "station": {
     "locked": "Locked",
-    "prompt": "Unlock with your PIN or badge to start."
+    "prompt": "Tap your name and enter your PIN, or scan your badge.",
+    "choose": "Who's working?",
+    "enterPin": "PIN for {name}",
+    "pinDigit": "Digit {n}",
+    "clear": "Clear",
+    "backspace": "Delete",
+    "cancel": "Back",
+    "unlock": "Unlock",
+    "badge": "Badge",
+    "noTiles": "Nobody has a PIN yet. Scan your badge, or ask an admin to set your PIN.",
+    "activeUser": "{name} is on this station.",
+    "keepWorking": "Keep working as {name}"
   },
   "stations": {
     "title": "Stations",

@@ -49,7 +49,7 @@ const mapErrors = os.middleware(async ({ next, context }) => {
 
 /**
  * Deny by default (NFR-SEC-01): every procedure goes through `authed`, which resolves the
- * request to an active user's Actor (see `resolveActor`).
+ * request to an active user's Actor, personal or at a station (see `resolveActor`).
  */
 const authed = os.middleware(async ({ next, context }) => {
   const resolved = await resolveActor(context.headers);
@@ -62,15 +62,16 @@ const authed = os.middleware(async ({ next, context }) => {
     if (device.kind === "stale") context.resHeaders?.append("Set-Cookie", clearStationCookie());
     throw new ORPCError("UNAUTHORIZED", { data: { messageKey: "errors.unauthenticated" } });
   }
-  const { actor, user } = resolved;
-  return next({ context: { actor, user, log: context.log.child({ userId: user.id }) } });
+  const { actor, user, station } = resolved;
+  const log = context.log.child({ userId: user.id, stationId: actor.stationId ?? undefined });
+  return next({ context: { actor, user, station, log } });
 });
 
 export const api = os.use(mapErrors).use(authed);
 
 /**
- * For the station device itself (status, and unlocking later): a valid station cookie, and no
- * unlocked user needed. A revoked station's cookie is cleared.
+ * For the station device itself (status, unlock): a valid station cookie, and no unlocked user
+ * needed. A revoked station's cookie is cleared.
  */
 const stationDevice = os.middleware(async ({ next, context }) => {
   const device = await resolveStationDevice(context.headers);

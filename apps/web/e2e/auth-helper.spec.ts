@@ -38,8 +38,9 @@ test("a deactivated user keeps no access, in the API or the pages", async ({ pag
   await db.user.update({ where: { id: admin.id }, data: { active: false } });
 
   expect((await page.request.get("/api/v1/me")).status()).toBe(401);
+  // Pages resolve the actor the same way as the API: an inactive user's session is nobody's.
   await page.goto("/settings");
-  await expect(page.getByText("You don't have permission to do that.")).toBeVisible();
+  await expect(page).toHaveURL(/\/sign-in$/);
 });
 
 test("the order event stream refuses signed-out callers and users who can't read orders", async ({
