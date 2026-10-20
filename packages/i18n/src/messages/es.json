@@ -23,6 +23,20 @@
     "sync": "Sincronización",
     "users": "Usuarios"
   },
+  "navFooter": {
+    "preferences": "Preferencias",
+    "language": "Idioma",
+    "theme": "Tema",
+    "themes": {
+      "SYSTEM": "Sistema",
+      "LIGHT": "Claro",
+      "DARK": "Oscuro",
+      "HIGH_CONTRAST": "Alto contraste"
+    },
+    "collapseSidebar": "Contraer barra lateral",
+    "expandSidebar": "Expandir barra lateral",
+    "logOut": "Cerrar sesión"
+  },
   "boxes": {
     "title": "Cajas",
     "name": "Nombre",

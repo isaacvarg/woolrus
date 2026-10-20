@@ -1,16 +1,20 @@
 import { OpenAPIGenerator } from "@orpc/openapi";
 import { OpenAPIHandler } from "@orpc/openapi/fetch";
 import { RPCHandler } from "@orpc/server/fetch";
+import { ResponseHeadersPlugin } from "@orpc/server/plugins";
 import { ZodToJsonSchemaConverter } from "@orpc/zod/zod4";
 import { contract } from "@woolrus/contracts";
 import { createLogger } from "@woolrus/logger";
 import { router } from "./router";
 
 /** RPC protocol, used by the web app's typed client at /rpc. */
-export const rpcHandler = new RPCHandler(router);
+// ResponseHeadersPlugin gives procedures `context.resHeaders`, for the cookies they set.
+export const rpcHandler = new RPCHandler(router, { plugins: [new ResponseHeadersPlugin()] });
 
 /** REST + OpenAPI at /api/v1, for the Android client and anything else. */
-export const openApiHandler = new OpenAPIHandler(router);
+export const openApiHandler = new OpenAPIHandler(router, {
+  plugins: [new ResponseHeadersPlugin()],
+});
 
 export const openApiGenerator = new OpenAPIGenerator({
   schemaConverters: [new ZodToJsonSchemaConverter()],

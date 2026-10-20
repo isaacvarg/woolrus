@@ -23,6 +23,20 @@
     "sync": "Sync",
     "users": "Users"
   },
+  "navFooter": {
+    "preferences": "Preferences",
+    "language": "Language",
+    "theme": "Theme",
+    "themes": {
+      "SYSTEM": "System",
+      "LIGHT": "Light",
+      "DARK": "Dark",
+      "HIGH_CONTRAST": "High contrast"
+    },
+    "collapseSidebar": "Collapse sidebar",
+    "expandSidebar": "Expand sidebar",
+    "logOut": "Log out"
+  },
   "boxes": {
     "title": "Boxes",
     "name": "Name",

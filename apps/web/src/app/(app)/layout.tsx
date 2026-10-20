@@ -3,8 +3,9 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 import { OrderEvents } from "@/lib/live";
-import { currentActor, currentSession } from "@/server/actor";
+import { currentActor, currentSession, currentUser } from "@/server/actor";
 import { DrawerNav } from "./drawer-nav";
+import { NavFooter } from "./nav-footer";
 import { QueueNav } from "./queue-nav";
 import { SyncIndicator } from "./sync-indicator";
 
@@ -14,14 +15,17 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const session = await currentSession();
   if (!session) redirect("/sign-in");
   const actor = await currentActor();
+  const user = await currentUser();
   const t = await getTranslations();
+  // A collapsed sidebar on desktop behaves like the tablet drawer: hidden behind the menu button.
+  const collapsed = user?.sidebarCollapsed ?? false;
 
   return (
-    <div className="drawer lg:drawer-open">
+    <div className={`drawer ${collapsed ? "" : "lg:drawer-open"}`}>
       <OrderEvents />
       <input id="nav" type="checkbox" className="drawer-toggle" />
       <div className="drawer-content flex flex-col">
-        <header className="navbar bg-base-100 shadow-sm lg:hidden">
+        <header className={`navbar bg-base-100 shadow-sm ${collapsed ? "" : "lg:hidden"}`}>
           <label htmlFor="nav" className="btn btn-ghost" aria-label="Open menu">
             ☰
           </label>
@@ -57,6 +61,17 @@ export default async function AppLayout({ children }: { children: React.ReactNod
                 <Link href="/sync">{t("nav.sync")}</Link>
               </li>
             </>
+          )}
+          {user && (
+            <NavFooter
+              name={user.name}
+              email={user.email}
+              preferences={{
+                locale: user.locale,
+                theme: user.theme,
+                sidebarCollapsed: user.sidebarCollapsed,
+              }}
+            />
           )}
         </DrawerNav>
       </div>

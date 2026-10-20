@@ -23,10 +23,18 @@ export const currentSession = cache(async () =>
   auth().api.getSession({ headers: await headers() }),
 );
 
+/** The current request's active user and Actor, or null. */
+const currentResolved = cache(async () => resolveActor(await headers()));
+
+/** The signed-in user's row, for their preferences (FR-SET-03). */
+export const currentUser = cache(
+  async (): Promise<User | null> => (await currentResolved())?.user ?? null,
+);
+
 /**
  * The current request's Actor, or null. Server components use it to decide what to show; the API
  * still checks permissions on its own.
  */
 export const currentActor = cache(
-  async (): Promise<UserActor | null> => (await resolveActor(await headers()))?.actor ?? null,
+  async (): Promise<UserActor | null> => (await currentResolved())?.actor ?? null,
 );

@@ -1,10 +1,11 @@
 import { implement, ORPCError, ValidationError } from "@orpc/server";
+import type { ResponseHeadersPluginContext } from "@orpc/server/plugins";
 import { contract, toFieldErrors } from "@woolrus/contracts";
 import { AppError } from "@woolrus/core";
 import type { Logger } from "@woolrus/logger";
 import { resolveActor } from "./actor";
 
-export type BaseContext = {
+export type BaseContext = ResponseHeadersPluginContext & {
   headers: Headers;
   log: Logger;
 };

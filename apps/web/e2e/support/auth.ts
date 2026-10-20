@@ -33,9 +33,14 @@ async function createUser(roles: Role[]): Promise<{ id: string; email: string }>
 /** Signs `page`'s browser context in as a fresh user with `roles`, with a real session cookie. */
 export async function signInAs(page: Page, roles: Role[]): Promise<{ id: string; email: string }> {
   const user = await createUser(roles);
-  const { test } = await testAuth.$context;
-  await page.context().addCookies(await test.getCookies({ userId: user.id }));
+  await signInAsUser(page, user.id);
   return user;
+}
+
+/** Signs `page`'s browser context in as an existing user, with a new session of its own. */
+export async function signInAsUser(page: Page, userId: string): Promise<void> {
+  const { test } = await testAuth.$context;
+  await page.context().addCookies(await test.getCookies({ userId }));
 }
 
 /**

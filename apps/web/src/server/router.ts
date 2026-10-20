@@ -27,11 +27,13 @@ import {
   sendTestEmail,
   setSecret,
   testStoreConnection,
+  updatePreferences,
   updatePriorityRule,
   updateSettings,
   updateUserRoles,
 } from "@woolrus/core";
 import { db } from "@woolrus/db";
+import { preferenceCookie } from "@/lib/preferences";
 import { api } from "./orpc";
 
 // Thin by design: parse (done by the contract), call core, return. No rules live here.
@@ -46,8 +48,15 @@ export const router = api.router({
       permissions: permissionsFor(user.roles),
       locale: user.locale,
       theme: user.theme,
+      sidebarCollapsed: user.sidebarCollapsed,
       stationId: actor.stationId,
     })),
+    updatePreferences: api.me.updatePreferences.handler(async ({ input, context }) => {
+      const preferences = await updatePreferences(db, context.actor, input);
+      context.resHeaders?.append("Set-Cookie", preferenceCookie("locale", preferences.locale));
+      context.resHeaders?.append("Set-Cookie", preferenceCookie("theme", preferences.theme));
+      return preferences;
+    }),
   },
   boxes: {
     list: api.boxes.list.handler(({ input, context }) => listBoxes(db, context.actor, input)),
