@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 import { OrderEvents } from "@/lib/live";
 import { currentActor, currentSession } from "@/server/actor";
+import { DrawerNav } from "./drawer-nav";
 import { QueueNav } from "./queue-nav";
 import { SyncIndicator } from "./sync-indicator";
 
@@ -30,7 +31,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       </div>
       <div className="drawer-side">
         <label htmlFor="nav" aria-label="Close menu" className="drawer-overlay" />
-        <nav className="menu min-h-full w-64 bg-base-100 p-4">
+        <DrawerNav toggleId="nav">
           <span className="mb-4 px-2 text-xl font-bold">{t("common.appName")}</span>
           <QueueNav />
           <div className="mt-2">
@@ -57,7 +58,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               </li>
             </>
           )}
-        </nav>
+        </DrawerNav>
       </div>
     </div>
   );
