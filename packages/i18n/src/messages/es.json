@@ -80,14 +80,16 @@
       "names": {
         "woocommerce": "WooCommerce",
         "shipstation": "ShipStation",
-        "lumexia": "Lumexia"
+        "lumexia": "Lumexia",
+        "email": "Correo"
       },
       "secrets": {
         "wooConsumerKey": "Clave de consumidor",
         "wooConsumerSecret": "Secreto de consumidor",
         "wooWebhookSecret": "Secreto del webhook",
         "shipstationApiKey": "Clave de API",
-        "lumexiaApiKey": "Clave de API"
+        "lumexiaApiKey": "Clave de API",
+        "resendApiKey": "Clave API de Resend"
       },
       "set": "Configurado",
       "notSet": "Sin configurar",
@@ -115,7 +117,12 @@
         "step2": "Estado Activo, tema «Pedido creado», versión de API «WP REST API Integration v3».",
         "step3": "URL de entrega: la de arriba. Secreto: el secreto del webhook guardado aquí.",
         "step4": "Agrega un segundo webhook igual con el tema «Pedido actualizado»."
-      }
+      },
+      "emailFrom": "Remitente",
+      "sendTestEmail": "Enviar correo de prueba",
+      "sendTestEmailHint": "Se envía a tu propia dirección con el remitente y la clave guardados.",
+      "testEmailSent": "Enviado a {to}. Revisa tu bandeja de entrada.",
+      "testEmailLogged": "Resend no está configurado, así que el correo para {to} se escribió en el registro del servidor en lugar de enviarse."
     }
   },
   "priorityRules": {
@@ -371,7 +378,8 @@
       "urlCredentials": "No incluyas usuario ni contraseña en la dirección; ingresa las claves en los campos de abajo.",
       "usState": "Usa el código de estado de 2 letras, p. ej. TX.",
       "usZip": "Usa un código postal de 5 dígitos (o ZIP+4).",
-      "email": "Ingresa un correo electrónico válido."
+      "email": "Ingresa un correo electrónico válido.",
+      "emailFrom": "Usa una dirección como no-reply@example.com o Woolrus <no-reply@example.com>."
     },
     "settings": {
       "encryptionKeyMissing": "No se pueden guardar secretos: falta la clave de cifrado del servidor o no es válida. Pide a quien administra el servidor que configure SETTINGS_ENCRYPTION_KEY."
@@ -421,6 +429,17 @@
         "removedHasRecords": "{line} se eliminó en la tienda, pero tiene notas, incidencias o anulaciones.",
         "pastPacking": "{line}: el pedido ya pasó Empaque, así que una línea nueva o mayor se enviaría sin surtir ni empacar. Regrésalo a Empaque primero, o descarta el cambio."
       }
+    },
+    "email": {
+      "unauthorized": "Resend rechazó la clave API. Revísala en Configuración → Integraciones.",
+      "rejected": "Resend rechazó el correo. Revisa la dirección del remitente y que su dominio esté verificado en Resend.",
+      "unavailable": "No se pudo conectar con Resend. Inténtalo de nuevo en un minuto."
+    }
+  },
+  "emails": {
+    "test": {
+      "subject": "Correo de prueba de Woolrus",
+      "body": "Este es un correo de prueba de Woolrus. Si lo estás leyendo, el correo está bien configurado."
     }
   }
 }

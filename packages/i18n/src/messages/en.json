@@ -80,14 +80,16 @@
       "names": {
         "woocommerce": "WooCommerce",
         "shipstation": "ShipStation",
-        "lumexia": "Lumexia"
+        "lumexia": "Lumexia",
+        "email": "Email"
       },
       "secrets": {
         "wooConsumerKey": "Consumer key",
         "wooConsumerSecret": "Consumer secret",
         "wooWebhookSecret": "Webhook secret",
         "shipstationApiKey": "API key",
-        "lumexiaApiKey": "API key"
+        "lumexiaApiKey": "API key",
+        "resendApiKey": "Resend API key"
       },
       "set": "Set",
       "notSet": "Not set",
@@ -115,7 +117,12 @@
         "step2": "Status Active, topic “Order created”, API version “WP REST API Integration v3”.",
         "step3": "Delivery URL: the one above. Secret: the webhook secret saved here.",
         "step4": "Add a second webhook the same way with the topic “Order updated”."
-      }
+      },
+      "emailFrom": "Sender",
+      "sendTestEmail": "Send test email",
+      "sendTestEmailHint": "Sends to your own address with the saved sender and key.",
+      "testEmailSent": "Sent to {to}. Check your inbox.",
+      "testEmailLogged": "Resend isn't set up, so the email to {to} was written to the server log instead of sent."
     }
   },
   "priorityRules": {
@@ -371,7 +378,8 @@
       "urlCredentials": "Leave the username and password out of the address; enter keys in the fields below.",
       "usState": "Use the 2-letter state code, e.g. TX.",
       "usZip": "Use a 5-digit ZIP code (or ZIP+4).",
-      "email": "Enter a valid email address."
+      "email": "Enter a valid email address.",
+      "emailFrom": "Use an address like no-reply@example.com or Woolrus <no-reply@example.com>."
     },
     "settings": {
       "encryptionKeyMissing": "Secrets can't be saved: the server's encryption key is missing or invalid. Ask whoever runs the server to set SETTINGS_ENCRYPTION_KEY."
@@ -421,6 +429,17 @@
         "removedHasRecords": "{line} was removed in the store but has notes, issues or voids on it.",
         "pastPacking": "{line}: the order is already past Packing, so an added or larger line would ship without being picked and packed. Force it back to Packing first, or dismiss."
       }
+    },
+    "email": {
+      "unauthorized": "Resend refused the API key. Check it in Settings → Integrations.",
+      "rejected": "Resend refused the email. Check the sender address and that its domain is verified in Resend.",
+      "unavailable": "Resend couldn't be reached. Try again in a minute."
+    }
+  },
+  "emails": {
+    "test": {
+      "subject": "Woolrus test email",
+      "body": "This is a test email from Woolrus. If you're reading it, email is set up correctly."
     }
   }
 }

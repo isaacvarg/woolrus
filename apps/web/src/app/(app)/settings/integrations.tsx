@@ -10,17 +10,21 @@ import { Button, TextField } from "@/components/ui/fields";
 import { useErrorMessage, useFieldErrors } from "@/lib/errors";
 import { orpc } from "@/lib/orpc";
 
-type UrlField = "wooStoreUrl" | "lumexiaBaseUrl";
+type SettingField = "wooStoreUrl" | "lumexiaBaseUrl" | "emailFrom";
 
-const integrations: { id: string; url?: UrlField; secrets: SecretName[] }[] = [
+const integrations: { id: string; field?: SettingField; secrets: SecretName[] }[] = [
   {
     id: "woocommerce",
-    url: "wooStoreUrl",
+    field: "wooStoreUrl",
     secrets: ["wooConsumerKey", "wooConsumerSecret", "wooWebhookSecret"],
   },
   { id: "shipstation", secrets: ["shipstationApiKey"] },
-  { id: "lumexia", url: "lumexiaBaseUrl", secrets: ["lumexiaApiKey"] },
+  { id: "lumexia", field: "lumexiaBaseUrl", secrets: ["lumexiaApiKey"] },
+  { id: "email", field: "emailFrom", secrets: ["resendApiKey"] },
 ];
+
+/** The sender address isn't a server: changing it never clears the Resend key. */
+const urlFields: ReadonlySet<SettingField> = new Set(["wooStoreUrl", "lumexiaBaseUrl"]);
 
 /** Every settings mutation returns the full admin settings: put them straight into the cache. */
 function useApplySettings() {
@@ -38,13 +42,17 @@ export function IntegrationsSection() {
   return (
     <div className="space-y-6">
       <h2 className="text-2xl font-bold">{t("settings.integrations.title")}</h2>
-      {integrations.map(({ id, url, secrets }) => (
+      {integrations.map(({ id, field, secrets }) => (
         <IntegrationCard key={id} name={t(`settings.integrations.names.${id}`)}>
-          {url && (
-            <UrlForm
-              field={url}
-              saved={settings.data[url]}
-              savedSecrets={secrets.filter((s) => settings.data.secrets[s]?.configured)}
+          {field && (
+            <SettingForm
+              field={field}
+              saved={settings.data[field]}
+              savedSecrets={
+                urlFields.has(field)
+                  ? secrets.filter((s) => settings.data.secrets[s]?.configured)
+                  : []
+              }
             />
           )}
           <div className="divide-y divide-base-200">
@@ -57,6 +65,7 @@ export function IntegrationsSection() {
             ))}
           </div>
           {id === "woocommerce" && <StoreTools />}
+          {id === "email" && <EmailTools />}
         </IntegrationCard>
       ))}
     </div>
@@ -91,12 +100,13 @@ function movesServer(saved: string | null, next: string | null): boolean {
   return origin !== null && origin !== originOf(saved);
 }
 
-function UrlForm({
+/** One text setting of a card. A URL moving to another server first asks to drop its keys. */
+function SettingForm({
   field,
   saved,
   savedSecrets,
 }: {
-  field: UrlField;
+  field: SettingField;
   saved: string | null;
   /** This integration's secrets that are set: the ones a move would clear. */
   savedSecrets: SecretName[];
@@ -136,10 +146,12 @@ function UrlForm({
         <TextField
           label={t(`settings.integrations.${field}`)}
           name={field}
-          inputMode="url"
+          inputMode={urlFields.has(field) ? "url" : "email"}
           value={value}
           onChange={(next) => {
-            if (save.isSuccess) save.reset();
+            // A server field error is re-applied on every render until the mutation is reset,
+            // and it would block the corrected value from submitting.
+            if (save.isSuccess || save.isError) save.reset();
             setValue(next);
           }}
         />
@@ -251,6 +263,40 @@ function StoreTools() {
           <li>{t("webhook.step3")}</li>
           <li>{t("webhook.step4")}</li>
         </ol>
+      </div>
+    </div>
+  );
+}
+
+/** Send test email, under the Email card's key: to the admin's own address. */
+function EmailTools() {
+  const t = useTranslations("settings.integrations");
+  const message = useTranslations();
+  const errorMessage = useErrorMessage();
+  const test = useMutation(orpc.settings.sendTestEmail.mutationOptions());
+
+  return (
+    <div className="flex flex-wrap items-center gap-3 border-t border-base-200 pt-4">
+      <Button className="btn-outline" isPending={test.isPending} onPress={() => test.mutate({})}>
+        {t("sendTestEmail")}
+      </Button>
+      <span className="text-sm text-base-content/70">{t("sendTestEmailHint")}</span>
+      <div aria-live="polite" className="basis-full">
+        {test.data?.ok === true && (
+          <p className={test.data.via === "resend" ? "text-success" : "text-warning"}>
+            {test.data.via === "resend"
+              ? t("testEmailSent", { to: test.data.to })
+              : t("testEmailLogged", { to: test.data.to })}
+          </p>
+        )}
+        {test.data?.ok === false && (
+          <p className="text-error">
+            {message.has(test.data.messageKey)
+              ? message(test.data.messageKey as never)
+              : message("errors.internal")}
+          </p>
+        )}
+        {test.error && <p className="text-error">{errorMessage(test.error)}</p>}
       </div>
     </div>
   );

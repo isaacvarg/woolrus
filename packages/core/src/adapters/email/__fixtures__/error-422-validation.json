@@ -1,0 +1,5 @@
+{
+  "statusCode": 422,
+  "message": "Invalid `from` field. The email address needs to follow the `email@example.com` or `Name <email@example.com>` format.",
+  "name": "validation_error"
+}

@@ -4,6 +4,7 @@ import {
   createBox,
   createPriorityRule,
   deletePriorityRule,
+  getEmailSender,
   getOrder,
   getOrderHistory,
   getPublicSettings,
@@ -20,6 +21,7 @@ import {
   queueCounts,
   reorderPriorityRules,
   requestSync,
+  sendTestEmail,
   setSecret,
   testStoreConnection,
   updatePriorityRule,
@@ -61,6 +63,15 @@ export const router = api.router({
     ),
     clearSecret: api.settings.clearSecret.handler(({ input, context }) =>
       clearSecret(db, context.actor, input),
+    ),
+    // The admin is waiting: give up after 10 s rather than Resend's default 30.
+    sendTestEmail: api.settings.sendTestEmail.handler(({ context }) =>
+      sendTestEmail(db, context.actor, (db) =>
+        getEmailSender(db, {
+          timeoutMs: 10_000,
+          log: (entry) => context.log.warn(entry, "test email logged, not sent: no Resend key"),
+        }),
+      ),
     ),
   },
   orders: {

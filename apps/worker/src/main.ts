@@ -1,11 +1,14 @@
 import {
   configuredStore,
+  getEmailSender,
   JOBS_SCHEMA,
   type JobPayloads,
   pollIfDue,
   processWooWebhook,
+  queueOptions,
   queues,
   recomputePriorities,
+  runEmailJob,
   syncProducts,
 } from "@woolrus/core";
 import { db } from "@woolrus/db";
@@ -23,7 +26,7 @@ boss.on("error", (err) => log.error({ err }, "pg-boss error"));
 await boss.start();
 
 for (const name of Object.values(queues)) {
-  await boss.createQueue(name);
+  await boss.createQueue(name, queueOptions[name]);
 }
 
 // FR-SYNC-09: tick every minute; `pollIfDue` polls once `syncIntervalMinutes` have passed, so a
@@ -79,6 +82,19 @@ await boss.work<JobPayloads[typeof queues.ordersRecomputePriority]>(
     log.info({ jobId: job?.id, updated }, "orders.recomputePriority done");
   },
 );
+
+// App email (SPEC-identity "Email"). Retries (3 attempts, backoff) come from the queue's policy.
+const emailLog = createLogger({ module: "email" });
+await boss.work<JobPayloads[typeof queues.emailSend]>(queues.emailSend, async ([job]) => {
+  if (!job) return;
+  const sender = await getEmailSender(db, {
+    log: (entry) => emailLog.warn(entry, "email logged, not sent: Resend isn't configured"),
+  });
+  const result = await runEmailJob(sender, job.data, {
+    log: (entry) => emailLog.error(entry, "email refused by Resend; not retrying"),
+  });
+  log.info({ jobId: job.id, template: job.data.template, result }, "email.send done");
+});
 
 log.info({ queues: Object.values(queues) }, "worker started");
 

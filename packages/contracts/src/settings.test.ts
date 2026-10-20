@@ -144,3 +144,40 @@ describe("SetSecretInput", () => {
     expect(Object.keys(secretErrors({ name: "nope", value: "abc" }))).toEqual(["name"]);
   });
 });
+
+describe("emailFrom", () => {
+  it.each([
+    "no-reply@example.com",
+    "Woolrus <no-reply@example.com>",
+    "  Woolrus Warehouse <ops@mail.example.com>  ",
+  ])("accepts %j", (value) => {
+    expect(fieldErrors({ emailFrom: value })).toEqual({});
+  });
+
+  it("trims the value and clears with null", () => {
+    expect(UpdateSettingsInput.parse({ emailFrom: " a@example.com " }).emailFrom).toBe(
+      "a@example.com",
+    );
+    expect(fieldErrors({ emailFrom: null })).toEqual({});
+  });
+
+  it.each([
+    "",
+    "not an address",
+    "Woolrus no-reply@example.com",
+    "Woolrus <no-reply@example.com",
+    "<no-reply@example.com>",
+    "Woolrus <a@example.com>, b@example.com",
+    `${"x".repeat(250)}@example.com`,
+  ])("rejects %j", (value) => {
+    expect(Object.keys(fieldErrors({ emailFrom: value }))).toEqual(["emailFrom"]);
+  });
+});
+
+describe("resendApiKey", () => {
+  it("is a secret name", () => {
+    expect(SetSecretInput.parse({ name: "resendApiKey", value: "re_123" }).name).toBe(
+      "resendApiKey",
+    );
+  });
+});

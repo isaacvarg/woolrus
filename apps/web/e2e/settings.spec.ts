@@ -442,3 +442,56 @@ test("Test connection explains a refused key in the user's language", async ({ p
   await woo.getByRole("button", { name: "Test connection" }).click();
   await expect(woo.getByText(en.errors.sync.unauthorized)).toBeVisible();
 });
+
+test("an admin sets the email sender and sends a test email, which is logged without a Resend key", async ({
+  page,
+}) => {
+  await signInAs(page, ["ADMIN"]);
+  await withSettingsLock(async () => {
+    try {
+      await page.request.delete("/api/v1/settings/secrets/resendApiKey");
+      await page.goto("/settings");
+      const email = page.getByRole("region", { name: "Email" });
+      await expect(email.getByRole("group", { name: "Resend API key" })).toContainText("Not set");
+
+      await email.getByLabel("Sender").fill("Woolrus no-reply@example.com");
+      await email.getByRole("button", { name: "Save" }).click();
+      await expect(email.getByText(en.errors.field.emailFrom)).toBeVisible();
+
+      await email.getByLabel("Sender").fill("Woolrus <no-reply@example.com>");
+      await email.getByRole("button", { name: "Save" }).click();
+      await expect(email.getByRole("status").first()).toHaveText("Saved.");
+      await page.reload();
+      await expect(email.getByLabel("Sender")).toHaveValue("Woolrus <no-reply@example.com>");
+
+      await email.getByRole("button", { name: "Send test email" }).click();
+      await expect(email.getByText(/written to the server log instead of sent/)).toBeVisible();
+    } finally {
+      await page.request.patch("/api/v1/settings", { data: { emailFrom: null } });
+    }
+  });
+});
+
+test("Send test email shows where it went, or Resend's refusal in the user's language", async ({
+  page,
+}) => {
+  // Real Resend calls are covered by the adapter's fixtures; here only the card's messages.
+  const replies = [
+    { ok: true, to: "admin@example.test", via: "resend" },
+    { ok: false, messageKey: "errors.email.unauthorized" },
+  ];
+  await page.route(/\/rpc\/settings\/sendTestEmail/, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ json: replies.shift() }),
+    }),
+  );
+  await signInAs(page, ["ADMIN"]);
+  await page.goto("/settings");
+  const email = page.getByRole("region", { name: "Email" });
+  await email.getByRole("button", { name: "Send test email" }).click();
+  await expect(email.getByText("Sent to admin@example.test. Check your inbox.")).toBeVisible();
+  await email.getByRole("button", { name: "Send test email" }).click();
+  await expect(email.getByText(en.errors.email.unauthorized)).toBeVisible();
+});
