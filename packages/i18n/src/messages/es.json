@@ -460,6 +460,11 @@
       "emailInvalid": "Introduce un correo electrónico válido.",
       "pending": "Este correo ya tiene una invitación pendiente. Reenvíala o revócala.",
       "notOpen": "Esta invitación ya fue aceptada o revocada."
+    },
+    "auth": {
+      "deactivated": "Tu cuenta está desactivada. Pide a un administrador que la reactive.",
+      "signInFailed": "No se pudo iniciar sesión. Inténtalo de nuevo.",
+      "linkInvalid": "Ese enlace ha vencido o ya se usó. Pide uno nuevo."
     }
   },
   "emails": {
@@ -472,6 +477,12 @@
       "body": "{inviter} te invitó a Woolrus, nuestro espacio de trabajo del almacén, como {roles}.",
       "action": "Iniciar sesión en Woolrus",
       "expiry": "Inicia sesión con Google o con un enlace por correo usando esta dirección. La invitación es válida durante 7 días."
+    },
+    "magicLink": {
+      "subject": "Tu enlace para iniciar sesión en Woolrus",
+      "body": "Usa el siguiente enlace para iniciar sesión en Woolrus. Funciona una vez y vence en 5 minutos.",
+      "action": "Iniciar sesión en Woolrus",
+      "ignore": "Si no pediste iniciar sesión, puedes ignorar este correo."
     }
   },
   "users": {
@@ -531,5 +542,15 @@
       "accepted": "Aceptada",
       "revoked": "Revocada"
     }
+  },
+  "signIn": {
+    "title": "Iniciar sesión",
+    "withGoogle": "Iniciar sesión con Google",
+    "withDiscord": "Iniciar sesión con Discord",
+    "or": "o",
+    "email": "Correo",
+    "emailMe": "Enviarme un enlace",
+    "checkEmail": "Revisa tu correo: te enviamos un enlace para iniciar sesión.",
+    "useAnother": "Usar otro correo"
   }
 }

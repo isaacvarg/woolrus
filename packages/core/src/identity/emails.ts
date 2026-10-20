@@ -17,6 +17,11 @@ const templates = {
     paragraphs: ["emails.invitation.body", "emails.invitation.expiry"],
     action: "emails.invitation.action",
   },
+  magicLink: {
+    subject: "emails.magicLink.subject",
+    paragraphs: ["emails.magicLink.body", "emails.magicLink.ignore"],
+    action: "emails.magicLink.action",
+  },
 } as const satisfies Record<string, Template>;
 
 export type EmailTemplate = keyof typeof templates;

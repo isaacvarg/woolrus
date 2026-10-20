@@ -460,6 +460,11 @@
       "emailInvalid": "Enter a valid email address.",
       "pending": "This email already has a pending invitation. Resend or revoke it instead.",
       "notOpen": "This invitation was already accepted or revoked."
+    },
+    "auth": {
+      "deactivated": "Your account is deactivated. Ask an admin to reactivate it.",
+      "signInFailed": "Sign-in didn't work. Try again.",
+      "linkInvalid": "That sign-in link has expired or was already used. Ask for a new one."
     }
   },
   "emails": {
@@ -472,6 +477,12 @@
       "body": "{inviter} invited you to Woolrus, our warehouse workspace, as {roles}.",
       "action": "Sign in to Woolrus",
       "expiry": "Sign in with Google or an email link using this address. The invitation is valid for 7 days."
+    },
+    "magicLink": {
+      "subject": "Your Woolrus sign-in link",
+      "body": "Use the link below to sign in to Woolrus. It works once and expires in 5 minutes.",
+      "action": "Sign in to Woolrus",
+      "ignore": "If you didn't ask to sign in, you can ignore this email."
     }
   },
   "users": {
@@ -531,5 +542,15 @@
       "accepted": "Accepted",
       "revoked": "Revoked"
     }
+  },
+  "signIn": {
+    "title": "Sign in",
+    "withGoogle": "Sign in with Google",
+    "withDiscord": "Sign in with Discord",
+    "or": "or",
+    "email": "Email",
+    "emailMe": "Email me a link",
+    "checkEmail": "Check your email for a sign-in link.",
+    "useAnother": "Use another email"
   }
 }

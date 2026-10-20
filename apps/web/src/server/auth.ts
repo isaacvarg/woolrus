@@ -1,5 +1,6 @@
-import { acceptInvitation, mayCreateAccount } from "@woolrus/core";
+import { acceptInvitation, getEmailSender, mayCreateAccount, sendMagicLink } from "@woolrus/core";
 import { db } from "@woolrus/db";
+import { defaultLocale, isLocale, type Locale } from "@woolrus/i18n";
 import { createLogger } from "@woolrus/logger";
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
@@ -22,6 +23,12 @@ function socialProviders() {
   };
 }
 
+/** The sign-in page's language, for a magic link to someone with no account yet. */
+function pageLocale(headers: Headers | undefined): Locale {
+  const cookie = headers?.get("cookie")?.match(/(?:^|;\s*)locale=([^;]+)/)?.[1];
+  return isLocale(cookie) ? cookie : defaultLocale;
+}
+
 function createAuth() {
   return betterAuth({
     baseURL: env().BETTER_AUTH_URL,
@@ -32,11 +39,27 @@ function createAuth() {
       database: { generateId: false },
     },
     socialProviders: socialProviders(),
+    // Failed OAuth callbacks land back on the sign-in page with `?error=<code>`, which it translates.
+    onAPIError: { errorURL: "/sign-in" },
     plugins: [
       magicLink({
-        // TODO(email): wire an SMTP provider. Until then the link is only logged (dev use).
-        sendMagicLink: async ({ email, url }) => {
-          log.warn({ email, url }, "magic link (no email provider configured)");
+        // Only to people who may sign in, inline through the EmailSender (SPEC-identity "Sign-in
+        // hardening"). Nothing is thrown back: the page says "check your email" either way.
+        sendMagicLink: async ({ email, url }, ctx) => {
+          await sendMagicLink(
+            db,
+            { email, url, fallbackLocale: pageLocale(ctx?.request?.headers ?? ctx?.headers) },
+            {
+              adminEmails: env().ADMIN_EMAILS,
+              // With no Resend key the link goes to the server log (dev), as before.
+              sender: (db) =>
+                getEmailSender(db, {
+                  timeoutMs: 10_000,
+                  log: (entry) => log.warn(entry, "magic link logged, not sent: no Resend key"),
+                }),
+              log,
+            },
+          );
         },
       }),
       // Lets the future Android client authenticate with `Authorization: Bearer <token>`.
@@ -44,6 +67,23 @@ function createAuth() {
       nextCookies(),
     ],
     databaseHooks: {
+      session: {
+        create: {
+          // A deactivated user can't start a session (e.g. a Google sign-in, or a link sent
+          // before deactivation). Better Auth then redirects with `failed_to_create_session`
+          // (magic link) or `unable_to_create_session` (OAuth), which the sign-in page shows as
+          // errors.auth.deactivated.
+          before: async (session) => {
+            const user = await db.user.findUnique({
+              where: { id: session.userId },
+              select: { active: true },
+            });
+            if (user?.active) return;
+            log.info({ userId: session.userId }, "sign-in refused: user deactivated");
+            return false;
+          },
+        },
+      },
       user: {
         create: {
           // Invite-only (NFR-SEC-02): no open invitation, no account. ADMIN_EMAILS bootstraps the
