@@ -6,16 +6,14 @@ import { getPublicSettings, getSettings, setSecret } from "../settings/service";
 import { sendTestEmail } from "./email";
 import { createInvitation, listInvitations } from "./invitations";
 import {
-  findStationByToken,
-  listStations,
   lockStation,
-  registerStation,
   stationActor,
   stationStatus,
   touchStation,
   unlockWithBadge,
   unlockWithPin,
-} from "./stations";
+} from "./station-session";
+import { findStationByToken, listStations, registerStation } from "./stations";
 import { issueBadge, listUsers, setPin } from "./users";
 
 // SPEC-identity success criterion 9: one session that sets a PIN, issues a badge, registers a

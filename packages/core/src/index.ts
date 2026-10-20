@@ -15,6 +15,7 @@ export * from "./identity/emails";
 export * from "./identity/invitations";
 export * from "./identity/preferences";
 export * from "./identity/sign-in";
+export * from "./identity/station-session";
 export * from "./identity/stations";
 export * from "./identity/users";
 export * from "./install-jobs";
