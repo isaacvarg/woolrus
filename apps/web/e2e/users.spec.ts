@@ -4,9 +4,10 @@ import { signInAs } from "./support/auth";
 
 const db = createDb();
 
-// Every e2e run leaves its users behind, so a local dev database lists thousands: the first render
-// of /users in dev mode can take several seconds. CI starts empty.
-const firstLoad = { timeout: 30_000 };
+// Every e2e run leaves its users behind, so a local dev database lists thousands: each render of
+// /users in dev mode (first load, and every refetch after a change) can take several seconds. CI
+// starts empty.
+const slowRender = { timeout: 30_000 };
 
 /** On tablet width the nav is a drawer behind the menu button. */
 async function openNav(page: Page) {
@@ -44,7 +45,7 @@ test("an admin changes a user's roles, deactivates them and reactivates them", a
   browser,
   request,
 }) => {
-  test.slow(); // See firstLoad: every re-render of a local table of thousands of users is slow.
+  test.slow(); // See slowRender: every re-render of a local table of thousands of users is slow.
   await signInAs(page, ["ADMIN"]);
   const other = await browser.newContext();
   const ana = await signInOther(other, ["PICKER"]);
@@ -57,12 +58,10 @@ test("an admin changes a user's roles, deactivates them and reactivates them", a
 
   await page.goto("/");
   await openNav(page);
-  await expect(page.getByRole("link", { name: "Users" })).toHaveAttribute("href", "/users");
-  // Straight there: on tablet the drawer stays open over the page after a client-side nav click.
-  await page.goto("/users");
+  await page.getByRole("link", { name: "Users" }).click();
   const row = page.getByRole("row").filter({ hasText: ana.name });
-  await expect(row).toContainText("Picker", firstLoad);
-  await expect(row).toContainText("Active");
+  await expect(row).toContainText("Picker", slowRender);
+  await expect(row).toContainText("Active", slowRender);
 
   await row.getByRole("button", { name: `Actions for ${ana.name}` }).click();
   await page.getByRole("menuitem", { name: "Edit roles" }).click();
@@ -70,16 +69,16 @@ test("an admin changes a user's roles, deactivates them and reactivates them", a
   await roles.getByText("Packer").click();
   await roles.getByText("Picker").click();
   await roles.getByRole("button", { name: "Save" }).click();
-  await expect(roles).toBeHidden();
-  await expect(row).toContainText("Packer");
-  await expect(row).not.toContainText("Picker");
+  await expect(roles).toBeHidden(slowRender);
+  await expect(row).toContainText("Packer", slowRender);
+  await expect(row).not.toContainText("Picker", slowRender);
 
   await row.getByRole("button", { name: `Actions for ${ana.name}` }).click();
   await page.getByRole("menuitem", { name: "Deactivate" }).click();
   const confirm = page.getByRole("dialog", { name: `Deactivate ${ana.name}?` });
   await confirm.getByRole("button", { name: "Deactivate" }).click();
-  await expect(confirm).toBeHidden();
-  await expect(row).toContainText("Deactivated");
+  await expect(confirm).toBeHidden(slowRender);
+  await expect(row).toContainText("Deactivated", slowRender);
 
   // Signed out everywhere at once: the cookie and the bearer token both stop working.
   expect((await other.request.get("/api/v1/me")).status()).toBe(401);
@@ -89,7 +88,7 @@ test("an admin changes a user's roles, deactivates them and reactivates them", a
 
   await row.getByRole("button", { name: `Actions for ${ana.name}` }).click();
   await page.getByRole("menuitem", { name: "Reactivate" }).click();
-  await expect(row).not.toContainText("Deactivated");
+  await expect(row).not.toContainText("Deactivated", slowRender);
   await other.close();
 });
 
@@ -99,6 +98,6 @@ test("an admin can't edit themselves from the table", async ({ page }) => {
   await db.user.update({ where: { id: admin.id }, data: { name } });
   await page.goto("/users");
   const row = page.getByRole("row").filter({ hasText: name });
-  await expect(row).toBeVisible(firstLoad);
+  await expect(row).toBeVisible(slowRender);
   await expect(row.getByRole("button", { name: `Actions for ${name}` })).toHaveCount(0);
 });
