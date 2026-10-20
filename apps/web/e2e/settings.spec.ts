@@ -54,6 +54,48 @@ test("invalid input shows the field-level message next to the field", async ({ p
   await expect(shipFrom.getByText("Use the 2-letter state code, e.g. TX.")).toBeVisible();
 });
 
+test("correcting a field the server rejected clears only its message and lets the form save", async ({
+  page,
+}) => {
+  await signInAs(page, ["ADMIN"]);
+  await withSettingsLock(async () => {
+    // The API can't unset the address, so put back the one that was there, if any.
+    const before = (await (await page.request.get("/api/v1/settings")).json()).shipFromAddress;
+    try {
+      await page.goto("/settings");
+      const general = page.getByRole("form", { name: "General" });
+      const shipFrom = general.getByRole("group", { name: "Ship-from address" });
+      await shipFrom.getByLabel("Contact name").fill("E2E Shipping");
+      await shipFrom.getByLabel("Phone").fill("555-010-2030");
+      await shipFrom.getByLabel("Address line 1").fill("100 Dock Street");
+      await shipFrom.getByLabel("City").fill("Austin");
+      await shipFrom.getByLabel("State").fill("Texas");
+      await shipFrom.getByLabel("ZIP code").fill("7870");
+      await general.getByRole("button", { name: "Save" }).click();
+
+      const state = shipFrom.getByRole("textbox", { name: "State" });
+      const zip = shipFrom.getByRole("textbox", { name: "ZIP code" });
+      await expect(zip).toHaveAttribute("aria-invalid", "true");
+      await expect(shipFrom.getByText(en.errors.field.usZip)).toBeVisible();
+      await expect(state).toHaveAttribute("aria-invalid", "true");
+
+      // Fixing one field drops its message; the other field's stays until it's fixed too.
+      await zip.fill("78702");
+      await expect(zip).not.toHaveAttribute("aria-invalid", "true");
+      await expect(shipFrom.getByText(en.errors.field.usZip)).toHaveCount(0);
+      await expect(state).toHaveAttribute("aria-invalid", "true");
+
+      await state.fill("TX");
+      await general.getByRole("button", { name: "Save" }).click();
+      await expect(general.getByRole("status")).toHaveText("Settings saved.");
+      await expect(state).not.toHaveAttribute("aria-invalid", "true");
+    } finally {
+      if (before)
+        await page.request.patch("/api/v1/settings", { data: { shipFromAddress: before } });
+    }
+  });
+});
+
 test("a Picker has no Settings link and is refused at /settings", async ({ page }) => {
   await signInAs(page, ["PICKER"]);
   await page.goto("/boxes");
