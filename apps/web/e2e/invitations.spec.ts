@@ -1,24 +1,10 @@
-import { expect, type Page, test } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 import { createDb } from "@woolrus/db";
-import { signInAs } from "./support/auth";
+import { followMagicLink, signInAs } from "./support/auth";
 
 const db = createDb();
 // See users.spec.ts: /users renders slowly on a local database full of e2e users.
 const slowRender = { timeout: 30_000 };
-
-/** Follows the magic link for `email` the way the invitee would, reading its token from the DB. */
-async function signInWithMagicLink(page: Page, email: string) {
-  const response = await page.request.post("/api/auth/sign-in/magic-link", {
-    data: { email, callbackURL: "/" },
-  });
-  expect(response.ok()).toBe(true);
-  const verification = await db.verification.findFirstOrThrow({
-    where: { identifier: { startsWith: "magic-link:" }, value: { contains: `"${email}"` } },
-    orderBy: { createdAt: "desc" },
-  });
-  const token = verification.identifier.slice("magic-link:".length);
-  await page.goto(`/api/auth/magic-link/verify?token=${token}&callbackURL=/`);
-}
 
 test("an admin invites a user, who signs in with exactly the invited roles", async ({
   page,
@@ -43,7 +29,7 @@ test("an admin invites a user, who signs in with exactly the invited roles", asy
   await invitee.goto(`/sign-in?email=${encodeURIComponent(email)}`);
   await expect(invitee.getByLabel("Email")).toHaveValue(email);
 
-  await signInWithMagicLink(invitee, email);
+  await followMagicLink(invitee, email);
   await expect(invitee).not.toHaveURL(/sign-in/);
   const user = await db.user.findUniqueOrThrow({ where: { email } });
   expect(user.roles).toEqual(["PACKER"]);
@@ -68,7 +54,7 @@ test("a revoked invitation can't create an account", async ({ page, browser }) =
   await expect(row.getByText("Revoked")).toBeVisible(slowRender);
 
   const invitee = await (await browser.newContext()).newPage();
-  await signInWithMagicLink(invitee, email);
+  await followMagicLink(invitee, email);
   await expect(invitee).toHaveURL(/sign-in|error/);
   expect(await db.user.count({ where: { email } })).toBe(0);
 });

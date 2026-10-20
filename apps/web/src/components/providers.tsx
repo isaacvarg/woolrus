@@ -6,12 +6,15 @@ import { useState } from "react";
 import { Toaster } from "@/components/ui/toast";
 
 /**
- * A station whose user's turn ended on the server (idle lock, or Lock pressed in another tab)
- * answers `errors.station.locked`: show its lock screen. A full load drops that user's cache.
+ * Leaves a page whose actor is gone, with a full load so no cached data survives: a station whose
+ * user's turn ended on the server (idle lock, or Lock in another tab) answers
+ * `errors.station.locked` and shows its lock screen; a user signed out or deactivated elsewhere
+ * answers `errors.unauthenticated` and goes to sign-in (SPEC-identity success criterion 13).
  */
-function showLockScreenIfLocked(error: unknown) {
+function leaveIfSignedOut(error: unknown) {
   const data = error instanceof ORPCError ? (error.data as { messageKey?: unknown }) : undefined;
   if (data?.messageKey === "errors.station.locked") window.location.assign("/station");
+  if (data?.messageKey === "errors.unauthenticated") window.location.assign("/sign-in");
 }
 
 export function Providers({ children }: { children: React.ReactNode }) {
@@ -19,8 +22,8 @@ export function Providers({ children }: { children: React.ReactNode }) {
     () =>
       new QueryClient({
         defaultOptions: { queries: { staleTime: 10_000 } },
-        queryCache: new QueryCache({ onError: showLockScreenIfLocked }),
-        mutationCache: new MutationCache({ onError: showLockScreenIfLocked }),
+        queryCache: new QueryCache({ onError: leaveIfSignedOut }),
+        mutationCache: new MutationCache({ onError: leaveIfSignedOut }),
       }),
   );
   return (

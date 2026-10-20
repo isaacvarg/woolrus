@@ -53,16 +53,27 @@ export async function requestMagicLink(
   roles: Role[],
 ): Promise<{ id: string; email: string }> {
   const user = await createUser(roles);
+  await followMagicLink(page, user.email);
+  return user;
+}
+
+/**
+ * Asks for a magic link for `email` and follows it the way the recipient would, with the sign-in
+ * page as the error callback. The token is read from the verification table: Better Auth stores it
+ * before our sender decides whether to email it (dev and CI log the link instead), so this also
+ * stands in for a link that leaked. Rate limited like `requestMagicLink`.
+ */
+export async function followMagicLink(page: Page, email: string): Promise<void> {
   const response = await page.request.post("/api/auth/sign-in/magic-link", {
-    data: { email: user.email, callbackURL: "/" },
+    data: { email, callbackURL: "/", errorCallbackURL: "/sign-in" },
   });
   if (!response.ok()) throw new Error(`magic link request failed: ${response.status()}`);
-
   const verification = await db.verification.findFirstOrThrow({
-    where: { identifier: { startsWith: "magic-link:" }, value: { contains: `"${user.email}"` } },
+    where: { identifier: { startsWith: "magic-link:" }, value: { contains: `"${email}"` } },
     orderBy: { createdAt: "desc" },
   });
   const token = verification.identifier.slice("magic-link:".length);
-  await page.goto(`/api/auth/magic-link/verify?token=${token}&callbackURL=/`);
-  return user;
+  await page.goto(
+    `/api/auth/magic-link/verify?token=${token}&callbackURL=/&errorCallbackURL=/sign-in`,
+  );
 }

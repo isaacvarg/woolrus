@@ -1,27 +1,8 @@
-import { expect, type Page, test } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 import { createDb } from "@woolrus/db";
+import { followMagicLink } from "./support/auth";
 
 const db = createDb();
-
-/**
- * Asks for a magic link and follows it the way the recipient would, with the sign-in page as the
- * error callback. The token is read from the verification table: Better Auth stores it before
- * our sender decides whether to email it, so this also stands in for a link that leaked.
- */
-async function followMagicLink(page: Page, email: string) {
-  const response = await page.request.post("/api/auth/sign-in/magic-link", {
-    data: { email, callbackURL: "/", errorCallbackURL: "/sign-in" },
-  });
-  expect(response.ok()).toBe(true);
-  const verification = await db.verification.findFirstOrThrow({
-    where: { identifier: { startsWith: "magic-link:" }, value: { contains: `"${email}"` } },
-    orderBy: { createdAt: "desc" },
-  });
-  const token = verification.identifier.slice("magic-link:".length);
-  await page.goto(
-    `/api/auth/magic-link/verify?token=${token}&callbackURL=/&errorCallbackURL=/sign-in`,
-  );
-}
 
 test("a deactivated user can't sign in and is told why", async ({ page }) => {
   const email = `deactivated-${crypto.randomUUID()}@example.test`;

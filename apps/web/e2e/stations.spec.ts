@@ -3,14 +3,10 @@ import { expect, type Page, test } from "@playwright/test";
 import { hashBadgeCode, hashPin } from "@woolrus/core";
 import { createDb, type Role } from "@woolrus/db";
 import { signInAs } from "./support/auth";
+import { chooseTile, openNav } from "./support/stations";
 
 const db = createDb();
 const unique = () => crypto.randomUUID().slice(0, 8);
-
-async function openNav(page: Page) {
-  const menu = page.getByLabel("Open menu");
-  if ((await menu.isVisible()) && !(await page.locator("#nav").isChecked())) await menu.click();
-}
 
 /** Makes `page`'s device a fresh station, as registering one would, without the admin dance. */
 async function becomeStation(page: Page, baseURL: string | undefined) {
@@ -25,12 +21,6 @@ async function becomeStation(page: Page, baseURL: string | undefined) {
     .context()
     .addCookies([{ name: "woolrus_station", value: token, url: baseURL, httpOnly: true }]);
   return station;
-}
-
-/** Taps a name on the lock screen, once it's hydrated: the badge input takes focus only then. */
-async function chooseTile(page: Page, name: string) {
-  await expect(page.getByLabel("Badge")).toBeFocused();
-  await page.getByRole("button", { name }).click();
 }
 
 /** A floor worker with a unique name, a PIN and a badge. */

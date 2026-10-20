@@ -62,7 +62,9 @@ test("a user deactivated while the order event stream is open is cut off at the 
 }) => {
   test.slow(); // The server re-checks the session every 25 s.
   const picker = await signInAs(page, ["PICKER"]);
-  await page.goto("/");
+  // A same-origin page with no app code: an app page would leave for sign-in on its own once the
+  // user is deactivated (its queries get 401), and this test is about the server ending the stream.
+  await page.goto("/api/health");
 
   // Reads the raw stream (EventSource would quietly reconnect). The first chunk proves it's open.
   const status = await page.evaluate(async () => {
