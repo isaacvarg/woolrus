@@ -32,9 +32,10 @@ test("a deactivated user can't sign in and is told why", async ({ page }) => {
   await followMagicLink(page, email);
 
   await expect(page).toHaveURL(/\/sign-in\?error=/);
-  await expect(page.getByRole("alert")).toHaveText(
-    "Your account is deactivated. Ask an admin to reactivate it.",
-  );
+  // By text: Next's route announcer is also a role="alert".
+  await expect(
+    page.getByText("Your account is deactivated. Ask an admin to reactivate it."),
+  ).toBeVisible();
   expect(await db.session.count({ where: { user: { email } } })).toBe(0);
 });
 
@@ -44,7 +45,7 @@ test("an email with no invitation can't create an account (SRS §7.1 #3)", async
   await followMagicLink(page, email);
 
   await expect(page).toHaveURL(/\/sign-in\?error=/);
-  await expect(page.getByRole("alert")).toBeVisible();
+  await expect(page.getByText("Sign-in didn't work. Try again.")).toBeVisible();
   expect(await db.user.count({ where: { email } })).toBe(0);
 });
 
