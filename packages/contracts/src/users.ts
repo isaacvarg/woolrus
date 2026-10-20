@@ -26,6 +26,39 @@ export const UpdateUserRolesInput = z.object({
 });
 export type UpdateUserRolesInput = z.infer<typeof UpdateUserRolesInput>;
 
+/** All the same digit (000000) or a straight run up or down (123456, 654321). */
+function isWeakPin(pin: string): boolean {
+  const digits = [...pin].map(Number);
+  const steps = new Set(digits.slice(1).map((d, i) => d - (digits[i] as number)));
+  return steps.size === 1 && [0, 1, -1].includes([...steps][0] as number);
+}
+
+/** SPEC-identity "PIN rules": exactly 6 digits, not trivially guessable. */
+export const Pin = z
+  .string()
+  .regex(/^\d{6}$/, "errors.users.pinFormat")
+  .refine((pin) => !isWeakPin(pin), "errors.users.pinWeak");
+
+export const SetPinInput = z.object({ id: Id, pin: Pin });
+export type SetPinInput = z.infer<typeof SetPinInput>;
+
+/** A random valid PIN for the admin form's Generate button (shown once, then handed over). */
+export function generatePin(): string {
+  for (;;) {
+    const [n] = crypto.getRandomValues(new Uint32Array(1));
+    const pin = String((n as number) % 1_000_000).padStart(6, "0");
+    if (!isWeakPin(pin)) return pin;
+  }
+}
+
+/** The badge code is returned once, by `issueBadge`, with its QR code as SVG for printing. */
+export const IssuedBadge = z.object({
+  user: UserSummary,
+  code: z.string(),
+  qrSvg: z.string(),
+});
+export type IssuedBadge = z.infer<typeof IssuedBadge>;
+
 export const users = {
   list: base
     .route({ method: "GET", path: "/users", tags: ["Users"], summary: "List users" })
@@ -57,6 +90,41 @@ export const users = {
       path: "/users/{id}/reactivate",
       tags: ["Users"],
       summary: "Reactivate a user",
+    })
+    .input(z.object({ id: Id }))
+    .output(UserSummary),
+
+  setPin: base
+    .route({ method: "PUT", path: "/users/{id}/pin", tags: ["Users"], summary: "Set a user's PIN" })
+    .input(SetPinInput)
+    .output(UserSummary),
+
+  clearPin: base
+    .route({
+      method: "DELETE",
+      path: "/users/{id}/pin",
+      tags: ["Users"],
+      summary: "Clear a user's PIN",
+    })
+    .input(z.object({ id: Id }))
+    .output(UserSummary),
+
+  issueBadge: base
+    .route({
+      method: "POST",
+      path: "/users/{id}/badge",
+      tags: ["Users"],
+      summary: "Issue a new badge, replacing any old one. The code is returned only here",
+    })
+    .input(z.object({ id: Id }))
+    .output(IssuedBadge),
+
+  revokeBadge: base
+    .route({
+      method: "DELETE",
+      path: "/users/{id}/badge",
+      tags: ["Users"],
+      summary: "Revoke a user's badge",
     })
     .input(z.object({ id: Id }))
     .output(UserSummary),

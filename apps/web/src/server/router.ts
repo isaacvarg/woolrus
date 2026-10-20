@@ -1,5 +1,6 @@
 import {
   archiveBox,
+  clearPin,
   clearSecret,
   createBox,
   createInvitation,
@@ -12,6 +13,7 @@ import {
   getPublicSettings,
   getSettings,
   getSyncStatus,
+  issueBadge,
   listBoxes,
   listInvitations,
   listOrders,
@@ -27,8 +29,10 @@ import {
   reorderPriorityRules,
   requestSync,
   resendInvitation,
+  revokeBadge,
   revokeInvitation,
   sendTestEmail,
+  setPin,
   setSecret,
   testStoreConnection,
   updatePreferences,
@@ -38,6 +42,7 @@ import {
 } from "@woolrus/core";
 import { db } from "@woolrus/db";
 import { preferenceCookie } from "@/lib/preferences";
+import { badgeQrSvg } from "./badge";
 import { env } from "./env";
 import { api } from "./orpc";
 
@@ -181,6 +186,17 @@ export const router = api.router({
     ),
     reactivate: api.users.reactivate.handler(({ input, context }) =>
       reactivateUser(db, context.actor, input),
+    ),
+    setPin: api.users.setPin.handler(({ input, context }) => setPin(db, context.actor, input)),
+    clearPin: api.users.clearPin.handler(({ input, context }) =>
+      clearPin(db, context.actor, input),
+    ),
+    issueBadge: api.users.issueBadge.handler(async ({ input, context }) => {
+      const badge = await issueBadge(db, context.actor, input);
+      return { ...badge, qrSvg: await badgeQrSvg(badge.code) };
+    }),
+    revokeBadge: api.users.revokeBadge.handler(({ input, context }) =>
+      revokeBadge(db, context.actor, input),
     ),
   },
   invitations: {

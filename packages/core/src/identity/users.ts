@@ -1,8 +1,9 @@
-import type { UpdateUserRolesInput, UserSummary } from "@woolrus/contracts";
+import { Pin, type UpdateUserRolesInput, type UserSummary } from "@woolrus/contracts";
 import type { Db, DbTx, Prisma, Role } from "@woolrus/db";
 import { recordAudit } from "../audit";
 import { AppError, notFound } from "../errors";
 import { type Actor, assertCan } from "../permissions";
+import { hashBadgeCode, hashPin, newBadgeCode } from "./credentials";
 
 const summarySelect = {
   id: true,
@@ -132,6 +133,83 @@ export async function reactivateUser(
     if (user.active) return summary(tx, id);
     await tx.user.update({ where: { id }, data: { active: true } });
     await recordAudit(tx, actor, { entityType: "User", entityId: id, action: "user.reactivate" });
+    return summary(tx, id);
+  });
+}
+
+/**
+ * Sets the PIN and lifts any lockout. The PIN never reaches the audit row or the response.
+ * Hashed before the transaction: scrypt is deliberately slow and shouldn't hold row locks.
+ */
+export async function setPin(
+  db: Db,
+  actor: Actor,
+  { id, pin }: { id: string; pin: string },
+): Promise<UserSummary> {
+  assertCan(actor, "user.manage");
+  const parsed = Pin.safeParse(pin);
+  if (!parsed.success) {
+    const key =
+      parsed.error.issues[0]?.message === "errors.users.pinWeak" ? "pinWeak" : "pinFormat";
+    throw new AppError("BAD_REQUEST", "errors.validation", { pin: `errors.users.${key}` });
+  }
+  const pinHash = await hashPin(pin);
+  return db.$transaction(async (tx) => {
+    await lockForUserChange(tx, id);
+    await tx.user.update({
+      where: { id },
+      data: { pinHash, pinFailedAttempts: 0, pinLockedUntil: null },
+    });
+    await recordAudit(tx, actor, { entityType: "User", entityId: id, action: "user.pin.set" });
+    return summary(tx, id);
+  });
+}
+
+export async function clearPin(db: Db, actor: Actor, { id }: { id: string }): Promise<UserSummary> {
+  assertCan(actor, "user.manage");
+  return db.$transaction(async (tx) => {
+    await lockForUserChange(tx, id);
+    await tx.user.update({
+      where: { id },
+      data: { pinHash: null, pinFailedAttempts: 0, pinLockedUntil: null },
+    });
+    await recordAudit(tx, actor, { entityType: "User", entityId: id, action: "user.pin.clear" });
+    return summary(tx, id);
+  });
+}
+
+/**
+ * A new badge, replacing any old one. Only the code's SHA-256 is stored, so the code in the
+ * result is the only time anyone sees it: the admin prints it now or issues another.
+ */
+export async function issueBadge(
+  db: Db,
+  actor: Actor,
+  { id }: { id: string },
+): Promise<{ user: UserSummary; code: string }> {
+  assertCan(actor, "user.manage");
+  const code = newBadgeCode();
+  return db.$transaction(async (tx) => {
+    await lockForUserChange(tx, id);
+    await tx.user.update({
+      where: { id },
+      data: { badgeCode: hashBadgeCode(code), badgeIssuedAt: new Date() },
+    });
+    await recordAudit(tx, actor, { entityType: "User", entityId: id, action: "user.badge.issue" });
+    return { user: await summary(tx, id), code };
+  });
+}
+
+export async function revokeBadge(
+  db: Db,
+  actor: Actor,
+  { id }: { id: string },
+): Promise<UserSummary> {
+  assertCan(actor, "user.manage");
+  return db.$transaction(async (tx) => {
+    await lockForUserChange(tx, id);
+    await tx.user.update({ where: { id }, data: { badgeCode: null, badgeIssuedAt: null } });
+    await recordAudit(tx, actor, { entityType: "User", entityId: id, action: "user.badge.revoke" });
     return summary(tx, id);
   });
 }

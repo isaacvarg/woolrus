@@ -454,7 +454,9 @@
       "lastAdmin": "This would leave no active Admin. Make someone else an Admin first.",
       "self": "You can't deactivate yourself or remove your own Admin role.",
       "rolesRequired": "Choose at least one role.",
-      "alreadyExists": "Someone with this email already has an account."
+      "alreadyExists": "Someone with this email already has an account.",
+      "pinFormat": "A PIN is exactly 6 digits.",
+      "pinWeak": "Too easy to guess: avoid repeated digits and runs like 123456."
     },
     "invitations": {
       "emailInvalid": "Enter a valid email address.",
@@ -514,7 +516,24 @@
       "PACKER": "Packer",
       "QA": "QA",
       "SHIPPER": "Shipper"
-    }
+    },
+    "setPin": "Set PIN",
+    "clearPin": "Clear PIN",
+    "issueBadge": "Issue badge",
+    "revokeBadge": "Revoke badge",
+    "pinTitle": "PIN for {name}",
+    "newPin": "New PIN",
+    "pinHelp": "6 digits. Avoid repeated digits and runs like 123456.",
+    "generate": "Generate",
+    "generatedPin": "Give {name} this PIN now. It won't be shown again.",
+    "pinSaved": "PIN saved for {name}.",
+    "pinCleared": "PIN cleared for {name}.",
+    "badgeTitle": "Badge for {name}",
+    "badgeOnce": "This code is shown only now. Print the badge before you close this.",
+    "badgeQr": "Badge QR code for {name}",
+    "print": "Print",
+    "close": "Close",
+    "badgeRevoked": "Badge revoked for {name}."
   },
   "invitations": {
     "tab": "Invitations",

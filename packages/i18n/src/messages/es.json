@@ -454,7 +454,9 @@
       "lastAdmin": "No quedaría ningún Admin activo. Primero haz Admin a otra persona.",
       "self": "No puedes desactivarte ni quitarte tu propio rol de Admin.",
       "rolesRequired": "Elige al menos un rol.",
-      "alreadyExists": "Ya existe una cuenta con este correo."
+      "alreadyExists": "Ya existe una cuenta con este correo.",
+      "pinFormat": "El PIN tiene exactamente 6 dígitos.",
+      "pinWeak": "Demasiado fácil de adivinar: evita dígitos repetidos y secuencias como 123456."
     },
     "invitations": {
       "emailInvalid": "Introduce un correo electrónico válido.",
@@ -514,7 +516,24 @@
       "PACKER": "Empacador",
       "QA": "QA",
       "SHIPPER": "Envíos"
-    }
+    },
+    "setPin": "Establecer PIN",
+    "clearPin": "Borrar PIN",
+    "issueBadge": "Emitir credencial",
+    "revokeBadge": "Revocar credencial",
+    "pinTitle": "PIN de {name}",
+    "newPin": "Nuevo PIN",
+    "pinHelp": "6 dígitos. Evita dígitos repetidos y secuencias como 123456.",
+    "generate": "Generar",
+    "generatedPin": "Entrega este PIN a {name} ahora. No se volverá a mostrar.",
+    "pinSaved": "PIN guardado para {name}.",
+    "pinCleared": "PIN borrado para {name}.",
+    "badgeTitle": "Credencial de {name}",
+    "badgeOnce": "Este código solo se muestra ahora. Imprime la credencial antes de cerrar.",
+    "badgeQr": "Código QR de la credencial de {name}",
+    "print": "Imprimir",
+    "close": "Cerrar",
+    "badgeRevoked": "Credencial revocada para {name}."
   },
   "invitations": {
     "tab": "Invitaciones",

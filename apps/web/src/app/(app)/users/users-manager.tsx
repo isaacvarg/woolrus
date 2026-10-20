@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Role, type UserSummary } from "@woolrus/contracts";
+import { type IssuedBadge, Role, type UserSummary } from "@woolrus/contracts";
 import { useFormatter, useNow, useTranslations } from "next-intl";
 import { useState } from "react";
 import { Form } from "react-aria-components";
@@ -11,6 +11,7 @@ import { Menu, MenuItem } from "@/components/ui/menu";
 import { toast } from "@/components/ui/toast";
 import { useErrorMessage, useFieldErrors } from "@/lib/errors";
 import { client, orpc } from "@/lib/orpc";
+import { BadgeDialog, PinDialog } from "./credentials-dialogs";
 
 const roles = Role.options;
 
@@ -27,9 +28,29 @@ export function UsersManager({ currentUserId }: { currentUserId: string }) {
   const users = useQuery(orpc.users.list.queryOptions());
   const [editing, setEditing] = useState<UserSummary | null>(null);
   const [deactivating, setDeactivating] = useState<UserSummary | null>(null);
+  const [settingPin, setSettingPin] = useState<UserSummary | null>(null);
+  const [badge, setBadge] = useState<IssuedBadge | null>(null);
   const invalidate = useInvalidate();
   const reactivate = useMutation({
     mutationFn: (user: UserSummary) => client.users.reactivate({ id: user.id }),
+    onError: (error) => toast.error(errorMessage(error)),
+    onSettled: invalidate,
+  });
+  const clearPin = useMutation({
+    mutationFn: (user: UserSummary) => client.users.clearPin({ id: user.id }),
+    onSuccess: (user) => toast.success(t("users.pinCleared", { name: user.name })),
+    onError: (error) => toast.error(errorMessage(error)),
+    onSettled: invalidate,
+  });
+  const issueBadge = useMutation({
+    mutationFn: (user: UserSummary) => client.users.issueBadge({ id: user.id }),
+    onSuccess: setBadge,
+    onError: (error) => toast.error(errorMessage(error)),
+    onSettled: invalidate,
+  });
+  const revokeBadge = useMutation({
+    mutationFn: (user: UserSummary) => client.users.revokeBadge({ id: user.id }),
+    onSuccess: (user) => toast.success(t("users.badgeRevoked", { name: user.name })),
     onError: (error) => toast.error(errorMessage(error)),
     onSettled: invalidate,
   });
@@ -101,6 +122,20 @@ export function UsersManager({ currentUserId }: { currentUserId: string }) {
                 {user.id !== currentUserId && (
                   <Menu label={t("users.actionsFor", { name: user.name })} trigger="⋯">
                     <MenuItem onAction={() => setEditing(user)}>{t("users.editRoles")}</MenuItem>
+                    <MenuItem onAction={() => setSettingPin(user)}>{t("users.setPin")}</MenuItem>
+                    {user.hasPin && (
+                      <MenuItem onAction={() => clearPin.mutate(user)}>
+                        {t("users.clearPin")}
+                      </MenuItem>
+                    )}
+                    <MenuItem onAction={() => issueBadge.mutate(user)}>
+                      {t("users.issueBadge")}
+                    </MenuItem>
+                    {user.hasBadge && (
+                      <MenuItem onAction={() => revokeBadge.mutate(user)}>
+                        {t("users.revokeBadge")}
+                      </MenuItem>
+                    )}
                     {user.active ? (
                       <MenuItem danger onAction={() => setDeactivating(user)}>
                         {t("users.deactivate")}
@@ -121,6 +156,8 @@ export function UsersManager({ currentUserId }: { currentUserId: string }) {
       {deactivating && (
         <DeactivateDialog user={deactivating} onClose={() => setDeactivating(null)} />
       )}
+      {settingPin && <PinDialog user={settingPin} onClose={() => setSettingPin(null)} />}
+      {badge && <BadgeDialog badge={badge} onClose={() => setBadge(null)} />}
     </div>
   );
 }
