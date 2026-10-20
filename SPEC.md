@@ -62,7 +62,7 @@ States: `not started` → `spec draft` → `spec approved` → `planned` → `in
 | `store-sync` | M1 | [SPEC-store-sync](docs/specs/SPEC-store-sync.md) | [#19](https://github.com/isaacvarg/woolrus/issues/19) | done |
 | `workflow` | M1 | [SPEC-workflow](docs/specs/SPEC-workflow.md) | [#20](https://github.com/isaacvarg/woolrus/issues/20) | done |
 | `identity` | M2 | [SPEC-identity](docs/specs/SPEC-identity.md) | [#21](https://github.com/isaacvarg/woolrus/issues/21) | planned |
-| `notes` | M2 | [SPEC-notes](docs/specs/SPEC-notes.md) | [#22](https://github.com/isaacvarg/woolrus/issues/22) | spec approved |
+| `notes` | M2 | [SPEC-notes](docs/specs/SPEC-notes.md) | [#22](https://github.com/isaacvarg/woolrus/issues/22) | planned |
 | `picking` | M2 | — | [#23](https://github.com/isaacvarg/woolrus/issues/23) | not started |
 | `packing` | M2 | — | [#24](https://github.com/isaacvarg/woolrus/issues/24) | not started |
 | `exceptions` | M3 | — | [#25](https://github.com/isaacvarg/woolrus/issues/25) | not started |
