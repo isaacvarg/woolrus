@@ -20,7 +20,8 @@
     "allOrders": "All Orders",
     "queues": "Queues",
     "priorityRules": "Priority rules",
-    "sync": "Sync"
+    "sync": "Sync",
+    "users": "Users"
   },
   "boxes": {
     "title": "Boxes",
@@ -434,12 +435,48 @@
       "unauthorized": "Resend refused the API key. Check it in Settings → Integrations.",
       "rejected": "Resend refused the email. Check the sender address and that its domain is verified in Resend.",
       "unavailable": "Resend couldn't be reached. Try again in a minute."
+    },
+    "users": {
+      "lastAdmin": "This would leave no active Admin. Make someone else an Admin first.",
+      "self": "You can't deactivate yourself or remove your own Admin role.",
+      "rolesRequired": "Choose at least one role."
     }
   },
   "emails": {
     "test": {
       "subject": "Woolrus test email",
       "body": "This is a test email from Woolrus. If you're reading it, email is set up correctly."
+    }
+  },
+  "users": {
+    "title": "Users",
+    "name": "Name",
+    "email": "Email",
+    "roles": "Roles",
+    "status": "Status",
+    "active": "Active",
+    "inactive": "Deactivated",
+    "pin": "PIN",
+    "badge": "Badge",
+    "lastActive": "Last active",
+    "never": "Never",
+    "actions": "Actions",
+    "actionsFor": "Actions for {name}",
+    "editRoles": "Edit roles",
+    "editRolesTitle": "Roles for {name}",
+    "deactivate": "Deactivate",
+    "reactivate": "Reactivate",
+    "deactivateTitle": "Deactivate {name}?",
+    "deactivateBody": "They'll be signed out everywhere at once and can't sign back in until reactivated.",
+    "yes": "Yes",
+    "no": "No",
+    "pinLocked": "Locked until {time}",
+    "role": {
+      "ADMIN": "Admin",
+      "PICKER": "Picker",
+      "PACKER": "Packer",
+      "QA": "QA",
+      "SHIPPER": "Shipper"
     }
   }
 }

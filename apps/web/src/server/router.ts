@@ -3,6 +3,7 @@ import {
   clearSecret,
   createBox,
   createPriorityRule,
+  deactivateUser,
   deletePriorityRule,
   getEmailSender,
   getOrder,
@@ -16,9 +17,11 @@ import {
   listQueue,
   listSyncRunErrors,
   listSyncRuns,
+  listUsers,
   orderMutations,
   permissionsFor,
   queueCounts,
+  reactivateUser,
   reorderPriorityRules,
   requestSync,
   sendTestEmail,
@@ -26,6 +29,7 @@ import {
   testStoreConnection,
   updatePriorityRule,
   updateSettings,
+  updateUserRoles,
 } from "@woolrus/core";
 import { db } from "@woolrus/db";
 import { api } from "./orpc";
@@ -151,6 +155,18 @@ export const router = api.router({
     ),
     reorder: api.priorityRules.reorder.handler(({ input, context }) =>
       reorderPriorityRules(db, context.actor, input),
+    ),
+  },
+  users: {
+    list: api.users.list.handler(({ context }) => listUsers(db, context.actor)),
+    updateRoles: api.users.updateRoles.handler(({ input, context }) =>
+      updateUserRoles(db, context.actor, input),
+    ),
+    deactivate: api.users.deactivate.handler(({ input, context }) =>
+      deactivateUser(db, context.actor, input),
+    ),
+    reactivate: api.users.reactivate.handler(({ input, context }) =>
+      reactivateUser(db, context.actor, input),
     ),
   },
 });

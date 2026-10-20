@@ -20,7 +20,8 @@
     "allOrders": "Todos los pedidos",
     "queues": "Colas",
     "priorityRules": "Reglas de prioridad",
-    "sync": "Sincronización"
+    "sync": "Sincronización",
+    "users": "Usuarios"
   },
   "boxes": {
     "title": "Cajas",
@@ -434,12 +435,48 @@
       "unauthorized": "Resend rechazó la clave API. Revísala en Configuración → Integraciones.",
       "rejected": "Resend rechazó el correo. Revisa la dirección del remitente y que su dominio esté verificado en Resend.",
       "unavailable": "No se pudo conectar con Resend. Inténtalo de nuevo en un minuto."
+    },
+    "users": {
+      "lastAdmin": "No quedaría ningún Admin activo. Primero haz Admin a otra persona.",
+      "self": "No puedes desactivarte ni quitarte tu propio rol de Admin.",
+      "rolesRequired": "Elige al menos un rol."
     }
   },
   "emails": {
     "test": {
       "subject": "Correo de prueba de Woolrus",
       "body": "Este es un correo de prueba de Woolrus. Si lo estás leyendo, el correo está bien configurado."
+    }
+  },
+  "users": {
+    "title": "Usuarios",
+    "name": "Nombre",
+    "email": "Correo",
+    "roles": "Roles",
+    "status": "Estado",
+    "active": "Activo",
+    "inactive": "Desactivado",
+    "pin": "PIN",
+    "badge": "Credencial",
+    "lastActive": "Última actividad",
+    "never": "Nunca",
+    "actions": "Acciones",
+    "actionsFor": "Acciones para {name}",
+    "editRoles": "Editar roles",
+    "editRolesTitle": "Roles de {name}",
+    "deactivate": "Desactivar",
+    "reactivate": "Reactivar",
+    "deactivateTitle": "¿Desactivar a {name}?",
+    "deactivateBody": "Se cerrará su sesión en todas partes de inmediato y no podrá volver a entrar hasta que se reactive.",
+    "yes": "Sí",
+    "no": "No",
+    "pinLocked": "Bloqueado hasta {time}",
+    "role": {
+      "ADMIN": "Admin",
+      "PICKER": "Surtidor",
+      "PACKER": "Empacador",
+      "QA": "QA",
+      "SHIPPER": "Envíos"
     }
   }
 }

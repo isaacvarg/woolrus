@@ -11,6 +11,7 @@ export * from "./errors";
 export * from "./idempotency";
 export * from "./identity/email";
 export * from "./identity/emails";
+export * from "./identity/users";
 export * from "./install-jobs";
 export * from "./jobs";
 export * from "./permissions";
