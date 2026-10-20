@@ -128,9 +128,14 @@ function GeneralForm({ settings }: { settings: AdminSettings }) {
   const headingId = useId();
   const [loaded, setLoaded] = useState(() => toForm(settings));
   const [form, setForm] = useState(loaded);
+  // Held in state, not derived from save.error on each render: React Aria re-applies a new
+  // validationErrors object, so an edited field would keep its old message and block the submit.
+  const [serverErrors, setServerErrors] = useState<Record<string, string>>({});
 
   const save = useMutation(
     orpc.settings.update.mutationOptions({
+      onMutate: () => setServerErrors({}),
+      onError: (error) => setServerErrors(fieldErrors(error)),
       onSuccess: (updated) => {
         const next = toForm(updated);
         setLoaded(next);
@@ -141,12 +146,16 @@ function GeneralForm({ settings }: { settings: AdminSettings }) {
     }),
   );
 
-  const edit = (patch: Partial<FormState>) => {
+  /** `name` is the edited field's: its server error goes, the other fields' stay. */
+  const edit = (name: string, patch: Partial<FormState>) => {
     if (save.isSuccess) save.reset();
+    if (name in serverErrors) {
+      setServerErrors(({ [name]: _, ...rest }) => rest);
+    }
     setForm((current) => ({ ...current, ...patch }));
   };
   const editAddress = (field: AddressField, value: string) =>
-    edit({ shipFrom: { ...form.shipFrom, [field]: value } });
+    edit(`shipFromAddress.${field}`, { shipFrom: { ...form.shipFrom, [field]: value } });
   const addressField = (field: AddressField, type?: "tel" | "email") => (
     <TextField
       label={t(`settings.shipFrom.${field}`)}
@@ -161,7 +170,7 @@ function GeneralForm({ settings }: { settings: AdminSettings }) {
     <Form
       aria-labelledby={headingId}
       className="card bg-base-100 shadow-sm"
-      validationErrors={fieldErrors(save.error)}
+      validationErrors={serverErrors}
       onSubmit={(event) => {
         event.preventDefault();
         save.mutate(changedFields(form, loaded));
@@ -196,7 +205,7 @@ function GeneralForm({ settings }: { settings: AdminSettings }) {
             maxValue={60}
             formatOptions={{ maximumFractionDigits: 0 }}
             value={form.syncIntervalMinutes}
-            onChange={(syncIntervalMinutes) => edit({ syncIntervalMinutes })}
+            onChange={(syncIntervalMinutes) => edit("syncIntervalMinutes", { syncIntervalMinutes })}
           />
           <NumberField
             label={t("settings.stationIdleLock")}
@@ -206,7 +215,9 @@ function GeneralForm({ settings }: { settings: AdminSettings }) {
             maxValue={120}
             formatOptions={{ maximumFractionDigits: 0 }}
             value={form.stationIdleLockMinutes}
-            onChange={(stationIdleLockMinutes) => edit({ stationIdleLockMinutes })}
+            onChange={(stationIdleLockMinutes) =>
+              edit("stationIdleLockMinutes", { stationIdleLockMinutes })
+            }
           />
           <NumberField
             label={t("settings.claimExpiry")}
@@ -217,7 +228,7 @@ function GeneralForm({ settings }: { settings: AdminSettings }) {
             maxValue={480}
             formatOptions={{ maximumFractionDigits: 0 }}
             value={form.claimExpiryMinutes}
-            onChange={(claimExpiryMinutes) => edit({ claimExpiryMinutes })}
+            onChange={(claimExpiryMinutes) => edit("claimExpiryMinutes", { claimExpiryMinutes })}
           />
         </div>
 
@@ -232,7 +243,9 @@ function GeneralForm({ settings }: { settings: AdminSettings }) {
               maxValue={10_080}
               formatOptions={{ maximumFractionDigits: 0 }}
               value={form.sla[stage]}
-              onChange={(minutes) => edit({ sla: { ...form.sla, [stage]: minutes } })}
+              onChange={(minutes) =>
+                edit(`stageSlaMinutes.${stage}`, { sla: { ...form.sla, [stage]: minutes } })
+              }
             />
           ))}
           <p className="col-span-full text-sm text-base-content/70">{t("settings.sla.hint")}</p>
@@ -242,7 +255,7 @@ function GeneralForm({ settings }: { settings: AdminSettings }) {
           label={t("settings.weightDisplay.label")}
           name="weightDisplay"
           value={form.weightDisplay}
-          onChange={(value) => edit({ weightDisplay: value as WeightDisplay })}
+          onChange={(value) => edit("weightDisplay", { weightDisplay: value as WeightDisplay })}
         >
           {(["LB_OZ", "LB_DECIMAL"] as const).map((display) => (
             <Radio key={display} value={display}>
@@ -262,14 +275,16 @@ function GeneralForm({ settings }: { settings: AdminSettings }) {
             maxValue={3650}
             formatOptions={{ maximumFractionDigits: 0 }}
             value={form.piiRetentionDays}
-            onChange={(piiRetentionDays) => edit({ piiRetentionDays })}
+            onChange={(piiRetentionDays) => edit("piiRetentionDays", { piiRetentionDays })}
           />
         </div>
 
         <Checkbox
           name="qaMustDifferFromPacker"
           isSelected={form.qaMustDifferFromPacker}
-          onChange={(qaMustDifferFromPacker) => edit({ qaMustDifferFromPacker })}
+          onChange={(qaMustDifferFromPacker) =>
+            edit("qaMustDifferFromPacker", { qaMustDifferFromPacker })
+          }
         >
           {t("settings.qaMustDifferFromPacker")}
         </Checkbox>
