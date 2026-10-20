@@ -1,3 +1,4 @@
+import { acceptInvitation, mayCreateAccount } from "@woolrus/core";
 import { db } from "@woolrus/db";
 import { createLogger } from "@woolrus/logger";
 import { betterAuth } from "better-auth";
@@ -19,17 +20,6 @@ function socialProviders() {
       ? { discord: { clientId: e.DISCORD_CLIENT_ID, clientSecret: e.DISCORD_CLIENT_SECRET } }
       : {}),
   };
-}
-
-async function openInvitation(email: string) {
-  return db.invitation.findFirst({
-    where: {
-      email: email.toLowerCase(),
-      acceptedAt: null,
-      revokedAt: null,
-      expiresAt: { gt: new Date() },
-    },
-  });
 }
 
 function createAuth() {
@@ -56,32 +46,14 @@ function createAuth() {
     databaseHooks: {
       user: {
         create: {
-          // Invite-only (NFR-SEC-02): no invitation, no account. ADMIN_EMAILS bootstraps the first admin.
+          // Invite-only (NFR-SEC-02): no open invitation, no account. ADMIN_EMAILS bootstraps the
+          // first admin. The rule and its tests live in core (identity/sign-in.ts).
           before: async (user) => {
-            const email = user.email.toLowerCase();
-            if (env().ADMIN_EMAILS.includes(email)) return;
-            if (await openInvitation(email)) return;
-            log.warn({ email }, "sign-in refused: no invitation");
+            if (await mayCreateAccount(db, user.email, env().ADMIN_EMAILS)) return;
+            log.warn({ email: user.email.toLowerCase() }, "sign-in refused: no invitation");
             return false;
           },
-          after: async (user) => {
-            const email = user.email.toLowerCase();
-            const invitation = await openInvitation(email);
-            const roles = env().ADMIN_EMAILS.includes(email)
-              ? ["ADMIN" as const]
-              : (invitation?.roles ?? []);
-            await db.$transaction([
-              db.user.update({ where: { id: user.id }, data: { roles } }),
-              ...(invitation
-                ? [
-                    db.invitation.update({
-                      where: { id: invitation.id },
-                      data: { acceptedAt: new Date() },
-                    }),
-                  ]
-                : []),
-            ]);
-          },
+          after: async (user) => acceptInvitation(db, user, env().ADMIN_EMAILS),
         },
       },
     },

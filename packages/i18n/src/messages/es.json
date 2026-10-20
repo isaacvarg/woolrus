@@ -453,13 +453,25 @@
     "users": {
       "lastAdmin": "No quedaría ningún Admin activo. Primero haz Admin a otra persona.",
       "self": "No puedes desactivarte ni quitarte tu propio rol de Admin.",
-      "rolesRequired": "Elige al menos un rol."
+      "rolesRequired": "Elige al menos un rol.",
+      "alreadyExists": "Ya existe una cuenta con este correo."
+    },
+    "invitations": {
+      "emailInvalid": "Introduce un correo electrónico válido.",
+      "pending": "Este correo ya tiene una invitación pendiente. Reenvíala o revócala.",
+      "notOpen": "Esta invitación ya fue aceptada o revocada."
     }
   },
   "emails": {
     "test": {
       "subject": "Correo de prueba de Woolrus",
       "body": "Este es un correo de prueba de Woolrus. Si lo estás leyendo, el correo está bien configurado."
+    },
+    "invitation": {
+      "subject": "{inviter} te invitó a Woolrus",
+      "body": "{inviter} te invitó a Woolrus, nuestro espacio de trabajo del almacén, como {roles}.",
+      "action": "Iniciar sesión en Woolrus",
+      "expiry": "Inicia sesión con Google o con un enlace por correo usando esta dirección. La invitación es válida durante 7 días."
     }
   },
   "users": {
@@ -491,6 +503,33 @@
       "PACKER": "Empacador",
       "QA": "QA",
       "SHIPPER": "Envíos"
+    }
+  },
+  "invitations": {
+    "tab": "Invitaciones",
+    "usersTab": "Usuarios",
+    "invite": "Invitar usuario",
+    "inviteTitle": "Invitar a un usuario",
+    "email": "Correo",
+    "roles": "Roles",
+    "status": "Estado",
+    "expires": "Vence",
+    "invitedBy": "Invitado por",
+    "actions": "Acciones",
+    "actionsFor": "Acciones para {email}",
+    "send": "Enviar invitación",
+    "resend": "Reenviar",
+    "revoke": "Revocar",
+    "revokeTitle": "¿Revocar la invitación de {email}?",
+    "revokeBody": "No podrá iniciar sesión con ella. Puedes volver a invitarle más tarde.",
+    "sent": "Invitación enviada a {email}.",
+    "resent": "Invitación reenviada a {email}.",
+    "none": "Todavía no hay invitaciones.",
+    "statuses": {
+      "pending": "Pendiente",
+      "expired": "Vencida",
+      "accepted": "Aceptada",
+      "revoked": "Revocada"
     }
   }
 }

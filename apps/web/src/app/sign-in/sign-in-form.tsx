@@ -6,9 +6,10 @@ import { Form } from "react-aria-components";
 import { Button, TextField } from "@/components/ui/fields";
 import { authClient } from "@/lib/auth-client";
 
-export default function SignInPage() {
+/** `initialEmail` comes from an invitation link (`/sign-in?email=…`). */
+export function SignInForm({ initialEmail }: { initialEmail: string }) {
   const t = useTranslations("common");
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(initialEmail);
   const [sent, setSent] = useState(false);
 
   return (

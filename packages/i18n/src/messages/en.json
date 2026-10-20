@@ -453,13 +453,25 @@
     "users": {
       "lastAdmin": "This would leave no active Admin. Make someone else an Admin first.",
       "self": "You can't deactivate yourself or remove your own Admin role.",
-      "rolesRequired": "Choose at least one role."
+      "rolesRequired": "Choose at least one role.",
+      "alreadyExists": "Someone with this email already has an account."
+    },
+    "invitations": {
+      "emailInvalid": "Enter a valid email address.",
+      "pending": "This email already has a pending invitation. Resend or revoke it instead.",
+      "notOpen": "This invitation was already accepted or revoked."
     }
   },
   "emails": {
     "test": {
       "subject": "Woolrus test email",
       "body": "This is a test email from Woolrus. If you're reading it, email is set up correctly."
+    },
+    "invitation": {
+      "subject": "{inviter} invited you to Woolrus",
+      "body": "{inviter} invited you to Woolrus, our warehouse workspace, as {roles}.",
+      "action": "Sign in to Woolrus",
+      "expiry": "Sign in with Google or an email link using this address. The invitation is valid for 7 days."
     }
   },
   "users": {
@@ -491,6 +503,33 @@
       "PACKER": "Packer",
       "QA": "QA",
       "SHIPPER": "Shipper"
+    }
+  },
+  "invitations": {
+    "tab": "Invitations",
+    "usersTab": "Users",
+    "invite": "Invite user",
+    "inviteTitle": "Invite a user",
+    "email": "Email",
+    "roles": "Roles",
+    "status": "Status",
+    "expires": "Expires",
+    "invitedBy": "Invited by",
+    "actions": "Actions",
+    "actionsFor": "Actions for {email}",
+    "send": "Send invitation",
+    "resend": "Resend",
+    "revoke": "Revoke",
+    "revokeTitle": "Revoke the invitation for {email}?",
+    "revokeBody": "They won't be able to sign in with it. You can invite them again later.",
+    "sent": "Invitation sent to {email}.",
+    "resent": "Invitation sent again to {email}.",
+    "none": "No invitations yet.",
+    "statuses": {
+      "pending": "Pending",
+      "expired": "Expired",
+      "accepted": "Accepted",
+      "revoked": "Revoked"
     }
   }
 }

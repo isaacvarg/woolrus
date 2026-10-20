@@ -2,6 +2,7 @@ import {
   archiveBox,
   clearSecret,
   createBox,
+  createInvitation,
   createPriorityRule,
   deactivateUser,
   deletePriorityRule,
@@ -12,6 +13,7 @@ import {
   getSettings,
   getSyncStatus,
   listBoxes,
+  listInvitations,
   listOrders,
   listPriorityRules,
   listQueue,
@@ -24,6 +26,8 @@ import {
   reactivateUser,
   reorderPriorityRules,
   requestSync,
+  resendInvitation,
+  revokeInvitation,
   sendTestEmail,
   setSecret,
   testStoreConnection,
@@ -34,6 +38,7 @@ import {
 } from "@woolrus/core";
 import { db } from "@woolrus/db";
 import { preferenceCookie } from "@/lib/preferences";
+import { env } from "./env";
 import { api } from "./orpc";
 
 // Thin by design: parse (done by the contract), call core, return. No rules live here.
@@ -176,6 +181,18 @@ export const router = api.router({
     ),
     reactivate: api.users.reactivate.handler(({ input, context }) =>
       reactivateUser(db, context.actor, input),
+    ),
+  },
+  invitations: {
+    list: api.invitations.list.handler(({ context }) => listInvitations(db, context.actor)),
+    create: api.invitations.create.handler(({ input, context }) =>
+      createInvitation(db, context.actor, input, { appUrl: env().BETTER_AUTH_URL }),
+    ),
+    resend: api.invitations.resend.handler(({ input, context }) =>
+      resendInvitation(db, context.actor, input, { appUrl: env().BETTER_AUTH_URL }),
+    ),
+    revoke: api.invitations.revoke.handler(({ input, context }) =>
+      revokeInvitation(db, context.actor, input),
     ),
   },
 });
