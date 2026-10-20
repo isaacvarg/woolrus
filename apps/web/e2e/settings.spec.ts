@@ -456,7 +456,12 @@ test("an admin sets the email sender and sends a test email, which is logged wit
 
       await email.getByLabel("Sender").fill("Woolrus no-reply@example.com");
       await email.getByRole("button", { name: "Save" }).click();
-      await expect(email.getByText(en.errors.field.emailFrom)).toBeVisible();
+      // The rendered message, not the catalog's: its "<" is ICU-quoted.
+      await expect(
+        email.getByText(
+          "Use an address like no-reply@example.com or Woolrus <no-reply@example.com>.",
+        ),
+      ).toBeVisible();
 
       await email.getByLabel("Sender").fill("Woolrus <no-reply@example.com>");
       await email.getByRole("button", { name: "Save" }).click();

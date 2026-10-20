@@ -380,7 +380,7 @@
       "usState": "Use the 2-letter state code, e.g. TX.",
       "usZip": "Use a 5-digit ZIP code (or ZIP+4).",
       "email": "Enter a valid email address.",
-      "emailFrom": "Use an address like no-reply@example.com or Woolrus <no-reply@example.com>."
+      "emailFrom": "Use an address like no-reply@example.com or Woolrus '<'no-reply@example.com>."
     },
     "settings": {
       "encryptionKeyMissing": "Secrets can't be saved: the server's encryption key is missing or invalid. Ask whoever runs the server to set SETTINGS_ENCRYPTION_KEY."
