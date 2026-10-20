@@ -1,7 +1,7 @@
 # Spec: `identity`
 
 **Milestone:** M2 · **Depends on:** `settings` · **Used by:** every module (the `Actor`), `picking`/`packing`/`qa`
-(station actors on the floor), `operations` (email health) · **State:** spec approved ·
+(station actors on the floor), `operations` (email health) · **State:** done ·
 **Issue:** [#21](https://github.com/isaacvarg/woolrus/issues/21)
 
 Project-wide commands, structure, code style, testing levels and boundaries are in [`../../SPEC.md`](../../SPEC.md);
@@ -287,6 +287,8 @@ One new dependency: `qrcode` (+ `@types/qrcode`) in `apps/web`, for badge QR cod
 2. **Unlock:** tap your name + PIN, or scan your badge alone. PINs needn't be unique.
 3. **PIN and badge are admin-managed.** Users can't set or change their own PIN.
 4. **Station permissions = the user's roles**, including Admin. The station only adds `stationId`.
+   Reconfirmed at the ship review (2026-10-20) knowing the risk: a photographed admin badge or a guessed admin
+   PIN gives full admin powers on any station. Not requiring a personal session for admin actions is deliberate.
 5. **Badges are QR codes**, rendered server-side as SVG with the `qrcode` package (new dependency, approved with
    this spec), error correction level **Q** (~25% of the code can be damaged and still scan). The badge code's
    characters (uppercase Crockford base32 + `-`) fit QR's compact alphanumeric mode. The text code is printed
