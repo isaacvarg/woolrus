@@ -62,9 +62,9 @@ const authed = os.middleware(async ({ next, context }) => {
     if (device.kind === "stale") context.resHeaders?.append("Set-Cookie", clearStationCookie());
     throw new ORPCError("UNAUTHORIZED", { data: { messageKey: "errors.unauthenticated" } });
   }
-  const { actor, user, station } = resolved;
+  const { actor, user, station, idleLockAt } = resolved;
   const log = context.log.child({ userId: user.id, stationId: actor.stationId ?? undefined });
-  return next({ context: { actor, user, station, log } });
+  return next({ context: { actor, user, station, idleLockAt, log } });
 });
 
 export const api = os.use(mapErrors).use(authed);

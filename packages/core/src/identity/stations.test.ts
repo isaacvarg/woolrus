@@ -4,6 +4,7 @@ import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { createActor, resetDb, testDb } from "../../test/db";
 import { createOrder } from "../../test/factories";
 import { assertCan, type UserActor } from "../permissions";
+import { loadSettings } from "../settings/service";
 import { beginPicking } from "../workflow/service";
 import { hashBadgeCode, hashPin } from "./credentials";
 import {
@@ -15,6 +16,7 @@ import {
   revokeStation,
   stationActor,
   stationStatus,
+  touchStation,
   unlockWithBadge,
   unlockWithPin,
 } from "./stations";
@@ -455,5 +457,104 @@ describe("lockStation", () => {
       kind: "FORBIDDEN",
       messageKey: "errors.station.notStation",
     });
+  });
+});
+
+// --- Idle lock (SPEC-identity "Idle lock", success criterion 7). A fake clock, no sleeps. ---
+
+describe("idle lock", () => {
+  const t0 = new Date("2026-10-20T10:00:00Z");
+  const minutesIn = (minutes: number, seconds = 0) =>
+    new Date(t0.getTime() + minutes * 60_000 + seconds * 1000);
+
+  /** Ana unlocked at t0 on a station with a 10-minute idle limit (the default). */
+  async function unlocked() {
+    const station = await newStation();
+    const ana = await worker("Ana", ["PACKER"]);
+    await unlockWithPin(db, station, { userId: ana.userId, pin: PIN }, t0);
+    return { station, ana };
+  }
+
+  it("acts as the user until the deadline, which stationActor reports", async () => {
+    const { station, ana } = await unlocked();
+    const resolved = await stationActor(db, station, minutesIn(9, 59));
+    expect(resolved?.actor.userId).toBe(ana.userId);
+    expect(resolved?.idleLockAt).toEqual(minutesIn(10));
+  });
+
+  it("ends the activation as IDLE on the first request past the limit, and stays locked", async () => {
+    const { station } = await unlocked();
+
+    expect(await stationActor(db, station, minutesIn(10, 1))).toBeNull();
+
+    expect(
+      await db.stationActivation.findFirstOrThrow({ where: { stationId: station.id } }),
+    ).toMatchObject({ endReason: "IDLE", endedAt: minutesIn(10) });
+    expect(await stationActor(db, station, minutesIn(10, 2))).toBeNull();
+  });
+
+  it("follows Settings.stationIdleLockMinutes", async () => {
+    const { station } = await unlocked();
+    const { id } = await loadSettings(db);
+    await db.settings.update({ where: { id }, data: { stationIdleLockMinutes: 2 } });
+    expect(await stationActor(db, station, minutesIn(2, 1))).toBeNull();
+  });
+
+  it("is extended by station.touch, and not by reads", async () => {
+    const { station } = await unlocked();
+
+    // Reads (any authed request resolves the actor) don't count as activity.
+    await stationActor(db, station, minutesIn(5));
+    expect((await stationActor(db, station, minutesIn(9)))?.idleLockAt).toEqual(minutesIn(10));
+
+    const actor = (await stationActor(db, station, minutesIn(9)))?.actor ?? never();
+    expect(await touchStation(db, actor, minutesIn(9))).toEqual({ idleLockAt: minutesIn(19) });
+    expect((await stationActor(db, station, minutesIn(18)))?.idleLockAt).toEqual(minutesIn(19));
+    expect(await stationActor(db, station, minutesIn(19, 1))).toBeNull();
+  });
+
+  it("touch refuses once the limit has passed, and is only for a station actor", async () => {
+    const { station } = await unlocked();
+    const actor = (await stationActor(db, station, minutesIn(1)))?.actor ?? never();
+
+    await expect(touchStation(db, actor, minutesIn(10, 1))).rejects.toMatchObject({
+      kind: "UNAUTHORIZED",
+      messageKey: "errors.station.locked",
+    });
+    expect(
+      await db.stationActivation.findFirstOrThrow({ where: { stationId: station.id } }),
+    ).toMatchObject({ endReason: "IDLE" });
+    await expect(
+      touchStation(db, await createActor(db, ["PACKER"]), minutesIn(1)),
+    ).rejects.toMatchObject({ kind: "FORBIDDEN", messageKey: "errors.station.notStation" });
+  });
+
+  it("names nobody on the lock screen once the turn went idle", async () => {
+    const { station } = await unlocked();
+    expect((await stationStatus(db, station, minutesIn(9))).activeUserName).toBe("Ana");
+    expect((await stationStatus(db, station, minutesIn(10, 1))).activeUserName).toBeNull();
+  });
+
+  it("starts a new activation when the same user unlocks after going idle", async () => {
+    const { station, ana } = await unlocked();
+    await unlockWithBadge(db, station, { code: ana.badge }, minutesIn(11));
+    const all = await db.stationActivation.findMany({
+      where: { stationId: station.id },
+      orderBy: { startedAt: "asc" },
+    });
+    expect(all).toMatchObject([{ endReason: "IDLE" }, { endedAt: null, startedAt: minutesIn(11) }]);
+  });
+
+  it("updates Station.lastSeenAt at most once a minute", async () => {
+    const { station } = await unlocked();
+    const lastSeen = async () =>
+      (await db.station.findUniqueOrThrow({ where: { id: station.id } })).lastSeenAt;
+
+    await stationActor(db, station, minutesIn(1));
+    expect(await lastSeen()).toEqual(minutesIn(1));
+    await stationActor(db, station, minutesIn(1, 59));
+    expect(await lastSeen()).toEqual(minutesIn(1));
+    await stationActor(db, station, minutesIn(2));
+    expect(await lastSeen()).toEqual(minutesIn(2));
   });
 });

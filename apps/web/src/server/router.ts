@@ -41,6 +41,7 @@ import {
   setSecret,
   stationStatus,
   testStoreConnection,
+  touchStation,
   unlockWithBadge,
   unlockWithPin,
   updatePreferences,
@@ -59,7 +60,7 @@ import { stationCookie } from "./station-cookie";
 // Thin by design: parse (done by the contract), call core, return. No rules live here.
 export const router = implementer.router({
   me: {
-    get: api.me.get.handler(({ context: { user, actor, station } }) => ({
+    get: api.me.get.handler(({ context: { user, actor, station, idleLockAt } }) => ({
       id: user.id,
       name: user.name,
       email: user.email,
@@ -71,6 +72,7 @@ export const router = implementer.router({
       sidebarCollapsed: user.sidebarCollapsed,
       stationId: actor.stationId,
       stationName: station?.name ?? null,
+      idleLockAt,
     })),
     updatePreferences: api.me.updatePreferences.handler(async ({ input, context }) => {
       const preferences = await updatePreferences(db, context.actor, input);
@@ -254,6 +256,7 @@ export const router = implementer.router({
       await lockStation(db, context.actor);
       return { ok: true as const };
     }),
+    touch: api.station.touch.handler(({ context }) => touchStation(db, context.actor)),
   },
 });
 

@@ -87,7 +87,7 @@ export const stations = {
 
 /**
  * Called by the station device itself, with its station cookie and no unlocked user needed;
- * `lock` needs the unlocked station actor.
+ * `lock` and `touch` need the unlocked station actor.
  */
 export const station = {
   status: base
@@ -122,4 +122,13 @@ export const station = {
       summary: "Lock this station: the user on it is done",
     })
     .output(z.object({ ok: z.literal(true) })),
+
+  touch: base
+    .route({
+      method: "POST",
+      path: "/station/touch",
+      tags: ["Station"],
+      summary: "Input on this station: pushes its idle lock out",
+    })
+    .output(z.object({ idleLockAt: z.date() })),
 };

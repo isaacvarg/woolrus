@@ -27,6 +27,12 @@ async function becomeStation(page: Page, baseURL: string | undefined) {
   return station;
 }
 
+/** Taps a name on the lock screen, once it's hydrated: the badge input takes focus only then. */
+async function chooseTile(page: Page, name: string) {
+  await expect(page.getByLabel("Badge")).toBeFocused();
+  await page.getByRole("button", { name }).click();
+}
+
 /** A floor worker with a unique name, a PIN and a badge. */
 async function worker(roles: Role[]) {
   const pin = "482916";
@@ -132,7 +138,7 @@ test("a packer unlocks a station with a PIN, a picker switches in by badge, and 
   await expect(page.getByRole("heading", { name: station.name })).toBeVisible();
 
   // A wrong PIN is refused; the right one unlocks and the station acts as the packer.
-  await page.getByRole("button", { name: packer.name }).click();
+  await chooseTile(page, packer.name);
   await page.getByLabel(`PIN for ${packer.name}`).fill("000001");
   await expect(page.getByText("That PIN isn't right.")).toBeVisible();
   await page.getByLabel(`PIN for ${packer.name}`).fill(packer.pin);
@@ -172,4 +178,41 @@ test("a packer unlocks a station with a PIN, a picker switches in by badge, and 
   const me = await page.request.get("/api/v1/me");
   expect(me.status()).toBe(401);
   expect(await me.json()).toMatchObject({ data: { messageKey: "errors.station.locked" } });
+});
+
+test("input pushes the idle lock out, and the station locks itself at the deadline", async ({
+  page,
+  baseURL,
+}) => {
+  const station = await becomeStation(page, baseURL);
+  const packer = await worker(["PACKER"]);
+  await page.clock.install();
+
+  await page.goto("/station");
+  await chooseTile(page, packer.name);
+  await page.getByLabel(`PIN for ${packer.name}`).fill(packer.pin);
+  await expect(page).toHaveURL(/\/boxes$/);
+  const me = await (await page.request.get("/api/v1/me")).json();
+  expect(new Date(me.idleLockAt).getTime()).toBeGreaterThan(Date.now());
+
+  // Input touches the station (at most once a minute); a read doesn't.
+  const touched = page.waitForResponse((r) => r.url().includes("station/touch") && r.ok());
+  await page.getByRole("heading").first().click();
+  await touched;
+
+  // The server: with the last input past the limit, the next request locks the station.
+  await db.stationActivation.updateMany({
+    where: { stationId: station.id, endedAt: null },
+    data: { lastActivityAt: new Date(Date.now() - 11 * 60_000) },
+  });
+  const locked = await page.request.get("/api/v1/me");
+  expect(await locked.json()).toMatchObject({ data: { messageKey: "errors.station.locked" } });
+  expect(
+    await db.stationActivation.findFirst({ where: { stationId: station.id, userId: packer.id } }),
+  ).toMatchObject({ endReason: "IDLE" });
+
+  // The client: at its deadline the lock screen shows on its own.
+  await page.clock.fastForward("11:00");
+  await expect(page).toHaveURL(/\/station$/);
+  await expect(page.getByText("Locked", { exact: true })).toBeVisible();
 });

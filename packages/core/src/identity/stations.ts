@@ -20,6 +20,7 @@ import {
 import { recordAudit } from "../audit";
 import { AppError, notFound } from "../errors";
 import { type Actor, assertCan, type UserActor } from "../permissions";
+import { loadSettings } from "../settings/service";
 import { hashBadgeCode, hashPin, verifyPin } from "./credentials";
 
 // Shared floor tablets (SPEC-identity "Stations"). A station holds a long-lived random token in an
@@ -186,7 +187,11 @@ function initials(name: string): string {
  * For the station device itself (`station.status`). The tiles carry a name and initials only:
  * enough to find yourself, nothing to sign in with.
  */
-export async function stationStatus(db: Db, station: Station): Promise<StationStatus> {
+export async function stationStatus(
+  db: Db,
+  station: Station,
+  now: Date = new Date(),
+): Promise<StationStatus> {
   const [users, active] = await Promise.all([
     db.user.findMany({
       where: { active: true, pinHash: { not: null } },
@@ -202,7 +207,8 @@ export async function stationStatus(db: Db, station: Station): Promise<StationSt
       },
       orderBy: { name: "asc" },
     }),
-    openActivation(db, station.id),
+    // Through stationActor, so a turn that went idle ends here too, not just on the next request.
+    stationActor(db, station, now),
   ]);
   const lastHere = (u: (typeof users)[number]) => u.stationActivations[0]?.startedAt.getTime() ?? 0;
   // Stable sort: people who never used this station stay in name order after the rest.
@@ -212,7 +218,7 @@ export async function stationStatus(db: Db, station: Station): Promise<StationSt
   return {
     id: station.id,
     name: station.name,
-    activeUserName: active?.user.active ? active.user.name : null,
+    activeUserName: active?.user.name ?? null,
     tiles,
   };
 }
@@ -225,18 +231,88 @@ function openActivation(db: Db | DbTx, stationId: string) {
   });
 }
 
+const MINUTE = 60_000;
+
+/** When an activation locks itself: `Settings.stationIdleLockMinutes` after the last input. */
+async function idleDeadline(db: Db | DbTx, lastActivityAt: Date): Promise<Date> {
+  const { stationIdleLockMinutes } = await loadSettings(db);
+  return new Date(lastActivityAt.getTime() + stationIdleLockMinutes * MINUTE);
+}
+
+/** Ends an activation that went idle, as of its deadline. A no-op if something else ended it. */
+async function endIdle(db: Db | DbTx, id: string, deadline: Date): Promise<void> {
+  await db.stationActivation.updateMany({
+    where: { id, endedAt: null },
+    data: { endedAt: deadline, endReason: "IDLE" },
+  });
+}
+
 /**
  * Who the station is acting as: its open activation's user, if still active. Null means locked.
  * Permissions are exactly the user's roles; the station only adds where (decision 4).
+ *
+ * Idle lock is enforced here, lazily (like claims; no job): the first request past the deadline
+ * ends the activation (`IDLE`). Resolving the actor never extends it: only `touchStation` does, so
+ * a tablet left on a page with background refetches still locks.
  */
 export async function stationActor(
   db: Db,
   station: Station,
-): Promise<{ user: User; actor: UserActor } | null> {
+  now: Date = new Date(),
+): Promise<{ user: User; actor: UserActor; idleLockAt: Date } | null> {
   const activation = await openActivation(db, station.id);
   if (!activation?.user.active) return null;
+  const idleLockAt = await idleDeadline(db, activation.lastActivityAt);
+  if (idleLockAt < now) {
+    await endIdle(db, activation.id, idleLockAt);
+    return null;
+  }
+  // At most once a minute, so every request doesn't write.
+  await db.station.updateMany({
+    where: {
+      id: station.id,
+      OR: [{ lastSeenAt: null }, { lastSeenAt: { lte: new Date(now.getTime() - MINUTE) } }],
+    },
+    data: { lastSeenAt: now },
+  });
   const { user } = activation;
-  return { user, actor: { userId: user.id, roles: user.roles, stationId: station.id } };
+  return {
+    user,
+    actor: { userId: user.id, roles: user.roles, stationId: station.id },
+    idleLockAt,
+  };
+}
+
+/**
+ * Pointer, key or scan input on the station (`station.touch`): pushes the idle deadline out. Too
+ * late is too late: an activation already past its deadline ends instead of being revived.
+ */
+export async function touchStation(
+  db: Db,
+  actor: Actor,
+  now: Date = new Date(),
+): Promise<{ idleLockAt: Date }> {
+  const { stationId } = actor;
+  if (stationId === null) throw new AppError("FORBIDDEN", "errors.station.notStation");
+  const outcome = await db.$transaction(async (tx) => {
+    const activation = await tx.stationActivation.findFirst({
+      where: { stationId, userId: actor.userId, endedAt: null },
+    });
+    if (!activation) return null;
+    const deadline = await idleDeadline(tx, activation.lastActivityAt);
+    if (deadline < now) {
+      await endIdle(tx, activation.id, deadline);
+      return null;
+    }
+    await tx.stationActivation.update({
+      where: { id: activation.id },
+      data: { lastActivityAt: now },
+    });
+    return { idleLockAt: await idleDeadline(tx, now) };
+  });
+  // After the commit, so the IDLE end sticks.
+  if (!outcome) throw new AppError("UNAUTHORIZED", "errors.station.locked");
+  return outcome;
 }
 
 export const PIN_MAX_ATTEMPTS = 5;
@@ -322,8 +398,8 @@ export async function unlockWithBadge(
 }
 
 /**
- * Makes `user` the one acting on the station: the previous user's turn ends (`SWITCHED_USER`); the
- * same user unlocking again keeps theirs. The station row lock serializes two people unlocking
+ * Makes `user` the one acting on the station: the previous user's turn ends (`SWITCHED_USER`, or
+ * `IDLE` if it already timed out); the same user unlocking again within the limit keeps theirs. The station row lock serializes two people unlocking
  * the same tablet at once, and catches a revoke since the cookie was read.
  */
 async function activate(
@@ -337,7 +413,14 @@ async function activate(
     SELECT active FROM stations WHERE id = ${station.id}::uuid FOR NO KEY UPDATE`;
   if (!row?.active) throw new AppError("UNAUTHORIZED", "errors.station.unknown");
 
-  const open = await openActivation(tx, station.id);
+  let open = await openActivation(tx, station.id);
+  if (open) {
+    const deadline = await idleDeadline(tx, open.lastActivityAt);
+    if (deadline < now) {
+      await endIdle(tx, open.id, deadline);
+      open = null;
+    }
+  }
   if (open?.userId === user.id) {
     await tx.stationActivation.update({ where: { id: open.id }, data: { lastActivityAt: now } });
   } else {

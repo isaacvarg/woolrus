@@ -5,14 +5,20 @@ import { cache } from "react";
 import { auth } from "./auth";
 import { stationToken } from "./station-cookie";
 
-export type Resolved = { user: User; actor: UserActor; station: Station | null };
+export type Resolved = {
+  user: User;
+  actor: UserActor;
+  station: Station | null;
+  /** On a station: when it locks itself without input (idle lock). */
+  idleLockAt: Date | null;
+};
 
 /**
  * The one rule for who is acting (SPEC-identity "Actor resolution"), used by the API's `authed`
  * middleware and by server components, so they always agree:
  * 1. a session (cookie or bearer token) of an active user: a personal actor;
- * 2. else a station cookie of an active station with an open activation for an active user: that
- *    user, with exactly their roles, at that station;
+ * 2. else a station cookie of an active station with an open, not idle, activation for an active
+ *    user: that user, with exactly their roles, at that station;
  * 3. else nobody. Always a UserActor: a request can never act as the system actor.
  */
 export async function resolveActor(requestHeaders: Headers): Promise<Resolved | null> {
@@ -25,6 +31,7 @@ export async function resolveActor(requestHeaders: Headers): Promise<Resolved | 
         user,
         actor: { userId: user.id, roles: user.roles, stationId: null },
         station: null,
+        idleLockAt: null,
       };
     }
   }
@@ -53,6 +60,11 @@ const currentResolved = cache(async () => resolveActor(await headers()));
 /** The station this request acts from, if any. */
 export const currentStation = cache(
   async (): Promise<Station | null> => (await currentResolved())?.station ?? null,
+);
+
+/** When the current station locks itself without input, if this request acts from one. */
+export const currentIdleLockAt = cache(
+  async (): Promise<Date | null> => (await currentResolved())?.idleLockAt ?? null,
 );
 
 /** The signed-in user's row, for their preferences (FR-SET-03). */

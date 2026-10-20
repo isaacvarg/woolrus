@@ -4,10 +4,17 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 import { OrderEvents } from "@/lib/live";
-import { currentActor, currentStation, currentUser, resolveStationDevice } from "@/server/actor";
+import {
+  currentActor,
+  currentIdleLockAt,
+  currentStation,
+  currentUser,
+  resolveStationDevice,
+} from "@/server/actor";
 import { DrawerNav } from "./drawer-nav";
 import { NavFooter } from "./nav-footer";
 import { QueueNav } from "./queue-nav";
+import { StationIdleLock } from "./station-idle-lock";
 import { SyncIndicator } from "./sync-indicator";
 
 // Everything under (app) requires someone acting: a personal session or an unlocked station. The
@@ -22,6 +29,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   }
   const user = await currentUser();
   const station = await currentStation();
+  const idleLockAt = await currentIdleLockAt();
   const t = await getTranslations();
   // A collapsed sidebar on desktop behaves like the tablet drawer: hidden behind the menu button.
   const collapsed = user?.sidebarCollapsed ?? false;
@@ -29,6 +37,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   return (
     <div className={`drawer ${collapsed ? "" : "lg:drawer-open"}`}>
       <OrderEvents />
+      {idleLockAt && <StationIdleLock idleLockAt={idleLockAt} />}
       <input id="nav" type="checkbox" className="drawer-toggle" />
       <div className="drawer-content flex flex-col">
         <header className={`navbar bg-base-100 shadow-sm ${collapsed ? "" : "lg:hidden"}`}>

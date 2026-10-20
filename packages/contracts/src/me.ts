@@ -31,6 +31,8 @@ export const Me = z.object({
   stationId: Id.nullable(),
   /** The station this request acts from, if any: the nav shows it, and Lock instead of Log out. */
   stationName: z.string().nullable(),
+  /** On a station: when it locks itself unless there is input before then. */
+  idleLockAt: z.date().nullable(),
 });
 export type Me = z.infer<typeof Me>;
 
