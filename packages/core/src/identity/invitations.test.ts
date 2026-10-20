@@ -319,7 +319,9 @@ describe("accepting an invitation (sign-up)", () => {
 
   it("gives exactly the invited roles and marks the invitation accepted", async () => {
     const { email, invitation } = await invite(["PICKER", "PACKER"]);
-    expect(await mayCreateAccount(db, email.toUpperCase(), adminEmails)).toBe(true);
+    expect(
+      await mayCreateAccount(db, { email: email.toUpperCase(), emailVerified: true }, adminEmails),
+    ).toBe(true);
 
     const user = await signUp(email);
     await acceptInvitation(db, { id: user.id, email }, adminEmails);
@@ -345,13 +347,21 @@ describe("accepting an invitation (sign-up)", () => {
       data: { expiresAt: new Date(Date.now() - 1000) },
     });
 
-    expect(await mayCreateAccount(db, revoked.email, adminEmails)).toBe(false);
-    expect(await mayCreateAccount(db, expired.email, adminEmails)).toBe(false);
-    expect(await mayCreateAccount(db, unique("stranger"), adminEmails)).toBe(false);
+    expect(
+      await mayCreateAccount(db, { email: revoked.email, emailVerified: true }, adminEmails),
+    ).toBe(false);
+    expect(
+      await mayCreateAccount(db, { email: expired.email, emailVerified: true }, adminEmails),
+    ).toBe(false);
+    expect(
+      await mayCreateAccount(db, { email: unique("stranger"), emailVerified: true }, adminEmails),
+    ).toBe(false);
   });
 
   it("lets an ADMIN_EMAILS address in as Admin without an invitation", async () => {
-    expect(await mayCreateAccount(db, "Boss@Example.test", adminEmails)).toBe(true);
+    expect(
+      await mayCreateAccount(db, { email: "Boss@Example.test", emailVerified: true }, adminEmails),
+    ).toBe(true);
     const user = await signUp("boss@example.test");
     await acceptInvitation(db, { id: user.id, email: "boss@example.test" }, adminEmails);
     expect((await db.user.findUniqueOrThrow({ where: { id: user.id } })).roles).toEqual(["ADMIN"]);

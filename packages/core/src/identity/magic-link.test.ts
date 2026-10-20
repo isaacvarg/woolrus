@@ -120,6 +120,31 @@ describe("sendMagicLink", () => {
 
 describe("mayCreateAccount (SRS §7.1 #3: any account got full access)", () => {
   it("refuses an email with no open invitation that isn't in ADMIN_EMAILS", async () => {
-    expect(await mayCreateAccount(db, "nobody@example.test", adminEmails)).toBe(false);
+    expect(
+      await mayCreateAccount(
+        db,
+        { email: "nobody@example.test", emailVerified: true },
+        adminEmails,
+      ),
+    ).toBe(false);
+  });
+
+  // An OAuth provider (Discord) can hand over an address its user never verified. Better Auth
+  // creates the account anyway, so an attacker could take an invitation or an ADMIN_EMAILS
+  // bootstrap by naming the address. Magic-link sign-ups arrive verified.
+  it("refuses an unverified email, even with an open invitation or in ADMIN_EMAILS", async () => {
+    const [admin] = adminEmails;
+    if (!admin) throw new Error("expected an admin email");
+    await db.invitation.create({
+      data: {
+        email: "invited@example.test",
+        roles: ["PACKER"],
+        expiresAt: new Date(Date.now() + 86_400_000),
+      },
+    });
+    for (const email of ["invited@example.test", admin]) {
+      expect(await mayCreateAccount(db, { email, emailVerified: false }, adminEmails)).toBe(false);
+      expect(await mayCreateAccount(db, { email, emailVerified: true }, adminEmails)).toBe(true);
+    }
   });
 });

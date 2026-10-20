@@ -21,12 +21,18 @@ export async function openInvitation(db: Db | DbTx, email: string, now = new Dat
 const isAdminEmail = (email: string, adminEmails: readonly string[]) =>
   adminEmails.includes(email.toLowerCase());
 
-/** Invite-only: an open invitation, or an `ADMIN_EMAILS` address bootstrapping an admin. */
+/**
+ * Invite-only: an open invitation, or an `ADMIN_EMAILS` address bootstrapping an admin, and only
+ * for an email the sign-in method proved. Better Auth creates OAuth accounts with whatever the
+ * provider reports, and Discord reports unverified addresses, so without this anyone could claim
+ * an invitation or the admin bootstrap by naming the address. Magic-link sign-ups are verified.
+ */
 export async function mayCreateAccount(
   db: Db,
-  email: string,
+  { email, emailVerified }: { email: string; emailVerified: boolean },
   adminEmails: readonly string[],
 ): Promise<boolean> {
+  if (!emailVerified) return false;
   return isAdminEmail(email, adminEmails) || (await openInvitation(db, email)) !== null;
 }
 

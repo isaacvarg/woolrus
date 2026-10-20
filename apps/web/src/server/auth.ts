@@ -7,6 +7,7 @@ import { prismaAdapter } from "better-auth/adapters/prisma";
 import { nextCookies } from "better-auth/next-js";
 import { bearer } from "better-auth/plugins/bearer";
 import { magicLink } from "better-auth/plugins/magic-link";
+import { after } from "next/server";
 import { env } from "./env";
 
 const log = createLogger({ module: "auth" });
@@ -43,22 +44,28 @@ function createAuth() {
     onAPIError: { errorURL: "/sign-in" },
     plugins: [
       magicLink({
-        // Only to people who may sign in, inline through the EmailSender (SPEC-identity "Sign-in
-        // hardening"). Nothing is thrown back: the page says "check your email" either way.
+        // Only to people who may sign in, through the EmailSender (SPEC-identity "Sign-in
+        // hardening"). Nothing is thrown back: the page says "check your email" either way. Sent
+        // after the response, not awaited: a refused address answers after one query, an allowed
+        // one would wait on Resend, and that difference would tell who has an account. Still not
+        // a job, so the link never sits in the job table.
         sendMagicLink: async ({ email, url }, ctx) => {
-          await sendMagicLink(
-            db,
-            { email, url, fallbackLocale: pageLocale(ctx?.request?.headers ?? ctx?.headers) },
-            {
-              adminEmails: env().ADMIN_EMAILS,
-              // With no Resend key the link goes to the server log (dev), as before.
-              sender: (db) =>
-                getEmailSender(db, {
-                  timeoutMs: 10_000,
-                  log: (entry) => log.warn(entry, "magic link logged, not sent: no Resend key"),
-                }),
-              log,
-            },
+          const fallbackLocale = pageLocale(ctx?.request?.headers ?? ctx?.headers);
+          after(() =>
+            sendMagicLink(
+              db,
+              { email, url, fallbackLocale },
+              {
+                adminEmails: env().ADMIN_EMAILS,
+                // With no Resend key the link goes to the server log (dev), as before.
+                sender: (db) =>
+                  getEmailSender(db, {
+                    timeoutMs: 10_000,
+                    log: (entry) => log.warn(entry, "magic link logged, not sent: no Resend key"),
+                  }),
+                log,
+              },
+            ),
           );
         },
       }),
@@ -87,10 +94,14 @@ function createAuth() {
       user: {
         create: {
           // Invite-only (NFR-SEC-02): no open invitation, no account. ADMIN_EMAILS bootstraps the
-          // first admin. The rule and its tests live in core (identity/sign-in.ts).
+          // first admin. Either needs a verified email. The rule and its tests live in core
+          // (identity/sign-in.ts).
           before: async (user) => {
-            if (await mayCreateAccount(db, user.email, env().ADMIN_EMAILS)) return;
-            log.warn({ email: user.email.toLowerCase() }, "sign-in refused: no invitation");
+            if (await mayCreateAccount(db, user, env().ADMIN_EMAILS)) return;
+            log.warn(
+              { email: user.email.toLowerCase(), emailVerified: user.emailVerified },
+              "sign-in refused: no invitation, or an unverified email",
+            );
             return false;
           },
           after: async (user) => acceptInvitation(db, user, env().ADMIN_EMAILS),
