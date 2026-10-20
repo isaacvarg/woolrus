@@ -20,6 +20,9 @@ model Settings {
   shipstationApiKeyEnc String? @map("shipstation_api_key_enc")
   lumexiaBaseUrl       String? @map("lumexia_base_url")
   lumexiaApiKeyEnc     String? @map("lumexia_api_key_enc")
+  /// Sender for app email, e.g. "Woolrus <no-reply@example.com>" (SPEC-identity "Email").
+  emailFrom            String? @map("email_from")
+  resendApiKeyEnc      String? @map("resend_api_key_enc")
 
   syncIntervalMinutes    Int           @default(5) @map("sync_interval_minutes")
   stationIdleLockMinutes Int           @default(10) @map("station_idle_lock_minutes")

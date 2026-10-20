@@ -1,5 +1,6 @@
 import { expect, type Page, test } from "@playwright/test";
 import { signInAs } from "./support/auth";
+import { openNav } from "./support/nav";
 import { withSettingsLock } from "./support/settings-lock";
 import {
   createStoreOrder,
@@ -10,12 +11,6 @@ import {
   signedOrderUpdated,
   startPicking,
 } from "./support/woo";
-
-/** On tablet width the nav is a drawer behind the menu button. */
-async function openNav(page: Page) {
-  const menu = page.getByLabel("Open menu");
-  if (await menu.isVisible()) await menu.click();
-}
 
 const syncStatus = (page: Page) =>
   page.getByRole("navigation").getByRole("status").filter({ hasText: /sync/i });

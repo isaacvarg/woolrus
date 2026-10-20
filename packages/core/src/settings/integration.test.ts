@@ -4,7 +4,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vites
 import { createActor, resetDb, testDb } from "../../test/db";
 import { SecretDecryptError } from "./crypto";
 import { getIntegrationConfig } from "./integration";
-import { setSecret, updateSettings } from "./service";
+import { clearSecret, setSecret, updateSettings } from "./service";
 
 const db: Db = testDb();
 afterAll(() => db.$disconnect());
@@ -49,6 +49,8 @@ describe("getIntegrationConfig", () => {
     await setSecret(db, admin, { name: "wooWebhookSecret", value: "wh_settings" });
     await setSecret(db, admin, { name: "shipstationApiKey", value: "ss_settings" });
     await setSecret(db, admin, { name: "lumexiaApiKey", value: "lx_settings" });
+    await updateSettings(db, admin, { emailFrom: "Woolrus <no-reply@example.com>" });
+    await setSecret(db, admin, { name: "resendApiKey", value: "re_settings" });
 
     expect(await getIntegrationConfig(db)).toEqual({
       woocommerce: {
@@ -59,6 +61,7 @@ describe("getIntegrationConfig", () => {
       },
       shipstation: { apiKey: "ss_settings" },
       lumexia: { baseUrl: "https://lumexia.example.com", apiKey: "lx_settings" },
+      email: { from: "Woolrus <no-reply@example.com>", resendApiKey: "re_settings" },
     });
   });
 
@@ -75,6 +78,7 @@ describe("getIntegrationConfig", () => {
       },
       shipstation: null,
       lumexia: null,
+      email: null,
     });
   });
 
@@ -87,6 +91,7 @@ describe("getIntegrationConfig", () => {
         woocommerce: null,
         shipstation: null,
         lumexia: null,
+        email: null,
       });
     },
   );
@@ -104,6 +109,7 @@ describe("getIntegrationConfig", () => {
         },
         shipstation: { apiKey: "ss_env" },
         lumexia: { baseUrl: "http://lumexia.localhost", apiKey: "lx_env" },
+        email: null,
       });
     },
   );
@@ -125,6 +131,17 @@ describe("getIntegrationConfig", () => {
     await setSecret(db, admin, { name: "wooConsumerKey", value: "ck_settings" });
     await updateSettings(db, admin, { lumexiaBaseUrl: "https://lumexia.example.com" });
     expect(await getIntegrationConfig(db)).toMatchObject({ woocommerce: null, lumexia: null });
+  });
+
+  it("leaves email unconfigured until both the sender and the Resend key are set", async () => {
+    stubEnv("production");
+    const admin = await createActor(db, ["ADMIN"]);
+    await setSecret(db, admin, { name: "resendApiKey", value: "re_settings" });
+    expect((await getIntegrationConfig(db)).email).toBeNull();
+
+    await clearSecret(db, admin, { name: "resendApiKey" });
+    await updateSettings(db, admin, { emailFrom: "no-reply@example.com" });
+    expect((await getIntegrationConfig(db)).email).toBeNull();
   });
 
   it("fails loudly when a stored secret can't be decrypted", async () => {

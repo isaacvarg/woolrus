@@ -28,6 +28,22 @@ export const IntegrationUrl = z
     return url === null || (url.username === "" && url.password === "");
   }, "errors.field.urlCredentials");
 
+const isAddress = (value: string) => z.email().safeParse(value).success;
+const NAMED_ADDRESS = /^([^<>,"]+?)\s*<([^<>\s]+)>$/;
+
+/**
+ * Who app email comes from: `ops@example.com` or `Woolrus <no-reply@example.com>`. One mailbox:
+ * no lists, no quoted names (Resend's `from` takes exactly these two forms).
+ */
+export const EmailFrom = z
+  .string()
+  .trim()
+  .max(254)
+  .refine((value) => {
+    const named = NAMED_ADDRESS.exec(value);
+    return named ? isAddress(named[2] as string) : isAddress(value);
+  }, "errors.field.emailFrom");
+
 const text = (max: number) => z.string().trim().min(1).max(max);
 
 /** One US warehouse (decisions.md). Carriers require the phone number. */
@@ -77,6 +93,7 @@ export const SecretName = z.enum([
   "wooWebhookSecret",
   "shipstationApiKey",
   "lumexiaApiKey",
+  "resendApiKey",
 ]);
 export type SecretName = z.infer<typeof SecretName>;
 
@@ -89,6 +106,7 @@ export const AdminSettings = z.object({
   shipFromAddress: ShipFromAddress.nullable(),
   wooStoreUrl: z.string().nullable(),
   lumexiaBaseUrl: z.string().nullable(),
+  emailFrom: z.string().nullable(),
   syncIntervalMinutes: z.number(),
   stationIdleLockMinutes: z.number(),
   claimExpiryMinutes: z.number(),
@@ -114,6 +132,7 @@ export const UpdateSettingsInput = z.object({
   shipFromAddress: ShipFromAddress.optional(),
   wooStoreUrl: IntegrationUrl.nullable().optional(),
   lumexiaBaseUrl: IntegrationUrl.nullable().optional(),
+  emailFrom: EmailFrom.nullable().optional(),
   syncIntervalMinutes: SyncIntervalMinutes.optional(),
   stationIdleLockMinutes: StationIdleLockMinutes.optional(),
   claimExpiryMinutes: ClaimExpiryMinutes.optional(),
@@ -140,6 +159,14 @@ export type SetSecretInput = z.infer<typeof SetSecretInput>;
 
 export const ClearSecretInput = z.object({ name: SecretName });
 export type ClearSecretInput = z.infer<typeof ClearSecretInput>;
+
+/** Send test email: like Test connection, a failure is a result the card shows. */
+export const SendTestEmailResult = z.discriminatedUnion("ok", [
+  /** `log`: Resend isn't configured, so the email went to the server log, not the inbox. */
+  z.object({ ok: z.literal(true), to: z.string(), via: z.enum(["resend", "log"]) }),
+  z.object({ ok: z.literal(false), messageKey: z.string() }),
+]);
+export type SendTestEmailResult = z.infer<typeof SendTestEmailResult>;
 
 export const settings = {
   get: base
@@ -184,4 +211,13 @@ export const settings = {
     })
     .input(ClearSecretInput)
     .output(AdminSettings),
+
+  sendTestEmail: base
+    .route({
+      method: "POST",
+      path: "/settings/email/test",
+      tags: ["Settings"],
+      summary: "Send a test email to your own address",
+    })
+    .output(SendTestEmailResult),
 };

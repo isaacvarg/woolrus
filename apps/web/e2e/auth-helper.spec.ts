@@ -38,8 +38,9 @@ test("a deactivated user keeps no access, in the API or the pages", async ({ pag
   await db.user.update({ where: { id: admin.id }, data: { active: false } });
 
   expect((await page.request.get("/api/v1/me")).status()).toBe(401);
+  // Pages resolve the actor the same way as the API: an inactive user's session is nobody's.
   await page.goto("/settings");
-  await expect(page.getByText("You don't have permission to do that.")).toBeVisible();
+  await expect(page).toHaveURL(/\/sign-in$/);
 });
 
 test("the order event stream refuses signed-out callers and users who can't read orders", async ({
@@ -61,7 +62,9 @@ test("a user deactivated while the order event stream is open is cut off at the 
 }) => {
   test.slow(); // The server re-checks the session every 25 s.
   const picker = await signInAs(page, ["PICKER"]);
-  await page.goto("/");
+  // A same-origin page with no app code: an app page would leave for sign-in on its own once the
+  // user is deactivated (its queries get 401), and this test is about the server ending the stream.
+  await page.goto("/api/health");
 
   // Reads the raw stream (EventSource would quietly reconnect). The first chunk proves it's open.
   const status = await page.evaluate(async () => {

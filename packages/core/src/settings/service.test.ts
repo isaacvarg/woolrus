@@ -28,6 +28,7 @@ describe("settings service", () => {
       shipFromAddress: null,
       wooStoreUrl: null,
       lumexiaBaseUrl: null,
+      emailFrom: null,
       syncIntervalMinutes: 5,
       stationIdleLockMinutes: 10,
       claimExpiryMinutes: 30,
@@ -41,6 +42,7 @@ describe("settings service", () => {
         wooWebhookSecret: { configured: false },
         shipstationApiKey: { configured: false },
         lumexiaApiKey: { configured: false },
+        resendApiKey: { configured: false },
       },
     });
     expect(await db.settings.count()).toBe(1);
@@ -68,6 +70,22 @@ describe("settings service", () => {
     // Exactly the changed fields: the unchanged weightDisplay must not appear.
     expect(audit[0]?.before).toEqual({ shipFromAddress: null, syncIntervalMinutes: 5 });
     expect(audit[0]?.after).toEqual({ shipFromAddress: address, syncIntervalMinutes: 15 });
+  });
+
+  it("saves and clears the email sender, audited like any setting", async () => {
+    const admin = await createActor(db, ["ADMIN"]);
+    const from = "Woolrus <no-reply@example.com>";
+    expect((await updateSettings(db, admin, { emailFrom: from })).emailFrom).toBe(from);
+    expect((await updateSettings(db, admin, { emailFrom: null })).emailFrom).toBeNull();
+
+    const audit = await db.auditEvent.findMany({
+      where: { entityType: "Settings" },
+      orderBy: { id: "asc" },
+    });
+    expect(audit.map((a) => [a.before, a.after])).toEqual([
+      [{ emailFrom: null }, { emailFrom: from }],
+      [{ emailFrom: from }, { emailFrom: null }],
+    ]);
   });
 
   it("leaves every field a patch omits as it was, not back at its default", async () => {

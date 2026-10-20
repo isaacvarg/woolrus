@@ -28,6 +28,7 @@ const secretColumns = {
   wooWebhookSecret: "wooWebhookSecretEnc",
   shipstationApiKey: "shipstationApiKeyEnc",
   lumexiaApiKey: "lumexiaApiKeyEnc",
+  resendApiKey: "resendApiKeyEnc",
 } as const satisfies Record<SecretName, keyof Settings>;
 
 /** Each integration URL and the secrets that only make sense for the server it points at. */
@@ -69,6 +70,7 @@ function toAdminSettings(row: Settings): AdminSettings {
     shipFromAddress: shipFrom.success ? shipFrom.data : null,
     wooStoreUrl: row.wooStoreUrl,
     lumexiaBaseUrl: row.lumexiaBaseUrl,
+    emailFrom: row.emailFrom,
     syncIntervalMinutes: row.syncIntervalMinutes,
     stationIdleLockMinutes: row.stationIdleLockMinutes,
     claimExpiryMinutes: row.claimExpiryMinutes,

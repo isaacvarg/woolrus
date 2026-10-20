@@ -20,7 +20,28 @@
     "allOrders": "All Orders",
     "queues": "Queues",
     "priorityRules": "Priority rules",
-    "sync": "Sync"
+    "sync": "Sync",
+    "users": "Users",
+    "stations": "Stations",
+    "openMenu": "Open menu",
+    "closeMenu": "Close menu"
+  },
+  "navFooter": {
+    "preferences": "Preferences",
+    "language": "Language",
+    "theme": "Theme",
+    "themes": {
+      "SYSTEM": "System",
+      "LIGHT": "Light",
+      "DARK": "Dark",
+      "HIGH_CONTRAST": "High contrast"
+    },
+    "collapseSidebar": "Collapse sidebar",
+    "expandSidebar": "Expand sidebar",
+    "logOut": "Log out",
+    "lock": "Lock",
+    "switchUser": "Switch user",
+    "station": "Station: {name}"
   },
   "boxes": {
     "title": "Boxes",
@@ -80,14 +101,16 @@
       "names": {
         "woocommerce": "WooCommerce",
         "shipstation": "ShipStation",
-        "lumexia": "Lumexia"
+        "lumexia": "Lumexia",
+        "email": "Email"
       },
       "secrets": {
         "wooConsumerKey": "Consumer key",
         "wooConsumerSecret": "Consumer secret",
         "wooWebhookSecret": "Webhook secret",
         "shipstationApiKey": "API key",
-        "lumexiaApiKey": "API key"
+        "lumexiaApiKey": "API key",
+        "resendApiKey": "Resend API key"
       },
       "set": "Set",
       "notSet": "Not set",
@@ -115,7 +138,12 @@
         "step2": "Status Active, topic “Order created”, API version “WP REST API Integration v3”.",
         "step3": "Delivery URL: the one above. Secret: the webhook secret saved here.",
         "step4": "Add a second webhook the same way with the topic “Order updated”."
-      }
+      },
+      "emailFrom": "Sender",
+      "sendTestEmail": "Send test email",
+      "sendTestEmailHint": "Sends to your own address with the saved sender and key.",
+      "testEmailSent": "Sent to {to}. Check your inbox.",
+      "testEmailLogged": "Resend isn't set up, so the email to {to} was written to the server log instead of sent."
     }
   },
   "priorityRules": {
@@ -371,7 +399,8 @@
       "urlCredentials": "Leave the username and password out of the address; enter keys in the fields below.",
       "usState": "Use the 2-letter state code, e.g. TX.",
       "usZip": "Use a 5-digit ZIP code (or ZIP+4).",
-      "email": "Enter a valid email address."
+      "email": "Enter a valid email address.",
+      "emailFrom": "Use an address like no-reply@example.com or Woolrus '<'no-reply@example.com>."
     },
     "settings": {
       "encryptionKeyMissing": "Secrets can't be saved: the server's encryption key is missing or invalid. Ask whoever runs the server to set SETTINGS_ENCRYPTION_KEY."
@@ -421,6 +450,191 @@
         "removedHasRecords": "{line} was removed in the store but has notes, issues or voids on it.",
         "pastPacking": "{line}: the order is already past Packing, so an added or larger line would ship without being picked and packed. Force it back to Packing first, or dismiss."
       }
+    },
+    "email": {
+      "unauthorized": "Resend refused the API key. Check it in Settings → Integrations.",
+      "rejected": "Resend refused the email. Check the sender address and that its domain is verified in Resend.",
+      "unavailable": "Resend couldn't be reached. Try again in a minute."
+    },
+    "users": {
+      "lastAdmin": "This would leave no active Admin. Make someone else an Admin first.",
+      "self": "You can't deactivate yourself or remove your own Admin role.",
+      "rolesRequired": "Choose at least one role.",
+      "alreadyExists": "Someone with this email already has an account.",
+      "pinFormat": "A PIN is exactly 6 digits.",
+      "pinWeak": "Too easy to guess: avoid repeated digits and runs like 123456."
+    },
+    "invitations": {
+      "emailInvalid": "Enter a valid email address.",
+      "pending": "This email already has a pending invitation. Resend or revoke it instead.",
+      "notOpen": "This invitation was already accepted or revoked."
+    },
+    "auth": {
+      "deactivated": "Your account is deactivated. Ask an admin to reactivate it.",
+      "signInFailed": "Sign-in didn't work. Try again.",
+      "linkInvalid": "That sign-in link has expired or was already used. Ask for a new one."
+    },
+    "stations": {
+      "nameTaken": "There's already a station with that name.",
+      "nameTooLong": "Use at most 40 characters.",
+      "personalOnly": "Register a station from your own sign-in, not from a station."
+    },
+    "station": {
+      "locked": "This station is locked. Unlock it to continue.",
+      "unknown": "This device is no longer a station.",
+      "badPin": "That PIN isn't right.",
+      "pinLocked": "Too many wrong PINs. Try again at {until, time, short}.",
+      "badBadge": "That badge isn't recognized.",
+      "notStation": "Only a station can be locked."
     }
+  },
+  "emails": {
+    "test": {
+      "subject": "Woolrus test email",
+      "body": "This is a test email from Woolrus. If you're reading it, email is set up correctly."
+    },
+    "invitation": {
+      "subject": "{inviter} invited you to Woolrus",
+      "body": "{inviter} invited you to Woolrus, our warehouse workspace, as {roles}.",
+      "action": "Sign in to Woolrus",
+      "expiry": "Sign in with Google or an email link using this address. The invitation is valid for 7 days."
+    },
+    "magicLink": {
+      "subject": "Your Woolrus sign-in link",
+      "body": "Use the link below to sign in to Woolrus. It works once and expires in 5 minutes.",
+      "action": "Sign in to Woolrus",
+      "ignore": "If you didn't ask to sign in, you can ignore this email."
+    }
+  },
+  "users": {
+    "title": "Users",
+    "name": "Name",
+    "email": "Email",
+    "roles": "Roles",
+    "status": "Status",
+    "active": "Active",
+    "inactive": "Deactivated",
+    "pin": "PIN",
+    "badge": "Badge",
+    "lastActive": "Last active",
+    "never": "Never",
+    "actions": "Actions",
+    "actionsFor": "Actions for {name}",
+    "editRoles": "Edit roles",
+    "editRolesTitle": "Roles for {name}",
+    "deactivate": "Deactivate",
+    "reactivate": "Reactivate",
+    "deactivateTitle": "Deactivate {name}?",
+    "deactivateBody": "They'll be signed out everywhere at once and can't sign back in until reactivated.",
+    "yes": "Yes",
+    "no": "No",
+    "pinLocked": "Locked until {time}",
+    "role": {
+      "ADMIN": "Admin",
+      "PICKER": "Picker",
+      "PACKER": "Packer",
+      "QA": "QA",
+      "SHIPPER": "Shipper"
+    },
+    "setPin": "Set PIN",
+    "clearPin": "Clear PIN",
+    "issueBadge": "Issue badge",
+    "revokeBadge": "Revoke badge",
+    "pinTitle": "PIN for {name}",
+    "newPin": "New PIN",
+    "pinHelp": "6 digits. Avoid repeated digits and runs like 123456.",
+    "generate": "Generate",
+    "generatedPin": "Give {name} this PIN now. It won't be shown again.",
+    "pinSaved": "PIN saved for {name}.",
+    "pinCleared": "PIN cleared for {name}.",
+    "badgeTitle": "Badge for {name}",
+    "badgeOnce": "This code is shown only now. Print the badge before you close this.",
+    "badgeQr": "Badge QR code for {name}",
+    "print": "Print",
+    "close": "Close",
+    "badgeRevoked": "Badge revoked for {name}.",
+    "search": "Search users",
+    "searchPlaceholder": "Name or email",
+    "pagination": "Pages",
+    "previousPage": "Previous page",
+    "nextPage": "Next page",
+    "pageOf": "Page {page} of {pages}"
+  },
+  "invitations": {
+    "tab": "Invitations",
+    "usersTab": "Users",
+    "invite": "Invite user",
+    "inviteTitle": "Invite a user",
+    "email": "Email",
+    "roles": "Roles",
+    "status": "Status",
+    "expires": "Expires",
+    "invitedBy": "Invited by",
+    "actions": "Actions",
+    "actionsFor": "Actions for {email}",
+    "send": "Send invitation",
+    "resend": "Resend",
+    "revoke": "Revoke",
+    "revokeTitle": "Revoke the invitation for {email}?",
+    "revokeBody": "They won't be able to sign in with it. You can invite them again later.",
+    "sent": "Invitation sent to {email}.",
+    "resent": "Invitation sent again to {email}.",
+    "none": "No invitations yet.",
+    "statuses": {
+      "pending": "Pending",
+      "expired": "Expired",
+      "accepted": "Accepted",
+      "revoked": "Revoked"
+    }
+  },
+  "station": {
+    "locked": "Locked",
+    "prompt": "Tap your name and enter your PIN, or scan your badge.",
+    "choose": "Who's working?",
+    "enterPin": "PIN for {name}",
+    "pinDigit": "Digit {n}",
+    "clear": "Clear",
+    "backspace": "Delete",
+    "cancel": "Back",
+    "unlock": "Unlock",
+    "badge": "Badge",
+    "noTiles": "Nobody has a PIN yet. Scan your badge, or ask an admin to set your PIN.",
+    "activeUser": "{name} is on this station.",
+    "keepWorking": "Keep working as {name}"
+  },
+  "stations": {
+    "title": "Stations",
+    "name": "Name",
+    "currentUser": "Current user",
+    "lastSeen": "Last seen",
+    "status": "Status",
+    "active": "Active",
+    "revoked": "Revoked",
+    "never": "Never",
+    "nobody": "—",
+    "actions": "Actions",
+    "actionsFor": "Actions for {name}",
+    "register": "Make this device a station",
+    "registerTitle": "Make this device a station",
+    "registerBody": "You'll be signed out on this device, and it will show the station lock screen. Staff then unlock it with their PIN or badge.",
+    "registerSubmit": "Make it a station",
+    "rename": "Rename",
+    "renameTitle": "Rename {name}",
+    "revoke": "Revoke",
+    "revokeTitle": "Revoke {name}?",
+    "revokeBody": "The device goes back to the sign-in page, and whoever is on it is locked out.",
+    "none": "No stations yet.",
+    "renamed": "Station renamed.",
+    "revokedToast": "{name} revoked."
+  },
+  "signIn": {
+    "title": "Sign in",
+    "withGoogle": "Sign in with Google",
+    "withDiscord": "Sign in with Discord",
+    "or": "or",
+    "email": "Email",
+    "emailMe": "Email me a link",
+    "checkEmail": "Check your email for a sign-in link.",
+    "useAnother": "Use another email"
   }
 }

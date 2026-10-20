@@ -45,3 +45,19 @@
   outline: 3px solid var(--color-primary);
   outline-offset: 2px;
 }
+
+/* While a badge is open, printing prints only the badge, whatever else is on the page. */
+@media print {
+  body:has(.print-badge) * {
+    visibility: hidden;
+  }
+  body:has(.print-badge) .print-badge,
+  body:has(.print-badge) .print-badge * {
+    visibility: visible;
+  }
+  body:has(.print-badge) .print-badge {
+    position: fixed;
+    inset: 0 auto auto 0;
+    border: none;
+  }
+}

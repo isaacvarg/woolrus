@@ -1,10 +1,12 @@
 import { implement, ORPCError, ValidationError } from "@orpc/server";
+import type { ResponseHeadersPluginContext } from "@orpc/server/plugins";
 import { contract, toFieldErrors } from "@woolrus/contracts";
 import { AppError } from "@woolrus/core";
 import type { Logger } from "@woolrus/logger";
-import { resolveActor } from "./actor";
+import { resolveActor, resolveStationDevice } from "./actor";
+import { clearStationCookie } from "./station-cookie";
 
-export type BaseContext = {
+export type BaseContext = ResponseHeadersPluginContext & {
   headers: Headers;
   log: Logger;
 };
@@ -47,15 +49,43 @@ const mapErrors = os.middleware(async ({ next, context }) => {
 
 /**
  * Deny by default (NFR-SEC-01): every procedure goes through `authed`, which resolves the
- * request to an active user's Actor (see `resolveActor`).
+ * request to an active user's Actor, personal or at a station (see `resolveActor`).
  */
 const authed = os.middleware(async ({ next, context }) => {
   const resolved = await resolveActor(context.headers);
   if (!resolved) {
+    // A station device with nobody unlocked: the client shows the lock screen, not sign-in.
+    const device = await resolveStationDevice(context.headers);
+    if (device.kind === "station") {
+      throw new ORPCError("UNAUTHORIZED", { data: { messageKey: "errors.station.locked" } });
+    }
+    if (device.kind === "stale") context.resHeaders?.append("Set-Cookie", clearStationCookie());
     throw new ORPCError("UNAUTHORIZED", { data: { messageKey: "errors.unauthenticated" } });
   }
-  const { actor, user } = resolved;
-  return next({ context: { actor, user, log: context.log.child({ userId: user.id }) } });
+  const { actor, user, station, idleLockAt } = resolved;
+  const log = context.log.child({ userId: user.id, stationId: actor.stationId ?? undefined });
+  return next({ context: { actor, user, station, idleLockAt, log } });
 });
 
 export const api = os.use(mapErrors).use(authed);
+
+/**
+ * For the station device itself (status, unlock): a valid station cookie, and no unlocked user
+ * needed. A revoked station's cookie is cleared.
+ */
+const stationDevice = os.middleware(async ({ next, context }) => {
+  const device = await resolveStationDevice(context.headers);
+  if (device.kind !== "station") {
+    if (device.kind === "stale") context.resHeaders?.append("Set-Cookie", clearStationCookie());
+    throw new ORPCError("UNAUTHORIZED", { data: { messageKey: "errors.station.unknown" } });
+  }
+  return next({ context: { station: device.station } });
+});
+
+export const stationApi = os.use(mapErrors).use(stationDevice);
+
+/**
+ * The top-level router adds no middleware: each procedure brings its own (`api` or `stationApi`).
+ * `api.router` would put `authed` in front of the station procedures too.
+ */
+export const implementer = os;

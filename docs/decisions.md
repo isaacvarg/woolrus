@@ -95,6 +95,11 @@ positive quantities and dimensions, single-row settings. **Keep them when editin
   first URL where there was none, keeps them.
 - **ShipStation:** API v2. **Lumexia:** its REST API with a scoped API key. **Storage:** S3-compatible (RustFS).
   Each sits behind an adapter interface in core so it can be swapped.
+- **Email provider: Resend** (2026-10-20, SPEC-identity decision 1), through its HTTP API with `fetch`, no SDK:
+  `POST https://api.resend.com/emails` with `Idempotency-Key`. Behind the `EmailSender` adapter in
+  `packages/core/src/adapters/email/`; configured by `Settings.emailFrom` and the `resendApiKey` secret. Without a
+  key the log sender is used and health reports `email: "unconfigured"` (a go-live blocker in production). 4xx is a
+  permanent failure; 429/5xx retry through pg-boss. Magic links are sent right after the response (never queued), invitations by the `email.send` job.
 
 ## Deployment
 
@@ -107,7 +112,6 @@ positive quantities and dimensions, single-row settings. **Keep them when editin
 
 - **WooCommerce plugins:** pull real orders from the production store and check `meta_data` for ACF fields and
   bundle/composite line items before modelling them (we don't know yet whether ACF matters for orders).
-- **Email provider** for magic links (and GlitchTip). Until then the link is logged by the web server.
 - **Google / Discord OAuth apps** need creating; redirect URI `https://<host>/api/auth/callback/<provider>`.
 - **GHCR visibility:** if the repo is private, the host needs `docker login ghcr.io` with a read-only token.
 - **Storage bucket** is not created automatically yet; the storage adapter should ensure it on startup.

@@ -1,37 +1,75 @@
 import {
   archiveBox,
+  clearPin,
   clearSecret,
   createBox,
+  createInvitation,
   createPriorityRule,
+  deactivateUser,
   deletePriorityRule,
+  getEmailSender,
   getOrder,
   getOrderHistory,
   getPublicSettings,
   getSettings,
   getSyncStatus,
+  issueBadge,
   listBoxes,
+  listInvitations,
   listOrders,
   listPriorityRules,
   listQueue,
+  listStations,
   listSyncRunErrors,
   listSyncRuns,
+  listUsers,
+  lockStation,
   orderMutations,
   permissionsFor,
   queueCounts,
+  reactivateUser,
+  registerStation,
+  renameStation,
   reorderPriorityRules,
   requestSync,
+  resendInvitation,
+  revokeBadge,
+  revokeInvitation,
+  revokeStation,
+  sendTestEmail,
+  setPin,
   setSecret,
+  stationStatus,
   testStoreConnection,
+  touchStation,
+  unlockWithBadge,
+  unlockWithPin,
+  updatePreferences,
   updatePriorityRule,
   updateSettings,
+  updateUserRoles,
 } from "@woolrus/core";
 import { db } from "@woolrus/db";
-import { api } from "./orpc";
+import { preferenceCookie } from "@/lib/preferences";
+import { auth } from "./auth";
+import { badgeQrSvg } from "./badge";
+import { env } from "./env";
+import { api, type BaseContext, implementer, stationApi } from "./orpc";
+import { stationCookie } from "./station-cookie";
+
+/** Signs out the request's Better Auth session, if any, passing its cookie-clearing headers on. */
+async function endPersonalSession(context: BaseContext): Promise<void> {
+  if (!(await auth().api.getSession({ headers: context.headers }))) return;
+  const signedOut = await auth().api.signOut({ headers: context.headers, returnHeaders: true });
+  for (const cookie of signedOut.headers.getSetCookie()) {
+    context.resHeaders?.append("Set-Cookie", cookie);
+  }
+}
 
 // Thin by design: parse (done by the contract), call core, return. No rules live here.
-export const router = api.router({
+export const router = implementer.router({
   me: {
-    get: api.me.get.handler(({ context: { user, actor } }) => ({
+    get: api.me.get.handler(({ context: { user, actor, station, idleLockAt } }) => ({
       id: user.id,
       name: user.name,
       email: user.email,
@@ -40,8 +78,17 @@ export const router = api.router({
       permissions: permissionsFor(user.roles),
       locale: user.locale,
       theme: user.theme,
+      sidebarCollapsed: user.sidebarCollapsed,
       stationId: actor.stationId,
+      stationName: station?.name ?? null,
+      idleLockAt,
     })),
+    updatePreferences: api.me.updatePreferences.handler(async ({ input, context }) => {
+      const preferences = await updatePreferences(db, context.actor, input);
+      context.resHeaders?.append("Set-Cookie", preferenceCookie("locale", preferences.locale));
+      context.resHeaders?.append("Set-Cookie", preferenceCookie("theme", preferences.theme));
+      return preferences;
+    }),
   },
   boxes: {
     list: api.boxes.list.handler(({ input, context }) => listBoxes(db, context.actor, input)),
@@ -61,6 +108,15 @@ export const router = api.router({
     ),
     clearSecret: api.settings.clearSecret.handler(({ input, context }) =>
       clearSecret(db, context.actor, input),
+    ),
+    // The admin is waiting: give up after 10 s rather than Resend's default 30.
+    sendTestEmail: api.settings.sendTestEmail.handler(({ context }) =>
+      sendTestEmail(db, context.actor, (db) =>
+        getEmailSender(db, {
+          timeoutMs: 10_000,
+          log: (entry) => context.log.warn(entry, "test email logged, not sent: no Resend key"),
+        }),
+      ),
     ),
   },
   orders: {
@@ -141,6 +197,78 @@ export const router = api.router({
     reorder: api.priorityRules.reorder.handler(({ input, context }) =>
       reorderPriorityRules(db, context.actor, input),
     ),
+  },
+  users: {
+    list: api.users.list.handler(({ input, context }) => listUsers(db, context.actor, input)),
+    updateRoles: api.users.updateRoles.handler(({ input, context }) =>
+      updateUserRoles(db, context.actor, input),
+    ),
+    deactivate: api.users.deactivate.handler(({ input, context }) =>
+      deactivateUser(db, context.actor, input),
+    ),
+    reactivate: api.users.reactivate.handler(({ input, context }) =>
+      reactivateUser(db, context.actor, input),
+    ),
+    setPin: api.users.setPin.handler(({ input, context }) => setPin(db, context.actor, input)),
+    clearPin: api.users.clearPin.handler(({ input, context }) =>
+      clearPin(db, context.actor, input),
+    ),
+    issueBadge: api.users.issueBadge.handler(async ({ input, context }) => {
+      const badge = await issueBadge(db, context.actor, input);
+      return { ...badge, qrSvg: await badgeQrSvg(badge.code) };
+    }),
+    revokeBadge: api.users.revokeBadge.handler(({ input, context }) =>
+      revokeBadge(db, context.actor, input),
+    ),
+  },
+  invitations: {
+    list: api.invitations.list.handler(({ context }) => listInvitations(db, context.actor)),
+    create: api.invitations.create.handler(({ input, context }) =>
+      createInvitation(db, context.actor, input, { appUrl: env().BETTER_AUTH_URL }),
+    ),
+    resend: api.invitations.resend.handler(({ input, context }) =>
+      resendInvitation(db, context.actor, input, { appUrl: env().BETTER_AUTH_URL }),
+    ),
+    revoke: api.invitations.revoke.handler(({ input, context }) =>
+      revokeInvitation(db, context.actor, input),
+    ),
+  },
+  stations: {
+    list: api.stations.list.handler(({ context }) => listStations(db, context.actor)),
+    // The device becomes the station: it gets the station cookie, and the admin's own session on
+    // it ends. The token goes only into the cookie, never the body.
+    register: api.stations.register.handler(async ({ input, context }) => {
+      const { station, token } = await registerStation(db, context.actor, input);
+      context.resHeaders?.append("Set-Cookie", stationCookie(token));
+      await endPersonalSession(context);
+      return station;
+    }),
+    rename: api.stations.rename.handler(({ input, context }) =>
+      renameStation(db, context.actor, input),
+    ),
+    revoke: api.stations.revoke.handler(({ input, context }) =>
+      revokeStation(db, context.actor, input),
+    ),
+  },
+  station: {
+    status: stationApi.station.status.handler(({ context }) => stationStatus(db, context.station)),
+    // A personal session would win over the station (actor.ts), so the worker who just unlocked
+    // would act as whoever left it signed in. Unlocking ends it.
+    unlockPin: stationApi.station.unlockPin.handler(async ({ input, context }) => {
+      const unlocked = await unlockWithPin(db, context.station, input);
+      await endPersonalSession(context);
+      return unlocked;
+    }),
+    unlockBadge: stationApi.station.unlockBadge.handler(async ({ input, context }) => {
+      const unlocked = await unlockWithBadge(db, context.station, input);
+      await endPersonalSession(context);
+      return unlocked;
+    }),
+    lock: api.station.lock.handler(async ({ context }) => {
+      await lockStation(db, context.actor);
+      return { ok: true as const };
+    }),
+    touch: api.station.touch.handler(({ context }) => touchStation(db, context.actor)),
   },
 });
 

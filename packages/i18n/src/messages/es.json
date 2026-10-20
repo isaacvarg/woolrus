@@ -20,7 +20,28 @@
     "allOrders": "Todos los pedidos",
     "queues": "Colas",
     "priorityRules": "Reglas de prioridad",
-    "sync": "Sincronización"
+    "sync": "Sincronización",
+    "users": "Usuarios",
+    "stations": "Estaciones",
+    "openMenu": "Abrir menú",
+    "closeMenu": "Cerrar menú"
+  },
+  "navFooter": {
+    "preferences": "Preferencias",
+    "language": "Idioma",
+    "theme": "Tema",
+    "themes": {
+      "SYSTEM": "Sistema",
+      "LIGHT": "Claro",
+      "DARK": "Oscuro",
+      "HIGH_CONTRAST": "Alto contraste"
+    },
+    "collapseSidebar": "Contraer barra lateral",
+    "expandSidebar": "Expandir barra lateral",
+    "logOut": "Cerrar sesión",
+    "lock": "Bloquear",
+    "switchUser": "Cambiar de usuario",
+    "station": "Estación: {name}"
   },
   "boxes": {
     "title": "Cajas",
@@ -80,14 +101,16 @@
       "names": {
         "woocommerce": "WooCommerce",
         "shipstation": "ShipStation",
-        "lumexia": "Lumexia"
+        "lumexia": "Lumexia",
+        "email": "Correo"
       },
       "secrets": {
         "wooConsumerKey": "Clave de consumidor",
         "wooConsumerSecret": "Secreto de consumidor",
         "wooWebhookSecret": "Secreto del webhook",
         "shipstationApiKey": "Clave de API",
-        "lumexiaApiKey": "Clave de API"
+        "lumexiaApiKey": "Clave de API",
+        "resendApiKey": "Clave API de Resend"
       },
       "set": "Configurado",
       "notSet": "Sin configurar",
@@ -115,7 +138,12 @@
         "step2": "Estado Activo, tema «Pedido creado», versión de API «WP REST API Integration v3».",
         "step3": "URL de entrega: la de arriba. Secreto: el secreto del webhook guardado aquí.",
         "step4": "Agrega un segundo webhook igual con el tema «Pedido actualizado»."
-      }
+      },
+      "emailFrom": "Remitente",
+      "sendTestEmail": "Enviar correo de prueba",
+      "sendTestEmailHint": "Se envía a tu propia dirección con el remitente y la clave guardados.",
+      "testEmailSent": "Enviado a {to}. Revisa tu bandeja de entrada.",
+      "testEmailLogged": "Resend no está configurado, así que el correo para {to} se escribió en el registro del servidor en lugar de enviarse."
     }
   },
   "priorityRules": {
@@ -371,7 +399,8 @@
       "urlCredentials": "No incluyas usuario ni contraseña en la dirección; ingresa las claves en los campos de abajo.",
       "usState": "Usa el código de estado de 2 letras, p. ej. TX.",
       "usZip": "Usa un código postal de 5 dígitos (o ZIP+4).",
-      "email": "Ingresa un correo electrónico válido."
+      "email": "Ingresa un correo electrónico válido.",
+      "emailFrom": "Usa una dirección como no-reply@example.com o Woolrus '<'no-reply@example.com>."
     },
     "settings": {
       "encryptionKeyMissing": "No se pueden guardar secretos: falta la clave de cifrado del servidor o no es válida. Pide a quien administra el servidor que configure SETTINGS_ENCRYPTION_KEY."
@@ -421,6 +450,191 @@
         "removedHasRecords": "{line} se eliminó en la tienda, pero tiene notas, incidencias o anulaciones.",
         "pastPacking": "{line}: el pedido ya pasó Empaque, así que una línea nueva o mayor se enviaría sin surtir ni empacar. Regrésalo a Empaque primero, o descarta el cambio."
       }
+    },
+    "email": {
+      "unauthorized": "Resend rechazó la clave API. Revísala en Configuración → Integraciones.",
+      "rejected": "Resend rechazó el correo. Revisa la dirección del remitente y que su dominio esté verificado en Resend.",
+      "unavailable": "No se pudo conectar con Resend. Inténtalo de nuevo en un minuto."
+    },
+    "users": {
+      "lastAdmin": "No quedaría ningún Admin activo. Primero haz Admin a otra persona.",
+      "self": "No puedes desactivarte ni quitarte tu propio rol de Admin.",
+      "rolesRequired": "Elige al menos un rol.",
+      "alreadyExists": "Ya existe una cuenta con este correo.",
+      "pinFormat": "El PIN tiene exactamente 6 dígitos.",
+      "pinWeak": "Demasiado fácil de adivinar: evita dígitos repetidos y secuencias como 123456."
+    },
+    "invitations": {
+      "emailInvalid": "Introduce un correo electrónico válido.",
+      "pending": "Este correo ya tiene una invitación pendiente. Reenvíala o revócala.",
+      "notOpen": "Esta invitación ya fue aceptada o revocada."
+    },
+    "auth": {
+      "deactivated": "Tu cuenta está desactivada. Pide a un administrador que la reactive.",
+      "signInFailed": "No se pudo iniciar sesión. Inténtalo de nuevo.",
+      "linkInvalid": "Ese enlace ha vencido o ya se usó. Pide uno nuevo."
+    },
+    "stations": {
+      "nameTaken": "Ya hay una estación con ese nombre.",
+      "nameTooLong": "Usa como máximo 40 caracteres.",
+      "personalOnly": "Registra una estación desde tu propia sesión, no desde una estación."
+    },
+    "station": {
+      "locked": "Esta estación está bloqueada. Desbloquéala para continuar.",
+      "unknown": "Este dispositivo ya no es una estación.",
+      "badPin": "Ese PIN no es correcto.",
+      "pinLocked": "Demasiados PIN incorrectos. Vuelve a intentarlo a las {until, time, short}.",
+      "badBadge": "No se reconoce esa credencial.",
+      "notStation": "Solo se puede bloquear una estación."
     }
+  },
+  "emails": {
+    "test": {
+      "subject": "Correo de prueba de Woolrus",
+      "body": "Este es un correo de prueba de Woolrus. Si lo estás leyendo, el correo está bien configurado."
+    },
+    "invitation": {
+      "subject": "{inviter} te invitó a Woolrus",
+      "body": "{inviter} te invitó a Woolrus, nuestro espacio de trabajo del almacén, como {roles}.",
+      "action": "Iniciar sesión en Woolrus",
+      "expiry": "Inicia sesión con Google o con un enlace por correo usando esta dirección. La invitación es válida durante 7 días."
+    },
+    "magicLink": {
+      "subject": "Tu enlace para iniciar sesión en Woolrus",
+      "body": "Usa el siguiente enlace para iniciar sesión en Woolrus. Funciona una vez y vence en 5 minutos.",
+      "action": "Iniciar sesión en Woolrus",
+      "ignore": "Si no pediste iniciar sesión, puedes ignorar este correo."
+    }
+  },
+  "users": {
+    "title": "Usuarios",
+    "name": "Nombre",
+    "email": "Correo",
+    "roles": "Roles",
+    "status": "Estado",
+    "active": "Activo",
+    "inactive": "Desactivado",
+    "pin": "PIN",
+    "badge": "Credencial",
+    "lastActive": "Última actividad",
+    "never": "Nunca",
+    "actions": "Acciones",
+    "actionsFor": "Acciones para {name}",
+    "editRoles": "Editar roles",
+    "editRolesTitle": "Roles de {name}",
+    "deactivate": "Desactivar",
+    "reactivate": "Reactivar",
+    "deactivateTitle": "¿Desactivar a {name}?",
+    "deactivateBody": "Se cerrará su sesión en todas partes de inmediato y no podrá volver a entrar hasta que se reactive.",
+    "yes": "Sí",
+    "no": "No",
+    "pinLocked": "Bloqueado hasta {time}",
+    "role": {
+      "ADMIN": "Admin",
+      "PICKER": "Surtidor",
+      "PACKER": "Empacador",
+      "QA": "QA",
+      "SHIPPER": "Envíos"
+    },
+    "setPin": "Establecer PIN",
+    "clearPin": "Borrar PIN",
+    "issueBadge": "Emitir credencial",
+    "revokeBadge": "Revocar credencial",
+    "pinTitle": "PIN de {name}",
+    "newPin": "Nuevo PIN",
+    "pinHelp": "6 dígitos. Evita dígitos repetidos y secuencias como 123456.",
+    "generate": "Generar",
+    "generatedPin": "Entrega este PIN a {name} ahora. No se volverá a mostrar.",
+    "pinSaved": "PIN guardado para {name}.",
+    "pinCleared": "PIN borrado para {name}.",
+    "badgeTitle": "Credencial de {name}",
+    "badgeOnce": "Este código solo se muestra ahora. Imprime la credencial antes de cerrar.",
+    "badgeQr": "Código QR de la credencial de {name}",
+    "print": "Imprimir",
+    "close": "Cerrar",
+    "badgeRevoked": "Credencial revocada para {name}.",
+    "search": "Buscar usuarios",
+    "searchPlaceholder": "Nombre o correo",
+    "pagination": "Páginas",
+    "previousPage": "Página anterior",
+    "nextPage": "Página siguiente",
+    "pageOf": "Página {page} de {pages}"
+  },
+  "invitations": {
+    "tab": "Invitaciones",
+    "usersTab": "Usuarios",
+    "invite": "Invitar usuario",
+    "inviteTitle": "Invitar a un usuario",
+    "email": "Correo",
+    "roles": "Roles",
+    "status": "Estado",
+    "expires": "Vence",
+    "invitedBy": "Invitado por",
+    "actions": "Acciones",
+    "actionsFor": "Acciones para {email}",
+    "send": "Enviar invitación",
+    "resend": "Reenviar",
+    "revoke": "Revocar",
+    "revokeTitle": "¿Revocar la invitación de {email}?",
+    "revokeBody": "No podrá iniciar sesión con ella. Puedes volver a invitarle más tarde.",
+    "sent": "Invitación enviada a {email}.",
+    "resent": "Invitación reenviada a {email}.",
+    "none": "Todavía no hay invitaciones.",
+    "statuses": {
+      "pending": "Pendiente",
+      "expired": "Vencida",
+      "accepted": "Aceptada",
+      "revoked": "Revocada"
+    }
+  },
+  "station": {
+    "locked": "Bloqueada",
+    "prompt": "Toca tu nombre e introduce tu PIN, o escanea tu credencial.",
+    "choose": "¿Quién está trabajando?",
+    "enterPin": "PIN de {name}",
+    "pinDigit": "Dígito {n}",
+    "clear": "Borrar todo",
+    "backspace": "Borrar",
+    "cancel": "Volver",
+    "unlock": "Desbloquear",
+    "badge": "Credencial",
+    "noTiles": "Nadie tiene PIN todavía. Escanea tu credencial o pide a un administrador que te asigne un PIN.",
+    "activeUser": "{name} está en esta estación.",
+    "keepWorking": "Seguir como {name}"
+  },
+  "stations": {
+    "title": "Estaciones",
+    "name": "Nombre",
+    "currentUser": "Usuario actual",
+    "lastSeen": "Última actividad",
+    "status": "Estado",
+    "active": "Activa",
+    "revoked": "Revocada",
+    "never": "Nunca",
+    "nobody": "—",
+    "actions": "Acciones",
+    "actionsFor": "Acciones para {name}",
+    "register": "Convertir este dispositivo en estación",
+    "registerTitle": "Convertir este dispositivo en estación",
+    "registerBody": "Se cerrará tu sesión en este dispositivo y mostrará la pantalla de bloqueo de la estación. El personal la desbloquea con su PIN o credencial.",
+    "registerSubmit": "Convertir en estación",
+    "rename": "Renombrar",
+    "renameTitle": "Renombrar {name}",
+    "revoke": "Revocar",
+    "revokeTitle": "¿Revocar {name}?",
+    "revokeBody": "El dispositivo vuelve a la página de inicio de sesión y quien esté en él queda bloqueado.",
+    "none": "Todavía no hay estaciones.",
+    "renamed": "Estación renombrada.",
+    "revokedToast": "{name} revocada."
+  },
+  "signIn": {
+    "title": "Iniciar sesión",
+    "withGoogle": "Iniciar sesión con Google",
+    "withDiscord": "Iniciar sesión con Discord",
+    "or": "o",
+    "email": "Correo",
+    "emailMe": "Enviarme un enlace",
+    "checkEmail": "Revisa tu correo: te enviamos un enlace para iniciar sesión.",
+    "useAnother": "Usar otro correo"
   }
 }

@@ -41,7 +41,8 @@ model User {
   createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  // Station sign-in. PIN is hashed; badge is the value printed in the user's badge barcode.
+  // Station sign-in. Only hashes: `pinHash` is salted scrypt; `badgeCode` is the SHA-256 (hex) of
+  // the code printed on the user's QR badge, so a database read can't make a badge.
   pinHash           String?   @map("pin_hash")
   pinFailedAttempts Int       @default(0) @map("pin_failed_attempts")
   pinLockedUntil    DateTime? @map("pin_locked_until") @db.Timestamptz(3)
@@ -180,13 +181,15 @@ enum StationLockReason {
 
 /// One stretch of a user being the active user on a station.
 model StationActivation {
-  id        String              @id @default(uuid(7)) @db.Uuid
-  stationId String              @map("station_id") @db.Uuid
-  userId    String              @map("user_id") @db.Uuid
-  method    StationUnlockMethod
-  startedAt DateTime            @default(now()) @map("started_at") @db.Timestamptz(3)
-  endedAt   DateTime?           @map("ended_at") @db.Timestamptz(3)
-  endReason StationLockReason?  @map("end_reason")
+  id             String              @id @default(uuid(7)) @db.Uuid
+  stationId      String              @map("station_id") @db.Uuid
+  userId         String              @map("user_id") @db.Uuid
+  method         StationUnlockMethod
+  startedAt      DateTime            @default(now()) @map("started_at") @db.Timestamptz(3)
+  endedAt        DateTime?           @map("ended_at") @db.Timestamptz(3)
+  endReason      StationLockReason?  @map("end_reason")
+  /// Last pointer, key or scan input; idle lock compares it with Settings.stationIdleLockMinutes.
+  lastActivityAt DateTime            @default(now()) @map("last_activity_at") @db.Timestamptz(3)
 
   station Station @relation(fields: [stationId], references: [id], onDelete: Cascade)
   user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)

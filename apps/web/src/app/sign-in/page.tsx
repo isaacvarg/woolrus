@@ -1,46 +1,36 @@
-"use client";
+import type { ErrorCode } from "@woolrus/i18n";
+import { env } from "@/server/env";
+import { SignInForm } from "./sign-in-form";
 
-import { useTranslations } from "next-intl";
-import { useState } from "react";
-import { Form } from "react-aria-components";
-import { Button, TextField } from "@/components/ui/fields";
-import { authClient } from "@/lib/auth-client";
+/**
+ * Better Auth sends failed sign-ins back here with `?error=<code>`. Our session hook refusing a
+ * deactivated user is the only way session creation fails, so those two codes mean exactly that.
+ */
+function errorKey(code: string | undefined): ErrorCode | null {
+  if (!code) return null;
+  switch (code) {
+    case "failed_to_create_session":
+    case "unable_to_create_session":
+      return "errors.auth.deactivated";
+    case "INVALID_TOKEN":
+    case "EXPIRED_TOKEN":
+      return "errors.auth.linkInvalid";
+    default:
+      return "errors.auth.signInFailed";
+  }
+}
 
-export default function SignInPage() {
-  const t = useTranslations("common");
-  const [email, setEmail] = useState("");
-  const [sent, setSent] = useState(false);
-
+export default async function SignInPage({ searchParams }: PageProps<"/sign-in">) {
+  const { email, error } = await searchParams;
+  const e = env();
   return (
-    <main className="grid min-h-dvh place-items-center p-4">
-      <div className="card w-full max-w-sm bg-base-100 shadow">
-        <div className="card-body gap-4">
-          <h1 className="card-title text-2xl">{t("appName")}</h1>
-          <Button
-            className="btn-outline"
-            onPress={() => authClient.signIn.social({ provider: "google", callbackURL: "/" })}
-          >
-            Google
-          </Button>
-          <div className="divider my-0" />
-          {sent ? (
-            <p role="status">Check your email for a sign-in link.</p>
-          ) : (
-            <Form
-              onSubmit={async (event) => {
-                event.preventDefault();
-                await authClient.signIn.magicLink({ email, callbackURL: "/" });
-                setSent(true);
-              }}
-            >
-              <TextField label="Email" type="email" isRequired value={email} onChange={setEmail} />
-              <Button type="submit" className="btn-primary mt-2 w-full">
-                Email me a link
-              </Button>
-            </Form>
-          )}
-        </div>
-      </div>
-    </main>
+    <SignInForm
+      initialEmail={typeof email === "string" ? email : ""}
+      error={errorKey(typeof error === "string" ? error : undefined)}
+      providers={{
+        google: Boolean(e.GOOGLE_CLIENT_ID && e.GOOGLE_CLIENT_SECRET),
+        discord: Boolean(e.DISCORD_CLIENT_ID && e.DISCORD_CLIENT_SECRET),
+      }}
+    />
   );
 }
