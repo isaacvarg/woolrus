@@ -4,6 +4,7 @@ import { hashBadgeCode, hashPin } from "@woolrus/core";
 import { createDb, type Role } from "@woolrus/db";
 import { signInAs } from "./support/auth";
 import { openNav } from "./support/nav";
+import { withSettingsLock } from "./support/settings-lock";
 import { chooseTile } from "./support/stations";
 
 const db = createDb();
@@ -242,4 +243,71 @@ test("a malformed station cookie counts as no station", async ({ page, baseURL }
   await page.goto("/boxes");
   await expect(page).toHaveURL(/\/sign-in$/);
   expect((await page.request.get("/api/v1/me")).status()).toBe(401);
+});
+
+test("unlocking signs out a personal session left on the device, so the station acts as the worker", async ({
+  page,
+  baseURL,
+}) => {
+  const station = await becomeStation(page, baseURL);
+  const admin = await signInAs(page, ["ADMIN"]); // Signed in on the tablet, then walked away.
+  const packer = await worker(["PACKER"]);
+
+  await page.goto("/station");
+  await chooseTile(page, packer.name);
+  await page.getByLabel(`PIN for ${packer.name}`).fill(packer.pin);
+  await expect(page).toHaveURL(/\/boxes$/);
+  expect(await (await page.request.get("/api/v1/me")).json()).toMatchObject({
+    id: packer.id,
+    stationId: station.id,
+  });
+  expect(await db.session.count({ where: { userId: admin.id } })).toBe(0);
+});
+
+test("with a 1-minute idle limit, input near the deadline touches before the minute is up", async ({
+  page,
+  baseURL,
+}) => {
+  await withSettingsLock(async () => {
+    const before = await db.settings.findFirstOrThrow();
+    await db.settings.update({ where: { id: before.id }, data: { stationIdleLockMinutes: 1 } });
+    try {
+      await becomeStation(page, baseURL);
+      const packer = await worker(["PACKER"]);
+      await page.clock.install();
+      await page.goto("/station");
+      await chooseTile(page, packer.name);
+      await page.getByLabel(`PIN for ${packer.name}`).fill(packer.pin);
+      await expect(page).toHaveURL(/\/boxes$/);
+
+      const touches: string[] = [];
+      page.on("response", (r) => {
+        if (r.url().includes("station/touch") && r.ok()) touches.push(r.url());
+      });
+      await page.getByRole("heading").first().click();
+      await expect.poll(() => touches.length).toBe(1);
+      // 40 s later the deadline is 20 s away: a once-a-minute throttle would skip this input and
+      // let the turn lapse while the worker is busy.
+      await page.clock.fastForward("00:40");
+      await page.getByRole("heading").first().click();
+      await expect.poll(() => touches.length).toBe(2);
+    } finally {
+      await db.settings.update({
+        where: { id: before.id },
+        data: { stationIdleLockMinutes: before.stationIdleLockMinutes },
+      });
+    }
+  });
+});
+
+test("unlock calls need a station cookie", async ({ request }) => {
+  for (const response of await Promise.all([
+    request.post("/api/v1/station/unlock/pin", {
+      data: { userId: crypto.randomUUID(), pin: "482916" },
+    }),
+    request.post("/api/v1/station/unlock/badge", { data: { code: "WRB-NOPE" } }),
+  ])) {
+    expect(response.status()).toBe(401);
+    expect(await response.json()).toMatchObject({ data: { messageKey: "errors.station.unknown" } });
+  }
 });

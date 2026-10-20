@@ -17,7 +17,7 @@ function useInvalidate() {
   return () => queryClient.invalidateQueries({ queryKey: orpc.stations.key() });
 }
 
-export function StationsManager() {
+export function StationsManager({ canRegister }: { canRegister: boolean }) {
   const t = useTranslations();
   const format = useFormatter();
   const now = useNow({ updateInterval: 60_000 });
@@ -30,9 +30,11 @@ export function StationsManager() {
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end">
-        <Button onPress={() => setRegistering(true)}>{t("stations.register")}</Button>
-      </div>
+      {canRegister && (
+        <div className="flex justify-end">
+          <Button onPress={() => setRegistering(true)}>{t("stations.register")}</Button>
+        </div>
+      )}
       <div className="overflow-x-auto rounded-box bg-base-100 shadow-sm">
         <table className="table">
           <thead>

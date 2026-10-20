@@ -11,7 +11,8 @@ export default async function StationsPage() {
     <section className="mx-auto max-w-5xl space-y-6">
       <h1 className="text-3xl font-bold">{t("stations.title")}</h1>
       {actor && can(actor, "station.manage") ? (
-        <StationsManager />
+        // Registering needs a personal session; on a station the server would refuse it.
+        <StationsManager canRegister={actor.stationId === null} />
       ) : (
         <p role="alert" className="alert alert-error">
           {t("errors.forbidden")}

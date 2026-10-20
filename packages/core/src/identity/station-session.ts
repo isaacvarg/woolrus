@@ -231,8 +231,19 @@ export async function unlockWithBadge(
   now: Date = new Date(),
 ): Promise<StationUnlocked> {
   return db.$transaction(async (tx) => {
-    const user = await tx.user.findUnique({ where: { badgeCode: hashBadgeCode(code) } });
-    if (!user?.active) throw new AppError("UNAUTHORIZED", "errors.station.badBadge");
+    const match = await tx.user.findUnique({
+      where: { badgeCode: hashBadgeCode(code) },
+      select: { id: true },
+    });
+    // As in the PIN path: lock, then read, so a deactivation can't commit between the check and
+    // the new activation (it waits, then ends that activation itself).
+    if (match) {
+      await tx.$queryRaw`SELECT id FROM users WHERE id = ${match.id}::uuid FOR NO KEY UPDATE`;
+    }
+    const user = match && (await tx.user.findUnique({ where: { id: match.id } }));
+    if (!user?.active || user.badgeCode !== hashBadgeCode(code)) {
+      throw new AppError("UNAUTHORIZED", "errors.station.badBadge");
+    }
     await activate(tx, station, user, "BADGE", now);
     return { userName: user.name };
   });
@@ -286,19 +297,20 @@ async function activate(
 }
 
 /** The Lock button: the station actor's turn ends (`MANUAL`) and the lock screen returns. */
-export async function lockStation(db: Db, actor: Actor): Promise<void> {
+export async function lockStation(db: Db, actor: Actor, now: Date = new Date()): Promise<void> {
   const { stationId } = actor;
   if (stationId === null) throw new AppError("FORBIDDEN", "errors.station.notStation");
   await db.$transaction(async (tx) => {
     const { count } = await tx.stationActivation.updateMany({
       where: { stationId, userId: actor.userId, endedAt: null },
-      data: { endedAt: new Date(), endReason: "MANUAL" },
+      data: { endedAt: now, endReason: "MANUAL" },
     });
     if (count === 0) return;
     await recordAudit(tx, actor, {
       entityType: "Station",
       entityId: stationId,
       action: "station.lock",
+      at: now,
     });
   });
 }

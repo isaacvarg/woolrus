@@ -54,8 +54,17 @@ import { preferenceCookie } from "@/lib/preferences";
 import { auth } from "./auth";
 import { badgeQrSvg } from "./badge";
 import { env } from "./env";
-import { api, implementer, stationApi } from "./orpc";
+import { api, type BaseContext, implementer, stationApi } from "./orpc";
 import { stationCookie } from "./station-cookie";
+
+/** Signs out the request's Better Auth session, if any, passing its cookie-clearing headers on. */
+async function endPersonalSession(context: BaseContext): Promise<void> {
+  if (!(await auth().api.getSession({ headers: context.headers }))) return;
+  const signedOut = await auth().api.signOut({ headers: context.headers, returnHeaders: true });
+  for (const cookie of signedOut.headers.getSetCookie()) {
+    context.resHeaders?.append("Set-Cookie", cookie);
+  }
+}
 
 // Thin by design: parse (done by the contract), call core, return. No rules live here.
 export const router = implementer.router({
@@ -231,10 +240,7 @@ export const router = implementer.router({
     register: api.stations.register.handler(async ({ input, context }) => {
       const { station, token } = await registerStation(db, context.actor, input);
       context.resHeaders?.append("Set-Cookie", stationCookie(token));
-      const signedOut = await auth().api.signOut({ headers: context.headers, returnHeaders: true });
-      for (const cookie of signedOut.headers.getSetCookie()) {
-        context.resHeaders?.append("Set-Cookie", cookie);
-      }
+      await endPersonalSession(context);
       return station;
     }),
     rename: api.stations.rename.handler(({ input, context }) =>
@@ -246,12 +252,18 @@ export const router = implementer.router({
   },
   station: {
     status: stationApi.station.status.handler(({ context }) => stationStatus(db, context.station)),
-    unlockPin: stationApi.station.unlockPin.handler(({ input, context }) =>
-      unlockWithPin(db, context.station, input),
-    ),
-    unlockBadge: stationApi.station.unlockBadge.handler(({ input, context }) =>
-      unlockWithBadge(db, context.station, input),
-    ),
+    // A personal session would win over the station (actor.ts), so the worker who just unlocked
+    // would act as whoever left it signed in. Unlocking ends it.
+    unlockPin: stationApi.station.unlockPin.handler(async ({ input, context }) => {
+      const unlocked = await unlockWithPin(db, context.station, input);
+      await endPersonalSession(context);
+      return unlocked;
+    }),
+    unlockBadge: stationApi.station.unlockBadge.handler(async ({ input, context }) => {
+      const unlocked = await unlockWithBadge(db, context.station, input);
+      await endPersonalSession(context);
+      return unlocked;
+    }),
     lock: api.station.lock.handler(async ({ context }) => {
       await lockStation(db, context.actor);
       return { ok: true as const };
