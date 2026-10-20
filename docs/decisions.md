@@ -99,7 +99,7 @@ positive quantities and dimensions, single-row settings. **Keep them when editin
   `POST https://api.resend.com/emails` with `Idempotency-Key`. Behind the `EmailSender` adapter in
   `packages/core/src/adapters/email/`; configured by `Settings.emailFrom` and the `resendApiKey` secret. Without a
   key the log sender is used and health reports `email: "unconfigured"` (a go-live blocker in production). 4xx is a
-  permanent failure; 429/5xx retry through pg-boss. Magic links are sent inline, invitations by the `email.send` job.
+  permanent failure; 429/5xx retry through pg-boss. Magic links are sent right after the response (never queued), invitations by the `email.send` job.
 
 ## Deployment
 

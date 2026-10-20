@@ -1,6 +1,7 @@
 import type { Db, Role } from "@woolrus/db";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { createActor, resetDb, testDb } from "../../test/db";
+import { raceBehindLock } from "../../test/locks";
 import type { UserActor } from "../permissions";
 import { deactivateUser, listUsers, reactivateUser, updateUserRoles } from "./users";
 
@@ -131,13 +132,33 @@ describe("updateUserRoles", () => {
     expect(row.roles).toEqual(["ADMIN"]);
   });
 
+  it("an inactive Admin doesn't count toward keeping one", async () => {
+    // As above, the actor lost Admin mid-request; an old Admin account sits deactivated.
+    const actor = await createActor(db, ["ADMIN"]);
+    await db.user.update({ where: { id: actor.userId }, data: { roles: ["PICKER"] } });
+    const gone = await createActor(db, ["ADMIN"]);
+    await db.user.update({ where: { id: gone.userId }, data: { active: false } });
+    const lastAdmin = await createActor(db, ["ADMIN"]);
+
+    await expect(
+      updateUserRoles(db, actor, { id: lastAdmin.userId, roles: ["PACKER"] }),
+    ).rejects.toMatchObject({ messageKey: "errors.users.lastAdmin" });
+    await expect(deactivateUser(db, actor, { id: lastAdmin.userId })).rejects.toMatchObject({
+      messageKey: "errors.users.lastAdmin",
+    });
+  });
+
   it("never leaves no Admin when two admins demote each other at once", async () => {
     const a = await createActor(db, ["ADMIN"]);
     const b = await createActor(db, ["ADMIN"]);
-    const results = await Promise.allSettled([
-      updateUserRoles(db, a, { id: b.userId, roles: ["PICKER"] }),
-      updateUserRoles(db, b, { id: a.userId, roles: ["PICKER"] }),
-    ]);
+    const results = await raceBehindLock(
+      db,
+      { table: "users", ids: [a.userId, b.userId], waiters: 2 },
+      () => [
+        updateUserRoles(db, a, { id: b.userId, roles: ["PICKER"] }),
+        updateUserRoles(db, b, { id: a.userId, roles: ["PICKER"] }),
+      ],
+    );
     expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
     expect(results.find((r) => r.status === "rejected")).toMatchObject({
       reason: { messageKey: "errors.users.lastAdmin" },

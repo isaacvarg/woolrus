@@ -2,6 +2,7 @@ import type { Db, Role } from "@woolrus/db";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { createActor, resetDb, testDb } from "../../test/db";
 import { createOrder } from "../../test/factories";
+import { raceBehindLock } from "../../test/locks";
 import { assertCan, type UserActor } from "../permissions";
 import { loadSettings } from "../settings/service";
 import { beginPicking } from "../workflow/service";
@@ -318,6 +319,13 @@ describe("idle lock", () => {
     expect(resolved?.idleLockAt).toEqual(minutesIn(10));
   });
 
+  it("still acts at exactly the deadline; locks only after it", async () => {
+    const { station, ana } = await unlocked();
+    expect((await stationActor(db, station, minutesIn(10)))?.actor.userId).toBe(ana.userId);
+    const actor = (await stationActor(db, station, minutesIn(10)))?.actor ?? never();
+    expect(await touchStation(db, actor, minutesIn(10))).toEqual({ idleLockAt: minutesIn(20) });
+  });
+
   it("ends the activation as IDLE on the first request past the limit, and stays locked", async () => {
     const { station } = await unlocked();
 
@@ -392,5 +400,51 @@ describe("idle lock", () => {
     expect(await lastSeen()).toEqual(minutesIn(1));
     await stationActor(db, station, minutesIn(2));
     expect(await lastSeen()).toEqual(minutesIn(2));
+  });
+});
+
+// --- Races, forced to overlap (see raceBehindLock). ---
+
+describe("concurrency", () => {
+  it("parallel wrong PINs still lock the PIN at 5; the counter never runs past", async () => {
+    const station = await newStation();
+    const ana = await worker("Ana", ["PACKER"]);
+
+    const results = await raceBehindLock(
+      db,
+      { table: "users", ids: [ana.userId], waiters: 6 },
+      () =>
+        Array.from({ length: 6 }, () =>
+          unlockWithPin(db, station, { userId: ana.userId, pin: "111112" }),
+        ),
+    );
+
+    const keys = results.map((r) => (r.status === "rejected" ? r.reason.messageKey : "ok"));
+    expect(keys.filter((k) => k === "errors.station.badPin")).toHaveLength(4);
+    expect(keys.filter((k) => k === "errors.station.pinLocked")).toHaveLength(2);
+    const row = await db.user.findUniqueOrThrow({ where: { id: ana.userId } });
+    expect(row.pinLockedUntil).not.toBeNull();
+  });
+
+  it("two people unlocking one station at once leave exactly one turn open", async () => {
+    const station = await newStation();
+    const ana = await worker("Ana", ["PACKER"]);
+    const bo = await worker("Bo", ["PICKER"]);
+
+    const results = await raceBehindLock(
+      db,
+      { table: "stations", ids: [station.id], waiters: 2 },
+      () => [
+        unlockWithBadge(db, station, { code: ana.badge }),
+        unlockWithBadge(db, station, { code: bo.badge }),
+      ],
+    );
+
+    expect(results.every((r) => r.status === "fulfilled")).toBe(true);
+    expect(await openActivations(station.id)).toHaveLength(1);
+    const ended = await db.stationActivation.findMany({
+      where: { stationId: station.id, endedAt: { not: null } },
+    });
+    expect(ended).toMatchObject([{ endReason: "SWITCHED_USER" }]);
   });
 });

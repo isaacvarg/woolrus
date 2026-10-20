@@ -97,7 +97,8 @@ separate `stationDevice` middleware that requires a valid station cookie but no 
 A device with a station cookie never shows the personal sign-in page: `(app)` routes redirect to `/station` when
 locked. If a personal session and a station cookie are both present (an admin signed in on a station), the personal
 session wins for that request. Registering a station signs out the session, so this only happens if someone signs
-in on purpose.
+in on purpose, and unlocking the station by PIN or badge signs it out too, so the worker who unlocks is the one
+acting (ship review, 2026-10-20).
 
 ### Services (`packages/core/src/identity/`)
 
@@ -141,7 +142,13 @@ that would leave no active Admin. An admin can't deactivate themselves or remove
 - `sendMagicLink` sends only to an existing active user, an open invitation, or an `ADMIN_EMAILS` address.
   Otherwise it does nothing and logs at `info`. The page always says "check your email" so it doesn't reveal
   who has an account. This stops our Resend account being used to email arbitrary addresses.
-- Magic links are sent inline (the user is waiting), through the same `EmailSender`.
+- Magic links are sent right after the response (Next's `after()`), not as a job, through the same
+  `EmailSender`: the response time is then the same whether or not anything is sent, so it can't reveal who
+  has an account either (ship review, 2026-10-20).
+- `user.create.before` also needs a verified email: Better Auth creates OAuth accounts with whatever the
+  provider reports, and Discord reports unverified addresses, so an invitation or the `ADMIN_EMAILS`
+  bootstrap could otherwise be claimed by naming the address. Magic-link sign-ups are verified (ship review,
+  2026-10-20).
 - The sign-in page moves to `@woolrus/i18n` strings and shows Discord when it's configured.
 
 ### Stations
@@ -183,7 +190,7 @@ Exactly 6 digits. Reject all-same (`000000`) and straight runs (`123456`, `65432
 - Templates live in core (`identity/emails.ts`), plain HTML + text with strings from `@woolrus/i18n` in the
   recipient's locale (the user's `locale`, or `en` for invitations).
 - Worker job `email.send` with payload `{ to, template, params, locale, idempotencyKey }`. The payload never holds
-  a magic-link URL (those are sent inline).
+  a magic-link URL (those are sent directly, never queued).
 - Settings → Integrations gets an **Email** card: `emailFrom`, the `resendApiKey` secret (Set / Not set, as for the
   others) and **Send test email** to the admin's own address (`settings.manage`).
 
