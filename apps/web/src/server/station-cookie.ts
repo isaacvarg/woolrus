@@ -19,5 +19,10 @@ export const clearStationCookie = () => `${STATION_COOKIE}=; ${attributes(0)}`;
 
 export function stationToken(headers: Headers): string | null {
   const match = headers.get("cookie")?.match(/(?:^|;\s*)woolrus_station=([^;]+)/);
-  return match?.[1] ? decodeURIComponent(match[1]) : null;
+  if (!match?.[1]) return null;
+  try {
+    return decodeURIComponent(match[1]);
+  } catch {
+    return null; // Malformed (hand-edited): no station, rather than a 500 on every request.
+  }
 }

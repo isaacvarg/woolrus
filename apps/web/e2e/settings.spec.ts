@@ -1,13 +1,8 @@
 import { expect, type Page, test } from "@playwright/test";
 import en from "@woolrus/i18n/messages/en.json" with { type: "json" };
 import { signInAs } from "./support/auth";
+import { openNav } from "./support/nav";
 import { withSettingsLock } from "./support/settings-lock";
-
-/** On tablet width the nav is a drawer behind the menu button. */
-async function openNav(page: Page) {
-  const menu = page.getByLabel("Open menu");
-  if (await menu.isVisible()) await menu.click();
-}
 
 // There is one settings row, and the desktop and tablet projects run in parallel. Tests that change
 // it take turns through withSettingsLock and put back anything other tests could trip over.

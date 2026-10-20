@@ -103,7 +103,7 @@ in on purpose.
 
 | Function | Permission | Notes |
 |---|---|---|
-| `listUsers(db, actor)` | `user.manage` | Name, email, roles, active, `hasPin`, `hasBadge`, `pinLockedUntil`, last activity. Never `pinHash` or badge hash |
+| `listUsers(db, actor, { search?, page, pageSize })` | `user.manage` | Name order, 50 a page (max 100), search by name or email. Name, email, roles, active, `hasPin`, `hasBadge`, `pinLockedUntil`, last activity. Never `pinHash` or badge hash |
 | `updateUserRoles(db, actor, { userId, roles })` | `user.manage` | ≥ 1 role. Audited with before/after |
 | `deactivateUser(db, actor, { userId })` | `user.manage` | `active=false`, delete their Better Auth sessions, end their open activations (`MANUAL`), audited. Idempotent |
 | `reactivateUser(db, actor, { userId })` | `user.manage` | Audited |

@@ -3,7 +3,8 @@ import { expect, type Page, test } from "@playwright/test";
 import { hashBadgeCode, hashPin } from "@woolrus/core";
 import { createDb, type Role } from "@woolrus/db";
 import { signInAs } from "./support/auth";
-import { chooseTile, openNav } from "./support/stations";
+import { openNav } from "./support/nav";
+import { chooseTile } from "./support/stations";
 
 const db = createDb();
 const unique = () => crypto.randomUUID().slice(0, 8);
@@ -205,4 +206,40 @@ test("input pushes the idle lock out, and the station locks itself at the deadli
   await page.clock.fastForward("11:00");
   await expect(page).toHaveURL(/\/station$/);
   await expect(page.getByText("Locked", { exact: true })).toBeVisible();
+});
+
+test("a link to /station/forget doesn't make an active station forget itself", async ({
+  page,
+  baseURL,
+}) => {
+  await becomeStation(page, baseURL);
+  await page.goto("/station/forget");
+  await expect(page).toHaveURL(/\/station$/);
+  expect((await page.context().cookies()).find((c) => c.name === "woolrus_station")).toBeDefined();
+});
+
+test("a station revoked while its lock screen is open goes to sign-in on the next unlock", async ({
+  page,
+  baseURL,
+}) => {
+  const station = await becomeStation(page, baseURL);
+  const packer = await worker(["PACKER"]);
+  await page.goto("/station");
+  await chooseTile(page, packer.name);
+  await db.station.update({ where: { id: station.id }, data: { active: false } });
+
+  await page.getByLabel(`PIN for ${packer.name}`).fill(packer.pin);
+  await expect(page).toHaveURL(/\/sign-in$/);
+  expect(
+    (await page.context().cookies()).find((c) => c.name === "woolrus_station"),
+  ).toBeUndefined();
+});
+
+test("a malformed station cookie counts as no station", async ({ page, baseURL }) => {
+  await page
+    .context()
+    .addCookies([{ name: "woolrus_station", value: "%E0%A4%A", url: baseURL, httpOnly: true }]);
+  await page.goto("/boxes");
+  await expect(page).toHaveURL(/\/sign-in$/);
+  expect((await page.request.get("/api/v1/me")).status()).toBe(401);
 });

@@ -190,7 +190,7 @@ export const router = implementer.router({
     ),
   },
   users: {
-    list: api.users.list.handler(({ context }) => listUsers(db, context.actor)),
+    list: api.users.list.handler(({ input, context }) => listUsers(db, context.actor, input)),
     updateRoles: api.users.updateRoles.handler(({ input, context }) =>
       updateUserRoles(db, context.actor, input),
     ),

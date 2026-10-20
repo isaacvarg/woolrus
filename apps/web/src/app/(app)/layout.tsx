@@ -41,7 +41,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <input id="nav" type="checkbox" className="drawer-toggle" />
       <div className="drawer-content flex flex-col">
         <header className={`navbar bg-base-100 shadow-sm ${collapsed ? "" : "lg:hidden"}`}>
-          <label htmlFor="nav" className="btn btn-ghost" aria-label="Open menu">
+          <label htmlFor="nav" className="btn btn-ghost" aria-label={t("nav.openMenu")}>
             ☰
           </label>
           <span className="font-semibold">{t("common.appName")}</span>
@@ -49,7 +49,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <main className="p-4 lg:p-8">{children}</main>
       </div>
       <div className="drawer-side">
-        <label htmlFor="nav" aria-label="Close menu" className="drawer-overlay" />
+        <label htmlFor="nav" aria-label={t("nav.closeMenu")} className="drawer-overlay" />
         <DrawerNav toggleId="nav">
           <span className="mb-4 px-2 text-xl font-bold">{t("common.appName")}</span>
           <QueueNav />

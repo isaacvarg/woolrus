@@ -9,12 +9,20 @@ import { Toaster } from "@/components/ui/toast";
  * Leaves a page whose actor is gone, with a full load so no cached data survives: a station whose
  * user's turn ended on the server (idle lock, or Lock in another tab) answers
  * `errors.station.locked` and shows its lock screen; a user signed out or deactivated elsewhere
- * answers `errors.unauthenticated` and goes to sign-in (SPEC-identity success criterion 13).
+ * answers `errors.unauthenticated` and goes to sign-in (SPEC-identity success criterion 13); a
+ * station revoked under its open lock screen answers `errors.station.unknown` and forgets itself.
  */
+const exits: Record<string, string> = {
+  "errors.station.locked": "/station",
+  "errors.unauthenticated": "/sign-in",
+  "errors.station.unknown": "/station/forget",
+};
+
 function leaveIfSignedOut(error: unknown) {
-  const data = error instanceof ORPCError ? (error.data as { messageKey?: unknown }) : undefined;
-  if (data?.messageKey === "errors.station.locked") window.location.assign("/station");
-  if (data?.messageKey === "errors.unauthenticated") window.location.assign("/sign-in");
+  const key =
+    error instanceof ORPCError ? (error.data as { messageKey?: unknown })?.messageKey : undefined;
+  const exit = typeof key === "string" ? exits[key] : undefined;
+  if (exit) window.location.assign(exit);
 }
 
 export function Providers({ children }: { children: React.ReactNode }) {

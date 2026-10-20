@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { createDb } from "@woolrus/db";
 import { signInAs } from "./support/auth";
+import { findUserRow } from "./support/users";
 
 const db = createDb();
 // See users.spec.ts: /users renders slowly on a local database full of e2e users.
@@ -19,7 +20,7 @@ test("an admin sets a generated PIN, issues a badge to print, and revokes it", a
   await signInAs(page, ["ADMIN"]);
   const user = await packer();
   await page.goto("/users");
-  const row = page.getByRole("row").filter({ hasText: user.name });
+  const row = await findUserRow(page, user.name);
   const actions = row.getByRole("button", { name: `Actions for ${user.name}` });
 
   // PIN: Generate shows it once, then it saves.
@@ -60,7 +61,7 @@ test("a weak PIN is refused with a translated field error", async ({ page }) => 
   await signInAs(page, ["ADMIN"]);
   const user = await packer();
   await page.goto("/users");
-  const row = page.getByRole("row").filter({ hasText: user.name });
+  const row = await findUserRow(page, user.name);
   await row.getByRole("button", { name: `Actions for ${user.name}` }).click(slowRender);
   await page.getByRole("menuitem", { name: "Set PIN" }).click();
   const dialog = page.getByRole("dialog", { name: `PIN for ${user.name}` });

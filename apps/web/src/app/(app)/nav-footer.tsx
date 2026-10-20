@@ -129,7 +129,7 @@ export function NavFooter({
           <Button
             className="btn-ghost btn-sm justify-start"
             isPending={lock.isPending}
-            onPress={() => lock.mutate({})}
+            onPress={() => lock.mutate()}
           >
             {t("lock")}
           </Button>

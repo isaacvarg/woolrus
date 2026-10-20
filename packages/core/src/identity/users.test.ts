@@ -30,7 +30,7 @@ describe("listUsers", () => {
     });
     await createSession(picker.userId);
 
-    const users = await listUsers(db, admin);
+    const { users } = await listUsers(db, admin);
     const ana = users.find((u) => u.id === picker.userId);
     expect(ana).toMatchObject({
       name: "Ana",
@@ -49,6 +49,29 @@ describe("listUsers", () => {
     const serialized = JSON.stringify(users);
     expect(serialized).not.toContain("scrypt$salt$hash");
     expect(serialized).not.toContain("deadbeef");
+  });
+
+  it("searches name or email in any case, and pages in name order", async () => {
+    const admin = await createActor(db, ["ADMIN"]);
+    await db.user.update({ where: { id: admin.userId }, data: { name: "Zed Admin" } });
+    for (const name of ["Ana Lopez", "Bo Ana", "Cy", "Dee"]) {
+      const { userId } = await createActor(db, ["PICKER"]);
+      await db.user.update({ where: { id: userId }, data: { name } });
+    }
+    const { userId: byEmail } = await createActor(db, ["PICKER"]);
+    await db.user.update({
+      where: { id: byEmail },
+      data: { name: "Eve", email: "ANA.mail@example.test" },
+    });
+
+    const found = await listUsers(db, admin, { search: " ana " });
+    expect(found.users.map((u) => u.name)).toEqual(["Ana Lopez", "Bo Ana", "Eve"]);
+    expect(found.total).toBe(3);
+
+    const page2 = await listUsers(db, admin, { page: 2, pageSize: 2 });
+    expect(page2).toMatchObject({ total: 6, page: 2, pageSize: 2 });
+    expect(page2.users.map((u) => u.name)).toEqual(["Cy", "Dee"]);
+    expect((await listUsers(db, admin, { pageSize: 500 })).pageSize).toBe(100);
   });
 });
 

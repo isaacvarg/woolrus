@@ -22,7 +22,9 @@
     "priorityRules": "Reglas de prioridad",
     "sync": "Sincronización",
     "users": "Usuarios",
-    "stations": "Estaciones"
+    "stations": "Estaciones",
+    "openMenu": "Abrir menú",
+    "closeMenu": "Cerrar menú"
   },
   "navFooter": {
     "preferences": "Preferencias",
@@ -550,7 +552,13 @@
     "badgeQr": "Código QR de la credencial de {name}",
     "print": "Imprimir",
     "close": "Cerrar",
-    "badgeRevoked": "Credencial revocada para {name}."
+    "badgeRevoked": "Credencial revocada para {name}.",
+    "search": "Buscar usuarios",
+    "searchPlaceholder": "Nombre o correo",
+    "pagination": "Páginas",
+    "previousPage": "Página anterior",
+    "nextPage": "Página siguiente",
+    "pageOf": "Página {page} de {pages}"
   },
   "invitations": {
     "tab": "Invitaciones",

@@ -2,7 +2,9 @@ import { expect, test } from "@playwright/test";
 import { hashPin } from "@woolrus/core";
 import { createDb } from "@woolrus/db";
 import { followMagicLink, signInAs } from "./support/auth";
-import { chooseTile, openNav } from "./support/stations";
+import { openNav } from "./support/nav";
+import { chooseTile } from "./support/stations";
+import { findUserRow } from "./support/users";
 
 // The identity module's two journeys (SPEC-identity success criteria 13 and 14), one per device:
 // the desktop admin flow and the tablet floor flow. Details are in users, invitations,
@@ -44,7 +46,7 @@ test("desktop: an invited user signs in with their role's nav, and deactivation 
 
   // The admin deactivates them.
   await page.goto("/users");
-  const row = page.getByRole("row").filter({ hasText: email });
+  const row = await findUserRow(page, email);
   await row.getByRole("button", { name: /^Actions for/ }).click(slowRender);
   await page.getByRole("menuitem", { name: "Deactivate" }).click();
   await page.getByRole("dialog").getByRole("button", { name: "Deactivate" }).click();
@@ -81,7 +83,7 @@ test("tablet: badge, station, PIN unlock, badge switch, and idle lock", async ({
 
   // The admin issues the picker a badge; the print view has the QR code and the text code.
   await page.goto("/users");
-  const row = page.getByRole("row").filter({ hasText: picker.name });
+  const row = await findUserRow(page, picker.name);
   await row.getByRole("button", { name: `Actions for ${picker.name}` }).click(slowRender);
   await page.getByRole("menuitem", { name: "Issue badge" }).click();
   const badge = page.getByRole("dialog", { name: `Badge for ${picker.name}` });

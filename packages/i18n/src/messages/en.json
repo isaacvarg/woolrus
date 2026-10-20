@@ -22,7 +22,9 @@
     "priorityRules": "Priority rules",
     "sync": "Sync",
     "users": "Users",
-    "stations": "Stations"
+    "stations": "Stations",
+    "openMenu": "Open menu",
+    "closeMenu": "Close menu"
   },
   "navFooter": {
     "preferences": "Preferences",
@@ -550,7 +552,13 @@
     "badgeQr": "Badge QR code for {name}",
     "print": "Print",
     "close": "Close",
-    "badgeRevoked": "Badge revoked for {name}."
+    "badgeRevoked": "Badge revoked for {name}.",
+    "search": "Search users",
+    "searchPlaceholder": "Name or email",
+    "pagination": "Pages",
+    "previousPage": "Previous page",
+    "nextPage": "Next page",
+    "pageOf": "Page {page} of {pages}"
   },
   "invitations": {
     "tab": "Invitations",

@@ -1,4 +1,11 @@
-import { Pin, type UpdateUserRolesInput, type UserSummary } from "@woolrus/contracts";
+import {
+  Pin,
+  type UpdateUserRolesInput,
+  USER_LIST_PAGE_MAX,
+  type UserListInput,
+  type UserListPage,
+  type UserSummary,
+} from "@woolrus/contracts";
 import type { Db, DbTx, Prisma, Role } from "@woolrus/db";
 import { recordAudit } from "../audit";
 import { AppError, notFound } from "../errors";
@@ -63,10 +70,38 @@ async function assertNotLastAdmin(tx: DbTx, id: string): Promise<void> {
   if (others === 0) throw new AppError("CONFLICT", "errors.users.lastAdmin");
 }
 
-export async function listUsers(db: Db, actor: Actor): Promise<UserSummary[]> {
+/** Name order, a page at a time, optionally narrowed to a name or email fragment. */
+export async function listUsers(
+  db: Db,
+  actor: Actor,
+  input: UserListInput = {},
+): Promise<UserListPage> {
   assertCan(actor, "user.manage");
-  const users = await db.user.findMany({ select: summarySelect, orderBy: { name: "asc" } });
-  return users.map(toUserSummary);
+  const page = Math.max(1, Math.trunc(Number(input.page ?? 1)));
+  const pageSize = Math.min(
+    USER_LIST_PAGE_MAX,
+    Math.max(1, Math.trunc(Number(input.pageSize ?? 50))),
+  );
+  const search = input.search?.trim();
+  const where: Prisma.UserWhereInput = search
+    ? {
+        OR: [
+          { name: { contains: search, mode: "insensitive" } },
+          { email: { contains: search, mode: "insensitive" } },
+        ],
+      }
+    : {};
+  const [users, total] = await db.$transaction([
+    db.user.findMany({
+      where,
+      select: summarySelect,
+      orderBy: [{ name: "asc" }, { id: "asc" }],
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+    }),
+    db.user.count({ where }),
+  ]);
+  return { users: users.map(toUserSummary), total, page, pageSize };
 }
 
 export async function updateUserRoles(

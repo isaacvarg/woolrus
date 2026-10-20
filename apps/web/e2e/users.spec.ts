@@ -1,6 +1,8 @@
-import { type BrowserContext, expect, type Page, test } from "@playwright/test";
+import { type BrowserContext, expect, test } from "@playwright/test";
 import { createDb } from "@woolrus/db";
 import { signInAs } from "./support/auth";
+import { openNav } from "./support/nav";
+import { findUserRow } from "./support/users";
 
 const db = createDb();
 
@@ -8,12 +10,6 @@ const db = createDb();
 // /users in dev mode (first load, and every refetch after a change) can take several seconds. CI
 // starts empty.
 const slowRender = { timeout: 30_000 };
-
-/** On tablet width the nav is a drawer behind the menu button. */
-async function openNav(page: Page) {
-  const menu = page.getByLabel("Open menu");
-  if (await menu.isVisible()) await menu.click();
-}
 
 /** Signs a second browser in as a fresh user with a unique name, so its row is easy to find. */
 async function signInOther(context: BrowserContext, roles: Parameters<typeof signInAs>[1]) {
@@ -59,7 +55,7 @@ test("an admin changes a user's roles, deactivates them and reactivates them", a
   await page.goto("/");
   await openNav(page);
   await page.getByRole("link", { name: "Users" }).click();
-  const row = page.getByRole("row").filter({ hasText: ana.name });
+  const row = await findUserRow(page, ana.name);
   await expect(row).toContainText("Picker", slowRender);
   await expect(row).toContainText("Active", slowRender);
 
@@ -97,7 +93,7 @@ test("an admin can't edit themselves from the table", async ({ page }) => {
   const name = `E2E ${crypto.randomUUID().slice(0, 8)}`;
   await db.user.update({ where: { id: admin.id }, data: { name } });
   await page.goto("/users");
-  const row = page.getByRole("row").filter({ hasText: name });
+  const row = await findUserRow(page, name);
   await expect(row).toBeVisible(slowRender);
   await expect(row.getByRole("button", { name: `Actions for ${name}` })).toHaveCount(0);
 });

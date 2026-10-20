@@ -1,11 +1,6 @@
 import { expect, type Page, test } from "@playwright/test";
 import { signInAs, signInAsUser } from "./support/auth";
-
-/** On tablet width (or collapsed) the nav is a drawer behind the menu button; opens it once. */
-async function openNav(page: Page) {
-  const menu = page.getByLabel("Open menu");
-  if ((await menu.isVisible()) && !(await page.locator("#nav").isChecked())) await menu.click();
-}
+import { openNav } from "./support/nav";
 
 async function choose(page: Page, menu: string, item: string) {
   await openNav(page);

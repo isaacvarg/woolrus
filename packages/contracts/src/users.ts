@@ -59,10 +59,34 @@ export const IssuedBadge = z.object({
 });
 export type IssuedBadge = z.infer<typeof IssuedBadge>;
 
+export const USER_LIST_PAGE_MAX = 100;
+
+export const UserListInput = z.object({
+  /** Part of the name or email, any case. */
+  search: z.string().trim().max(100).optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(USER_LIST_PAGE_MAX).default(50),
+});
+export type UserListInput = z.input<typeof UserListInput>;
+
+export const UserListPage = z.object({
+  users: z.array(UserSummary),
+  total: z.number().int(),
+  page: z.number().int(),
+  pageSize: z.number().int(),
+});
+export type UserListPage = z.infer<typeof UserListPage>;
+
 export const users = {
   list: base
-    .route({ method: "GET", path: "/users", tags: ["Users"], summary: "List users" })
-    .output(z.array(UserSummary)),
+    .route({
+      method: "GET",
+      path: "/users",
+      tags: ["Users"],
+      summary: "List users: search by name or email, offset paging",
+    })
+    .input(UserListInput)
+    .output(UserListPage),
 
   updateRoles: base
     .route({
