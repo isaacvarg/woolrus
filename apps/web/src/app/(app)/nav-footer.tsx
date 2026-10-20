@@ -36,7 +36,9 @@ export function NavFooter({
   // A sign-in on a new device applies the stored preferences server-side; copy them into the
   // cookies too, so the sign-in page keeps them after Log out.
   useEffect(() => {
+    // biome-ignore lint/suspicious/noDocumentCookie: the Cookie Store API is async and not in every browser yet.
     document.cookie = preferenceCookie("locale", preferences.locale);
+    // biome-ignore lint/suspicious/noDocumentCookie: as above.
     document.cookie = preferenceCookie("theme", preferences.theme);
   }, [preferences.locale, preferences.theme]);
 
