@@ -2,8 +2,9 @@ import type { PickLineResult, ScanInput } from "@woolrus/contracts";
 import type { Db, DbTx } from "@woolrus/db";
 import { AppError } from "../errors";
 import { withIdempotency } from "../idempotency";
-import { type Actor, assertCan } from "../permissions";
+import { type Actor, assertCan, can } from "../permissions";
 import { codesForLine, normalizeCode } from "./codes";
+import { findCodeOwner } from "./link-barcode";
 import {
   activeQuantity,
   isWorkLine,
@@ -40,7 +41,7 @@ export async function scan(
           .filter((row) => isWorkLine(row) && codesForLine(row).has(wanted))
           .map((row) => ({ ...row, binLocation: binOf(row) })),
       );
-      if (matching.length === 0) throw await notOnOrder(tx, wanted);
+      if (matching.length === 0) throw await notOnOrder(tx, wanted, can(actor, "product.manage"));
       const target = matching.find(
         (row) => row.pickStatus === "PENDING" && row.pickedQuantity < activeQuantity(row),
       );
@@ -75,20 +76,15 @@ export async function scan(
   });
 }
 
-/** The refusal for a code no line of the order has: naming the product it belongs to, if any. */
-async function notOnOrder(tx: DbTx, code: string): Promise<AppError> {
-  // Codes are stored as the store typed them; compare normalized, as on the lines.
-  const [known] = await tx.$queryRaw<{ name: string }[]>`
-    SELECT name FROM (
-      SELECT v.name, 1 AS rank FROM product_variations v
-        WHERE upper(trim(v.barcode)) = ${code} OR upper(trim(v.sku)) = ${code}
-      UNION ALL
-      SELECT p.name, 2 AS rank FROM products p
-        WHERE upper(trim(p.barcode)) = ${code} OR upper(trim(p.sku)) = ${code}
-    ) AS found ORDER BY rank, name LIMIT 1`;
+/**
+ * The refusal for a code no line of the order has: naming the product it belongs to, if any, else
+ * offering `canLink` to callers who may link it.
+ */
+async function notOnOrder(tx: DbTx, code: string, canLink: boolean): Promise<AppError> {
+  const known = await findCodeOwner(tx, code);
   return known
     ? new AppError("CONFLICT", "errors.picking.scanNotOnOrder", undefined, {
         params: { name: known.name },
       })
-    : new AppError("CONFLICT", "errors.picking.scanUnknown");
+    : new AppError("CONFLICT", "errors.picking.scanUnknown", undefined, canLink ? { canLink } : {});
 }

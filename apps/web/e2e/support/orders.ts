@@ -17,6 +17,8 @@ const nextWooId = () => 1_000_000_000 + Math.floor(Math.random() * 1_000_000_000
 
 /** Orders this worker created, for `deleteCreatedOrders`. */
 const created: string[] = [];
+/** Products made with `ownProduct`, deleted after their orders. */
+const createdProducts: string[] = [];
 
 /**
  * Creates an order straight in the database, as `store-sync` would import it. Each test gives it a
@@ -33,6 +35,7 @@ export async function createOrder({
   rushOrderLine = false,
   sku = "E2E-SKU",
   attributes = [],
+  ownProduct = false,
 }: {
   customerName?: string;
   status?: WorkflowStatus;
@@ -46,10 +49,25 @@ export async function createOrder({
   sku?: string;
   /** The first line's size and checkout options, as sync stores them. */
   attributes?: { name: string; option: string }[];
+  /** Gives the first line a product of its own (deleted with the order), e.g. to link a barcode to. */
+  ownProduct?: boolean;
 } = {}) {
   const wooOrderId = nextWooId();
   const now = new Date();
   const rushOrder = rushOrderLine ? await rushOrderProduct() : null;
+  const product = ownProduct
+    ? await db.product.create({
+        data: {
+          wooProductId: wooOrderId,
+          type: "simple",
+          name: "E2E item",
+          sku: `E2E-${wooOrderId}`,
+          rawPayload: {},
+          syncedAt: now,
+        },
+      })
+    : null;
+  if (product) createdProducts.push(product.id);
   const order = await db.order.create({
     data: {
       wooOrderId,
@@ -71,6 +89,7 @@ export async function createOrder({
         create: [
           {
             wooLineItemId: wooOrderId,
+            productId: product?.id ?? null,
             sku,
             name: "E2E item",
             quantity,
@@ -130,4 +149,5 @@ async function rushOrderProduct() {
  */
 export async function deleteCreatedOrders() {
   await db.order.deleteMany({ where: { id: { in: created.splice(0) } } });
+  await db.product.deleteMany({ where: { id: { in: createdProducts.splice(0) } } });
 }

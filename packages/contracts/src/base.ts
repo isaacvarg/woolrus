@@ -19,6 +19,8 @@ export const AppErrorData = z.object({
   failures: z
     .array(z.object({ orderId: z.string(), messageKey: z.string(), params: MessageParams }))
     .optional(),
+  /** A refused scan of an unknown code that the caller may link to the line's product. */
+  canLink: z.boolean().optional(),
 });
 export type AppErrorData = z.infer<typeof AppErrorData>;
 

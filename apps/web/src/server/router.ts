@@ -20,6 +20,7 @@ import {
   getSettings,
   getSyncStatus,
   issueBadge,
+  linkBarcode,
   listBoxes,
   listInvitations,
   listNotes,
@@ -209,6 +210,9 @@ export const router = implementer.router({
       unpickLine(db, context.actor, input),
     ),
     scan: api.picking.scan.handler(({ input, context }) => scan(db, context.actor, input)),
+    linkBarcode: api.picking.linkBarcode.handler(({ input, context }) =>
+      linkBarcode(db, context.actor, input),
+    ),
     markOutOfStock: api.picking.markOutOfStock.handler(({ input, context }) =>
       markOutOfStock(db, context.actor, input),
     ),

@@ -347,6 +347,8 @@
     "scanned": "{name}: {picked} de {quantity}",
     "scanOk": "Escaneado.",
     "scanRefused": "Escaneo rechazado.",
+    "linkCode": "Vincular este código a {name}",
+    "linked": "{code} ahora es el código de barras de {name}.",
     "lineActions": "Más opciones para {name}",
     "outOfStock": {
       "action": "Sin existencias",
@@ -550,6 +552,8 @@
       "scanNotOnOrder": "Eso es {name}. No está en este pedido.",
       "scanUnknown": "Woolrus no conoce ese código.",
       "scanAlreadyPicked": "{line} ya está surtido.",
+      "codeInUse": "Ese código ya pertenece a {name}.",
+      "noProductToLink": "Esta línea no tiene un producto al que vincular el código.",
       "batchTooLarge": "Un lote admite como máximo {max} pedidos.",
       "batchOpen": "Ya tienes un lote abierto. Termínalo en Mis surtidos antes de empezar otro.",
       "batchFailed": "Algunos pedidos no se pudieron tomar, así que no se tomó ninguno."

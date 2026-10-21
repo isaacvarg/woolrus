@@ -29,6 +29,7 @@ export * from "./notes/service";
 export * from "./permissions";
 export * from "./picking/batches";
 export * from "./picking/complete";
+export * from "./picking/link-barcode";
 export * from "./picking/scan";
 export * from "./picking/service";
 export * from "./picking/sort";

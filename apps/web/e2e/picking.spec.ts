@@ -13,9 +13,14 @@ async function tick(page: Page, number: string) {
 }
 
 /** Opens a fresh Pending order from its queue row, as a picker would. */
-async function beginPicking(page: Page, quantity: number, roles: Role[] = ["PICKER"]) {
+async function beginPicking(
+  page: Page,
+  quantity: number,
+  roles: Role[] = ["PICKER"],
+  { ownProduct = false } = {},
+) {
   const customerName = `E2E ${crypto.randomUUID()}`;
-  const order = await createOrder({ customerName, quantity, rushOrderLine: true });
+  const order = await createOrder({ customerName, quantity, rushOrderLine: true, ownProduct });
   await signInAs(page, roles);
   await page.goto("/queue/pending");
   await page.getByRole("searchbox", { name: "Search orders" }).fill(customerName);
@@ -153,6 +158,42 @@ test("a scan counts one unit on its card; a wrong scan shows red and changes not
   // What's shown is what the server kept: the refused scans added nothing.
   await page.reload();
   await expect(page.getByTestId("pick-card").first()).toContainText("2 of 2");
+});
+
+test("an Admin links an unknown code to the line's product, and the next scan counts", async ({
+  page,
+}) => {
+  await beginPicking(page, 2, ["ADMIN"], { ownProduct: true });
+  const card = page.getByTestId("pick-card").first();
+  const banner = page.getByTestId("scan-banner");
+  const code = `E2E-${crypto.randomUUID().slice(0, 8)}`;
+
+  await scanCode(page, code);
+  await expect(banner).toHaveText(/Woolrus doesn't know that code/);
+  await banner.getByRole("button", { name: "Link this code to E2E item" }).click();
+  await expect(banner).toHaveAttribute("data-ok", "true");
+  await expect(banner).toHaveText(new RegExp(`${code} is now the barcode of E2E item`));
+  await expect(card).toContainText("0 of 2");
+
+  await scanCode(page, code);
+  await expect(banner).toHaveText(/E2E item: 1 of 2/);
+  await expect(card).toContainText("1 of 2");
+});
+
+test("a picker isn't offered linking and can't link through the API", async ({ page }) => {
+  const order = await beginPicking(page, 1, ["PICKER"], { ownProduct: true });
+  const banner = page.getByTestId("scan-banner");
+
+  await scanCode(page, "NOT-A-CODE-2");
+  await expect(banner).toHaveText(/Woolrus doesn't know that code/);
+  await expect(banner.getByRole("button")).toHaveCount(0);
+
+  const { lines } = await (await page.request.get(`/api/v1/orders/${order.id}`)).json();
+  const line = lines.find((l: { name: string }) => l.name === "E2E item");
+  const response = await page.request.post(`/api/v1/order-items/${line.id}/link-barcode`, {
+    data: { code: "NOT-A-CODE-2" },
+  });
+  expect(response.status()).toBe(403);
 });
 
 test("the cards are locked for someone who doesn't hold the claim", async ({ page, browser }) => {
