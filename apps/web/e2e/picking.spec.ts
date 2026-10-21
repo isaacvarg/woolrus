@@ -88,3 +88,43 @@ test("the cards are locked for someone who doesn't hold the claim", async ({ pag
     await other.close();
   }
 });
+
+test("Out of Stock blocks completion with the message; substituting unblocks it", async ({
+  page,
+}) => {
+  const order = await beginPicking(page, 2);
+  const card = page.getByTestId("pick-card").first();
+  const complete = page.getByRole("button", { name: "Complete Picking" });
+
+  await card.getByRole("button", { name: "More for E2E item" }).click();
+  await page.getByRole("menuitem", { name: "Out of Stock" }).click();
+  const outOfStock = page.getByRole("dialog", { name: "E2E item is out of stock" });
+  await outOfStock.getByRole("textbox", { name: "How many did you find?" }).fill("1");
+  await outOfStock.getByRole("textbox", { name: "Note" }).fill("Only one on the shelf");
+  await outOfStock.getByRole("button", { name: "Mark Out of Stock" }).click();
+  await expect(outOfStock).toBeHidden();
+  await expect(card).toContainText("1 of 2");
+  await expect(card.getByTestId("pick-status")).toHaveText(/Out of stock/);
+
+  await complete.click();
+  await expect(
+    page
+      .getByRole("alert")
+      .filter({ hasText: "E2E item is out of stock. Void it or pick a substitute first." }),
+  ).toBeVisible();
+
+  await card.getByRole("button", { name: "More for E2E item" }).click();
+  await page.getByRole("menuitem", { name: "Substituted" }).click();
+  const swap = page.getByRole("dialog", { name: "Substitute E2E item" });
+  await swap.getByRole("textbox", { name: "What went in instead" }).fill("One 16 oz jar");
+  await swap.getByRole("button", { name: "Mark Substituted" }).click();
+  await expect(swap).toBeHidden();
+  await expect(card.getByTestId("pick-status")).toHaveText(/Substituted/);
+  await expect(page.getByTestId("pick-progress")).toHaveText("1 of 1 lines picked");
+
+  await complete.click();
+  await expect(page).toHaveURL("/queue/pending");
+  await page.goto(`/orders/${order.id}`);
+  await expect(page.getByTestId("order-status")).toHaveText("Packing");
+  await expect(page.getByRole("table", { name: "Items" })).toContainText("One 16 oz jar");
+});

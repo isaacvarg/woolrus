@@ -329,7 +329,26 @@
     "bin": "Bin {bin}",
     "count": "{picked} of {quantity}",
     "oneFewer": "One fewer {name}",
-    "oneMore": "One more {name}"
+    "oneMore": "One more {name}",
+    "lineActions": "More for {name}",
+    "outOfStock": {
+      "action": "Out of Stock",
+      "title": "{name} is out of stock",
+      "found": "How many did you find?",
+      "foundHint": "Fewer than the {quantity} needed. The order can't leave Picking until this line is voided or substituted.",
+      "note": "Note",
+      "submit": "Mark Out of Stock",
+      "done": "{name} marked Out of Stock."
+    },
+    "substitute": {
+      "action": "Substituted",
+      "title": "Substitute {name}",
+      "instead": "What went in instead",
+      "insteadHint": "Packing and QA see this on the line.",
+      "note": "Note (optional)",
+      "submit": "Mark Substituted",
+      "done": "{name} marked Substituted."
+    }
   },
   "orders": {
     "status": "Status",

@@ -1,7 +1,16 @@
-import type { PickLine, PickLineInput, PickLineResult, PickView } from "@woolrus/contracts";
+import type {
+  MarkOutOfStockInput,
+  PickLine,
+  PickLineInput,
+  PickLineResult,
+  PickView,
+  SubstituteInput,
+} from "@woolrus/contracts";
 import type { Db, DbTx, PickStatus, Prisma } from "@woolrus/db";
 import { recordAudit } from "../audit";
 import { AppError, notFound } from "../errors";
+import { withIdempotency } from "../idempotency";
+import { createTextNote } from "../notes/service";
 import { lineAndPackageNoteCounts } from "../notes/targets";
 import { type Actor, assertCan } from "../permissions";
 import { claimExpiryMinutes, holdsClaim, isClaimLive, touchClaim } from "../workflow/claims";
@@ -66,9 +75,14 @@ type LineWrite = Pick<
   "pickStatus" | "pickedQuantity" | "pickedById" | "pickedAt" | "substitutionNote"
 >;
 
+/** For the writes that also add a line note: run once per key, and the note's text. */
+type WithNote = { idempotencyKey: string; note: (row: LineRow) => string };
+
 /**
  * Runs one line write: permission, the order lock, the Picking + live-claim checks, then the write,
- * its audit, the claim refresh and the order_changed notify, all in one transaction.
+ * its audit, an optional line note, the claim refresh and the order_changed notify, all in one
+ * transaction. With a note the write runs once per `idempotencyKey`; a replay returns the line as
+ * it is now.
  */
 async function writeLine(
   db: Db,
@@ -77,48 +91,67 @@ async function writeLine(
   op: string,
   decide: (row: LineRow, now: Date) => LineWrite,
   { now = new Date() }: PickOptions,
+  withNote?: WithNote,
 ): Promise<PickLineResult> {
   assertCan(actor, "order.pick");
   return db.$transaction(async (tx) => {
-    const ref = await tx.orderItem.findUnique({ where: { id: itemId }, select: { orderId: true } });
-    if (!ref) throw notFound();
-    // Settings before the order lock: the lock order workflow uses everywhere.
-    const expiry = await claimExpiryMinutes(tx);
-    const order = await lockOrder(tx, ref.orderId);
-    if (order.status !== "PICKING") throw new AppError("CONFLICT", "errors.picking.notPicking");
-    if (!isClaimLive(order, expiry, now) || !holdsClaim(actor, order.claimedById)) {
-      throw new AppError("CONFLICT", "errors.picking.claimRequired");
-    }
+    const write = async () => {
+      const ref = await tx.orderItem.findUnique({
+        where: { id: itemId },
+        select: { orderId: true },
+      });
+      if (!ref) throw notFound();
+      // Settings before the order lock: the lock order workflow uses everywhere.
+      const expiry = await claimExpiryMinutes(tx);
+      const order = await lockOrder(tx, ref.orderId);
+      if (order.status !== "PICKING") throw new AppError("CONFLICT", "errors.picking.notPicking");
+      if (!isClaimLive(order, expiry, now) || !holdsClaim(actor, order.claimedById)) {
+        throw new AppError("CONFLICT", "errors.picking.claimRequired");
+      }
 
-    // Read after the lock, so a store edit to the line can't slip in between.
-    const row = await tx.orderItem.findUniqueOrThrow({
+      // Read after the lock, so a store edit to the line can't slip in between.
+      const row = await tx.orderItem.findUniqueOrThrow({
+        where: { id: itemId },
+        include: lineInclude,
+      });
+      if (!isWorkLine(row)) throw new AppError("CONFLICT", "errors.picking.lineNotPickable");
+
+      const updated = await tx.orderItem.update({
+        where: { id: itemId },
+        data: decide(row, now),
+      });
+      if (withNote) {
+        await createTextNote(tx, actor, {
+          orderId: order.id,
+          orderItemId: itemId,
+          content: withNote.note(row),
+        });
+      }
+
+      await recordAudit(tx, actor, {
+        entityType: "OrderItem",
+        entityId: itemId,
+        action: `pick.${op}`,
+        before: { pickStatus: row.pickStatus, pickedQuantity: row.pickedQuantity },
+        after: { pickStatus: updated.pickStatus, pickedQuantity: updated.pickedQuantity },
+        at: now,
+      });
+      await touchClaim(tx, actor, order.id, { now });
+      await notifyOrderChanged(tx, { id: order.id, status: order.status });
+      return { orderId: order.id };
+    };
+
+    const { orderId } = withNote
+      ? await withIdempotency(tx, withNote.idempotencyKey, `picking.${op}`, actor, write)
+      : await write();
+    const line = await tx.orderItem.findUniqueOrThrow({
       where: { id: itemId },
       include: lineInclude,
     });
-    if (!isWorkLine(row)) throw new AppError("CONFLICT", "errors.picking.lineNotPickable");
-
-    const data = decide(row, now);
-    const updated = await tx.orderItem.update({
-      where: { id: itemId },
-      data,
-      include: lineInclude,
-    });
-
-    await recordAudit(tx, actor, {
-      entityType: "OrderItem",
-      entityId: itemId,
-      action: `pick.${op}`,
-      before: { pickStatus: row.pickStatus, pickedQuantity: row.pickedQuantity },
-      after: { pickStatus: updated.pickStatus, pickedQuantity: updated.pickedQuantity },
-      at: now,
-    });
-    await touchClaim(tx, actor, order.id, { now });
-    await notifyOrderChanged(tx, { id: order.id, status: order.status });
-
-    const notes = await lineAndPackageNoteCounts(tx, order.id);
+    const notes = await lineAndPackageNoteCounts(tx, orderId);
     return {
-      line: toPickLine(updated, notes.items.get(itemId) ?? 0),
-      ...(await progress(tx, order.id)),
+      line: toPickLine(line, notes.items.get(itemId) ?? 0),
+      ...(await progress(tx, orderId)),
     };
   });
 }
@@ -174,6 +207,91 @@ export function unpickLine(
     }),
     options,
   );
+}
+
+const tooBig = (field: string) =>
+  new AppError("BAD_REQUEST", "errors.validation", { [field]: "errors.field.tooBig" });
+
+/**
+ * The line isn't on the shelf: records how many were found (fewer than needed) and why, as an
+ * internal line note. Blocks the picked gate until the line is voided, substituted or picked.
+ */
+export function markOutOfStock(
+  db: Db,
+  actor: Actor,
+  { itemId, foundQuantity, note, idempotencyKey }: MarkOutOfStockInput,
+  options: PickOptions = {},
+): Promise<PickLineResult> {
+  return writeLine(
+    db,
+    actor,
+    itemId,
+    "markOutOfStock",
+    (row, now) => {
+      if (foundQuantity >= activeQuantity(row)) throw tooBig("foundQuantity");
+      return {
+        pickStatus: "OUT_OF_STOCK",
+        pickedQuantity: foundQuantity,
+        pickedById: actor.userId,
+        pickedAt: now,
+        substitutionNote: null,
+      };
+    },
+    options,
+    { idempotencyKey, note: () => note },
+  );
+}
+
+/** Something else went in instead: the line counts as picked, and the swap is noted on it. */
+export function substitute(
+  db: Db,
+  actor: Actor,
+  { itemId, substitute: instead, note, idempotencyKey }: SubstituteInput,
+  options: PickOptions = {},
+): Promise<PickLineResult> {
+  const text = instead.trim();
+  if (text.length === 0) {
+    throw new AppError("BAD_REQUEST", "errors.validation", { substitute: "errors.field.required" });
+  }
+  if (text.length > 200) throw tooBig("substitute");
+  const extra = note?.trim();
+  return writeLine(
+    db,
+    actor,
+    itemId,
+    "substitute",
+    (row, now) => ({
+      pickStatus: "SUBSTITUTED",
+      pickedQuantity: activeQuantity(row),
+      pickedById: actor.userId,
+      pickedAt: now,
+      substitutionNote: text,
+    }),
+    options,
+    {
+      idempotencyKey,
+      note: () => (extra ? `Substituted: ${text}\n${extra}` : `Substituted: ${text}`),
+    },
+  );
+}
+
+/**
+ * Recomputes a line's pick state after its active quantity changed (a void or an unvoid). The
+ * contract with `exceptions`, which calls it in the same transaction and checks its own
+ * permission, so there's no claim check here.
+ */
+export async function reconcilePick(tx: DbTx, itemId: string): Promise<void> {
+  const row = await tx.orderItem.findUniqueOrThrow({ where: { id: itemId }, include: lineInclude });
+  const active = activeQuantity(row);
+  const pickedQuantity =
+    row.pickStatus === "SUBSTITUTED" ? active : Math.min(row.pickedQuantity, active);
+  let pickStatus = row.pickStatus;
+  // The missing units were voided: what was found is all that's needed.
+  if (pickStatus === "OUT_OF_STOCK" && pickedQuantity === active) pickStatus = "PICKED";
+  // A void was undone: the line needs more units again.
+  if (pickStatus === "PICKED" && pickedQuantity < active) pickStatus = "PENDING";
+  if (pickStatus === row.pickStatus && pickedQuantity === row.pickedQuantity) return;
+  await tx.orderItem.update({ where: { id: itemId }, data: { pickStatus, pickedQuantity } });
 }
 
 /** The pick screen for one order (SPEC-picking "Reads"). */
