@@ -341,7 +341,21 @@
     "delete": "Eliminar",
     "deleteTitle": "¿Eliminar esta nota?",
     "deleteBody": "Se elimina para todos. No se puede deshacer.",
-    "deleted": "Nota eliminada."
+    "deleted": "Nota eliminada.",
+    "takePhoto": "Tomar foto",
+    "choosePhotos": "Elegir fotos",
+    "newPhotos": "Fotos por agregar",
+    "photos": "Fotos",
+    "remove": "Quitar",
+    "undoRemove": "Conservar",
+    "removePhoto": "Quitar la foto {name}",
+    "keepPhoto": "Conservar la foto {name}",
+    "uploading": "Subiendo",
+    "openPhoto": "Abrir la foto {index} de {count}",
+    "photoOf": "Foto {index} de {count}",
+    "previousPhoto": "Anterior",
+    "nextPhoto": "Siguiente",
+    "closePhoto": "Cerrar"
   },
   "status": {
     "PENDING": "Pendiente",
@@ -511,7 +525,11 @@
     },
     "notes": {
       "empty": "Escribe algo en la nota primero.",
-      "notAuthor": "Solo el autor de la nota o un administrador puede cambiarla."
+      "notAuthor": "Solo el autor de la nota o un administrador puede cambiarla.",
+      "fileTooLarge": "Ese archivo es demasiado grande. Las fotos y notas de voz pueden tener hasta 15 MB cada una.",
+      "fileType": "Las fotos deben ser JPEG, PNG o WebP. No se pueden adjuntar otros archivos.",
+      "imageTooLarge": "Esa foto tiene demasiados píxeles (más de 40 megapíxeles). Tómala con menor resolución.",
+      "tooManyPhotos": "Una nota puede tener como máximo 10 fotos."
     }
   },
   "emails": {

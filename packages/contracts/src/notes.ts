@@ -8,6 +8,34 @@ export type NoteVisibility = z.infer<typeof NoteVisibility>;
 /** Trimmed, up to 4000 characters. Core refuses a note with nothing in it (`errors.notes.empty`). */
 export const NoteContent = z.string().trim().max(4000);
 
+/** Per file, raw; the server checks it too (`errors.notes.fileTooLarge`). */
+export const NOTE_FILE_MAX_BYTES = 15 * 1024 * 1024;
+export const NOTE_MAX_PHOTOS = 10;
+/** The whole multipart request: 10 photos and a voice memo at the file limit, plus slack. */
+export const NOTE_REQUEST_MAX_BYTES = 160 * 1024 * 1024;
+/** What the server accepts as a photo, judged by content (`errors.notes.fileType`). */
+export const NOTE_PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
+
+export const AttachmentKind = z.enum(["IMAGE", "VOICE"]);
+export type AttachmentKind = z.infer<typeof AttachmentKind>;
+
+/** Metadata only: the bytes come from `url`, an app route that checks `order.read` per request. */
+export const NoteAttachment = z.object({
+  id: Id,
+  kind: AttachmentKind,
+  contentType: z.string(),
+  /** The uploaded name, for display only. */
+  fileName: z.string(),
+  sizeBytes: z.number().int(),
+  width: z.number().int().nullable(),
+  height: z.number().int().nullable(),
+  durationMs: z.number().int().nullable(),
+  url: z.string(),
+  /** Photos only. */
+  thumbUrl: z.string().nullable(),
+});
+export type NoteAttachment = z.infer<typeof NoteAttachment>;
+
 export const Note = z.object({
   id: Id,
   orderId: Id,
@@ -23,6 +51,8 @@ export const Note = z.object({
   pushedToWooAt: z.date().nullable(),
   /** Whether the caller may edit and delete it: its author, or a moderator (FR-NOTE-07). */
   canEdit: z.boolean(),
+  /** Oldest first. */
+  attachments: z.array(NoteAttachment),
 });
 export type Note = z.infer<typeof Note>;
 
@@ -31,6 +61,8 @@ export const CreateNoteInput = z.object({
   orderId: Id,
   content: NoteContent,
   visibility: NoteVisibility.default("INTERNAL"),
+  /** Sent as multipart. Checked, resized and stripped of metadata on the server. */
+  photos: z.array(z.file()).optional(),
 });
 export type CreateNoteInput = z.infer<typeof CreateNoteInput>;
 
@@ -38,6 +70,8 @@ export const UpdateNoteInput = z.object({
   id: Id,
   content: NoteContent.optional(),
   visibility: NoteVisibility.optional(),
+  addPhotos: z.array(z.file()).optional(),
+  removeAttachmentIds: z.array(Id).optional(),
 });
 export type UpdateNoteInput = z.infer<typeof UpdateNoteInput>;
 

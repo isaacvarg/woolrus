@@ -341,7 +341,21 @@
     "delete": "Delete",
     "deleteTitle": "Delete this note?",
     "deleteBody": "It is removed for everyone. This can't be undone.",
-    "deleted": "Note deleted."
+    "deleted": "Note deleted.",
+    "takePhoto": "Take photo",
+    "choosePhotos": "Choose photos",
+    "newPhotos": "Photos to add",
+    "photos": "Photos",
+    "remove": "Remove",
+    "undoRemove": "Keep",
+    "removePhoto": "Remove photo {name}",
+    "keepPhoto": "Keep photo {name}",
+    "uploading": "Uploading",
+    "openPhoto": "Open photo {index} of {count}",
+    "photoOf": "Photo {index} of {count}",
+    "previousPhoto": "Previous",
+    "nextPhoto": "Next",
+    "closePhoto": "Close"
   },
   "status": {
     "PENDING": "Pending",
@@ -511,7 +525,11 @@
     },
     "notes": {
       "empty": "Write something in the note first.",
-      "notAuthor": "Only the note's author or an admin can change it."
+      "notAuthor": "Only the note's author or an admin can change it.",
+      "fileTooLarge": "That file is too big. Photos and voice memos can be up to 15 MB each.",
+      "fileType": "Photos must be JPEG, PNG or WebP. Other files can't be attached.",
+      "imageTooLarge": "That photo has too many pixels (over 40 megapixels). Take it at a lower resolution.",
+      "tooManyPhotos": "A note can have at most 10 photos."
     }
   },
   "emails": {

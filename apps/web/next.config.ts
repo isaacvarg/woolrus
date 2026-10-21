@@ -19,7 +19,7 @@ const config: NextConfig = {
     "@woolrus/i18n",
     "@woolrus/logger",
   ],
-  serverExternalPackages: ["pino", "pg", "@prisma/adapter-pg"],
+  serverExternalPackages: ["pino", "pg", "@prisma/adapter-pg", "sharp"],
   typedRoutes: true,
   // CLAUDE.md is the agent entry point; stop `next dev` from generating apps/web/AGENTS.md.
   agentRules: false,

@@ -10,7 +10,11 @@ import { Button, TextAreaField } from "@/components/ui/fields";
 import { toast } from "@/components/ui/toast";
 import { useErrorMessage, useFieldErrors } from "@/lib/errors";
 import { client, orpc } from "@/lib/orpc";
-import { NOTE_MAX_LENGTH, VisibilitySwitch } from "./note-composer";
+import { NOTE_MAX_LENGTH, VisibilitySwitch, validateNoteContent } from "./note-composer";
+import { PhotoGallery } from "./photo-gallery";
+import { PhotoPicker, UploadProgress } from "./photo-picker";
+
+const photosOf = (note: Note) => note.attachments.filter((a) => a.kind === "IMAGE");
 
 /** An order's notes, oldest first. Edit and Delete show only where the server says `canEdit`. */
 export function NoteList({
@@ -53,7 +57,8 @@ function NoteItem({ note, canWriteCustomer }: { note: Note; canWriteCustomer: bo
         )}
         {note.pushedToWooAt && <span className="badge badge-ghost">{t("notes.sentToWoo")}</span>}
       </div>
-      <p className="whitespace-pre-line break-words">{note.content}</p>
+      {note.content && <p className="whitespace-pre-line break-words">{note.content}</p>}
+      <PhotoGallery photos={photosOf(note)} />
       {note.canEdit && (
         <div className="flex gap-2">
           <EditNote note={note} canWriteCustomer={canWriteCustomer} />
@@ -77,19 +82,31 @@ function EditNote({ note, canWriteCustomer }: { note: Note; canWriteCustomer: bo
   const refresh = useRefreshNotes(note.orderId);
   const [content, setContent] = useState(note.content);
   const [visibility, setVisibility] = useState<NoteVisibility>(note.visibility);
+  const [addPhotos, setAddPhotos] = useState<File[]>([]);
+  const [removeIds, setRemoveIds] = useState<string[]>([]);
+  const [progress, setProgress] = useState<number | null>(null);
+  const kept = note.attachments.filter((a) => !removeIds.includes(a.id));
 
   const update = useMutation({
     mutationFn: () =>
-      client.notes.update({
-        id: note.id,
-        content,
-        // Only someone who sees the switch sends it; the server checks it either way.
-        ...(canWriteCustomer ? { visibility } : {}),
-      }),
+      client.notes.update(
+        {
+          id: note.id,
+          content,
+          // Only someone who sees the switch sends it; the server checks it either way.
+          ...(canWriteCustomer ? { visibility } : {}),
+          addPhotos,
+          removeAttachmentIds: removeIds,
+        },
+        addPhotos.length > 0 ? { context: { onUploadProgress: setProgress } } : {},
+      ),
     onError: (error) => {
       if (Object.keys(fieldErrors(error)).length === 0) toast.error(errorMessage(error));
     },
-    onSettled: refresh,
+    onSettled: () => {
+      setProgress(null);
+      return refresh();
+    },
   });
 
   return (
@@ -98,6 +115,8 @@ function EditNote({ note, canWriteCustomer }: { note: Note; canWriteCustomer: bo
         if (!open) return;
         setContent(note.content);
         setVisibility(note.visibility);
+        setAddPhotos([]);
+        setRemoveIds([]);
         update.reset();
       }}
     >
@@ -121,14 +140,52 @@ function EditNote({ note, canWriteCustomer }: { note: Note; canWriteCustomer: bo
             <TextAreaField
               label={t("notes.content")}
               name="content"
-              isRequired
               maxLength={NOTE_MAX_LENGTH}
-              validate={(value) => (value.trim() ? null : t("errors.notes.empty"))}
+              validate={(value) => {
+                const error = validateNoteContent(value, kept.length + addPhotos.length);
+                return error && t(error);
+              }}
               value={content}
               onChange={setContent}
               autoFocus
             />
+            {photosOf(note).length > 0 && (
+              <ul className="flex flex-wrap gap-2" aria-label={t("notes.photos")}>
+                {photosOf(note).map((photo) => {
+                  const removed = removeIds.includes(photo.id);
+                  return (
+                    <li key={photo.id} className="flex flex-col items-center gap-1">
+                      {/* biome-ignore lint/performance/noImgElement: auth-checked app route */}
+                      <img
+                        src={photo.thumbUrl ?? photo.url}
+                        alt={photo.fileName}
+                        className={`size-20 rounded-box object-cover ${removed ? "opacity-30" : ""}`}
+                      />
+                      <Button
+                        className="btn-ghost btn-sm min-h-12"
+                        aria-label={t(removed ? "notes.keepPhoto" : "notes.removePhoto", {
+                          name: photo.fileName,
+                        })}
+                        onPress={() =>
+                          setRemoveIds((ids) =>
+                            removed ? ids.filter((id) => id !== photo.id) : [...ids, photo.id],
+                          )
+                        }
+                      >
+                        {t(removed ? "notes.undoRemove" : "notes.remove")}
+                      </Button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+            <PhotoPicker
+              photos={addPhotos}
+              onChange={setAddPhotos}
+              existing={kept.filter((a) => a.kind === "IMAGE").length}
+            />
             {canWriteCustomer && <VisibilitySwitch value={visibility} onChange={setVisibility} />}
+            {progress !== null && <UploadProgress value={progress} />}
             <div className="modal-action">
               <Button className="btn-ghost" onPress={close}>
                 {t("common.cancel")}

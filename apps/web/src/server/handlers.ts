@@ -3,7 +3,7 @@ import { OpenAPIHandler } from "@orpc/openapi/fetch";
 import { RPCHandler } from "@orpc/server/fetch";
 import { ResponseHeadersPlugin } from "@orpc/server/plugins";
 import { ZodToJsonSchemaConverter } from "@orpc/zod/zod4";
-import { contract } from "@woolrus/contracts";
+import { contract, NOTE_REQUEST_MAX_BYTES } from "@woolrus/contracts";
 import { createLogger } from "@woolrus/logger";
 import { router } from "./router";
 
@@ -37,4 +37,33 @@ export function generateOpenApiSpec() {
 export function requestContext(request: Request) {
   const requestId = request.headers.get("x-request-id") ?? crypto.randomUUID();
   return { headers: request.headers, log: createLogger({ requestId }) };
+}
+
+/**
+ * Caps a request body (note uploads are the largest): a declared length over `max` gets 413 at
+ * once, and a body that streams past it errors, so a client can't fill the server's memory.
+ */
+export function capRequestBody(request: Request, max = NOTE_REQUEST_MAX_BYTES): Request | Response {
+  if (Number(request.headers.get("content-length") ?? 0) > max) {
+    return new Response(null, { status: 413 });
+  }
+  if (!request.body) return request;
+  let seen = 0;
+  const body = request.body.pipeThrough(
+    new TransformStream<Uint8Array, Uint8Array>({
+      transform(chunk, controller) {
+        seen += chunk.byteLength;
+        if (seen > max) controller.error(new Error("request body too large"));
+        else controller.enqueue(chunk);
+      },
+    }),
+  );
+  // From the URL: Next's request objects aren't accepted as `new Request(request, …)` input.
+  return new Request(request.url, {
+    method: request.method,
+    headers: request.headers,
+    signal: request.signal,
+    body,
+    duplex: "half",
+  } as RequestInit);
 }

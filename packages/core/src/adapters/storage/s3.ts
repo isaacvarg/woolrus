@@ -85,7 +85,14 @@ export function createS3Storage(config: S3Config, options: S3Options = {}): Obje
     const { timeoutMs: ms = timeoutMs, ...rest } = init;
     const signed = await client.sign(url, rest);
     try {
-      return await doFetch(signed, { signal: AbortSignal.timeout(ms) });
+      // The original body, not the signed Request's stream: a stream goes out chunked under
+      // Next's fetch, and RustFS refuses a PUT without Content-Length (411).
+      return await doFetch(signed.url, {
+        method: signed.method,
+        headers: signed.headers,
+        body: rest.body,
+        signal: AbortSignal.timeout(ms),
+      });
     } catch (error) {
       const timedOut = error instanceof DOMException && error.name === "TimeoutError";
       throw new StorageError("unavailable", timedOut ? "timeout" : "network");
