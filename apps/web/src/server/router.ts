@@ -60,6 +60,7 @@ import { badgeQrSvg } from "./badge";
 import { env } from "./env";
 import { api, type BaseContext, implementer, stationApi } from "./orpc";
 import { stationCookie } from "./station-cookie";
+import { storage } from "./storage";
 
 /** Signs out the request's Better Auth session, if any, passing its cookie-clearing headers on. */
 async function endPersonalSession(context: BaseContext): Promise<void> {
@@ -178,8 +179,12 @@ export const router = implementer.router({
   },
   notes: {
     list: api.notes.list.handler(({ input, context }) => listNotes(db, context.actor, input)),
-    create: api.notes.create.handler(({ input, context }) => createNote(db, context.actor, input)),
-    update: api.notes.update.handler(({ input, context }) => updateNote(db, context.actor, input)),
+    create: api.notes.create.handler(({ input, context }) =>
+      createNote(db, storage(), context.actor, input),
+    ),
+    update: api.notes.update.handler(({ input, context }) =>
+      updateNote(db, storage(), context.actor, input),
+    ),
     delete: api.notes.delete.handler(({ input, context }) => deleteNote(db, context.actor, input)),
   },
   sync: {

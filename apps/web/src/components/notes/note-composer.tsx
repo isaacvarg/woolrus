@@ -9,6 +9,7 @@ import { Button, Switch, TextAreaField } from "@/components/ui/fields";
 import { toast } from "@/components/ui/toast";
 import { useErrorMessage, useFieldErrors } from "@/lib/errors";
 import { client, orpc } from "@/lib/orpc";
+import { PhotoPicker, UploadProgress } from "./photo-picker";
 
 export const NOTE_MAX_LENGTH = 4000;
 
@@ -53,9 +54,13 @@ export function useRefreshNotes(orderId: string) {
     ]);
 }
 
+/** Text or at least one file (`errors.notes.empty`). */
+export const validateNoteContent = (value: string, fileCount: number) =>
+  value.trim() || fileCount > 0 ? null : "errors.notes.empty";
+
 /**
- * Writes a note on the order, or on one of `targets` (a line, a package…). `initialTarget` presets
- * the picker, e.g. when opened from a line.
+ * Writes a note, with photos, on the order or on one of `targets` (a line, a package…).
+ * `initialTarget` presets the picker, e.g. when opened from a line.
  */
 export function NoteComposer({
   orderId,
@@ -78,21 +83,28 @@ export function NoteComposer({
   const [content, setContent] = useState("");
   const [visibility, setVisibility] = useState<NoteVisibility>("INTERNAL");
   const [target, setTarget] = useState(() => targetKey(initialTarget));
+  const [photos, setPhotos] = useState<File[]>([]);
+  const [progress, setProgress] = useState<number | null>(null);
   // One key per draft: a retry after a dropped response returns the note instead of adding twice.
   const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
 
   const create = useMutation({
     mutationFn: () =>
-      client.notes.create({
-        idempotencyKey,
-        orderId,
-        content,
-        visibility,
-        target: targets.find((o) => targetKey(o.target) === target)?.target ?? { kind: "order" },
-      }),
+      client.notes.create(
+        {
+          idempotencyKey,
+          orderId,
+          content,
+          visibility,
+          target: targets.find((o) => targetKey(o.target) === target)?.target ?? { kind: "order" },
+          photos,
+        },
+        photos.length > 0 ? { context: { onUploadProgress: setProgress } } : {},
+      ),
     onSuccess: () => {
       setContent("");
       setVisibility("INTERNAL");
+      setPhotos([]);
       setIdempotencyKey(crypto.randomUUID());
       toast.success(t("notes.added"));
       onAdded?.();
@@ -100,7 +112,10 @@ export function NoteComposer({
     onError: (error) => {
       if (Object.keys(fieldErrors(error)).length === 0) toast.error(errorMessage(error));
     },
-    onSettled: refresh,
+    onSettled: () => {
+      setProgress(null);
+      return refresh();
+    },
   });
 
   return (
@@ -115,9 +130,11 @@ export function NoteComposer({
       <TextAreaField
         label={t("notes.newNote")}
         name="content"
-        isRequired
         maxLength={NOTE_MAX_LENGTH}
-        validate={(value) => (value.trim() ? null : t("errors.notes.empty"))}
+        validate={(value) => {
+          const error = validateNoteContent(value, photos.length);
+          return error && t(error);
+        }}
         value={content}
         onChange={setContent}
       />
@@ -141,7 +158,9 @@ export function NoteComposer({
           </select>
         </div>
       )}
+      <PhotoPicker photos={photos} onChange={setPhotos} />
       {canWriteCustomer && <VisibilitySwitch value={visibility} onChange={setVisibility} />}
+      {progress !== null && <UploadProgress value={progress} />}
       <Button type="submit" className="btn-primary btn-lg" isPending={create.isPending}>
         {t("notes.add")}
       </Button>

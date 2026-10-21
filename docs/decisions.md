@@ -97,6 +97,11 @@ positive quantities and dimensions, single-row settings. **Keep them when editin
   Each sits behind an adapter interface in core so it can be swapped. Storage is reached with `aws4fetch`-signed
   `fetch` (path-style, `S3_*` env); its bucket is created private if missing when the worker starts and on first use
   in web, and health reports `storage`.
+- **Note attachments are served through the app, not signed URLs** (2026-10-20, SPEC-notes decision 1; deviation
+  from FR-NOTE-03). `GET /api/attachments/{id}` and `/thumb` resolve the actor, check `order.read` on every
+  request and stream from storage (`Cache-Control: private, max-age=3600, immutable`, `nosniff`, inline). Storage
+  stays off the floor network, no URL grants access by itself (NFR-SEC-05), and listing notes signs nothing
+  (NFR-PERF-03). Photos are stored only as the processed WebP (2048 px, metadata stripped) plus a 400 px thumbnail.
 - **Email provider: Resend** (2026-10-20, SPEC-identity decision 1), through its HTTP API with `fetch`, no SDK:
   `POST https://api.resend.com/emails` with `Idempotency-Key`. Behind the `EmailSender` adapter in
   `packages/core/src/adapters/email/`; configured by `Settings.emailFrom` and the `resendApiKey` secret. Without a

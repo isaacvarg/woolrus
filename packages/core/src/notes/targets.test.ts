@@ -3,9 +3,13 @@ import type { Db, DbTx } from "@woolrus/db";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { createActor, resetDb, testDb } from "../../test/db";
 import { createOrder } from "../../test/factories";
+import { createMemoryStorage } from "../adapters/storage/memory";
 import type { UserActor } from "../permissions";
 import { getOrder, listOrders, listQueue } from "../workflow/queries";
 import { createNote, deleteNote, listNotes } from "./service";
+
+// Text-only notes upload nothing; the service still takes a storage.
+const storage = createMemoryStorage();
 
 const db: Db = testDb();
 afterAll(() => db.$disconnect());
@@ -70,14 +74,25 @@ describe("note targets", () => {
     const [pkg] = packages;
     if (!item || !pkg) throw new Error("fixture");
 
-    const onOrder = await createNote(db, picker, input(order.id, { kind: "order" }));
-    const onItem = await createNote(db, picker, input(order.id, { kind: "item", id: item.id }));
+    const onOrder = await createNote(db, storage, picker, input(order.id, { kind: "order" }));
+    const onItem = await createNote(
+      db,
+      storage,
+      picker,
+      input(order.id, { kind: "item", id: item.id }),
+    );
     const onPackage = await createNote(
       db,
+      storage,
       picker,
       input(order.id, { kind: "package", id: pkg.id }),
     );
-    const onIssue = await createNote(db, picker, input(order.id, { kind: "issue", id: issue.id }));
+    const onIssue = await createNote(
+      db,
+      storage,
+      picker,
+      input(order.id, { kind: "issue", id: issue.id }),
+    );
 
     expect(onOrder.target).toEqual({ kind: "order", id: order.id, label: "5001" });
     expect(onItem.target).toEqual({ kind: "item", id: item.id, label: "Lavender soap ×2" });
@@ -94,14 +109,19 @@ describe("note targets", () => {
   it("defaults to the order when no target is given", async () => {
     const { order } = await createOrder(db);
     const { target: _, ...withoutTarget } = input(order.id, { kind: "order" });
-    const note = await createNote(db, picker, withoutTarget);
+    const note = await createNote(db, storage, picker, withoutTarget);
     expect(note.target.kind).toBe("order");
   });
 
   it("cuts a long issue description in the label", async () => {
     const { order } = await createOrder(db);
     const issue = await createIssue(order.id, "x".repeat(200));
-    const note = await createNote(db, picker, input(order.id, { kind: "issue", id: issue.id }));
+    const note = await createNote(
+      db,
+      storage,
+      picker,
+      input(order.id, { kind: "issue", id: issue.id }),
+    );
     expect(note.target.label).toHaveLength(80);
     expect(note.target.label.endsWith("…")).toBe(true);
   });
@@ -120,7 +140,7 @@ describe("note targets", () => {
       { kind: "issue", id: otherIssue.id },
       { kind: "item", id: crypto.randomUUID() },
     ] as const) {
-      await expect(createNote(db, picker, input(order.id, target))).rejects.toMatchObject({
+      await expect(createNote(db, storage, picker, input(order.id, target))).rejects.toMatchObject({
         kind: "BAD_REQUEST",
         messageKey: "errors.notes.targetMismatch",
       });
@@ -135,8 +155,13 @@ describe("note counts", () => {
     await createOrder(db, { number: "6002" });
     const [item] = items;
     if (!item) throw new Error("fixture");
-    await createNote(db, picker, input(order.id, { kind: "order" }));
-    const second = await createNote(db, picker, input(order.id, { kind: "item", id: item.id }));
+    await createNote(db, storage, picker, input(order.id, { kind: "order" }));
+    const second = await createNote(
+      db,
+      storage,
+      picker,
+      input(order.id, { kind: "item", id: item.id }),
+    );
 
     const counts = (rows: { number: string; noteCount: number }[]) =>
       Object.fromEntries(rows.map((r) => [r.number, r.noteCount]));
@@ -158,10 +183,10 @@ describe("note counts", () => {
     const [first, second] = items;
     const [box1, box2] = packages;
     if (!first || !second || !box1 || !box2) throw new Error("fixture");
-    await createNote(db, picker, input(order.id, { kind: "order" }));
-    await createNote(db, picker, input(order.id, { kind: "item", id: first.id }));
-    await createNote(db, picker, input(order.id, { kind: "item", id: first.id }));
-    await createNote(db, picker, input(order.id, { kind: "package", id: box2.id }));
+    await createNote(db, storage, picker, input(order.id, { kind: "order" }));
+    await createNote(db, storage, picker, input(order.id, { kind: "item", id: first.id }));
+    await createNote(db, storage, picker, input(order.id, { kind: "item", id: first.id }));
+    await createNote(db, storage, picker, input(order.id, { kind: "package", id: box2.id }));
 
     const view = await getOrder(db, picker, { id: order.id });
     expect(view.lines.map((l) => [l.id, l.noteCount])).toEqual([

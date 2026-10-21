@@ -2,8 +2,12 @@ import type { Db } from "@woolrus/db";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { createActor, resetDb, testDb } from "../../test/db";
 import { createOrder } from "../../test/factories";
+import { createMemoryStorage } from "../adapters/storage/memory";
 import { markNotePushed, notesToPush } from "./push";
 import { createNote, deleteNote, listNotes, updateNote } from "./service";
+
+// Text-only notes upload nothing; the service still takes a storage.
+const storage = createMemoryStorage();
 
 const db: Db = testDb();
 afterAll(() => db.$disconnect());
@@ -39,7 +43,7 @@ describe("notes to push to WooCommerce", () => {
     });
     const { order: other } = await createOrder(db);
 
-    const first = await createNote(db, author, {
+    const first = await createNote(db, storage, author, {
       idempotencyKey: key(),
       orderId: order.id,
       content: "Gift wrap please",
@@ -140,7 +144,7 @@ describe("notes to push to WooCommerce", () => {
     const author = await createActor(db, ["PICKER"]);
     const { order } = await createOrder(db);
     for (const content of ["one", "two"]) {
-      await createNote(db, author, {
+      await createNote(db, storage, author, {
         idempotencyKey: key(),
         orderId: order.id,
         content,
@@ -167,7 +171,7 @@ describe("notes to push to WooCommerce", () => {
   it("refuses to mark a note pushed twice", async () => {
     const author = await createActor(db, ["PICKER"]);
     const { order } = await createOrder(db);
-    const note = await createNote(db, author, {
+    const note = await createNote(db, storage, author, {
       idempotencyKey: key(),
       orderId: order.id,
       content: "once",
@@ -186,7 +190,7 @@ describe("notes to push to WooCommerce", () => {
     const author = await createActor(db, ["PICKER"]);
     const admin = await createActor(db, ["ADMIN"]);
     const { order } = await createOrder(db);
-    const note = await createNote(db, author, {
+    const note = await createNote(db, storage, author, {
       idempotencyKey: key(),
       orderId: order.id,
       content: "Sent",
@@ -196,7 +200,7 @@ describe("notes to push to WooCommerce", () => {
 
     for (const actor of [author, admin]) {
       await rejects(
-        updateNote(db, actor, { id: note.id, content: "changed" }),
+        updateNote(db, storage, actor, { id: note.id, content: "changed" }),
         "CONFLICT",
         "errors.notes.alreadySent",
       );

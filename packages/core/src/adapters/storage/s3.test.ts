@@ -11,7 +11,7 @@ const config: S3Config = {
   bucket: "attachments",
 };
 
-type Call = { method: string; url: URL; headers: Headers; body: string };
+type Call = { method: string; url: URL; headers: Headers; body: string; rawBody: unknown };
 
 /** A storage whose fetch answers from `replies` in order (the last one repeats). */
 function setup(...replies: (Response | Error)[]) {
@@ -24,6 +24,7 @@ function setup(...replies: (Response | Error)[]) {
       url: new URL(request.url),
       headers: request.headers,
       body: request.body ? await request.text() : "",
+      rawBody: init?.body,
     });
     const reply = replies[Math.min(i++, replies.length - 1)] as Response | Error;
     if (reply instanceof Error) throw reply;
@@ -57,6 +58,8 @@ describe("S3Storage requests", () => {
       /^AWS4-HMAC-SHA256 Credential=test-access\/\d{8}\/us-east-1\/s3\/aws4_request/,
     );
     expect(call?.body).toBe("img");
+    // Bytes, not a stream: a streamed body goes out chunked and RustFS wants Content-Length (411).
+    expect(call?.rawBody).toBeInstanceOf(Uint8Array);
   });
 
   it("forwards a Range and reports the content range", async () => {

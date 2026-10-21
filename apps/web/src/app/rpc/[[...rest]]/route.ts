@@ -1,6 +1,8 @@
-import { requestContext, rpcHandler } from "@/server/handlers";
+import { capRequestBody, requestContext, rpcHandler } from "@/server/handlers";
 
-async function handle(request: Request) {
+async function handle(incoming: Request) {
+  const request = capRequestBody(incoming);
+  if (request instanceof Response) return request;
   const { response } = await rpcHandler.handle(request, {
     prefix: "/rpc",
     context: requestContext(request),
