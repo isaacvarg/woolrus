@@ -16,7 +16,8 @@
     "@woolrus/core": "workspace:*",
     "@woolrus/db": "workspace:*",
     "@woolrus/logger": "workspace:*",
-    "pg-boss": "12.38.0"
+    "pg-boss": "12.38.0",
+    "sharp": "0.35.5"
   },
   "devDependencies": {
     "@types/node": "^24.19.2",

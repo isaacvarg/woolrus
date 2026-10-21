@@ -1,5 +1,7 @@
 import {
   configuredStore,
+  createS3Storage,
+  ensureBucketOnFirstUse,
   getEmailSender,
   JOBS_SCHEMA,
   type JobPayloads,
@@ -9,6 +11,9 @@ import {
   queues,
   recomputePriorities,
   runEmailJob,
+  runStorageDeleteJob,
+  s3ConfigFromEnv,
+  sweepOrphanFiles,
   syncProducts,
 } from "@woolrus/core";
 import { db } from "@woolrus/db";
@@ -24,6 +29,17 @@ const boss = new PgBoss({ connectionString, schema: JOBS_SCHEMA });
 boss.on("error", (err) => log.error({ err }, "pg-boss error"));
 
 await boss.start();
+
+// The attachments bucket is created on start, so a fresh install needs no manual step. Storage
+// being down mustn't stop order sync: log it, and the first storage job tries again.
+const storageLog = createLogger({ module: "storage" });
+const storage = ensureBucketOnFirstUse(createS3Storage(s3ConfigFromEnv()));
+await storage
+  .ensureBucket()
+  .then(() => storageLog.info("storage bucket ready"))
+  .catch((err: unknown) =>
+    storageLog.error({ err }, "storage bucket not ready; retrying on first use"),
+  );
 
 for (const name of Object.values(queues)) {
   await boss.createQueue(name, queueOptions[name]);
@@ -94,6 +110,28 @@ await boss.work<JobPayloads[typeof queues.emailSend]>(queues.emailSend, async ([
     log: (entry) => emailLog.error(entry, "email refused by Resend; not retrying"),
   });
   log.info({ jobId: job.id, template: job.data.template, result }, "email.send done");
+});
+
+// Note files (SPEC-notes "Deleting files"). Deletes come from the note's transaction; retries
+// (6 attempts, backoff) come from the queue's policy, and a missing object counts as done.
+await boss.work<JobPayloads[typeof queues.storageDelete]>(queues.storageDelete, async ([job]) => {
+  if (!job) return;
+  const result = await runStorageDeleteJob(storage, job.data);
+  storageLog.info({ jobId: job.id, ...result }, "storage.delete done");
+});
+
+// The sweep collects files no attachment points to: failed deletes, and notes removed by a cascade
+// (a deleted package or line item). Daily at 04:00 server time, after the catalog sync.
+await boss.schedule(
+  queues.storageSweep,
+  "0 4 * * *",
+  {},
+  { tz: Intl.DateTimeFormat().resolvedOptions().timeZone },
+);
+
+await boss.work<JobPayloads[typeof queues.storageSweep]>(queues.storageSweep, async ([job]) => {
+  const result = await sweepOrphanFiles(db, storage);
+  storageLog.info({ jobId: job?.id, ...result }, "storage.sweep done");
 });
 
 log.info({ queues: Object.values(queues) }, "worker started");

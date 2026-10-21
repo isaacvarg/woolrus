@@ -3,6 +3,9 @@
 import { useQuery } from "@tanstack/react-query";
 import type { OrderView as Order } from "@woolrus/contracts";
 import { useFormatter, useTranslations } from "next-intl";
+import type { TargetOption } from "@/components/notes/note-composer";
+import { useTargetName } from "@/components/notes/note-list";
+import { NoteOnTarget, NotesPanel } from "@/components/notes/notes-panel";
 import { useErrorMessage } from "@/lib/errors";
 import { orpc } from "@/lib/orpc";
 import { formatAddress } from "./address";
@@ -12,7 +15,45 @@ import { OrderActions } from "./order-actions";
 
 const priorityBadge: Record<number, string> = { 1: "badge-warning", 2: "badge-error" };
 
-export function OrderView({ id, userId }: { id: string; userId: string | null }) {
+type NoteTargets = {
+  all: TargetOption[];
+  line: (id: string) => TargetOption;
+  pkg: (id: string) => TargetOption;
+};
+
+/** What a note on this order can be on, worded as the notes list words it. */
+function useNoteTargets(order: Order): NoteTargets {
+  const targetName = useTargetName();
+  const lines = order.lines.map((line) => ({
+    target: { kind: "item" as const, id: line.id },
+    label: targetName({ kind: "item", label: `${line.name} ×${line.quantity}` }),
+  }));
+  const packages = order.packages.map((pkg) => ({
+    target: { kind: "package" as const, id: pkg.id },
+    label: targetName({ kind: "package", label: String(pkg.number) }),
+  }));
+  const all = [
+    {
+      target: { kind: "order" as const },
+      label: targetName({ kind: "order", label: order.number }),
+    },
+    ...lines,
+    ...packages,
+  ];
+  const find = (options: TargetOption[], id: string) =>
+    options.find((o) => o.target.kind !== "order" && o.target.id === id) as TargetOption;
+  return { all, line: (id) => find(lines, id), pkg: (id) => find(packages, id) };
+}
+
+export function OrderView({
+  id,
+  userId,
+  canWriteCustomer,
+}: {
+  id: string;
+  userId: string | null;
+  canWriteCustomer: boolean;
+}) {
   const t = useTranslations();
   const errorMessage = useErrorMessage();
   const order = useQuery(orpc.orders.get.queryOptions({ input: { id } }));
@@ -25,18 +66,36 @@ export function OrderView({ id, userId }: { id: string; userId: string | null })
       </p>
     );
   }
+  return <OrderLayout order={order.data} userId={userId} canWriteCustomer={canWriteCustomer} />;
+}
 
+function OrderLayout({
+  order,
+  userId,
+  canWriteCustomer,
+}: {
+  order: Order;
+  userId: string | null;
+  canWriteCustomer: boolean;
+}) {
+  const targets = useNoteTargets(order);
+  const notes = { orderId: order.id, canWriteCustomer, targets };
   return (
     <section className="mx-auto max-w-6xl space-y-6">
-      <OrderHeader order={order.data} />
-      <ExternalChangeBanner order={order.data} />
-      <OrderActions order={order.data} userId={userId} />
+      <OrderHeader order={order} />
+      <ExternalChangeBanner order={order} />
+      <OrderActions order={order} userId={userId} />
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
-          <OrderLines order={order.data} />
-          <OrderPackages order={order.data} />
+          <OrderLines order={order} notes={notes} />
+          <OrderPackages order={order} notes={notes} />
+          <NotesPanel
+            orderId={order.id}
+            canWriteCustomer={canWriteCustomer}
+            targets={targets.all}
+          />
         </div>
-        <HistoryPanel id={id} />
+        <HistoryPanel id={order.id} />
       </div>
     </section>
   );
@@ -107,7 +166,9 @@ function OrderHeader({ order }: { order: Order }) {
   );
 }
 
-function OrderLines({ order }: { order: Order }) {
+type NotesProps = { orderId: string; canWriteCustomer: boolean; targets: NoteTargets };
+
+function OrderLines({ order, notes }: { order: Order; notes: NotesProps }) {
   const t = useTranslations();
   return (
     <div className="overflow-x-auto rounded-box bg-base-100 shadow-sm">
@@ -119,6 +180,7 @@ function OrderLines({ order }: { order: Order }) {
             <th className="text-end">{t("order.quantity")}</th>
             <th className="text-end">{t("order.activeQuantity")}</th>
             <th>{t("order.pickStatusLabel")}</th>
+            <th>{t("notes.title")}</th>
           </tr>
         </thead>
         <tbody>
@@ -162,6 +224,9 @@ function OrderLines({ order }: { order: Order }) {
                   </>
                 )}
               </td>
+              <td>
+                <NoteOn notes={notes} option={notes.targets.line(line.id)} count={line.noteCount} />
+              </td>
             </tr>
           ))}
         </tbody>
@@ -170,7 +235,28 @@ function OrderLines({ order }: { order: Order }) {
   );
 }
 
-function OrderPackages({ order }: { order: Order }) {
+function NoteOn({
+  notes,
+  option,
+  count,
+}: {
+  notes: NotesProps;
+  option: TargetOption;
+  count: number;
+}) {
+  return (
+    <NoteOnTarget
+      orderId={notes.orderId}
+      canWriteCustomer={notes.canWriteCustomer}
+      targets={notes.targets.all}
+      target={option.target}
+      name={option.label}
+      count={count}
+    />
+  );
+}
+
+function OrderPackages({ order, notes }: { order: Order; notes: NotesProps }) {
   const t = useTranslations();
   if (order.packages.length === 0) return null;
   return (
@@ -178,12 +264,19 @@ function OrderPackages({ order }: { order: Order }) {
       <h2 className="text-xl font-bold">{t("order.packages")}</h2>
       <ul className="grid gap-2 md:grid-cols-2">
         {order.packages.map((pkg) => (
-          <li key={pkg.id} className="rounded-box bg-base-100 p-4 shadow-sm">
-            <div className="font-semibold">
-              {t("order.package", { number: pkg.number })}
-              {pkg.liveLabel && (
-                <span className="badge badge-info ms-2">{t("order.liveLabel")}</span>
-              )}
+          <li
+            key={pkg.id}
+            className="rounded-box bg-base-100 p-4 shadow-sm"
+            data-testid="order-package"
+          >
+            <div className="flex items-center justify-between gap-2">
+              <div className="font-semibold">
+                {t("order.package", { number: pkg.number })}
+                {pkg.liveLabel && (
+                  <span className="badge badge-info ms-2">{t("order.liveLabel")}</span>
+                )}
+              </div>
+              <NoteOn notes={notes} option={notes.targets.pkg(pkg.id)} count={pkg.noteCount} />
             </div>
             <div className="text-sm">
               {/* Weights wait for `packing`, which owns display units. */}

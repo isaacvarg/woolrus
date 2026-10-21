@@ -94,7 +94,14 @@ positive quantities and dimensions, single-row settings. **Keep them when editin
   `secret.clear`, reason `urlChanged`), so keys never follow a URL to another server. A path-only change, or a
   first URL where there was none, keeps them.
 - **ShipStation:** API v2. **Lumexia:** its REST API with a scoped API key. **Storage:** S3-compatible (RustFS).
-  Each sits behind an adapter interface in core so it can be swapped.
+  Each sits behind an adapter interface in core so it can be swapped. Storage is reached with `aws4fetch`-signed
+  `fetch` (path-style, `S3_*` env); its bucket is created private if missing when the worker starts and on first use
+  in web, and health reports `storage`.
+- **Note attachments are served through the app, not signed URLs** (2026-10-20, SPEC-notes decision 1; deviation
+  from FR-NOTE-03). `GET /api/attachments/{id}` and `/thumb` resolve the actor, check `order.read` on every
+  request and stream from storage (`Cache-Control: private, max-age=3600, immutable`, `nosniff`, inline). Storage
+  stays off the floor network, no URL grants access by itself (NFR-SEC-05), and listing notes signs nothing
+  (NFR-PERF-03). Photos are stored only as the processed WebP (2048 px, metadata stripped) plus a 400 px thumbnail.
 - **Email provider: Resend** (2026-10-20, SPEC-identity decision 1), through its HTTP API with `fetch`, no SDK:
   `POST https://api.resend.com/emails` with `Idempotency-Key`. Behind the `EmailSender` adapter in
   `packages/core/src/adapters/email/`; configured by `Settings.emailFrom` and the `resendApiKey` secret. Without a
@@ -114,4 +121,15 @@ positive quantities and dimensions, single-row settings. **Keep them when editin
   bundle/composite line items before modelling them (we don't know yet whether ACF matters for orders).
 - **Google / Discord OAuth apps** need creating; redirect URI `https://<host>/api/auth/callback/<provider>`.
 - **GHCR visibility:** if the repo is private, the host needs `docker login ghcr.io` with a read-only token.
-- **Storage bucket** is not created automatically yet; the storage adapter should ensure it on startup.
+- **Note upload memory** (notes review, 2026-10-21): a full note upload (10 photos at the 15 MB limit, 160 MB
+  request cap) peaks around 300 MB in web: the parsed multipart body plus `preparePhotos`' copies, which are all
+  checked before any is processed. Decoding one 40-megapixel photo with sharp adds about 160 MB. Three full uploads
+  at once could exhaust a small host. Real tablet photos are 3–5 MB, so this is unlikely today. Before production:
+  size the web container for it, or limit concurrent note uploads, or check each photo from its header and drop
+  its bytes before the next is read.
+- **Voice memo checks** (notes ship review, 2026-10-21): a voice memo is accepted by its container's magic bytes
+  and stored as uploaded, up to 15 MB; `durationMs` comes from the client and is only range-checked. So any
+  signed-in user can store arbitrary bytes behind an audio header (an MP4 video passes as `audio/mp4`), and
+  nothing limits uploads per user. Served as `audio/*` with `nosniff` and a sandbox CSP, so it can't run in the
+  browser. Before production: a per-user upload rate limit and byte budget, refusing memos far larger than
+  their duration allows (about 40 bytes per ms), refusing MP4s with a video track, and tracking bucket size.

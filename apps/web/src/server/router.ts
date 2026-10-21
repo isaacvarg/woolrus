@@ -4,8 +4,10 @@ import {
   clearSecret,
   createBox,
   createInvitation,
+  createNote,
   createPriorityRule,
   deactivateUser,
+  deleteNote,
   deletePriorityRule,
   getEmailSender,
   getOrder,
@@ -16,6 +18,7 @@ import {
   issueBadge,
   listBoxes,
   listInvitations,
+  listNotes,
   listOrders,
   listPriorityRules,
   listQueue,
@@ -44,6 +47,7 @@ import {
   touchStation,
   unlockWithBadge,
   unlockWithPin,
+  updateNote,
   updatePreferences,
   updatePriorityRule,
   updateSettings,
@@ -56,6 +60,7 @@ import { badgeQrSvg } from "./badge";
 import { env } from "./env";
 import { api, type BaseContext, implementer, stationApi } from "./orpc";
 import { stationCookie } from "./station-cookie";
+import { storage } from "./storage";
 
 /** Signs out the request's Better Auth session, if any, passing its cookie-clearing headers on. */
 async function endPersonalSession(context: BaseContext): Promise<void> {
@@ -171,6 +176,16 @@ export const router = implementer.router({
     claimMany: api.orders.claimMany.handler(({ input, context }) =>
       orderMutations.claimMany(db, context.actor, input),
     ),
+  },
+  notes: {
+    list: api.notes.list.handler(({ input, context }) => listNotes(db, context.actor, input)),
+    create: api.notes.create.handler(({ input, context }) =>
+      createNote(db, storage(), context.actor, input),
+    ),
+    update: api.notes.update.handler(({ input, context }) =>
+      updateNote(db, storage(), context.actor, input),
+    ),
+    delete: api.notes.delete.handler(({ input, context }) => deleteNote(db, context.actor, input)),
   },
   sync: {
     status: api.sync.status.handler(({ context }) => getSyncStatus(db, context.actor)),

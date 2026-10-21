@@ -49,6 +49,8 @@ export const permissions = [
   "label.void",
   "order.ship",
   "note.write",
+  /** Write to the customer: create a customer-visible note or switch one to it. */
+  "note.customer",
   "note.moderate",
   "issue.report",
   "issue.resolve",
@@ -75,8 +77,8 @@ export const rolePermissions: Record<Role, readonly Permission[]> = {
   ADMIN: permissions,
   PICKER: [...everyone, "order.pick"],
   PACKER: [...everyone, "order.pack"],
-  QA: [...everyone, "order.qa", "label.purchase", "label.print"],
-  SHIPPER: [...everyone, "label.print", "order.ship"],
+  QA: [...everyone, "order.qa", "label.purchase", "label.print", "note.customer"],
+  SHIPPER: [...everyone, "label.print", "order.ship", "note.customer"],
 };
 
 export function permissionsFor(roles: readonly Role[]): Permission[] {

@@ -13,6 +13,7 @@ import {
 import { type DbTx, Prisma, type WorkflowStatus } from "@woolrus/db";
 import { z } from "zod";
 import { AppError, notFound } from "../errors";
+import { lineAndPackageNoteCounts, noteCounts } from "../notes/targets";
 import { type Actor, assertCan } from "../permissions";
 import { loadSettings } from "../settings/service";
 import { externalChangeOf } from "../sync/review";
@@ -138,6 +139,10 @@ export async function listQueue(
 
   const page = rows.slice(0, pageSize);
   const last = page.at(-1);
+  const notes = await noteCounts(
+    db,
+    page.map((r) => r.id),
+  );
   return {
     rows: page.map((r) => ({
       id: r.id,
@@ -161,6 +166,7 @@ export async function listQueue(
       holdReason: r.holdReason,
       heldFromStatus: r.heldFromStatus,
       version: r.version,
+      noteCount: notes.get(r.id) ?? 0,
     })),
     nextCursor: rows.length > pageSize && last ? encodeCursor(last) : null,
   };
@@ -242,6 +248,7 @@ export async function getOrder(
   if (!order) throw notFound();
 
   const [detail] = await toOrderDetails(db, [order], { now });
+  const notes = await lineAndPackageNoteCounts(db, id);
   if (!detail) throw notFound();
   const externalChange = externalChangeOf(order);
   return {
@@ -264,6 +271,7 @@ export async function getOrder(
       pickedQuantity: i.pickedQuantity,
       substitutionNote: i.substitutionNote,
       attributes: toAttributes(i.attributes),
+      noteCount: notes.items.get(i.id) ?? 0,
     })),
     packages: order.packages.map((p) => ({
       id: p.id,
@@ -272,6 +280,7 @@ export async function getOrder(
       weightOz: p.weightOz === null ? null : p.weightOz.toNumber(),
       units: p.items.reduce((sum, it) => sum + it.quantity, 0),
       liveLabel: p.labels.length > 0,
+      noteCount: notes.packages.get(p.id) ?? 0,
     })),
     allowedActions: allowedActions(actor, {
       status: order.status,
@@ -427,5 +436,14 @@ export async function listOrders(
     db.$queryRaw<{ total: number }[]>`SELECT COUNT(*)::int AS total FROM orders o ${where}`,
   ]);
 
-  return { rows, total: count?.total ?? 0, page: pageNumber, pageSize: size };
+  const notes = await noteCounts(
+    db,
+    rows.map((r) => r.id),
+  );
+  return {
+    rows: rows.map((r) => ({ ...r, noteCount: notes.get(r.id) ?? 0 })),
+    total: count?.total ?? 0,
+    page: pageNumber,
+    pageSize: size,
+  };
 }
