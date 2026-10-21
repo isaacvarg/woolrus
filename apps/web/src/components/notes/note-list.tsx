@@ -18,8 +18,10 @@ import {
 } from "./note-composer";
 import { PhotoGallery } from "./photo-gallery";
 import { PhotoPicker, UploadProgress } from "./photo-picker";
+import { type VoiceMemo, VoicePlayer, VoiceRecorder } from "./voice-recorder";
 
 const photosOf = (note: Note) => note.attachments.filter((a) => a.kind === "IMAGE");
+const voiceOf = (note: Note) => note.attachments.find((a) => a.kind === "VOICE");
 
 const kinds: NoteTargetKind[] = ["order", "item", "package", "issue"];
 const filterLabel = {
@@ -127,6 +129,7 @@ export function NoteList({
 function NoteItem({ note, canWriteCustomer }: { note: Note; canWriteCustomer: boolean }) {
   const t = useTranslations();
   const format = useFormatter();
+  const voice = voiceOf(note);
 
   return (
     <li className="space-y-1 rounded-box bg-base-100 p-3 shadow-sm" data-testid="note">
@@ -142,6 +145,7 @@ function NoteItem({ note, canWriteCustomer }: { note: Note; canWriteCustomer: bo
       </div>
       {note.content && <p className="whitespace-pre-line break-words">{note.content}</p>}
       <PhotoGallery photos={photosOf(note)} />
+      {voice && <VoicePlayer memo={voice} />}
       {note.pushedToWooAt && <p className="text-sm opacity-70">{t("notes.frozen")}</p>}
       {note.canEdit && (
         <div className="flex gap-2">
@@ -161,9 +165,13 @@ function EditNote({ note, canWriteCustomer }: { note: Note; canWriteCustomer: bo
   const [content, setContent] = useState(note.content);
   const [visibility, setVisibility] = useState<NoteVisibility>(note.visibility);
   const [addPhotos, setAddPhotos] = useState<File[]>([]);
+  const [addVoice, setAddVoice] = useState<VoiceMemo | null>(null);
   const [removeIds, setRemoveIds] = useState<string[]>([]);
   const [progress, setProgress] = useState<number | null>(null);
   const kept = note.attachments.filter((a) => !removeIds.includes(a.id));
+  const voice = voiceOf(note);
+  const voiceRemoved = voice ? removeIds.includes(voice.id) : false;
+  const addCount = addPhotos.length + (addVoice ? 1 : 0);
 
   const update = useMutation({
     mutationFn: () =>
@@ -174,9 +182,10 @@ function EditNote({ note, canWriteCustomer }: { note: Note; canWriteCustomer: bo
           // Only someone who sees the switch sends it; the server checks it either way.
           ...(canWriteCustomer ? { visibility } : {}),
           addPhotos,
+          ...(addVoice ? { addVoice: addVoice.file, voiceDurationMs: addVoice.durationMs } : {}),
           removeAttachmentIds: removeIds,
         },
-        addPhotos.length > 0 ? { context: { onUploadProgress: setProgress } } : {},
+        addCount > 0 ? { context: { onUploadProgress: setProgress } } : {},
       ),
     onError: (error) => {
       if (Object.keys(fieldErrors(error)).length === 0) toast.error(errorMessage(error));
@@ -194,6 +203,7 @@ function EditNote({ note, canWriteCustomer }: { note: Note; canWriteCustomer: bo
         setContent(note.content);
         setVisibility(note.visibility);
         setAddPhotos([]);
+        setAddVoice(null);
         setRemoveIds([]);
         update.reset();
       }}
@@ -220,7 +230,7 @@ function EditNote({ note, canWriteCustomer }: { note: Note; canWriteCustomer: bo
               name="content"
               maxLength={NOTE_MAX_LENGTH}
               validate={(value) => {
-                const error = validateNoteContent(value, kept.length + addPhotos.length);
+                const error = validateNoteContent(value, kept.length + addCount);
                 return error && t(error);
               }}
               value={content}
@@ -262,6 +272,26 @@ function EditNote({ note, canWriteCustomer }: { note: Note; canWriteCustomer: bo
               onChange={setAddPhotos}
               existing={kept.filter((a) => a.kind === "IMAGE").length}
             />
+            {voice && (
+              <div
+                className={`flex flex-wrap items-center gap-2 ${voiceRemoved ? "opacity-30" : ""}`}
+              >
+                <VoicePlayer memo={voice} />
+                <Button
+                  className="btn-ghost btn-sm min-h-12"
+                  aria-label={t(voiceRemoved ? "notes.keepVoice" : "notes.removeVoice")}
+                  onPress={() =>
+                    setRemoveIds((ids) =>
+                      voiceRemoved ? ids.filter((id) => id !== voice.id) : [...ids, voice.id],
+                    )
+                  }
+                >
+                  {t(voiceRemoved ? "notes.undoRemove" : "notes.remove")}
+                </Button>
+              </div>
+            )}
+            {/* One memo per note: a new one can go in once the old one is marked for removal. */}
+            {(!voice || voiceRemoved) && <VoiceRecorder value={addVoice} onChange={setAddVoice} />}
             {canWriteCustomer && <VisibilitySwitch value={visibility} onChange={setVisibility} />}
             {progress !== null && <UploadProgress value={progress} />}
             <div className="modal-action">

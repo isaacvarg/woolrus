@@ -34,6 +34,14 @@ export const NOTE_MAX_PHOTOS = 10;
 export const NOTE_REQUEST_MAX_BYTES = 160 * 1024 * 1024;
 /** What the server accepts as a photo, judged by content (`errors.notes.fileType`). */
 export const NOTE_PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
+/** A voice memo's length, as the recorder measured it: the recorder stops at the cap. */
+export const NOTE_VOICE_MAX_MS = 5 * 60 * 1000;
+
+/**
+ * Whole milliseconds, 1 ms to 5 minutes. Coerced because multipart over `/api/v1` sends every
+ * field as text. The server only range-checks it.
+ */
+export const VoiceDurationMs = z.coerce.number().int().min(1).max(NOTE_VOICE_MAX_MS);
 
 export const AttachmentKind = z.enum(["IMAGE", "VOICE"]);
 export type AttachmentKind = z.infer<typeof AttachmentKind>;
@@ -84,6 +92,9 @@ export const CreateNoteInput = z.object({
   target: NoteTargetInput.default({ kind: "order" }),
   /** Sent as multipart. Checked, resized and stripped of metadata on the server. */
   photos: z.array(z.file()).optional(),
+  /** One voice memo, stored as sent once its container is recognized; needs `voiceDurationMs`. */
+  voice: z.file().optional(),
+  voiceDurationMs: VoiceDurationMs.optional(),
 });
 export type CreateNoteInput = z.infer<typeof CreateNoteInput>;
 
@@ -92,6 +103,9 @@ export const UpdateNoteInput = z.object({
   content: NoteContent.optional(),
   visibility: NoteVisibility.optional(),
   addPhotos: z.array(z.file()).optional(),
+  /** A note keeps at most one memo: to replace it, remove the old one in the same edit. */
+  addVoice: z.file().optional(),
+  voiceDurationMs: VoiceDurationMs.optional(),
   removeAttachmentIds: z.array(Id).optional(),
 });
 export type UpdateNoteInput = z.infer<typeof UpdateNoteInput>;

@@ -372,7 +372,17 @@
     "photoOf": "Foto {index} de {count}",
     "previousPhoto": "Anterior",
     "nextPhoto": "Siguiente",
-    "closePhoto": "Cerrar"
+    "closePhoto": "Cerrar",
+    "recordVoice": "Grabar voz",
+    "stopRecording": "Detener",
+    "recording": "Grabando {elapsed} de {max}",
+    "newVoice": "Nota de voz para añadir",
+    "discardVoice": "Descartar nota de voz",
+    "voiceMemo": "Nota de voz, {duration}",
+    "removeVoice": "Quitar nota de voz",
+    "keepVoice": "Conservar nota de voz",
+    "voiceCapped": "La grabación se detuvo al llegar al límite de 5 minutos.",
+    "micUnavailable": "No se puede usar el micrófono. Permítelo para este sitio e inténtalo de nuevo."
   },
   "status": {
     "PENDING": "Pendiente",
@@ -546,9 +556,10 @@
       "alreadySent": "Esta nota ya está en WooCommerce, así que no se puede cambiar.",
       "targetMismatch": "Esa línea, paquete o incidencia no es de este pedido.",
       "fileTooLarge": "Ese archivo es demasiado grande. Las fotos y notas de voz pueden tener hasta 15 MB cada una.",
-      "fileType": "Las fotos deben ser JPEG, PNG o WebP. No se pueden adjuntar otros archivos.",
+      "fileType": "Las fotos deben ser JPEG, PNG o WebP, y las notas de voz WebM, Ogg, MP4 o MP3. No se pueden adjuntar otros archivos.",
       "imageTooLarge": "Esa foto tiene demasiados píxeles (más de 40 megapíxeles). Tómala con menor resolución.",
-      "tooManyPhotos": "Una nota puede tener como máximo 10 fotos."
+      "tooManyPhotos": "Una nota puede tener como máximo 10 fotos.",
+      "tooManyVoiceMemos": "Una nota puede tener una sola nota de voz. Quita la anterior para grabar otra."
     }
   },
   "emails": {

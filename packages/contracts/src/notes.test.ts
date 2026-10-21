@@ -41,6 +41,24 @@ describe("CreateNoteInput", () => {
     expect(CreateNoteInput.safeParse({ ...base, visibility: "CUSTOMER" }).success).toBe(true);
     expect(CreateNoteInput.safeParse({ ...base, visibility: "PUBLIC" }).success).toBe(false);
   });
+
+  it("range-checks a voice memo's duration, 1 ms to 5 minutes, from a form field too", () => {
+    const voice = new File([new Uint8Array([0x1a, 0x45, 0xdf, 0xa3])], "voice.webm");
+    const base = { idempotencyKey: "note-key-1", orderId, content: "", voice };
+    const parse = (voiceDurationMs: unknown) =>
+      CreateNoteInput.safeParse({ ...base, voiceDurationMs });
+    expect(parse(1).success).toBe(true);
+    expect(parse(300_000).success).toBe(true);
+    // Multipart over /api/v1 sends every field as text.
+    expect(parse("20500").data?.voiceDurationMs).toBe(20_500);
+    expect(toFieldErrors(parse(0).error?.issues ?? [])).toEqual({
+      voiceDurationMs: "errors.field.tooSmall",
+    });
+    expect(toFieldErrors(parse(300_001).error?.issues ?? [])).toEqual({
+      voiceDurationMs: "errors.field.tooBig",
+    });
+    expect(parse(1.5).success).toBe(false);
+  });
 });
 
 describe("UpdateNoteInput", () => {
@@ -48,6 +66,17 @@ describe("UpdateNoteInput", () => {
     expect(UpdateNoteInput.parse({ id: orderId, visibility: "CUSTOMER" })).toEqual({
       id: orderId,
       visibility: "CUSTOMER",
+    });
+  });
+
+  it("takes a voice memo with its duration", () => {
+    const addVoice = new File([new Uint8Array([0x4f, 0x67, 0x67, 0x53])], "voice.ogg");
+    expect(UpdateNoteInput.safeParse({ id: orderId, addVoice, voiceDurationMs: 0 }).success).toBe(
+      false,
+    );
+    expect(UpdateNoteInput.parse({ id: orderId, addVoice, voiceDurationMs: 1000 })).toMatchObject({
+      addVoice,
+      voiceDurationMs: 1000,
     });
   });
 });

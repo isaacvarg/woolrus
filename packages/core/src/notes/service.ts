@@ -1,9 +1,10 @@
-import type {
-  CreateNoteInput,
-  NoteAttachment as NoteAttachmentDto,
-  Note as NoteDto,
-  NoteVisibility,
-  UpdateNoteInput,
+import {
+  type CreateNoteInput,
+  NOTE_VOICE_MAX_MS,
+  type NoteAttachment as NoteAttachmentDto,
+  type Note as NoteDto,
+  type NoteVisibility,
+  type UpdateNoteInput,
 } from "@woolrus/contracts";
 import type { Db, DbTx, NoteAttachment, Prisma } from "@woolrus/db";
 import type { ObjectStorage } from "../adapters/storage/storage";
@@ -18,6 +19,7 @@ import {
   NOTE_FILE_LIMITS,
   type PreparedAttachment,
   preparePhotos,
+  prepareVoice,
   uploadAll,
 } from "./media";
 import { resolveTarget, targetInclude, targetOf } from "./targets";
@@ -91,6 +93,44 @@ function assertPhotoCount(count: number): void {
       photos: "errors.notes.tooManyPhotos",
     });
   }
+}
+
+/** One voice memo per note (SPEC-notes "Limits"); `field` is the form field that added one. */
+function assertVoiceCount(count: number, field: string): void {
+  if (count > 1) {
+    throw new AppError("BAD_REQUEST", "errors.notes.tooManyVoiceMemos", {
+      [field]: "errors.notes.tooManyVoiceMemos",
+    });
+  }
+}
+
+/**
+ * The recorder's duration goes with a memo and only with one: whole milliseconds, 1 ms to
+ * 5 minutes. The contract coerces and checks it too; core doesn't rely on that.
+ */
+function assertVoiceDuration(voice: File | undefined, durationMs: number | undefined): void {
+  const invalid = (key: "required" | "invalid" | "tooSmall" | "tooBig") =>
+    new AppError("BAD_REQUEST", "errors.validation", { voiceDurationMs: `errors.field.${key}` });
+  if (durationMs === undefined) {
+    if (voice) throw invalid("required");
+    return;
+  }
+  if (!voice || !Number.isInteger(durationMs)) throw invalid("invalid");
+  if (durationMs < 1) throw invalid("tooSmall");
+  if (durationMs > NOTE_VOICE_MAX_MS) throw invalid("tooBig");
+}
+
+/** The memo first: it's a cheap check, and a refused one shouldn't wait for photos to resize. */
+async function prepareFiles(
+  noteId: string,
+  photos: File[],
+  voice: { file: File | undefined; durationMs: number | undefined; field: string },
+): Promise<PreparedAttachment[]> {
+  const memo =
+    voice.file && voice.durationMs !== undefined
+      ? [await prepareVoice(noteId, voice.file, voice.durationMs, voice.field)]
+      : [];
+  return [...memo, ...(await preparePhotos(noteId, photos))];
 }
 
 /** Served by the app (`/api/attachments/{id}`), never by a storage URL (decisions.md). */
@@ -219,8 +259,9 @@ export async function createNote(
   assertCan(actor, "note.write");
   assertCanWriteVisibility(actor, input.visibility);
   const photos = input.photos ?? [];
-  const content = cleanContent(input.content, photos.length);
+  const content = cleanContent(input.content, photos.length + (input.voice ? 1 : 0));
   assertPhotoCount(photos.length);
+  assertVoiceDuration(input.voice, input.voiceDurationMs);
   // A replay returns the stored note, so it shouldn't process or upload anything.
   const replay = await db.idempotentRequest.findUnique({
     where: { key: input.idempotencyKey },
@@ -230,7 +271,14 @@ export async function createNote(
 
   return withUploads(
     storage,
-    () => (replay ? Promise.resolve([]) : preparePhotos(noteId, photos)),
+    () =>
+      replay
+        ? Promise.resolve([])
+        : prepareFiles(noteId, photos, {
+            file: input.voice,
+            durationMs: input.voiceDurationMs,
+            field: "voice",
+          }),
     (prepared) =>
       db.$transaction(async (tx) => {
         // Only the id is stored for replays: the stored JSON would turn the dates into strings.
@@ -287,14 +335,17 @@ type NoteWithAttachments = Prisma.NoteGetPayload<{ include: { attachments: true 
  */
 function planUpdate(actor: Actor, existing: NoteWithAttachments, input: UpdateNoteInput) {
   assertMayEdit(actor, existing);
+  assertVoiceDuration(input.addVoice, input.voiceDurationMs);
   const removeIds = new Set(input.removeAttachmentIds ?? []);
   const known = new Set(existing.attachments.map((a) => a.id));
   if ([...removeIds].some((id) => !known.has(id))) throw notFound();
   const kept = existing.attachments.filter((a) => !removeIds.has(a.id));
-  const addCount = input.addPhotos?.length ?? 0;
-  assertPhotoCount(kept.filter((a) => a.kind === "IMAGE").length + addCount);
+  const addPhotos = input.addPhotos?.length ?? 0;
+  const addVoice = input.addVoice ? 1 : 0;
+  assertPhotoCount(kept.filter((a) => a.kind === "IMAGE").length + addPhotos);
+  assertVoiceCount(kept.filter((a) => a.kind === "VOICE").length + addVoice, "addVoice");
   const next = {
-    content: cleanContent(input.content ?? existing.content, kept.length + addCount),
+    content: cleanContent(input.content ?? existing.content, kept.length + addPhotos + addVoice),
     visibility: input.visibility ?? existing.visibility,
   };
   // Editing a customer note is writing to the customer too, not only switching to it.
@@ -319,7 +370,12 @@ export async function updateNote(
 
   return withUploads(
     storage,
-    () => preparePhotos(input.id, input.addPhotos ?? []),
+    () =>
+      prepareFiles(input.id, input.addPhotos ?? [], {
+        file: input.addVoice,
+        durationMs: input.voiceDurationMs,
+        field: "addVoice",
+      }),
     (prepared) =>
       db.$transaction(async (tx) => {
         const existing = await findNote(tx);

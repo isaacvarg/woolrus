@@ -5,6 +5,14 @@ import { createOrder, deleteCreatedOrders } from "./support/orders";
 
 test.afterAll(deleteCreatedOrders);
 
+// Chromium's fake microphone (a beep) stands in for the tablet's, granted without a prompt.
+test.use({
+  launchOptions: {
+    args: ["--use-fake-device-for-media-stream", "--use-fake-ui-for-media-stream"],
+  },
+  permissions: ["microphone"],
+});
+
 test("QA writes a customer-visible note, sees the Customer badge, and edits it", async ({
   page,
   context,
@@ -98,8 +106,9 @@ test("notes need a signed-in caller", async ({ request }) => {
   expect((await request.get(`/api/v1/orders/${order.id}/notes`)).status()).toBe(401);
 });
 
-test("a picker notes a line from its row, sees the indicators, and deleting clears them", async ({
+test("a picker notes a line with a photo and a voice memo, sees the indicators, and deleting clears them", async ({
   page,
+  browser,
 }, testInfo) => {
   test.skip(testInfo.project.name !== "tablet", "the floor journey");
   const customerName = `E2E ${crypto.randomUUID()}`;
@@ -113,13 +122,47 @@ test("a picker notes a line from its row, sees the indicators, and deleting clea
   // Opened from the line, the picker is preset to it.
   await expect(dialog.getByRole("combobox", { name: "On" })).toHaveValue(/^item:/);
   await dialog.getByRole("textbox", { name: "New note" }).fill("Jar lid cracked");
+  await choosePhotos(page, dialog, PHOTOS.slice(0, 1));
+  await dialog.getByRole("button", { name: "Record voice" }).click();
+  await expect(dialog.getByRole("timer")).toContainText("Recording 0:01 of 5:00");
+  await dialog.getByRole("button", { name: "Stop" }).click();
+  // Replay before saving, or throw it away.
+  await expect(dialog.getByRole("button", { name: "Discard voice memo" })).toBeVisible();
+  await expect(dialog.locator("audio")).toHaveAttribute("aria-label", "Voice memo to add");
   await dialog.getByRole("button", { name: "Add note" }).click();
   await expect(dialog).toBeHidden();
 
   await expect(line.getByRole("img", { name: "1 note" })).toBeVisible();
   const notes = page.getByRole("region", { name: "Notes" });
   const group = notes.getByRole("region", { name: "Line: E2E item ×2" });
-  await expect(group.getByTestId("note")).toContainText("Jar lid cracked");
+  const note = group.getByTestId("note");
+  await expect(note).toContainText("Jar lid cracked");
+
+  await note.getByRole("list", { name: "Photos" }).getByRole("button").click();
+  const lightbox = page.getByRole("dialog", { name: "Photo 1 of 1" });
+  await loaded(lightbox.getByRole("img"));
+  await page.getByRole("button", { name: "Close" }).click();
+
+  const audio = note.locator("audio");
+  await expect(audio).toHaveAttribute("aria-label", /^Voice memo, 0:0[1-9]$/);
+  await expect
+    .poll(() => audio.evaluate((el: HTMLAudioElement) => el.readyState))
+    .toBeGreaterThanOrEqual(HAVE_METADATA);
+  // Seeking asks for byte ranges.
+  const src = (await audio.getAttribute("src")) ?? "";
+  const ranged = await page.request.get(src, { headers: { Range: "bytes=0-99" } });
+  expect(ranged.status()).toBe(206);
+  expect(ranged.headers()["content-type"]).toBe("audio/webm");
+  expect((await ranged.body()).length).toBe(100);
+
+  const otherContext = await browser.newContext();
+  const otherPage = await otherContext.newPage();
+  await signInAs(otherPage, ["PICKER"]);
+  await otherPage.goto(`/orders/${order.id}`);
+  const theirs = otherPage.getByTestId("note");
+  await expect(theirs).toContainText("Jar lid cracked");
+  await expect(theirs.getByRole("button", { name: "Edit" })).toHaveCount(0);
+  await otherContext.close();
   await notes.getByRole("radio", { name: "Order" }).click();
   await expect(notes.getByText("No notes here.")).toBeVisible();
   await notes.getByRole("radio", { name: "Lines" }).click();
@@ -173,6 +216,8 @@ async function choosePhotos(page: Page, scope: ReturnType<Page["getByRole"]>, fi
   await (await chooser).setFiles(files);
 }
 
+const HAVE_METADATA = 1;
+
 const loaded = (img: ReturnType<Page["locator"]>) =>
   expect.poll(() => img.evaluate((el: HTMLImageElement) => el.complete && el.naturalWidth > 0));
 
@@ -192,7 +237,7 @@ test("a picker attaches photos on a tablet, opens them in the lightbox and remov
   await choosePhotos(page, notes, [
     { name: "scan.pdf", mimeType: "application/pdf", buffer: Buffer.from("%PDF-1.7") },
   ]);
-  await expect(page.getByText("Photos must be JPEG, PNG or WebP.", { exact: false })).toBeVisible();
+  await expect(page.getByText("Photos must be JPEG, PNG or WebP,", { exact: false })).toBeVisible();
 
   await choosePhotos(page, notes);
   await expect(notes.getByRole("list", { name: "Photos to add" }).getByRole("img")).toHaveCount(2);

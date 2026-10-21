@@ -60,6 +60,50 @@ export function sniffImage(bytes: Uint8Array): ImageFormat | null {
   return null;
 }
 
+export type AudioFormat = { contentType: string; ext: string };
+
+/**
+ * ISO BMFF brands an audio recording carries: M4A, generic MP4 (Safari's MediaRecorder writes
+ * `iso5`/`mp42`) and 3GP. Image brands like `heic` or `avif` share `ftyp` and stay out.
+ */
+const MP4_BRANDS = new Set([
+  "M4A ",
+  "M4B ",
+  "mp41",
+  "mp42",
+  "isom",
+  "iso2",
+  "iso4",
+  "iso5",
+  "iso6",
+  "dash",
+  "3gp4",
+  "3gp5",
+  "3gp6",
+]);
+
+/** An MPEG audio frame header: 11 sync bits, then a version and a layer that aren't reserved. */
+const isMpegFrame = (bytes: Uint8Array) => {
+  const b = bytes[1] ?? 0;
+  return bytes[0] === 0xff && (b & 0xe0) === 0xe0 && ((b >> 3) & 3) !== 1 && ((b >> 1) & 3) !== 0;
+};
+
+/** The voice containers SPEC-notes accepts, by magic bytes. The bytes are stored as they are. */
+export function sniffAudio(bytes: Uint8Array): AudioFormat | null {
+  // EBML: what Android Chrome's MediaRecorder writes.
+  const ebml = [0x1a, 0x45, 0xdf, 0xa3];
+  if (startsWith(bytes, ebml)) return { contentType: "audio/webm", ext: "webm" };
+  if (startsWith(bytes, ascii("OggS"))) return { contentType: "audio/ogg", ext: "ogg" };
+  if (startsWith(bytes, ascii("ftyp"), 4)) {
+    const brand = String.fromCharCode(...bytes.subarray(8, 12));
+    return MP4_BRANDS.has(brand) ? { contentType: "audio/mp4", ext: "m4a" } : null;
+  }
+  if (startsWith(bytes, ascii("ID3")) || isMpegFrame(bytes)) {
+    return { contentType: "audio/mpeg", ext: "mp3" };
+  }
+  return null;
+}
+
 /**
  * Checks a photo without decoding its pixels: size, type by magic bytes (and that sharp reads the
  * same format from the header), and pixel count. `field` names the form field for the error.
@@ -134,6 +178,37 @@ export async function preparePhotos(noteId: string, photos: File[]): Promise<Pre
   const prepared: PreparedAttachment[] = [];
   for (const { bytes, name } of checked) prepared.push(await processPhoto(noteId, bytes, name));
   return prepared;
+}
+
+/**
+ * A voice memo is checked (size, container by magic bytes) and stored unchanged with the detected
+ * type. `durationMs` comes from the recorder; the service range-checks it.
+ */
+export async function prepareVoice(
+  noteId: string,
+  voice: File,
+  durationMs: number,
+  field = "voice",
+): Promise<PreparedAttachment> {
+  if (voice.size > NOTE_FILE_LIMITS.fileBytes) throw fileError("errors.notes.fileTooLarge", field);
+  const bytes = new Uint8Array(await voice.arrayBuffer());
+  const format = sniffAudio(bytes);
+  if (!format) throw fileError("errors.notes.fileType", field);
+  const id = uuidv7();
+  const storageKey = attachmentKey(noteId, id, format.ext);
+  return {
+    id,
+    kind: "VOICE",
+    storageKey,
+    thumbnailKey: null,
+    contentType: format.contentType,
+    fileName: voice.name.slice(0, 255),
+    sizeBytes: bytes.length,
+    width: null,
+    height: null,
+    durationMs,
+    files: [{ key: storageKey, body: bytes, contentType: format.contentType }],
+  };
 }
 
 /** Puts every object; on a failure, deletes what got there and rethrows. */
