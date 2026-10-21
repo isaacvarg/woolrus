@@ -2,7 +2,7 @@
 
 **Milestone:** M2 · **Depends on:** `workflow` · **Used by:** `picking`, `packing`, `qa` (note composer in their
 drawers), `exceptions` (notes on quality issues and voids), `shipping` (pushes notes to WooCommerce), `returns`,
-`operations` (storage health, PII purge) · **State:** planned ·
+`operations` (storage health, PII purge) · **State:** done ·
 **Issue:** [#22](https://github.com/isaacvarg/woolrus/issues/22)
 
 Project-wide commands, structure, code style, testing levels and boundaries are in [`../../SPEC.md`](../../SPEC.md);
