@@ -36,12 +36,18 @@ type Recording = { recorder: MediaRecorder; stream: MediaStream; startedAt: numb
 export function VoiceRecorder({
   value,
   onChange,
+  onRecordingChange,
 }: {
   value: VoiceMemo | null;
   onChange: (memo: VoiceMemo | null) => void;
+  /** While it's true the form shouldn't submit: the memo isn't there until recording stops. */
+  onRecordingChange?: (recording: boolean) => void;
 }) {
   const t = useTranslations();
   const [recording, setRecording] = useState<Recording | null>(null);
+  const onRecordingChangeRef = useRef(onRecordingChange);
+  onRecordingChangeRef.current = onRecordingChange;
+  useEffect(() => onRecordingChangeRef.current?.(recording !== null), [recording]);
   const [elapsed, setElapsed] = useState(0);
   const recordingRef = useRef<Recording | null>(null);
   // Called from the recorder's events, which outlive the render that started it.

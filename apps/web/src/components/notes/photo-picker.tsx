@@ -91,7 +91,7 @@ function PickedPhoto({ file, onRemove }: { file: File; onRemove: () => void }) {
       {/* biome-ignore lint/performance/noImgElement: a local blob preview, nothing to optimize */}
       <img src={url} alt={file.name} className="size-20 rounded-box object-cover" />
       <Button
-        className="btn-circle btn-sm absolute -top-2 -right-2"
+        className="btn-circle btn-sm absolute -top-3 -right-3 min-h-12 min-w-12"
         aria-label={t("notes.removePhoto", { name: file.name })}
         onPress={onRemove}
       >

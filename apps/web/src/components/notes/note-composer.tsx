@@ -83,9 +83,11 @@ export function NoteComposer({
   const pickerId = useId();
   const [content, setContent] = useState("");
   const [visibility, setVisibility] = useState<NoteVisibility>("INTERNAL");
-  const [target, setTarget] = useState(() => targetKey(initialTarget));
+  // The target itself, not a picker key: opened from a line with no picker, it stays that line.
+  const [target, setTarget] = useState<NoteTargetInput>(initialTarget);
   const [photos, setPhotos] = useState<File[]>([]);
   const [voice, setVoice] = useState<VoiceMemo | null>(null);
+  const [recording, setRecording] = useState(false);
   const fileCount = photos.length + (voice ? 1 : 0);
   const [progress, setProgress] = useState<number | null>(null);
   // One key per draft: a retry after a dropped response returns the note instead of adding twice.
@@ -99,7 +101,7 @@ export function NoteComposer({
           orderId,
           content,
           visibility,
-          target: targets.find((o) => targetKey(o.target) === target)?.target ?? { kind: "order" },
+          target,
           photos,
           ...(voice ? { voice: voice.file, voiceDurationMs: voice.durationMs } : {}),
         },
@@ -152,8 +154,12 @@ export function NoteComposer({
           <select
             id={pickerId}
             className="select select-lg w-full"
-            value={target}
-            onChange={(event) => setTarget(event.target.value)}
+            value={targetKey(target)}
+            onChange={(event) =>
+              setTarget(
+                targets.find((o) => targetKey(o.target) === event.target.value)?.target ?? target,
+              )
+            }
           >
             {targets.map((option) => (
               <option key={targetKey(option.target)} value={targetKey(option.target)}>
@@ -164,10 +170,15 @@ export function NoteComposer({
         </div>
       )}
       <PhotoPicker photos={photos} onChange={setPhotos} />
-      <VoiceRecorder value={voice} onChange={setVoice} />
+      <VoiceRecorder value={voice} onChange={setVoice} onRecordingChange={setRecording} />
       {canWriteCustomer && <VisibilitySwitch value={visibility} onChange={setVisibility} />}
       {progress !== null && <UploadProgress value={progress} />}
-      <Button type="submit" className="btn-primary btn-lg" isPending={create.isPending}>
+      <Button
+        type="submit"
+        className="btn-primary btn-lg"
+        isPending={create.isPending}
+        isDisabled={recording}
+      >
         {t("notes.add")}
       </Button>
     </Form>

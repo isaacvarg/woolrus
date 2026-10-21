@@ -166,6 +166,7 @@ function EditNote({ note, canWriteCustomer }: { note: Note; canWriteCustomer: bo
   const [visibility, setVisibility] = useState<NoteVisibility>(note.visibility);
   const [addPhotos, setAddPhotos] = useState<File[]>([]);
   const [addVoice, setAddVoice] = useState<VoiceMemo | null>(null);
+  const [recording, setRecording] = useState(false);
   const [removeIds, setRemoveIds] = useState<string[]>([]);
   const [progress, setProgress] = useState<number | null>(null);
   const kept = note.attachments.filter((a) => !removeIds.includes(a.id));
@@ -291,14 +292,25 @@ function EditNote({ note, canWriteCustomer }: { note: Note; canWriteCustomer: bo
               </div>
             )}
             {/* One memo per note: a new one can go in once the old one is marked for removal. */}
-            {(!voice || voiceRemoved) && <VoiceRecorder value={addVoice} onChange={setAddVoice} />}
+            {(!voice || voiceRemoved) && (
+              <VoiceRecorder
+                value={addVoice}
+                onChange={setAddVoice}
+                onRecordingChange={setRecording}
+              />
+            )}
             {canWriteCustomer && <VisibilitySwitch value={visibility} onChange={setVisibility} />}
             {progress !== null && <UploadProgress value={progress} />}
             <div className="modal-action">
               <Button className="btn-ghost" onPress={close}>
                 {t("common.cancel")}
               </Button>
-              <Button type="submit" className="btn-primary" isPending={update.isPending}>
+              <Button
+                type="submit"
+                className="btn-primary"
+                isPending={update.isPending}
+                isDisabled={recording}
+              >
                 {t("common.save")}
               </Button>
             </div>
