@@ -1,10 +1,10 @@
 import { expect, test } from "@playwright/test";
 
-test("health check reports the database, the encryption key and email", async ({ request }) => {
+test("health check reports the database, encryption, storage and email", async ({ request }) => {
   const response = await request.get("/api/health");
   expect(response.ok()).toBe(true);
   const body = await response.json();
-  expect(body).toMatchObject({ checks: { database: "ok", encryption: "ok" } });
+  expect(body).toMatchObject({ checks: { database: "ok", encryption: "ok", storage: "ok" } });
   // Dev and CI have no Resend key; either way it doesn't fail the check.
   expect(["ok", "unconfigured"]).toContain(body.checks.email);
 });

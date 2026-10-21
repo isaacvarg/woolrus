@@ -1,5 +1,7 @@
 import {
   configuredStore,
+  createS3Storage,
+  ensureBucketOnFirstUse,
   getEmailSender,
   JOBS_SCHEMA,
   type JobPayloads,
@@ -9,6 +11,7 @@ import {
   queues,
   recomputePriorities,
   runEmailJob,
+  s3ConfigFromEnv,
   syncProducts,
 } from "@woolrus/core";
 import { db } from "@woolrus/db";
@@ -24,6 +27,17 @@ const boss = new PgBoss({ connectionString, schema: JOBS_SCHEMA });
 boss.on("error", (err) => log.error({ err }, "pg-boss error"));
 
 await boss.start();
+
+// The attachments bucket is created on start, so a fresh install needs no manual step. Storage
+// being down mustn't stop order sync: log it, and the first storage job tries again.
+const storageLog = createLogger({ module: "storage" });
+const storage = ensureBucketOnFirstUse(createS3Storage(s3ConfigFromEnv()));
+await storage
+  .ensureBucket()
+  .then(() => storageLog.info("storage bucket ready"))
+  .catch((err: unknown) =>
+    storageLog.error({ err }, "storage bucket not ready; retrying on first use"),
+  );
 
 for (const name of Object.values(queues)) {
   await boss.createQueue(name, queueOptions[name]);

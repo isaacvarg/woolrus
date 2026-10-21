@@ -94,7 +94,9 @@ positive quantities and dimensions, single-row settings. **Keep them when editin
   `secret.clear`, reason `urlChanged`), so keys never follow a URL to another server. A path-only change, or a
   first URL where there was none, keeps them.
 - **ShipStation:** API v2. **Lumexia:** its REST API with a scoped API key. **Storage:** S3-compatible (RustFS).
-  Each sits behind an adapter interface in core so it can be swapped.
+  Each sits behind an adapter interface in core so it can be swapped. Storage is reached with `aws4fetch`-signed
+  `fetch` (path-style, `S3_*` env); its bucket is created private if missing when the worker starts and on first use
+  in web, and health reports `storage`.
 - **Email provider: Resend** (2026-10-20, SPEC-identity decision 1), through its HTTP API with `fetch`, no SDK:
   `POST https://api.resend.com/emails` with `Idempotency-Key`. Behind the `EmailSender` adapter in
   `packages/core/src/adapters/email/`; configured by `Settings.emailFrom` and the `resendApiKey` secret. Without a
@@ -114,4 +116,3 @@ positive quantities and dimensions, single-row settings. **Keep them when editin
   bundle/composite line items before modelling them (we don't know yet whether ACF matters for orders).
 - **Google / Discord OAuth apps** need creating; redirect URI `https://<host>/api/auth/callback/<provider>`.
 - **GHCR visibility:** if the repo is private, the host needs `docker login ghcr.io` with a read-only token.
-- **Storage bucket** is not created automatically yet; the storage adapter should ensure it on startup.

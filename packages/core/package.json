@@ -15,6 +15,7 @@
     "@woolrus/contracts": "workspace:*",
     "@woolrus/db": "workspace:*",
     "@woolrus/i18n": "workspace:*",
+    "aws4fetch": "1.0.20",
     "pg-boss": "12.38.0",
     "zod": "4.6.7"
   },
