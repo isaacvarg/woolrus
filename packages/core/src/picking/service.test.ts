@@ -3,8 +3,17 @@ import pg from "pg";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { createActor, resetDb, testDb } from "../../test/db";
 import { createOrder, type LineSpec } from "../../test/factories";
+import { evaluateGate, loadGateSnapshot } from "../workflow/gates";
 import { ORDER_CHANGED_CHANNEL } from "../workflow/notify";
-import { getPickView, pickLine, unpickLine } from "./service";
+import { getOrder } from "../workflow/queries";
+import {
+  getPickView,
+  markOutOfStock,
+  pickLine,
+  reconcilePick,
+  substitute,
+  unpickLine,
+} from "./service";
 
 const db: Db = testDb();
 afterAll(() => db.$disconnect());
@@ -306,5 +315,334 @@ describe("getPickView", () => {
     const view = await getPickView(db, picker, { orderId: order.id });
 
     expect(view.customerNote).toBe("Gift wrap");
+  });
+});
+
+let keySeq = 0;
+const key = () => {
+  keySeq += 1;
+  return `pick-key-${keySeq}`;
+};
+
+const lineNotes = (orderItemId: string) =>
+  db.note.findMany({ where: { orderItemId }, orderBy: { createdAt: "asc" } });
+
+const pickedGate = async (orderId: string) =>
+  evaluateGate("picked", await loadGateSnapshot(db, orderId));
+
+describe("markOutOfStock", () => {
+  it("records what was found and writes one internal note on the line", async () => {
+    const { picker, item } = await picking([{ name: "Clay mask", quantity: 3 }]);
+
+    const result = await markOutOfStock(db, picker, {
+      itemId: item.id,
+      foundQuantity: 1,
+      note: "Only one on the shelf",
+      idempotencyKey: key(),
+    });
+
+    expect(result.line).toMatchObject({ pickStatus: "OUT_OF_STOCK", pickedQuantity: 1 });
+    expect(result).toMatchObject({ done: 0, total: 1 });
+    expect(await lineRow(item.id)).toMatchObject({
+      pickStatus: "OUT_OF_STOCK",
+      pickedQuantity: 1,
+      pickedById: picker.userId,
+    });
+    expect(await lineNotes(item.id)).toMatchObject([
+      { content: "Only one on the shelf", visibility: "INTERNAL", authorId: picker.userId },
+    ]);
+    expect(result.line.noteCount).toBe(1);
+    const actions = (await db.auditEvent.findMany({ where: { entityId: item.id } })).map(
+      (a) => a.action,
+    );
+    expect(actions).toEqual(["pick.markOutOfStock"]);
+  });
+
+  it("writes no second note on a replay of the same key", async () => {
+    const { picker, item } = await picking([{ quantity: 2 }]);
+    const input = { itemId: item.id, foundQuantity: 0, note: "None left", idempotencyKey: key() };
+
+    await markOutOfStock(db, picker, input);
+    const replay = await markOutOfStock(db, picker, input);
+
+    expect(replay.line).toMatchObject({ pickStatus: "OUT_OF_STOCK", pickedQuantity: 0 });
+    expect(await lineNotes(item.id)).toHaveLength(1);
+    expect(await db.auditEvent.count({ where: { entityId: item.id } })).toBe(1);
+  });
+
+  it("blocks the picked gate until the line is picked or substituted", async () => {
+    const { picker, order, item } = await picking([{ name: "Clay mask", quantity: 2 }]);
+    await markOutOfStock(db, picker, {
+      itemId: item.id,
+      foundQuantity: 0,
+      note: "Gone",
+      idempotencyKey: key(),
+    });
+
+    expect(await pickedGate(order.id)).toEqual([
+      { messageKey: "errors.workflow.gate.lineOutOfStock", params: { line: "Clay mask" } },
+    ]);
+
+    await substitute(db, picker, {
+      itemId: item.id,
+      substitute: "16 oz jar",
+      idempotencyKey: key(),
+    });
+    expect(await pickedGate(order.id)).toEqual([]);
+  });
+
+  it("is replaced by a later pick", async () => {
+    const { picker, order, item } = await picking([{ quantity: 2 }]);
+    await markOutOfStock(db, picker, {
+      itemId: item.id,
+      foundQuantity: 1,
+      note: "One short",
+      idempotencyKey: key(),
+    });
+
+    await pickLine(db, picker, { itemId: item.id });
+
+    expect(await lineRow(item.id)).toMatchObject({ pickStatus: "PICKED", pickedQuantity: 2 });
+    expect(await pickedGate(order.id)).toEqual([]);
+  });
+
+  describe("refuses, changing nothing,", () => {
+    const unchanged = async (itemId: string) => {
+      expect(await lineRow(itemId)).toMatchObject({ pickStatus: "PENDING", pickedQuantity: 0 });
+      expect(await lineNotes(itemId)).toHaveLength(0);
+    };
+
+    it("when found is the whole active quantity", async () => {
+      const { picker, item } = await picking([{ quantity: 3, voids: [{ quantity: 1 }] }]);
+
+      await expect(
+        markOutOfStock(db, picker, {
+          itemId: item.id,
+          foundQuantity: 2,
+          note: "x",
+          idempotencyKey: key(),
+        }),
+      ).rejects.toMatchObject({
+        kind: "BAD_REQUEST",
+        fields: { foundQuantity: "errors.field.tooBig" },
+      });
+      await unchanged(item.id);
+    });
+
+    it("when the actor doesn't hold the claim", async () => {
+      const { item } = await picking();
+      const other = await createActor(db, ["PICKER"]);
+
+      await expect(
+        markOutOfStock(db, other, {
+          itemId: item.id,
+          foundQuantity: 0,
+          note: "x",
+          idempotencyKey: key(),
+        }),
+      ).rejects.toMatchObject({ messageKey: "errors.picking.claimRequired" });
+      await unchanged(item.id);
+    });
+
+    it("when the order isn't in Picking", async () => {
+      const { picker, order, item } = await picking();
+      await db.order.update({ where: { id: order.id }, data: { status: "PACKING" } });
+
+      await expect(
+        markOutOfStock(db, picker, {
+          itemId: item.id,
+          foundQuantity: 0,
+          note: "x",
+          idempotencyKey: key(),
+        }),
+      ).rejects.toMatchObject({ messageKey: "errors.picking.notPicking" });
+      await unchanged(item.id);
+    });
+
+    it("for a line nobody picks", async () => {
+      const { picker, item } = await picking([{ physical: false }]);
+
+      await expect(
+        markOutOfStock(db, picker, {
+          itemId: item.id,
+          foundQuantity: 0,
+          note: "x",
+          idempotencyKey: key(),
+        }),
+      ).rejects.toMatchObject({ messageKey: "errors.picking.lineNotPickable" });
+      await unchanged(item.id);
+    });
+
+    it("for someone who can't pick", async () => {
+      const { item } = await picking();
+      const packer = await createActor(db, ["PACKER"]);
+
+      await expect(
+        markOutOfStock(db, packer, {
+          itemId: item.id,
+          foundQuantity: 0,
+          note: "x",
+          idempotencyKey: key(),
+        }),
+      ).rejects.toMatchObject({ kind: "FORBIDDEN" });
+      await unchanged(item.id);
+    });
+  });
+});
+
+describe("substitute", () => {
+  it("counts the line as picked, keeps what went in and notes it on the line", async () => {
+    const { picker, item } = await picking([{ quantity: 2 }]);
+
+    const result = await substitute(db, picker, {
+      itemId: item.id,
+      substitute: "One 16 oz jar",
+      note: "Customer asked for fewer jars",
+      idempotencyKey: key(),
+    });
+
+    expect(result.line).toMatchObject({
+      pickStatus: "SUBSTITUTED",
+      pickedQuantity: 2,
+      substitutionNote: "One 16 oz jar",
+    });
+    expect(result).toMatchObject({ done: 1, total: 1 });
+    expect(await lineNotes(item.id)).toMatchObject([
+      {
+        content: "Substituted: One 16 oz jar\nCustomer asked for fewer jars",
+        visibility: "INTERNAL",
+      },
+    ]);
+  });
+
+  it("writes the note without the optional text, once per key", async () => {
+    const { picker, item } = await picking();
+    const input = { itemId: item.id, substitute: "Rose soap", idempotencyKey: key() };
+
+    await substitute(db, picker, input);
+    await substitute(db, picker, input);
+
+    expect(await lineNotes(item.id)).toMatchObject([{ content: "Substituted: Rose soap" }]);
+  });
+
+  it("shows on the order detail line", async () => {
+    const { picker, order, item } = await picking();
+    await substitute(db, picker, {
+      itemId: item.id,
+      substitute: "Rose soap",
+      idempotencyKey: key(),
+    });
+
+    const detail = await getOrder(db, picker, { id: order.id });
+
+    expect(detail.lines.find((l) => l.id === item.id)).toMatchObject({
+      pickStatus: "SUBSTITUTED",
+      substitutionNote: "Rose soap",
+    });
+  });
+
+  it("replaces an Out of Stock state", async () => {
+    const { picker, item } = await picking([
+      { quantity: 2, pickStatus: "OUT_OF_STOCK", pickedQuantity: 1 },
+    ]);
+
+    await substitute(db, picker, {
+      itemId: item.id,
+      substitute: "Rose soap",
+      idempotencyKey: key(),
+    });
+
+    expect(await lineRow(item.id)).toMatchObject({ pickStatus: "SUBSTITUTED", pickedQuantity: 2 });
+  });
+
+  it("is refused for someone who can't pick, or without the claim", async () => {
+    const { item } = await picking();
+    const qa = await createActor(db, ["QA"]);
+    const other = await createActor(db, ["PICKER"]);
+
+    await expect(
+      substitute(db, qa, { itemId: item.id, substitute: "x", idempotencyKey: key() }),
+    ).rejects.toMatchObject({ kind: "FORBIDDEN" });
+    await expect(
+      substitute(db, other, { itemId: item.id, substitute: "x", idempotencyKey: key() }),
+    ).rejects.toMatchObject({ messageKey: "errors.picking.claimRequired" });
+    expect(await lineRow(item.id)).toMatchObject({ pickStatus: "PENDING", substitutionNote: null });
+    expect(await lineNotes(item.id)).toHaveLength(0);
+  });
+});
+
+describe("reconcilePick", () => {
+  const voidUnits = (orderId: string, orderItemId: string, quantity: number) =>
+    db.itemVoid.create({
+      data: { orderId, orderItemId, quantity, reason: "test void", stage: "PICKING" },
+    });
+  const reconcile = (itemId: string) => db.$transaction((tx) => reconcilePick(tx, itemId));
+
+  it("clamps a picked count above the active quantity", async () => {
+    const { order, item } = await picking([{ quantity: 3, pickedQuantity: 2 }]);
+    await voidUnits(order.id, item.id, 2);
+
+    await reconcile(item.id);
+
+    expect(await lineRow(item.id)).toMatchObject({ pickStatus: "PENDING", pickedQuantity: 1 });
+  });
+
+  it("turns a partial Out of Stock into Picked once the rest is voided, and the order passes picked", async () => {
+    const { picker, order, item } = await picking([{ name: "Clay mask", quantity: 3 }]);
+    await markOutOfStock(db, picker, {
+      itemId: item.id,
+      foundQuantity: 1,
+      note: "Only one",
+      idempotencyKey: key(),
+    });
+    await voidUnits(order.id, item.id, 2);
+
+    await reconcile(item.id);
+
+    expect(await lineRow(item.id)).toMatchObject({ pickStatus: "PICKED", pickedQuantity: 1 });
+    expect(await pickedGate(order.id)).toEqual([]);
+  });
+
+  it("puts a Picked line back to pending when a void is undone", async () => {
+    const { order, item } = await picking([
+      {
+        quantity: 3,
+        pickStatus: "PICKED",
+        pickedQuantity: 1,
+        voids: [{ quantity: 2, undone: true }],
+      },
+    ]);
+
+    await reconcile(item.id);
+
+    expect(await lineRow(item.id)).toMatchObject({ pickStatus: "PENDING", pickedQuantity: 1 });
+    expect(await pickedGate(order.id)).toMatchObject([
+      { messageKey: "errors.workflow.gate.lineNotPicked" },
+    ]);
+  });
+
+  it("keeps a Substituted line at its active quantity", async () => {
+    const { order, item } = await picking([{ quantity: 3, pickStatus: "SUBSTITUTED" }]);
+    await voidUnits(order.id, item.id, 1);
+
+    await reconcile(item.id);
+
+    expect(await lineRow(item.id)).toMatchObject({ pickStatus: "SUBSTITUTED", pickedQuantity: 2 });
+
+    await db.itemVoid.updateMany({
+      where: { orderItemId: item.id },
+      data: { undoneAt: new Date() },
+    });
+    await reconcile(item.id);
+    expect(await lineRow(item.id)).toMatchObject({ pickStatus: "SUBSTITUTED", pickedQuantity: 3 });
+  });
+
+  it("leaves a consistent line alone", async () => {
+    const { item } = await picking([{ quantity: 2, pickedQuantity: 1 }]);
+    const before = await lineRow(item.id);
+
+    await reconcile(item.id);
+
+    expect(await lineRow(item.id)).toEqual(before);
   });
 });

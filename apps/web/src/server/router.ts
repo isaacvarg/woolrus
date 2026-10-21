@@ -29,6 +29,7 @@ import {
   listSyncRuns,
   listUsers,
   lockStation,
+  markOutOfStock,
   orderMutations,
   permissionsFor,
   pickLine,
@@ -47,6 +48,7 @@ import {
   setPin,
   setSecret,
   stationStatus,
+  substitute,
   testStoreConnection,
   touchStation,
   unlockWithBadge,
@@ -204,6 +206,12 @@ export const router = implementer.router({
       unpickLine(db, context.actor, input),
     ),
     scan: api.picking.scan.handler(({ input, context }) => scan(db, context.actor, input)),
+    markOutOfStock: api.picking.markOutOfStock.handler(({ input, context }) =>
+      markOutOfStock(db, context.actor, input),
+    ),
+    substitute: api.picking.substitute.handler(({ input, context }) =>
+      substitute(db, context.actor, input),
+    ),
   },
   sync: {
     status: api.sync.status.handler(({ context }) => getSyncStatus(db, context.actor)),

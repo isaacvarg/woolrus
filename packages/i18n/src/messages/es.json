@@ -336,7 +336,26 @@
     "oneMore": "Uno más de {name}",
     "scanned": "{name}: {picked} de {quantity}",
     "scanOk": "Escaneado.",
-    "scanRefused": "Escaneo rechazado."
+    "scanRefused": "Escaneo rechazado.",
+    "lineActions": "Más opciones para {name}",
+    "outOfStock": {
+      "action": "Sin existencias",
+      "title": "{name} está agotado",
+      "found": "¿Cuántos encontraste?",
+      "foundHint": "Menos de los {quantity} necesarios. El pedido no puede salir de surtido hasta que esta línea se anule o se sustituya.",
+      "note": "Nota",
+      "submit": "Marcar sin existencias",
+      "done": "{name} marcado sin existencias."
+    },
+    "substitute": {
+      "action": "Sustituido",
+      "title": "Sustituir {name}",
+      "instead": "Qué se puso en su lugar",
+      "insteadHint": "Empaque y control de calidad lo ven en la línea.",
+      "note": "Nota (opcional)",
+      "submit": "Marcar sustituido",
+      "done": "{name} marcado como sustituido."
+    }
   },
   "orders": {
     "status": "Estado",

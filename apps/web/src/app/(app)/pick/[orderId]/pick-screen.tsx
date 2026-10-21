@@ -5,7 +5,7 @@ import type { PickLine, PickLineResult, PickStatus, PickView } from "@woolrus/co
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { useEffect, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { ToggleButton } from "react-aria-components";
 import { Button } from "@/components/ui/fields";
 import { toast } from "@/components/ui/toast";
@@ -13,6 +13,7 @@ import { useErrorMessage } from "@/lib/errors";
 import { client, orpc } from "@/lib/orpc";
 import { playScanSound, useScanner } from "@/lib/scanner";
 import { type Unmet, UnmetList, unmetOf } from "../../orders/[id]/order-actions";
+import { LineMenu } from "./line-dialogs";
 
 // The pick screen (SPEC-picking "UI", FR-PICK-01/02). Taps apply at once and the server confirms
 // them (NFR-PERF-02); writes run one at a time per order so they land in the order they were made.
@@ -77,12 +78,13 @@ function PickLayout({ view, userId, canPack }: { view: PickView } & Viewer) {
   const { order } = view;
   const viewKey = orpc.picking.view.queryKey({ input: { orderId: order.id } });
   const writeKey = ["pickWrite", order.id];
+  const writeScope = `pick:${order.id}`;
   const canPick = order.status === "PICKING" && order.claim?.userId === userId;
 
   const write = useMutation({
     mutationKey: writeKey,
     // One at a time per order: a tap and its undo reach the server in the order they were made.
-    scope: { id: `pick:${order.id}` },
+    scope: { id: writeScope },
     mutationFn: ({ line, quantity }: Write) =>
       quantity === 0
         ? client.picking.unpickLine({ itemId: line.id })
@@ -184,6 +186,19 @@ function PickLayout({ view, userId, canPack }: { view: PickView } & Viewer) {
               disabled={!canPick}
               flash={scanned?.ok && scanned.lineId === line.id ? scanned.at : null}
               onWrite={(quantity) => write.mutate({ line, quantity })}
+              menu={
+                <LineMenu
+                  line={line}
+                  disabled={!canPick}
+                  scope={writeScope}
+                  onResult={(result) => {
+                    setUnmet(null);
+                    queryClient.setQueryData<PickView>(viewKey, (v) =>
+                      v ? applyResult(v, result) : v,
+                    );
+                  }}
+                />
+              }
             />
           ))}
         </ul>
@@ -338,12 +353,15 @@ function PickCard({
   disabled,
   flash,
   onWrite,
+  menu,
 }: {
   line: PickLine;
   disabled: boolean;
   /** When a scan last counted on this card. */
   flash: number | null;
   onWrite: (quantity: number) => void;
+  /** Out of Stock and Substituted; absent while the viewer can't pick. */
+  menu: ReactNode;
 }) {
   const t = useTranslations();
   const flashing = useFlash(flash);
@@ -401,24 +419,29 @@ function PickCard({
           </div>
         </div>
       </ToggleButton>
-      {line.quantity > 1 && (
+      {(line.quantity > 1 || !disabled) && (
         <div className="flex justify-end gap-2 border-t border-base-300 p-2">
-          <Button
-            className="btn-outline btn-lg min-w-20 text-2xl"
-            aria-label={t("pick.oneFewer", { name: line.name })}
-            isDisabled={disabled || line.pickedQuantity === 0}
-            onPress={() => onWrite(line.pickedQuantity - 1)}
-          >
-            −
-          </Button>
-          <Button
-            className="btn-outline btn-lg min-w-20 text-2xl"
-            aria-label={t("pick.oneMore", { name: line.name })}
-            isDisabled={disabled || line.pickedQuantity >= line.quantity}
-            onPress={() => onWrite(line.pickedQuantity + 1)}
-          >
-            +
-          </Button>
+          {menu}
+          {line.quantity > 1 && (
+            <>
+              <Button
+                className="btn-outline btn-lg min-w-20 text-2xl"
+                aria-label={t("pick.oneFewer", { name: line.name })}
+                isDisabled={disabled || line.pickedQuantity === 0}
+                onPress={() => onWrite(line.pickedQuantity - 1)}
+              >
+                −
+              </Button>
+              <Button
+                className="btn-outline btn-lg min-w-20 text-2xl"
+                aria-label={t("pick.oneMore", { name: line.name })}
+                isDisabled={disabled || line.pickedQuantity >= line.quantity}
+                onPress={() => onWrite(line.pickedQuantity + 1)}
+              >
+                +
+              </Button>
+            </>
+          )}
         </div>
       )}
     </li>

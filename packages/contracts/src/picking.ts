@@ -4,6 +4,7 @@ import { ExpectedVersion, LineAttribute, OrderDetail, PickStatus } from "./order
 
 // Picking (SPEC-picking "API"). Line writes need the order in Picking and the caller's live claim;
 // they set an absolute state, so a replay is harmless and they don't carry the order's version.
+// Out of Stock and Substituted also write a line note, so they carry an idempotency key.
 
 /** One card on the pick screen. `quantity` is what's left to pick after voids. */
 export const PickLine = z.object({
@@ -83,6 +84,24 @@ export const ScanInput = z.object({
 });
 export type ScanInput = z.infer<typeof ScanInput>;
 
+/** `foundQuantity` is below the active quantity; core checks the upper bound against the line. */
+export const MarkOutOfStockInput = z.object({
+  itemId: Id,
+  foundQuantity: z.number().int().min(0).max(10_000),
+  note: z.string().trim().min(1).max(500),
+  idempotencyKey: IdempotencyKey,
+});
+export type MarkOutOfStockInput = z.infer<typeof MarkOutOfStockInput>;
+
+export const SubstituteInput = z.object({
+  itemId: Id,
+  /** What went in instead; kept on the line as `substitutionNote`. */
+  substitute: z.string().trim().min(1).max(200),
+  note: z.string().trim().max(500).optional(),
+  idempotencyKey: IdempotencyKey,
+});
+export type SubstituteInput = z.infer<typeof SubstituteInput>;
+
 const tags = ["Picking"];
 
 export const picking = {
@@ -131,5 +150,23 @@ export const picking = {
       summary: "Count one scanned unit on the first line of the order it matches",
     })
     .input(ScanInput)
+    .output(PickLineResult),
+  markOutOfStock: base
+    .route({
+      method: "POST",
+      path: "/order-items/{itemId}/out-of-stock",
+      tags,
+      summary: "Mark a line Out of Stock with how many were found and a note",
+    })
+    .input(MarkOutOfStockInput)
+    .output(PickLineResult),
+  substitute: base
+    .route({
+      method: "POST",
+      path: "/order-items/{itemId}/substitute",
+      tags,
+      summary: "Mark a line Substituted with what went in instead; it counts as picked",
+    })
+    .input(SubstituteInput)
     .output(PickLineResult),
 };
