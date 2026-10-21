@@ -171,12 +171,20 @@ async function processPhoto(noteId: string, bytes: Uint8Array, fileName: string)
  * memory). Throws on the first refused file, before any processing.
  */
 export async function preparePhotos(noteId: string, photos: File[]): Promise<PreparedAttachment[]> {
-  const checked: { bytes: Uint8Array; name: string }[] = [];
+  const checked: { bytes: Uint8Array; name: string; field: string }[] = [];
   for (const [index, photo] of photos.entries()) {
-    checked.push({ bytes: await checkPhoto(photo, `photos.${index}`), name: photo.name });
+    const field = `photos.${index}`;
+    checked.push({ bytes: await checkPhoto(photo, field), name: photo.name, field });
   }
   const prepared: PreparedAttachment[] = [];
-  for (const { bytes, name } of checked) prepared.push(await processPhoto(noteId, bytes, name));
+  for (const { bytes, name, field } of checked) {
+    // The header check can't see a body that's cut off or corrupt; decoding can. That's the
+    // same refusal as a wrong type, not a server error.
+    const photo = await processPhoto(noteId, bytes, name).catch(() => {
+      throw fileError("errors.notes.fileType", field);
+    });
+    prepared.push(photo);
+  }
   return prepared;
 }
 

@@ -102,6 +102,23 @@ describe("preparePhotos", () => {
     await refused([fileOf(huge, "huge.png")], "errors.notes.imageTooLarge");
   });
 
+  it.each(["jpeg", "png", "webp"] as const)(
+    "refuses a %s whose header is fine but whose pixels are cut off, as a file-type error",
+    async (format) => {
+      // A dropped connection or a broken camera app: the header passes, decoding doesn't.
+      const full = await solidImage(640, 480, format);
+      const cut = full.slice(0, Math.floor(full.length / 2));
+      const ok = await solidImage(10, 10, "png");
+      await expect(
+        preparePhotos(NOTE_ID, [fileOf(ok, "ok.png"), fileOf(cut, `cut.${format}`)]),
+      ).rejects.toMatchObject({
+        kind: "BAD_REQUEST",
+        messageKey: "errors.notes.fileType",
+        fields: { "photos.1": "errors.notes.fileType" },
+      });
+    },
+  );
+
   it("names the refused file's field", async () => {
     const ok = await solidImage(10, 10, "png");
     const pdf = new TextEncoder().encode("%PDF-1.7");

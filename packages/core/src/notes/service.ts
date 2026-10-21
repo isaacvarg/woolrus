@@ -211,7 +211,9 @@ function toNoteDto(actor: Actor, note: NoteRow, stationName: string | null): Not
 }
 
 async function loadNote(tx: DbTx, actor: Actor, id: string): Promise<NoteDto> {
-  const note = await tx.note.findUniqueOrThrow({ where: { id }, include: noteInclude });
+  const note = await tx.note.findUnique({ where: { id }, include: noteInclude });
+  // A replayed create whose note was deleted since: the request's result is gone.
+  if (!note) throw notFound();
   return toNoteDto(actor, note, (await stationNames(tx, [id])).get(id) ?? null);
 }
 

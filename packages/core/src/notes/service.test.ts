@@ -144,6 +144,16 @@ describe("notes service", () => {
     expect(await db.note.count()).toBe(1);
   });
 
+  it("answers a replay of a create whose note was since deleted with not found", async () => {
+    const picker = await createActor(db, ["PICKER"]);
+    const { order } = await createOrder(db);
+    const request = input(order.id);
+    const first = await createNote(db, storage, picker, request);
+    await deleteNote(db, picker, { id: first.id });
+    await rejects(createNote(db, storage, picker, request), "NOT_FOUND", "errors.notFound");
+    expect(await db.note.count()).toBe(0);
+  });
+
   it("works in every order status, needs no claim and leaves the order's version alone", async () => {
     const picker = await createActor(db, ["PICKER"]);
     const qa = await createActor(db, ["QA"]);
@@ -334,12 +344,30 @@ describe("notes service", () => {
 
     it("deletes the uploads when the note transaction fails", async () => {
       const picker = await createActor(db, ["PICKER"]);
-      const missing = "0199e6a0-0000-7000-8000-000000000002";
+      const { order, items } = await createOrder(db);
+      const line = items[0];
+      if (!line) throw new Error("factory");
+      // The line passes the check before upload, then a sync removes it while the photo uploads,
+      // so the transaction's own check refuses the note after the files are in storage.
+      let puts = 0;
+      const racing = {
+        ...storage,
+        put: async (...args: Parameters<MemoryStorage["put"]>) => {
+          if (puts++ === 0) await db.orderItem.delete({ where: { id: line.id } });
+          return storage.put(...args);
+        },
+      };
       await rejects(
-        createNote(db, storage, picker, input(missing, { photos: [await photo()] })),
-        "NOT_FOUND",
-        "errors.notFound",
+        createNote(
+          db,
+          racing,
+          picker,
+          input(order.id, { photos: [await photo()], target: { kind: "item", id: line.id } }),
+        ),
+        "BAD_REQUEST",
+        "errors.notes.targetMismatch",
       );
+      expect(puts).toBe(2);
       await nothingWritten();
     });
 
