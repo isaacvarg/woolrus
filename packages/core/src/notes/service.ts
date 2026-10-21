@@ -10,10 +10,14 @@ import { AppError, notFound } from "../errors";
 import { withIdempotency } from "../idempotency";
 import { type Actor, assertCan, can } from "../permissions";
 import { notifyOrderChanged } from "../workflow/notify";
+import { resolveTarget, targetInclude, targetOf } from "./targets";
 
 const MAX_CONTENT = 4000;
 
-const noteInclude = { author: { select: { name: true } } } satisfies Prisma.NoteInclude;
+const noteInclude = {
+  author: { select: { name: true } },
+  ...targetInclude,
+} satisfies Prisma.NoteInclude;
 type NoteRow = Prisma.NoteGetPayload<{ include: typeof noteInclude }>;
 
 /** The contract trims and caps content already; core doesn't rely on it. */
@@ -65,6 +69,7 @@ function toNoteDto(actor: Actor, note: NoteRow, stationName: string | null): Not
   return {
     id: note.id,
     orderId: note.orderId,
+    target: targetOf(note),
     content: note.content,
     visibility: note.visibility,
     authorId: note.authorId,
@@ -118,7 +123,11 @@ export async function listNotes(
  * Notes aren't workflow writes: any order status, no claim, no `Order.version` bump, no stage
  * event. Open pages still hear about them through `order_changed`.
  */
-export async function createNote(db: Db, actor: Actor, input: CreateNoteInput): Promise<NoteDto> {
+export async function createNote(
+  db: Db,
+  actor: Actor,
+  input: Omit<CreateNoteInput, "target"> & Partial<Pick<CreateNoteInput, "target">>,
+): Promise<NoteDto> {
   assertCan(actor, "note.write");
   assertCanWriteVisibility(actor, input.visibility);
   const content = cleanContent(input.content);
@@ -131,9 +140,11 @@ export async function createNote(db: Db, actor: Actor, input: CreateNoteInput): 
       actor,
       async () => {
         const status = await orderStatus(tx, input.orderId);
+        const target = await resolveTarget(tx, input.orderId, input.target ?? { kind: "order" });
         const note = await tx.note.create({
           data: {
             orderId: input.orderId,
+            ...target,
             authorId: actor.userId,
             content,
             visibility: input.visibility,
@@ -143,7 +154,7 @@ export async function createNote(db: Db, actor: Actor, input: CreateNoteInput): 
           entityType: "Note",
           entityId: note.id,
           action: "create",
-          after: { orderId: note.orderId, ...snapshot(note) },
+          after: { orderId: note.orderId, ...target, ...snapshot(note) },
         });
         await notifyOrderChanged(tx, { id: input.orderId, status });
         return { id: note.id };

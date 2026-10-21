@@ -5,10 +5,27 @@ import { CreateNoteInput, UpdateNoteInput } from "./notes";
 const orderId = "0199e6a0-0000-7000-8000-000000000001";
 
 describe("CreateNoteInput", () => {
-  it("trims the content and defaults to an internal note", () => {
+  it("trims the content and defaults to an internal note on the order", () => {
     expect(
       CreateNoteInput.parse({ idempotencyKey: "note-key-1", orderId, content: "  hello \n" }),
-    ).toEqual({ idempotencyKey: "note-key-1", orderId, content: "hello", visibility: "INTERNAL" });
+    ).toEqual({
+      idempotencyKey: "note-key-1",
+      orderId,
+      content: "hello",
+      visibility: "INTERNAL",
+      target: { kind: "order" },
+    });
+  });
+
+  it("takes a line, package or issue target by id", () => {
+    const base = { idempotencyKey: "note-key-1", orderId, content: "hi" };
+    for (const kind of ["item", "package", "issue"]) {
+      expect(CreateNoteInput.safeParse({ ...base, target: { kind, id: orderId } }).success).toBe(
+        true,
+      );
+      expect(CreateNoteInput.safeParse({ ...base, target: { kind } }).success).toBe(false);
+    }
+    expect(CreateNoteInput.safeParse({ ...base, target: { kind: "return" } }).success).toBe(false);
   });
 
   it("caps the content at 4000 characters", () => {

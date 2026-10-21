@@ -20,6 +20,7 @@ import { useFormatter, useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
 import { Input, Label, SearchField, ToggleButton, ToggleButtonGroup } from "react-aria-components";
 import type { z } from "zod";
+import { NoteCount } from "@/components/notes/note-count";
 import { Button } from "@/components/ui/fields";
 import { useErrorMessage } from "@/lib/errors";
 import { orpc } from "@/lib/orpc";
@@ -259,6 +260,7 @@ export function OrdersTable() {
                         ⚠
                       </span>
                     )}
+                    <NoteCount count={row.noteCount} className="ms-2" />
                   </td>
                   <td>{row.customerName}</td>
                   <td>{t(`status.${row.status}`)}</td>

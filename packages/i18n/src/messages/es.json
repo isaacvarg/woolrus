@@ -341,7 +341,23 @@
     "delete": "Eliminar",
     "deleteTitle": "¿Eliminar esta nota?",
     "deleteBody": "Se elimina para todos. No se puede deshacer.",
-    "deleted": "Nota eliminada."
+    "deleted": "Nota eliminada.",
+    "count": "{count, plural, one {# nota} other {# notas}}",
+    "on": "Sobre",
+    "target": {
+      "order": "Pedido #{label}",
+      "item": "Línea: {label}",
+      "package": "Paquete {label}",
+      "issue": "Incidencia: {label}"
+    },
+    "filter": "Mostrar notas sobre",
+    "filterAll": "Todo",
+    "filterOrder": "Pedido",
+    "filterItem": "Líneas",
+    "filterPackage": "Paquetes",
+    "filterIssue": "Incidencias",
+    "noneInFilter": "No hay notas aquí.",
+    "addOn": "Agregar una nota sobre {target}"
   },
   "status": {
     "PENDING": "Pendiente",
@@ -511,7 +527,8 @@
     },
     "notes": {
       "empty": "Escribe algo en la nota primero.",
-      "notAuthor": "Solo el autor de la nota o un administrador puede cambiarla."
+      "notAuthor": "Solo el autor de la nota o un administrador puede cambiarla.",
+      "targetMismatch": "Esa línea, paquete o incidencia no es de este pedido."
     }
   },
   "emails": {

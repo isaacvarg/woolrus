@@ -1,9 +1,9 @@
 "use client";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import type { NoteVisibility } from "@woolrus/contracts";
+import type { NoteTargetInput, NoteVisibility } from "@woolrus/contracts";
 import { useTranslations } from "next-intl";
-import { useState } from "react";
+import { useId, useState } from "react";
 import { Form } from "react-aria-components";
 import { Button, Switch, TextAreaField } from "@/components/ui/fields";
 import { toast } from "@/components/ui/toast";
@@ -37,36 +37,70 @@ export function VisibilitySwitch({
   );
 }
 
-/** Writes a note on the order. */
+/** Something a note can be on, as the target picker offers it. `label` is already worded. */
+export type TargetOption = { target: NoteTargetInput; label: string };
+
+export const targetKey = (target: NoteTargetInput) =>
+  target.kind === "order" ? "order" : `${target.kind}:${target.id}`;
+
+/** Lists and the order (its lines' and packages' counts) change with every note. */
+export function useRefreshNotes(orderId: string) {
+  const queryClient = useQueryClient();
+  return () =>
+    Promise.all([
+      queryClient.invalidateQueries({ queryKey: orpc.notes.list.key({ input: { orderId } }) }),
+      queryClient.invalidateQueries({ queryKey: orpc.orders.key() }),
+    ]);
+}
+
+/**
+ * Writes a note on the order, or on one of `targets` (a line, a package…). `initialTarget` presets
+ * the picker, e.g. when opened from a line.
+ */
 export function NoteComposer({
   orderId,
   canWriteCustomer,
+  targets = [],
+  initialTarget = { kind: "order" },
+  onAdded,
 }: {
   orderId: string;
   canWriteCustomer: boolean;
+  targets?: TargetOption[];
+  initialTarget?: NoteTargetInput;
+  onAdded?: () => void;
 }) {
   const t = useTranslations();
   const errorMessage = useErrorMessage();
   const fieldErrors = useFieldErrors();
-  const queryClient = useQueryClient();
+  const refresh = useRefreshNotes(orderId);
+  const pickerId = useId();
   const [content, setContent] = useState("");
   const [visibility, setVisibility] = useState<NoteVisibility>("INTERNAL");
+  const [target, setTarget] = useState(() => targetKey(initialTarget));
   // One key per draft: a retry after a dropped response returns the note instead of adding twice.
   const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
 
   const create = useMutation({
-    mutationFn: () => client.notes.create({ idempotencyKey, orderId, content, visibility }),
+    mutationFn: () =>
+      client.notes.create({
+        idempotencyKey,
+        orderId,
+        content,
+        visibility,
+        target: targets.find((o) => targetKey(o.target) === target)?.target ?? { kind: "order" },
+      }),
     onSuccess: () => {
       setContent("");
       setVisibility("INTERNAL");
       setIdempotencyKey(crypto.randomUUID());
       toast.success(t("notes.added"));
+      onAdded?.();
     },
     onError: (error) => {
       if (Object.keys(fieldErrors(error)).length === 0) toast.error(errorMessage(error));
     },
-    onSettled: () =>
-      queryClient.invalidateQueries({ queryKey: orpc.notes.list.key({ input: { orderId } }) }),
+    onSettled: refresh,
   });
 
   return (
@@ -87,6 +121,26 @@ export function NoteComposer({
         value={content}
         onChange={setContent}
       />
+      {targets.length > 1 && (
+        <div className="fieldset">
+          <label htmlFor={pickerId} className="fieldset-legend">
+            {t("notes.on")}
+          </label>
+          {/* Native on purpose: tablets open their own large picker. */}
+          <select
+            id={pickerId}
+            className="select select-lg w-full"
+            value={target}
+            onChange={(event) => setTarget(event.target.value)}
+          >
+            {targets.map((option) => (
+              <option key={targetKey(option.target)} value={targetKey(option.target)}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
       {canWriteCustomer && <VisibilitySwitch value={visibility} onChange={setVisibility} />}
       <Button type="submit" className="btn-primary btn-lg" isPending={create.isPending}>
         {t("notes.add")}
