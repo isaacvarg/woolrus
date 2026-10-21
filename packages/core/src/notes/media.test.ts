@@ -1,8 +1,15 @@
 import sharp from "sharp";
 import { describe, expect, it } from "vitest";
 import { createMemoryStorage } from "../adapters/storage/memory";
-import { NOTE_FILE_LIMITS, preparePhotos, sniffImage, uploadAll } from "./media";
-import { cameraJpeg, fileOf, solidImage } from "./test-files";
+import {
+  NOTE_FILE_LIMITS,
+  preparePhotos,
+  prepareVoice,
+  sniffAudio,
+  sniffImage,
+  uploadAll,
+} from "./media";
+import { audioBytes, cameraJpeg, fileOf, solidImage } from "./test-files";
 
 const NOTE_ID = "0192f0a0-0000-7000-8000-000000000001";
 
@@ -110,6 +117,76 @@ describe("sniffImage", () => {
     expect(sniffImage(await solidImage(2, 2, "png"))).toBe("png");
     expect(sniffImage(await solidImage(2, 2, "webp"))).toBe("webp");
     expect(sniffImage(new Uint8Array([1, 2, 3]))).toBeNull();
+  });
+});
+
+describe("prepareVoice", () => {
+  it.each([
+    ["webm", "audio/webm", "webm"],
+    ["ogg", "audio/ogg", "ogg"],
+    ["m4a", "audio/mp4", "m4a"],
+    ["mp4", "audio/mp4", "m4a"],
+    ["mp3", "audio/mpeg", "mp3"],
+    ["mp3Frame", "audio/mpeg", "mp3"],
+  ] as const)("stores %s unchanged as %s", async (format, contentType, ext) => {
+    const bytes = audioBytes(format);
+    // The browser's type is ignored: only the content counts.
+    const voice = fileOf(bytes, "voice-memo", "application/octet-stream");
+    const prepared = await prepareVoice(NOTE_ID, voice, 20_500);
+    if (!prepared) throw new Error("no voice memo");
+    expect(prepared).toMatchObject({
+      kind: "VOICE",
+      contentType,
+      fileName: "voice-memo",
+      storageKey: `notes/${NOTE_ID}/${prepared.id}.${ext}`,
+      thumbnailKey: null,
+      sizeBytes: bytes.length,
+      width: null,
+      height: null,
+      durationMs: 20_500,
+    });
+    expect(prepared.files).toEqual([{ key: prepared.storageKey, body: bytes, contentType }]);
+  });
+
+  it("refuses anything else by its content", async () => {
+    const cases = [
+      await solidImage(10, 10, "jpeg"),
+      new TextEncoder().encode("%PDF-1.7"),
+      Uint8Array.from("\x00\x00\x00\x18ftypheic", (c) => c.charCodeAt(0)),
+      Uint8Array.from("RIFF\x00\x00\x00\x00WAVE", (c) => c.charCodeAt(0)),
+      new Uint8Array([0xff, 0xf1, 0x50, 0x80]), // AAC ADTS: frame sync, but layer 0
+      new Uint8Array(0),
+    ];
+    for (const bytes of cases) {
+      await expect(
+        prepareVoice(NOTE_ID, fileOf(bytes, "voice.webm", "audio/webm"), 1000),
+      ).rejects.toMatchObject({
+        kind: "BAD_REQUEST",
+        messageKey: "errors.notes.fileType",
+        fields: { voice: "errors.notes.fileType" },
+      });
+    }
+  });
+
+  it("refuses a file over 15 MB", async () => {
+    const big = audioBytes("webm", NOTE_FILE_LIMITS.fileBytes + 1);
+    await expect(prepareVoice(NOTE_ID, fileOf(big, "v.webm"), 1000)).rejects.toMatchObject({
+      messageKey: "errors.notes.fileTooLarge",
+    });
+  });
+
+  it("names the field it was sent as", async () => {
+    const pdf = new TextEncoder().encode("%PDF-1.7");
+    await expect(prepareVoice(NOTE_ID, fileOf(pdf, "v"), 1000, "addVoice")).rejects.toMatchObject({
+      fields: { addVoice: "errors.notes.fileType" },
+    });
+  });
+});
+
+describe("sniffAudio", () => {
+  it("doesn't take an image for audio", async () => {
+    expect(sniffAudio(await solidImage(2, 2, "jpeg"))).toBeNull();
+    expect(sniffAudio(audioBytes("ogg"))).toEqual({ contentType: "audio/ogg", ext: "ogg" });
   });
 });
 

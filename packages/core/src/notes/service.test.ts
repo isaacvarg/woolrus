@@ -9,7 +9,7 @@ import type { Actor } from "../permissions";
 import { ORDER_CHANGED_CHANNEL } from "../workflow/notify";
 import { NOTE_FILE_LIMITS } from "./media";
 import { createNote, deleteNote, getAttachment, listNotes, updateNote } from "./service";
-import { fileOf, solidImage } from "./test-files";
+import { audioBytes, fileOf, solidImage } from "./test-files";
 
 const db: Db = testDb();
 afterAll(() => db.$disconnect());
@@ -462,6 +462,142 @@ describe("notes service", () => {
         "NOT_FOUND",
         "errors.notFound",
       );
+    });
+  });
+
+  describe("voice memos", () => {
+    const memo = (name = "voice-memo.webm") =>
+      fileOf(audioBytes("webm"), name, "audio/webm;codecs=opus");
+    const photo = async () => fileOf(await solidImage(16, 16, "png"), "photo.png");
+
+    it("stores one memo unchanged next to photos, with its duration", async () => {
+      const picker = await createActor(db, ["PICKER"]);
+      const { order } = await createOrder(db);
+      const note = await createNote(
+        db,
+        storage,
+        picker,
+        input(order.id, {
+          content: "",
+          photos: [await photo()],
+          voice: memo(),
+          voiceDurationMs: 20_500,
+        }),
+      );
+      const voice = note.attachments.find((a) => a.kind === "VOICE");
+      expect(note.attachments.map((a) => a.kind).sort()).toEqual(["IMAGE", "VOICE"]);
+      expect(voice).toMatchObject({
+        contentType: "audio/webm",
+        fileName: "voice-memo.webm",
+        sizeBytes: 4096,
+        durationMs: 20_500,
+        width: null,
+        height: null,
+        url: `/api/attachments/${voice?.id}`,
+        thumbUrl: null,
+      });
+      const key = `notes/${note.id}/${voice?.id}.webm`;
+      expect(storage.keys()).toContain(key);
+      expect(await getAttachment(db, picker, { id: voice?.id ?? "", variant: "full" })).toEqual({
+        key,
+        contentType: "audio/webm",
+        fileName: "voice-memo.webm",
+      });
+      await rejects(
+        getAttachment(db, picker, { id: voice?.id ?? "", variant: "thumb" }),
+        "NOT_FOUND",
+        "errors.notFound",
+      );
+    });
+
+    it("refuses a memo without a duration in range, or a duration without a memo", async () => {
+      const picker = await createActor(db, ["PICKER"]);
+      const { order } = await createOrder(db);
+      const cases: [Partial<CreateNoteInput>, string][] = [
+        [{ voice: memo() }, "errors.field.required"],
+        [{ voice: memo(), voiceDurationMs: 0 }, "errors.field.tooSmall"],
+        [{ voice: memo(), voiceDurationMs: 300_001 }, "errors.field.tooBig"],
+        [{ voice: memo(), voiceDurationMs: 1.5 }, "errors.field.invalid"],
+        [{ voiceDurationMs: 1000 }, "errors.field.invalid"],
+      ];
+      for (const [fields, fieldError] of cases) {
+        await expect(
+          createNote(db, storage, picker, input(order.id, { ...fields, photos: [await photo()] })),
+        ).rejects.toMatchObject({
+          kind: "BAD_REQUEST",
+          messageKey: "errors.validation",
+          fields: { voiceDurationMs: fieldError },
+        });
+      }
+      await rejects(
+        createNote(
+          db,
+          storage,
+          picker,
+          input(order.id, { voice: fileOf(audioBytes("webm").slice(4), "x"), voiceDurationMs: 1 }),
+        ),
+        "BAD_REQUEST",
+        "errors.notes.fileType",
+      );
+      expect(storage.keys()).toEqual([]);
+      expect(await db.note.count()).toBe(0);
+    });
+
+    it("keeps at most one memo per note through edits", async () => {
+      const picker = await createActor(db, ["PICKER"]);
+      const { order } = await createOrder(db);
+      const note = await createNote(
+        db,
+        storage,
+        picker,
+        input(order.id, { content: "", voice: memo("first.webm"), voiceDurationMs: 1000 }),
+      );
+      const keysBefore = storage.keys();
+      const first = note.attachments[0]?.id ?? "";
+
+      await rejects(
+        updateNote(db, storage, picker, {
+          id: note.id,
+          addVoice: memo(),
+          voiceDurationMs: 2000,
+        }),
+        "BAD_REQUEST",
+        "errors.notes.tooManyVoiceMemos",
+      );
+      await expect(
+        updateNote(db, storage, picker, { id: note.id, addVoice: memo() }),
+      ).rejects.toMatchObject({ fields: { voiceDurationMs: "errors.field.required" } });
+      expect(storage.keys()).toEqual(keysBefore);
+
+      // Replacing it in one edit is fine.
+      const replaced = await updateNote(db, storage, picker, {
+        id: note.id,
+        removeAttachmentIds: [first],
+        addVoice: memo("second.webm"),
+        voiceDurationMs: 2000,
+      });
+      expect(replaced.attachments).toHaveLength(1);
+      expect(replaced.attachments[0]).toMatchObject({
+        kind: "VOICE",
+        fileName: "second.webm",
+        durationMs: 2000,
+      });
+
+      // The memo is all there is, so it can't go without text taking its place.
+      await rejects(
+        updateNote(db, storage, picker, {
+          id: note.id,
+          removeAttachmentIds: [replaced.attachments[0]?.id ?? ""],
+        }),
+        "BAD_REQUEST",
+        "errors.notes.empty",
+      );
+      const textOnly = await updateNote(db, storage, picker, {
+        id: note.id,
+        content: "Lid cracked",
+        removeAttachmentIds: [replaced.attachments[0]?.id ?? ""],
+      });
+      expect(textOnly.attachments).toEqual([]);
     });
   });
 

@@ -34,3 +34,19 @@ export async function cameraJpeg(): Promise<Uint8Array> {
     .jpeg({ quality: 70 })
     .toBuffer();
 }
+
+/** The first bytes of each audio container the server takes, padded to `size`. */
+const AUDIO_HEADERS = {
+  webm: [0x1a, 0x45, 0xdf, 0xa3, 0x9f, 0x42, 0x86, 0x81, 0x01],
+  ogg: [..."OggS"].map((c) => c.charCodeAt(0)).concat([0x00, 0x02]),
+  m4a: [0x00, 0x00, 0x00, 0x1c, ...[..."ftypM4A "].map((c) => c.charCodeAt(0))],
+  mp4: [0x00, 0x00, 0x00, 0x20, ...[..."ftypiso5"].map((c) => c.charCodeAt(0))],
+  mp3: [..."ID3"].map((c) => c.charCodeAt(0)).concat([0x04, 0x00]),
+  mp3Frame: [0xff, 0xfb, 0x90, 0x64],
+} as const;
+
+export function audioBytes(format: keyof typeof AUDIO_HEADERS, size = 4096): Uint8Array {
+  const bytes = new Uint8Array(size);
+  bytes.set(AUDIO_HEADERS[format]);
+  return bytes;
+}
