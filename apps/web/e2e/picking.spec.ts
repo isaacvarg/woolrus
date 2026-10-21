@@ -73,6 +73,43 @@ test("completing with a line unpicked shows what's missing; once picked it moves
   await expect(page.getByRole("table", { name: "Items" })).toContainText("E2E PICKER");
 });
 
+/** Types `code` the way an HID scanner does: a fast burst of keys, then Enter. */
+async function scanCode(page: Page, code: string) {
+  await page.keyboard.type(code, { delay: 5 });
+  await page.keyboard.press("Enter");
+}
+
+test("a scan counts one unit on its card; a wrong scan shows red and changes nothing", async ({
+  page,
+}) => {
+  await beginPicking(page, 2);
+  const card = page.getByTestId("pick-card").first();
+  const banner = page.getByTestId("scan-banner");
+
+  // Matched by the line's SKU, whatever the case.
+  await scanCode(page, "e2e-sku");
+  await expect(banner).toHaveAttribute("data-ok", "true");
+  await expect(banner).toHaveText(/E2E item: 1 of 2/);
+  await expect(card).toContainText("1 of 2");
+  await expect(card).toHaveAttribute("data-flash", "true");
+
+  await scanCode(page, "NOT-A-CODE-1");
+  await expect(banner).toHaveAttribute("data-ok", "false");
+  await expect(banner).toHaveText(/Woolrus doesn't know that code/);
+  await expect(card).toContainText("1 of 2");
+
+  await scanCode(page, "E2E-SKU");
+  await expect(card).toContainText("2 of 2");
+  await expect(page.getByTestId("pick-progress")).toHaveText("1 of 1 lines picked");
+
+  await scanCode(page, "E2E-SKU");
+  await expect(banner).toHaveText(/E2E item is already picked/);
+
+  // What's shown is what the server kept: the refused scans added nothing.
+  await page.reload();
+  await expect(page.getByTestId("pick-card").first()).toContainText("2 of 2");
+});
+
 test("the cards are locked for someone who doesn't hold the claim", async ({ page, browser }) => {
   const order = await beginPicking(page, 1);
   const other = await browser.newContext();

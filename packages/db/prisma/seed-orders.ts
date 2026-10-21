@@ -7,15 +7,41 @@ import type { Db, DbTx, PickStatus, Prisma, WorkflowStatus } from "../src/index"
 
 const ID_BASE = 9_000_000;
 
-type DemoProduct = { sku: string; name: string; bin: string; weightOz: number; physical?: boolean };
+type DemoProduct = {
+  sku: string;
+  name: string;
+  bin: string;
+  weightOz: number;
+  physical?: boolean;
+  /** What a scanner reads off the label (FR-PICK-06); the rest match by SKU. */
+  barcode?: string;
+};
 
 const products: DemoProduct[] = [
-  { sku: "WOOL-MER-RED", name: "Merino yarn, Red", bin: "A-01-1", weightOz: 3.5 },
-  { sku: "WOOL-MER-NAVY", name: "Merino yarn, Navy", bin: "A-01-2", weightOz: 3.5 },
+  {
+    sku: "WOOL-MER-RED",
+    name: "Merino yarn, Red",
+    bin: "A-01-1",
+    weightOz: 3.5,
+    barcode: "0700000000011",
+  },
+  {
+    sku: "WOOL-MER-NAVY",
+    name: "Merino yarn, Navy",
+    bin: "A-01-2",
+    weightOz: 3.5,
+    barcode: "0700000000028",
+  },
   { sku: "WOOL-ALP-CRM", name: "Alpaca blend, Cream", bin: "A-02-1", weightOz: 3.5 },
-  { sku: "NDL-CIRC-5", name: "Circular needles 5 mm", bin: "B-01-1", weightOz: 1.2 },
+  {
+    sku: "NDL-CIRC-5",
+    name: "Circular needles 5 mm",
+    bin: "B-01-1",
+    weightOz: 1.2,
+    barcode: "0700000000035",
+  },
   { sku: "NDL-DPN-4", name: "Double-pointed needles 4 mm", bin: "B-01-2", weightOz: 0.8 },
-  { sku: "KIT-BEANIE", name: "Beanie kit", bin: "C-03-1", weightOz: 9 },
+  { sku: "KIT-BEANIE", name: "Beanie kit", bin: "C-03-1", weightOz: 9, barcode: "0700000000042" },
   { sku: "BOOK-WINTER", name: "Pattern book: Winter Knits", bin: "D-01-1", weightOz: 14 },
   // Sold in the store but never handled on the floor: it only raises priority.
   { sku: "RUSH-ORDER", name: "Rush Order", bin: "", weightOz: 0, physical: false },
@@ -142,10 +168,12 @@ async function upsertProducts(db: Db): Promise<Map<string, { id: string; physica
         weightOz: p.weightOz,
         binLocation: p.bin || null,
         physical,
+        barcode: p.barcode ?? null,
         rawPayload: { demo: true },
         syncedAt: new Date(),
       },
-      update: {},
+      // Demo stacks seeded before barcodes existed get them on the next seed.
+      update: p.barcode ? { barcode: p.barcode } : {},
     });
     bySku.set(p.sku, { id: row.id, physical: row.physical });
   }

@@ -5,12 +5,13 @@ import type { PickLine, PickLineResult, PickStatus, PickView } from "@woolrus/co
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ToggleButton } from "react-aria-components";
 import { Button } from "@/components/ui/fields";
 import { toast } from "@/components/ui/toast";
 import { useErrorMessage } from "@/lib/errors";
 import { client, orpc } from "@/lib/orpc";
+import { playScanSound, useScanner } from "@/lib/scanner";
 import { type Unmet, UnmetList, unmetOf } from "../../orders/[id]/order-actions";
 
 // The pick screen (SPEC-picking "UI", FR-PICK-01/02). Taps apply at once and the server confirms
@@ -37,6 +38,9 @@ function applyWrite(view: PickView, { line, quantity }: Write): PickView {
   );
   return { ...view, lines, done: lines.filter((l) => isDone(l.pickStatus)).length };
 }
+
+/** What the last scan did, for the banner: counted on a line, or refused with the reason. */
+type ScanOutcome = { ok: boolean; message: string; lineId?: string; at: number };
 
 function applyResult(view: PickView, result: PickLineResult): PickView {
   const lines = view.lines.map((l) => (l.id === result.line.id ? result.line : l));
@@ -97,6 +101,33 @@ function PickLayout({ view, userId }: { view: PickView; userId: string | null })
     },
   });
 
+  const [scanned, setScanned] = useState<ScanOutcome | null>(null);
+  const scan = useMutation({
+    // Same lane as taps: a scan and a tap on the same line land in the order they were made.
+    scope: { id: `pick:${order.id}` },
+    mutationFn: (code: string) =>
+      client.picking.scan({ orderId: order.id, code, scanId: crypto.randomUUID() }),
+    onSuccess: (result) => {
+      queryClient.setQueryData<PickView>(viewKey, (v) => (v ? applyResult(v, result) : v));
+      playScanSound(true);
+      setScanned({
+        ok: true,
+        lineId: result.line.id,
+        at: Date.now(),
+        message: t("pick.scanned", {
+          name: result.line.name,
+          picked: result.line.pickedQuantity,
+          quantity: result.line.quantity,
+        }),
+      });
+    },
+    onError: (error) => {
+      playScanSound(false);
+      setScanned({ ok: false, at: Date.now(), message: errorMessage(error) });
+    },
+  });
+  useScanner((code) => scan.mutate(code), canPick);
+
   const complete = useMutation({
     mutationFn: () =>
       client.orders.completePicking({ id: order.id, expectedVersion: order.version }),
@@ -124,6 +155,7 @@ function PickLayout({ view, userId }: { view: PickView; userId: string | null })
     <section className="mx-auto max-w-5xl space-y-4 pb-28">
       <PickHeader view={view} />
       <PickBanner view={view} userId={userId} />
+      <ScanBanner outcome={scanned} />
 
       {view.customerNote && (
         <div className="alert alert-info">
@@ -141,6 +173,7 @@ function PickLayout({ view, userId }: { view: PickView; userId: string | null })
               key={line.id}
               line={line}
               disabled={!canPick}
+              flash={scanned?.ok && scanned.lineId === line.id ? scanned.at : null}
               onWrite={(quantity) => write.mutate({ line, quantity })}
             />
           ))}
@@ -221,6 +254,46 @@ function PickBanner({ view, userId }: { view: PickView; userId: string | null })
   );
 }
 
+/**
+ * The last scan's result, announced to screen readers (NFR-UX-05). The live region stays mounted so
+ * every new message is read out; the banner itself shows only once something was scanned.
+ */
+function ScanBanner({ outcome }: { outcome: ScanOutcome | null }) {
+  const t = useTranslations();
+  return (
+    <div aria-live="assertive" aria-atomic="true">
+      {outcome && (
+        <div
+          key={outcome.at}
+          className={`alert ${outcome.ok ? "alert-success" : "alert-error"} text-lg font-semibold`}
+          data-testid="scan-banner"
+          data-ok={outcome.ok}
+        >
+          <span aria-hidden="true">{outcome.ok ? "✓" : "✕"}</span>
+          <span>
+            <span className="sr-only">
+              {outcome.ok ? t("pick.scanOk") : t("pick.scanRefused")}{" "}
+            </span>
+            {outcome.message}
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** True for a second after `at`: long enough to see which card a scan counted on. */
+function useFlash(at: number | null) {
+  const [on, setOn] = useState(false);
+  useEffect(() => {
+    if (at === null) return;
+    setOn(true);
+    const timer = setTimeout(() => setOn(false), 1000);
+    return () => clearTimeout(timer);
+  }, [at]);
+  return on;
+}
+
 const statusIcon: Record<PickStatus, string> = {
   PENDING: "○",
   PICKED: "✓",
@@ -238,21 +311,26 @@ const statusTone: Record<PickStatus, string> = {
 function PickCard({
   line,
   disabled,
+  flash,
   onWrite,
 }: {
   line: PickLine;
   disabled: boolean;
+  /** When a scan last counted on this card. */
+  flash: number | null;
   onWrite: (quantity: number) => void;
 }) {
   const t = useTranslations();
+  const flashing = useFlash(flash);
   const done = isDone(line.pickStatus);
   const partial = line.pickStatus === "PENDING" && line.pickedQuantity > 0;
   const statusText = partial ? t("pick.partial") : t(`order.pickStatus.${line.pickStatus}`);
 
   return (
     <li
-      className={`rounded-box border-2 bg-base-100 shadow-sm ${statusTone[line.pickStatus]}`}
+      className={`rounded-box border-2 bg-base-100 shadow-sm transition-shadow ${statusTone[line.pickStatus]} ${flashing ? "ring-4 ring-success" : ""}`}
       data-testid="pick-card"
+      data-flash={flashing || undefined}
     >
       <ToggleButton
         isSelected={done}
