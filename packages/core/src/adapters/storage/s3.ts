@@ -54,6 +54,12 @@ const decodeXml = (s: string) =>
 const xmlValue = (xml: string, tag: string) =>
   new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`).exec(xml)?.[1];
 
+/** Null when storage doesn't say (a chunked reply): an unknown size, not an empty file. */
+function contentLength(response: Response): number | null {
+  const header = response.headers.get("content-length");
+  return header === null ? null : Number(header);
+}
+
 function statusError(status: number, what: string): StorageError {
   const detail = `${status} ${what}`;
   if (status === 404) return new StorageError("notFound", detail);
@@ -84,6 +90,13 @@ export function createS3Storage(config: S3Config, options: S3Options = {}): Obje
   ): Promise<Response> {
     const { timeoutMs: ms = timeoutMs, ...rest } = init;
     const signed = await client.sign(url, rest);
+    // The timeout covers waiting for storage to answer, not reading the body: a GET's body is
+    // streamed to the browser, and a slow tablet or a paused <audio> may take longer than that.
+    const controller = new AbortController();
+    const timer = setTimeout(
+      () => controller.abort(new DOMException("storage timed out", "TimeoutError")),
+      ms,
+    );
     try {
       // The original body, not the signed Request's stream: a stream goes out chunked under
       // Next's fetch, and RustFS refuses a PUT without Content-Length (411).
@@ -91,11 +104,13 @@ export function createS3Storage(config: S3Config, options: S3Options = {}): Obje
         method: signed.method,
         headers: signed.headers,
         body: rest.body,
-        signal: AbortSignal.timeout(ms),
+        signal: controller.signal,
       });
     } catch (error) {
       const timedOut = error instanceof DOMException && error.name === "TimeoutError";
       throw new StorageError("unavailable", timedOut ? "timeout" : "network");
+    } finally {
+      clearTimeout(timer);
     }
   }
 
@@ -135,7 +150,7 @@ export function createS3Storage(config: S3Config, options: S3Options = {}): Obje
       }
       return {
         body: response.body,
-        size: Number(response.headers.get("content-length") ?? 0),
+        size: contentLength(response),
         contentType: response.headers.get("content-type") ?? "application/octet-stream",
         contentRange: response.headers.get("content-range") ?? undefined,
       };

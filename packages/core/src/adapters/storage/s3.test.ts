@@ -62,6 +62,45 @@ describe("S3Storage requests", () => {
     expect(call?.rawBody).toBeInstanceOf(Uint8Array);
   });
 
+  it("times out waiting for storage, not while the body is being read", async () => {
+    // Like real fetch: aborting the signal kills the body stream too. The body ends after the
+    // timeout, as a 15 MB file to a slow tablet (or a paused audio element) would.
+    const slowBody = ((_input: string | URL | Request, init?: RequestInit) => {
+      const signal = init?.signal;
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+          signal?.addEventListener("abort", () => controller.error(signal.reason));
+          controller.enqueue(new TextEncoder().encode("first half, "));
+          setTimeout(() => {
+            if (signal?.aborted) return;
+            controller.enqueue(new TextEncoder().encode("second half"));
+            controller.close();
+          }, 150);
+        },
+      });
+      return Promise.resolve(
+        new Response(body, { status: 200, headers: { "content-type": "audio/webm" } }),
+      );
+    }) as typeof fetch;
+    const storage = createS3Storage(config, { fetch: slowBody, timeoutMs: 50 });
+    const object = await storage.get("notes/n1/v.webm");
+    expect(await new Response(object.body).text()).toBe("first half, second half");
+    // No content-length from storage: the size is unknown, not zero.
+    expect(object.size).toBeNull();
+
+    const hanging = createS3Storage(config, {
+      timeoutMs: 50,
+      fetch: ((_input: string | URL | Request, init?: RequestInit) =>
+        new Promise((_, reject) =>
+          init?.signal?.addEventListener("abort", () => reject(init.signal?.reason)),
+        )) as typeof fetch,
+    });
+    await expect(hanging.get("k")).rejects.toMatchObject({
+      kind: "unavailable",
+      detail: "timeout",
+    });
+  });
+
   it("forwards a Range and reports the content range", async () => {
     const { storage, calls } = setup(
       new Response("0123", {

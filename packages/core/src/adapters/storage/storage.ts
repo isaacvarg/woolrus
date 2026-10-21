@@ -3,8 +3,8 @@
 
 export type StoredObject = {
   body: ReadableStream<Uint8Array>;
-  /** Bytes in `body`: the part's length for a ranged get. */
-  size: number;
+  /** Bytes in `body` (the part's length for a ranged get); null when storage didn't say. */
+  size: number | null;
   contentType: string;
   /** `bytes 0-99/1234` when a range was asked for, so the serving route can answer 206. */
   contentRange?: string;

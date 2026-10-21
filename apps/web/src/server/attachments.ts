@@ -9,6 +9,16 @@ const log = createLogger({ module: "attachments" });
 const empty = (status: number) => new Response(null, { status });
 
 /**
+ * One range, as browsers send for seeking and Safari's audio. Anything else (several ranges, a
+ * malformed header) is ignored and the whole file is served, so storage only ever sees one.
+ */
+function singleRange(header: string | null): string | undefined {
+  if (!header) return undefined;
+  const value = header.trim();
+  return /^bytes=(\d+-\d*|-\d+)$/.test(value) ? value : undefined;
+}
+
+/**
  * Streams a note attachment through the app (SPEC-notes "Serving attachments"): storage stays off
  * the network, and `order.read` is checked on every fetch, so no URL grants access by itself.
  */
@@ -22,17 +32,21 @@ export async function serveAttachment(
   if (!z.uuid().safeParse(id).success) return empty(404);
   try {
     const attachment = await getAttachment(db, resolved.actor, { id, variant });
-    const range = request.headers.get("range") ?? undefined;
-    const object = await storage().get(attachment.key, range);
+    const object = await storage().get(attachment.key, singleRange(request.headers.get("range")));
     const headers = new Headers({
       "Content-Type": attachment.contentType,
-      "Content-Length": String(object.size),
       // Keys are never reused, so the bytes behind a URL never change.
       "Cache-Control": "private, max-age=3600, immutable",
       "X-Content-Type-Options": "nosniff",
       "Content-Disposition": "inline",
       "Accept-Ranges": "bytes",
+      // Defense in depth: voice memos are stored as uploaded, so even if a stored type were ever
+      // wrong, the bytes can't run as a page or be embedded by another site.
+      "Content-Security-Policy": "default-src 'none'; sandbox",
+      "Cross-Origin-Resource-Policy": "same-origin",
     });
+    // Unknown when storage replied chunked; then the response is chunked too.
+    if (object.size !== null) headers.set("Content-Length", String(object.size));
     if (object.contentRange) headers.set("Content-Range", object.contentRange);
     return new Response(object.body, { status: object.contentRange ? 206 : 200, headers });
   } catch (error) {

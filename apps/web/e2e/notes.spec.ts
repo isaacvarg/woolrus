@@ -153,6 +153,8 @@ test("a picker notes a line with a photo and a voice memo, sees the indicators, 
   const ranged = await page.request.get(src, { headers: { Range: "bytes=0-99" } });
   expect(ranged.status()).toBe(206);
   expect(ranged.headers()["content-type"]).toBe("audio/webm");
+  expect(ranged.headers()["content-length"]).toBe("100");
+  expect(ranged.headers()["content-range"]).toMatch(/^bytes 0-99\/\d+$/);
   expect((await ranged.body()).length).toBe(100);
 
   const otherContext = await browser.newContext();
@@ -267,12 +269,25 @@ test("a picker attaches photos on a tablet, opens them in the lightbox and remov
     "cache-control": "private, max-age=3600, immutable",
     "x-content-type-options": "nosniff",
     "content-disposition": "inline",
+    // Defense in depth: even if a stored type were ever wrong, the bytes can't run as a page.
+    "content-security-policy": "default-src 'none'; sandbox",
+    "cross-origin-resource-policy": "same-origin",
   });
+  const size = Number(response.headers()["content-length"]);
+  expect(size).toBe((await response.body()).length);
   expect((await page.request.get(`${url}/thumb`)).status()).toBe(200);
   expect((await request.get(url)).status()).toBe(401);
   expect(
     (await page.request.get("/api/attachments/0199e6a0-0000-7000-8000-00000000dead")).status(),
   ).toBe(404);
+  expect((await page.request.get("/api/attachments/not-a-uuid")).status()).toBe(404);
+  // One range only: a multi-range request gets the whole file, a range past the end gets 416.
+  const multi = await page.request.get(url, { headers: { Range: "bytes=0-0,2-2,4-4" } });
+  expect(multi.status()).toBe(200);
+  expect((await multi.body()).length).toBe(size);
+  expect(
+    (await page.request.get(url, { headers: { Range: `bytes=${size + 10}-` } })).status(),
+  ).toBe(416);
 
   await note.getByRole("button", { name: "Edit" }).click();
   const dialog = page.getByRole("dialog", { name: "Edit note" });
