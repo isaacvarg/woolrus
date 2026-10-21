@@ -42,6 +42,7 @@ import {
   revokeBadge,
   revokeInvitation,
   revokeStation,
+  scan,
   sendTestEmail,
   setPin,
   setSecret,
@@ -202,6 +203,7 @@ export const router = implementer.router({
     unpickLine: api.picking.unpickLine.handler(({ input, context }) =>
       unpickLine(db, context.actor, input),
     ),
+    scan: api.picking.scan.handler(({ input, context }) => scan(db, context.actor, input)),
   },
   sync: {
     status: api.sync.status.handler(({ context }) => getSyncStatus(db, context.actor)),

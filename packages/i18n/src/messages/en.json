@@ -333,7 +333,10 @@
     "bin": "Bin {bin}",
     "count": "{picked} of {quantity}",
     "oneFewer": "One fewer {name}",
-    "oneMore": "One more {name}"
+    "oneMore": "One more {name}",
+    "scanned": "{name}: {picked} of {quantity}",
+    "scanOk": "Scanned.",
+    "scanRefused": "Scan refused."
   },
   "orders": {
     "status": "Status",
@@ -495,7 +498,10 @@
     "picking": {
       "notPicking": "This order isn't being picked, so its lines can't change.",
       "claimRequired": "Claim this order to pick it.",
-      "lineNotPickable": "Nothing on this line needs picking."
+      "lineNotPickable": "Nothing on this line needs picking.",
+      "scanNotOnOrder": "That's {name}. It isn't on this order.",
+      "scanUnknown": "Woolrus doesn't know that code.",
+      "scanAlreadyPicked": "{line} is already picked."
     },
     "workflow": {
       "illegalTransition": "That move isn't allowed from the order's current status.",

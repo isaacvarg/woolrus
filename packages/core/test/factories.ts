@@ -28,6 +28,10 @@ export type LineSpec = {
   noProduct?: boolean;
   /** The product's bin location. */
   bin?: string;
+  /** The product's barcode. */
+  barcode?: string;
+  /** Gives the line a variation of its product, with these codes. */
+  variation?: { sku?: string; barcode?: string };
   imageUrl?: string;
   /** Variation attributes and product options, as sync stores them (raw JSON). */
   attributes?: unknown;
@@ -145,16 +149,33 @@ async function createLine(db: Db, orderId: string, line: LineSpec): Promise<Orde
           sku,
           physical: line.physical ?? true,
           binLocation: line.bin ?? null,
+          barcode: line.barcode ?? null,
           rawPayload: {},
           syncedAt: new Date(),
         },
       });
+  const variation =
+    product && line.variation
+      ? await db.productVariation.create({
+          data: {
+            productId: product.id,
+            wooVariationId: n,
+            name,
+            sku: line.variation.sku ?? null,
+            barcode: line.variation.barcode ?? null,
+            attributes: [],
+            rawPayload: {},
+            syncedAt: new Date(),
+          },
+        })
+      : null;
 
   const item = await db.orderItem.create({
     data: {
       orderId,
       wooLineItemId: n,
       productId: product?.id ?? null,
+      variationId: variation?.id ?? null,
       name,
       sku,
       quantity,

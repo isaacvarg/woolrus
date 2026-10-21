@@ -7,7 +7,7 @@ import { type Actor, assertCan } from "../permissions";
 import { claimExpiryMinutes, holdsClaim, isClaimLive, touchClaim } from "../workflow/claims";
 import { toOrderDetails } from "../workflow/detail";
 import { evaluateGate, loadGateSnapshot } from "../workflow/gates";
-import { lockOrder } from "../workflow/lock";
+import { type LockedOrder, lockOrder } from "../workflow/lock";
 import { notifyOrderChanged } from "../workflow/notify";
 import { displayName, nameFields } from "../workflow/people";
 import { toAttributes } from "../workflow/queries";
@@ -19,20 +19,21 @@ import { pickOrder } from "./sort";
 
 export type PickOptions = { now?: Date };
 
-const lineInclude = {
-  product: { select: { physical: true, binLocation: true } },
-  variation: { select: { binLocation: true } },
+export const lineInclude = {
+  product: { select: { physical: true, binLocation: true, barcode: true, sku: true } },
+  variation: { select: { binLocation: true, barcode: true, sku: true } },
   voids: { where: { undoneAt: null }, select: { quantity: true } },
   pickedBy: { select: nameFields },
 } as const satisfies Prisma.OrderItemInclude;
 
-type LineRow = Prisma.OrderItemGetPayload<{ include: typeof lineInclude }>;
+export type LineRow = Prisma.OrderItemGetPayload<{ include: typeof lineInclude }>;
 
-const activeQuantity = (row: LineRow) =>
+export const activeQuantity = (row: LineRow) =>
   Math.max(row.quantity - row.voids.reduce((sum, v) => sum + v.quantity, 0), 0);
 
 // A line whose product row is gone counts as physical (SPEC-workflow "Schema additions").
-const isWorkLine = (row: LineRow) => (row.product?.physical ?? true) && activeQuantity(row) > 0;
+export const isWorkLine = (row: LineRow) =>
+  (row.product?.physical ?? true) && activeQuantity(row) > 0;
 
 const isDone = (status: PickStatus) => status === "PICKED" || status === "SUBSTITUTED";
 
@@ -61,10 +62,27 @@ async function progress(tx: DbTx, orderId: string): Promise<{ done: number; tota
   return { done: work.filter((l) => isDone(l.pickStatus)).length, total: work.length };
 }
 
-type LineWrite = Pick<
+export type LineWrite = Pick<
   Prisma.OrderItemUncheckedUpdateInput,
   "pickStatus" | "pickedQuantity" | "pickedById" | "pickedAt" | "substitutionNote"
 >;
+
+/** Locks the order and checks it is in Picking under the actor's live claim. Run inside a transaction. */
+export async function lockForPicking(
+  tx: DbTx,
+  actor: Actor,
+  orderId: string,
+  now: Date,
+): Promise<LockedOrder> {
+  // Settings before the order lock: the lock order workflow uses everywhere.
+  const expiry = await claimExpiryMinutes(tx);
+  const order = await lockOrder(tx, orderId);
+  if (order.status !== "PICKING") throw new AppError("CONFLICT", "errors.picking.notPicking");
+  if (!isClaimLive(order, expiry, now) || !holdsClaim(actor, order.claimedById)) {
+    throw new AppError("CONFLICT", "errors.picking.claimRequired");
+  }
+  return order;
+}
 
 /**
  * Runs one line write: permission, the order lock, the Picking + live-claim checks, then the write,
@@ -79,48 +97,57 @@ async function writeLine(
   { now = new Date() }: PickOptions,
 ): Promise<PickLineResult> {
   assertCan(actor, "order.pick");
-  return db.$transaction(async (tx) => {
-    const ref = await tx.orderItem.findUnique({ where: { id: itemId }, select: { orderId: true } });
-    if (!ref) throw notFound();
-    // Settings before the order lock: the lock order workflow uses everywhere.
-    const expiry = await claimExpiryMinutes(tx);
-    const order = await lockOrder(tx, ref.orderId);
-    if (order.status !== "PICKING") throw new AppError("CONFLICT", "errors.picking.notPicking");
-    if (!isClaimLive(order, expiry, now) || !holdsClaim(actor, order.claimedById)) {
-      throw new AppError("CONFLICT", "errors.picking.claimRequired");
-    }
+  return db.$transaction((tx) => writeLineIn(tx, actor, itemId, op, decide, now));
+}
 
-    // Read after the lock, so a store edit to the line can't slip in between.
-    const row = await tx.orderItem.findUniqueOrThrow({
-      where: { id: itemId },
-      include: lineInclude,
-    });
-    if (!isWorkLine(row)) throw new AppError("CONFLICT", "errors.picking.lineNotPickable");
+/** `writeLine` inside the caller's transaction, for operations that pick the line themselves (scan). */
+export async function writeLineIn(
+  tx: DbTx,
+  actor: Actor,
+  itemId: string,
+  op: string,
+  decide: (row: LineRow, now: Date) => LineWrite,
+  now: Date,
+): Promise<PickLineResult> {
+  assertCan(actor, "order.pick");
+  const ref = await tx.orderItem.findUnique({ where: { id: itemId }, select: { orderId: true } });
+  if (!ref) throw notFound();
+  const order = await lockForPicking(tx, actor, ref.orderId, now);
 
-    const data = decide(row, now);
-    const updated = await tx.orderItem.update({
-      where: { id: itemId },
-      data,
-      include: lineInclude,
-    });
-
-    await recordAudit(tx, actor, {
-      entityType: "OrderItem",
-      entityId: itemId,
-      action: `pick.${op}`,
-      before: { pickStatus: row.pickStatus, pickedQuantity: row.pickedQuantity },
-      after: { pickStatus: updated.pickStatus, pickedQuantity: updated.pickedQuantity },
-      at: now,
-    });
-    await touchClaim(tx, actor, order.id, { now });
-    await notifyOrderChanged(tx, { id: order.id, status: order.status });
-
-    const notes = await lineAndPackageNoteCounts(tx, order.id);
-    return {
-      line: toPickLine(updated, notes.items.get(itemId) ?? 0),
-      ...(await progress(tx, order.id)),
-    };
+  // Read after the lock, so a store edit to the line can't slip in between.
+  const row = await tx.orderItem.findUniqueOrThrow({
+    where: { id: itemId },
+    include: lineInclude,
   });
+  if (!isWorkLine(row)) throw new AppError("CONFLICT", "errors.picking.lineNotPickable");
+
+  const data = decide(row, now);
+  const updated = await tx.orderItem.update({
+    where: { id: itemId },
+    data,
+    include: lineInclude,
+  });
+
+  await recordAudit(tx, actor, {
+    entityType: "OrderItem",
+    entityId: itemId,
+    action: `pick.${op}`,
+    before: { pickStatus: row.pickStatus, pickedQuantity: row.pickedQuantity },
+    after: { pickStatus: updated.pickStatus, pickedQuantity: updated.pickedQuantity },
+    at: now,
+  });
+  await touchClaim(tx, actor, order.id, { now });
+  await notifyOrderChanged(tx, { id: order.id, status: order.status });
+  return lineResult(tx, order.id, updated);
+}
+
+/** A line as the pick screen shows it, with the order's done/total counts. */
+export async function lineResult(tx: DbTx, orderId: string, row: LineRow): Promise<PickLineResult> {
+  const notes = await lineAndPackageNoteCounts(tx, orderId);
+  return {
+    line: toPickLine(row, notes.items.get(row.id) ?? 0),
+    ...(await progress(tx, orderId)),
+  };
 }
 
 /** Picks the whole line, or records `quantity` units so far (FR-PICK-02). Replaces Out of Stock or Substituted. */

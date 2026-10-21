@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { base, Id } from "./base";
+import { base, Id, IdempotencyKey } from "./base";
 import { ExpectedVersion, LineAttribute, OrderDetail, PickStatus } from "./orders";
 
 // Picking (SPEC-picking "API"). Line writes need the order in Picking and the caller's live claim;
@@ -74,6 +74,15 @@ export const CompletePickResult = z.object({
 });
 export type CompletePickResult = z.infer<typeof CompletePickResult>;
 
+export const ScanInput = z.object({
+  orderId: Id,
+  /** What the scanner typed: a barcode or SKU, matched trimmed and case-insensitive. */
+  code: z.string().trim().min(1).max(200),
+  /** One per physical scan, so a retried request doesn't count the unit twice. */
+  scanId: IdempotencyKey,
+});
+export type ScanInput = z.infer<typeof ScanInput>;
+
 const tags = ["Picking"];
 
 export const picking = {
@@ -114,4 +123,13 @@ export const picking = {
     })
     .input(CompletePickInput)
     .output(CompletePickResult),
+  scan: base
+    .route({
+      method: "POST",
+      path: "/orders/{orderId}/scan",
+      tags,
+      summary: "Count one scanned unit on the first line of the order it matches",
+    })
+    .input(ScanInput)
+    .output(PickLineResult),
 };
