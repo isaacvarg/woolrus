@@ -321,6 +321,28 @@
     "pageOf": "Page {page} of {pages}",
     "total": "{count, plural, one {# order} other {# orders}}"
   },
+  "notes": {
+    "title": "Notes",
+    "empty": "No notes on this order yet.",
+    "newNote": "New note",
+    "content": "Note",
+    "add": "Add note",
+    "added": "Note added.",
+    "customerVisible": "Visible to the customer",
+    "customerVisibleHint": "WooCommerce emails it to the customer when the order ships. Leave it off for notes meant for the team.",
+    "customerBadge": "Customer",
+    "formerUser": "Former user",
+    "atStation": "at {station}",
+    "edited": "edited",
+    "sentToWoo": "Sent to WooCommerce",
+    "edit": "Edit",
+    "editTitle": "Edit note",
+    "saved": "Note saved.",
+    "delete": "Delete",
+    "deleteTitle": "Delete this note?",
+    "deleteBody": "It is removed for everyone. This can't be undone.",
+    "deleted": "Note deleted."
+  },
   "status": {
     "PENDING": "Pending",
     "PICKING": "Picking",
@@ -486,6 +508,10 @@
       "pinLocked": "Too many wrong PINs. Try again at {until, time, short}.",
       "badBadge": "That badge isn't recognized.",
       "notStation": "Only a station can be locked."
+    },
+    "notes": {
+      "empty": "Write something in the note first.",
+      "notAuthor": "Only the note's author or an admin can change it."
     }
   },
   "emails": {

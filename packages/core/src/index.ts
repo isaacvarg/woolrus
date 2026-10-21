@@ -20,6 +20,7 @@ export * from "./identity/stations";
 export * from "./identity/users";
 export * from "./install-jobs";
 export * from "./jobs";
+export * from "./notes/service";
 export * from "./permissions";
 export * from "./settings/crypto";
 export { encryptionKey } from "./settings/env";

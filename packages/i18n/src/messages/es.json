@@ -321,6 +321,28 @@
     "pageOf": "Página {page} de {pages}",
     "total": "{count, plural, one {# pedido} other {# pedidos}}"
   },
+  "notes": {
+    "title": "Notas",
+    "empty": "Este pedido aún no tiene notas.",
+    "newNote": "Nueva nota",
+    "content": "Nota",
+    "add": "Agregar nota",
+    "added": "Nota agregada.",
+    "customerVisible": "Visible para el cliente",
+    "customerVisibleHint": "WooCommerce se la envía por correo al cliente cuando se envía el pedido. Déjala desactivada para notas del equipo.",
+    "customerBadge": "Cliente",
+    "formerUser": "Usuario anterior",
+    "atStation": "en {station}",
+    "edited": "editada",
+    "sentToWoo": "Enviada a WooCommerce",
+    "edit": "Editar",
+    "editTitle": "Editar nota",
+    "saved": "Nota guardada.",
+    "delete": "Eliminar",
+    "deleteTitle": "¿Eliminar esta nota?",
+    "deleteBody": "Se elimina para todos. No se puede deshacer.",
+    "deleted": "Nota eliminada."
+  },
   "status": {
     "PENDING": "Pendiente",
     "PICKING": "En surtido",
@@ -486,6 +508,10 @@
       "pinLocked": "Demasiados PIN incorrectos. Vuelve a intentarlo a las {until, time, short}.",
       "badBadge": "No se reconoce esa credencial.",
       "notStation": "Solo se puede bloquear una estación."
+    },
+    "notes": {
+      "empty": "Escribe algo en la nota primero.",
+      "notAuthor": "Solo el autor de la nota o un administrador puede cambiarla."
     }
   },
   "emails": {

@@ -3,6 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import type { OrderView as Order } from "@woolrus/contracts";
 import { useFormatter, useTranslations } from "next-intl";
+import { NotesPanel } from "@/components/notes/notes-panel";
 import { useErrorMessage } from "@/lib/errors";
 import { orpc } from "@/lib/orpc";
 import { formatAddress } from "./address";
@@ -12,7 +13,15 @@ import { OrderActions } from "./order-actions";
 
 const priorityBadge: Record<number, string> = { 1: "badge-warning", 2: "badge-error" };
 
-export function OrderView({ id, userId }: { id: string; userId: string | null }) {
+export function OrderView({
+  id,
+  userId,
+  canWriteCustomer,
+}: {
+  id: string;
+  userId: string | null;
+  canWriteCustomer: boolean;
+}) {
   const t = useTranslations();
   const errorMessage = useErrorMessage();
   const order = useQuery(orpc.orders.get.queryOptions({ input: { id } }));
@@ -35,6 +44,7 @@ export function OrderView({ id, userId }: { id: string; userId: string | null })
         <div className="space-y-6 lg:col-span-2">
           <OrderLines order={order.data} />
           <OrderPackages order={order.data} />
+          <NotesPanel orderId={id} canWriteCustomer={canWriteCustomer} />
         </div>
         <HistoryPanel id={id} />
       </div>

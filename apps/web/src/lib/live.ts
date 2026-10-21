@@ -33,11 +33,22 @@ function invalidateLists(queryClient: QueryClient) {
   }
 }
 
+/** Every query that follows the order event stream: orders, and their notes. */
+const followed = () => [orpc.orders.key(), orpc.notes.key()];
+
+function invalidateFollowed(queryClient: QueryClient) {
+  for (const queryKey of followed()) void queryClient.invalidateQueries({ queryKey });
+}
+
 function invalidateOrders(queryClient: QueryClient, ids: Iterable<string>) {
   invalidateLists(queryClient);
   for (const id of ids) {
     void queryClient.invalidateQueries({ queryKey: orpc.orders.get.key({ input: { id } }) });
     void queryClient.invalidateQueries({ queryKey: orpc.orders.history.key({ input: { id } }) });
+    // Notes change without touching the order, and say so with the same event.
+    void queryClient.invalidateQueries({
+      queryKey: orpc.notes.list.key({ input: { orderId: id } }),
+    });
   }
 }
 
@@ -53,9 +64,11 @@ export function useOrderEvents() {
     let connected = false;
     // Evaluated again whenever a query updates; every change of `connected` below invalidates, so
     // the interval switches as soon as the refetch lands.
-    queryClient.setQueryDefaults(orpc.orders.key(), {
-      refetchInterval: () => (connected ? REFRESH_MS : POLL_MS),
-    });
+    for (const queryKey of followed()) {
+      queryClient.setQueryDefaults(queryKey, {
+        refetchInterval: () => (connected ? REFRESH_MS : POLL_MS),
+      });
+    }
 
     let source: EventSource | undefined;
     let attempt = 0;
@@ -69,7 +82,7 @@ export function useOrderEvents() {
         attempt = 0;
         connected = true;
         // Changes made before the stream opened, or while it was down, sent no event here.
-        void queryClient.invalidateQueries({ queryKey: orpc.orders.key() });
+        invalidateFollowed(queryClient);
       };
       source.addEventListener("order_changed", (message) => {
         pending.add((JSON.parse(message.data) as OrderChangedEvent).id);
@@ -80,7 +93,7 @@ export function useOrderEvents() {
         }, BATCH_MS);
       });
       source.addEventListener("resync", () => {
-        void queryClient.invalidateQueries({ queryKey: orpc.orders.key() });
+        invalidateFollowed(queryClient);
       });
       source.onerror = () => {
         // EventSource retries on its own at a fixed rate, and gives up for good on an HTTP error
@@ -88,7 +101,7 @@ export function useOrderEvents() {
         source?.close();
         if (connected) {
           connected = false;
-          void queryClient.invalidateQueries({ queryKey: orpc.orders.key() });
+          invalidateFollowed(queryClient);
         }
         const delay = BACKOFF_MS[Math.min(attempt, BACKOFF_MS.length - 1)];
         attempt += 1;
@@ -101,7 +114,9 @@ export function useOrderEvents() {
       source?.close();
       clearTimeout(reconnect);
       clearTimeout(flush);
-      queryClient.setQueryDefaults(orpc.orders.key(), { refetchInterval: false });
+      for (const queryKey of followed()) {
+        queryClient.setQueryDefaults(queryKey, { refetchInterval: false });
+      }
     };
   }, [queryClient]);
 }

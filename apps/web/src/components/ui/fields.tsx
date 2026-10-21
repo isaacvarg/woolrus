@@ -21,6 +21,7 @@ import {
   type RadioProps,
   type SwitchProps,
   Text,
+  TextArea,
   type TextFieldProps,
 } from "react-aria-components";
 
@@ -69,6 +70,27 @@ export function TextField({
         </Text>
       )}
       <AppFieldError isEmail={props.type === "email"} />
+    </AriaTextField>
+  );
+}
+
+/** Multi-line text, e.g. a note. */
+export function TextAreaField({
+  label,
+  description,
+  rows = 4,
+  ...props
+}: TextFieldProps & { label: string; description?: string; rows?: number }) {
+  return (
+    <AriaTextField {...props} className="fieldset">
+      <Label className="fieldset-legend">{label}</Label>
+      <TextArea className="textarea w-full text-base" rows={rows} />
+      {description && (
+        <Text slot="description" className="label whitespace-normal">
+          {description}
+        </Text>
+      )}
+      <AppFieldError />
     </AriaTextField>
   );
 }

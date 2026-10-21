@@ -32,6 +32,17 @@ describe("permissions", () => {
     }
   });
 
+  it("lets Admin, QA and Shipper write to the customer, and everyone write notes", () => {
+    for (const role of ["ADMIN", "QA", "SHIPPER"] as const) {
+      expect(can(actor([role]), "note.customer")).toBe(true);
+    }
+    for (const role of ["PICKER", "PACKER"] as const) {
+      expect(can(actor([role]), "note.customer")).toBe(false);
+      expect(can(actor([role]), "note.write")).toBe(true);
+      expect(can(actor([role]), "note.moderate")).toBe(false);
+    }
+  });
+
   it("gives the system actor no user and no station", () => {
     expect(systemActor).toMatchObject({ userId: null, stationId: null, system: "store-sync" });
     expect(can(systemActor, "order.cancel")).toBe(true);
