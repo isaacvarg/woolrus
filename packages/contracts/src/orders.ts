@@ -119,6 +119,8 @@ export const QueueRow = z.object({
   holdReason: z.string().nullable(),
   heldFromStatus: WorkflowStatus.nullable(),
   version: z.number().int(),
+  /** Notes on the order, any target (FR-NOTE-05). */
+  noteCount: z.number().int(),
 });
 export type QueueRow = z.infer<typeof QueueRow>;
 
@@ -184,6 +186,8 @@ export const OrderLine = z.object({
   substitutionNote: z.string().nullable(),
   /** What the floor needs to pick the right thing: size, pack, and options chosen at checkout. */
   attributes: z.array(LineAttribute),
+  /** Notes on this line. */
+  noteCount: z.number().int(),
 });
 export type OrderLine = z.infer<typeof OrderLine>;
 
@@ -195,6 +199,8 @@ export const OrderPackageSummary = z.object({
   units: z.number().int(),
   /** A label exists or may exist at the carrier. */
   liveLabel: z.boolean(),
+  /** Notes on this package. */
+  noteCount: z.number().int(),
 });
 export type OrderPackageSummary = z.infer<typeof OrderPackageSummary>;
 
@@ -297,6 +303,8 @@ export const OrderListRow = z.object({
   orderedAt: z.date(),
   statusChangedAt: z.date(),
   externalChange: z.boolean(),
+  /** Notes on the order, any target (FR-NOTE-05). */
+  noteCount: z.number().int(),
 });
 export type OrderListRow = z.infer<typeof OrderListRow>;
 

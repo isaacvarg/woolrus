@@ -97,3 +97,62 @@ test("notes need a signed-in caller", async ({ request }) => {
   const order = await createOrder();
   expect((await request.get(`/api/v1/orders/${order.id}/notes`)).status()).toBe(401);
 });
+
+test("a picker notes a line from its row, sees the indicators, and deleting clears them", async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== "tablet", "the floor journey");
+  const customerName = `E2E ${crypto.randomUUID()}`;
+  const order = await createOrder({ status: "PICKING", customerName });
+  await signInAs(page, ["PICKER"]);
+  await page.goto(`/orders/${order.id}`);
+
+  const line = page.getByRole("table", { name: "Items" }).getByRole("row", { name: /E2E item/ });
+  await line.getByRole("button", { name: "Add a note on Line: E2E item ×2" }).click();
+  const dialog = page.getByRole("dialog", { name: "Add a note on Line: E2E item ×2" });
+  // Opened from the line, the picker is preset to it.
+  await expect(dialog.getByRole("combobox", { name: "On" })).toHaveValue(/^item:/);
+  await dialog.getByRole("textbox", { name: "New note" }).fill("Jar lid cracked");
+  await dialog.getByRole("button", { name: "Add note" }).click();
+  await expect(dialog).toBeHidden();
+
+  await expect(line.getByRole("img", { name: "1 note" })).toBeVisible();
+  const notes = page.getByRole("region", { name: "Notes" });
+  const group = notes.getByRole("region", { name: "Line: E2E item ×2" });
+  await expect(group.getByTestId("note")).toContainText("Jar lid cracked");
+  await notes.getByRole("radio", { name: "Order" }).click();
+  await expect(notes.getByText("No notes here.")).toBeVisible();
+  await notes.getByRole("radio", { name: "Lines" }).click();
+  await expect(group).toBeVisible();
+
+  await page.goto("/queue/picking");
+  await page.getByRole("searchbox", { name: "Search orders" }).fill(customerName);
+  const row = page.getByRole("row", { name: new RegExp(customerName) });
+  await expect(row.getByRole("img", { name: "1 note" })).toBeVisible();
+
+  await page.goto(`/orders/${order.id}`);
+  await group.getByRole("button", { name: "Delete" }).click();
+  await page
+    .getByRole("dialog", { name: "Delete this note?" })
+    .getByRole("button", { name: "Delete" })
+    .click();
+  await expect(notes.getByText("No notes on this order yet.")).toBeVisible();
+  await expect(line.getByRole("img", { name: /note/ })).toHaveCount(0);
+});
+
+test("a note's target must be on its order", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "an API check");
+  const order = await createOrder();
+  const other = await createOrder();
+  await signInAs(page, ["PICKER"]);
+  const otherLine = (await (await page.request.get(`/api/v1/orders/${other.id}`)).json()).lines[0]
+    .id as string;
+  const response = await page.request.post(`/api/v1/orders/${order.id}/notes`, {
+    data: {
+      idempotencyKey: crypto.randomUUID(),
+      content: "Wrong line",
+      target: { kind: "item", id: otherLine },
+    },
+  });
+  expect(response.status()).toBe(400);
+});

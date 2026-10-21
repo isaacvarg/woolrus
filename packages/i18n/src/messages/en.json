@@ -342,7 +342,23 @@
     "delete": "Delete",
     "deleteTitle": "Delete this note?",
     "deleteBody": "It is removed for everyone. This can't be undone.",
-    "deleted": "Note deleted."
+    "deleted": "Note deleted.",
+    "count": "{count, plural, one {# note} other {# notes}}",
+    "on": "On",
+    "target": {
+      "order": "Order #{label}",
+      "item": "Line: {label}",
+      "package": "Package {label}",
+      "issue": "Issue: {label}"
+    },
+    "filter": "Show notes on",
+    "filterAll": "All",
+    "filterOrder": "Order",
+    "filterItem": "Lines",
+    "filterPackage": "Packages",
+    "filterIssue": "Issues",
+    "noneInFilter": "No notes here.",
+    "addOn": "Add a note on {target}"
   },
   "status": {
     "PENDING": "Pending",
@@ -513,7 +529,8 @@
     "notes": {
       "empty": "Write something in the note first.",
       "notAuthor": "Only the note's author or an admin can change it.",
-      "alreadySent": "This note is already in WooCommerce, so it can't be changed."
+      "alreadySent": "This note is already in WooCommerce, so it can't be changed.",
+      "targetMismatch": "That line, package or issue isn't on this order."
     }
   },
   "emails": {

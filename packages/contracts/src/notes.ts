@@ -8,9 +8,29 @@ export type NoteVisibility = z.infer<typeof NoteVisibility>;
 /** Trimmed, up to 4000 characters. Core refuses a note with nothing in it (`errors.notes.empty`). */
 export const NoteContent = z.string().trim().max(4000);
 
+/** What a note is on: the order itself, or one of its lines, packages or quality issues. */
+export const NoteTargetKind = z.enum(["order", "item", "package", "issue"]);
+export type NoteTargetKind = z.infer<typeof NoteTargetKind>;
+
+export const NoteTargetInput = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("order") }),
+  z.object({ kind: z.literal("item"), id: Id }),
+  z.object({ kind: z.literal("package"), id: Id }),
+  z.object({ kind: z.literal("issue"), id: Id }),
+]);
+export type NoteTargetInput = z.infer<typeof NoteTargetInput>;
+
+/**
+ * `label` is store data, not UI text: the order number, `<line name> ×<quantity>`, the package
+ * number, or the issue's description (cut at 80 characters). The UI words it per `kind`.
+ */
+export const NoteTarget = z.object({ kind: NoteTargetKind, id: Id, label: z.string() });
+export type NoteTarget = z.infer<typeof NoteTarget>;
+
 export const Note = z.object({
   id: Id,
   orderId: Id,
+  target: NoteTarget,
   content: z.string(),
   visibility: NoteVisibility,
   /** Null once the author's account is gone. */
@@ -31,6 +51,7 @@ export const CreateNoteInput = z.object({
   orderId: Id,
   content: NoteContent,
   visibility: NoteVisibility.default("INTERNAL"),
+  target: NoteTargetInput.default({ kind: "order" }),
 });
 export type CreateNoteInput = z.infer<typeof CreateNoteInput>;
 

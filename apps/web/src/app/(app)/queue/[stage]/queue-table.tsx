@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { useFormatter, useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
 import { Input, Label, SearchField } from "react-aria-components";
+import { NoteCount } from "@/components/notes/note-count";
 import { Button } from "@/components/ui/fields";
 import { toast } from "@/components/ui/toast";
 import { useErrorMessage } from "@/lib/errors";
@@ -153,6 +154,7 @@ export function QueueTable({
                         ⚠
                       </span>
                     )}
+                    <NoteCount count={row.noteCount} className="ms-2" />
                   </td>
                   <td>{row.customerName}</td>
                   <td className="text-end tabular-nums">{row.itemCount}</td>

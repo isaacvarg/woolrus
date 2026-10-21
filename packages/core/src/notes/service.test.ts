@@ -23,6 +23,7 @@ function input(
     orderId,
     content: "Box was crushed",
     visibility: "INTERNAL",
+    target: { kind: "order" },
     ...fields,
   };
 }
