@@ -17,6 +17,10 @@ export const queues = {
   ordersRecomputePriority: "orders.recomputePriority",
   /** Send one app email through the configured sender (SPEC-identity "Email"). */
   emailSend: "email.send",
+  /** Delete stored files whose attachment rows are gone (SPEC-notes "Deleting files", FR-NOTE-06). */
+  storageDelete: "storage.delete",
+  /** Daily: delete `notes/` files no attachment points to, e.g. after a cascade (SPEC-notes). */
+  storageSweep: "storage.sweep",
 } as const;
 export type QueueName = (typeof queues)[keyof typeof queues];
 
@@ -33,6 +37,9 @@ export type JobPayloads = {
     locale: Locale;
     idempotencyKey: string;
   };
+  /** Object keys (files and thumbnails); missing ones count as deleted. */
+  [queues.storageDelete]: { keys: string[] };
+  [queues.storageSweep]: Record<string, never>;
 };
 
 /**
@@ -45,6 +52,9 @@ export const queueOptions: Partial<
   // 3 attempts: a 429 or 5xx from Resend throws and is retried after ~30 s, then ~60 s. The
   // idempotency key makes a retry after a lost response harmless.
   [queues.emailSend]: { retryLimit: 2, retryDelay: 30, retryBackoff: true },
+  // Storage down for a while shouldn't lose a delete: 6 attempts over roughly half an hour. A job
+  // that still fails leaves orphans, which the daily sweep collects.
+  [queues.storageDelete]: { retryLimit: 5, retryDelay: 60, retryBackoff: true },
 };
 
 /** pg-boss keeps its tables in their own schema, separate from Prisma's. */
