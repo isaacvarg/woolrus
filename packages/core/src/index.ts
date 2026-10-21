@@ -27,6 +27,7 @@ export * from "./notes/files";
 export * from "./notes/push";
 export * from "./notes/service";
 export * from "./permissions";
+export * from "./picking/complete";
 export * from "./picking/service";
 export * from "./picking/sort";
 export * from "./settings/crypto";

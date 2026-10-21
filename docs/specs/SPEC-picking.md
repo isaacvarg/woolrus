@@ -174,8 +174,8 @@ change of tablet and so `reporting` can count batch picks later.
   the lines in pick order with everything on a card (image, name, SKU, attributes, active quantity, picked
   quantity, status, substitution, note count, bin), counts done/total, the **picked** gate's unmet list (computed
   by `workflow`'s gate, read-only), and the open batch the order is in, if any. `order.read`.
-- **Completing a single order** `completePick({ orderId, expectedVersion, then: "queue" | "next" | "pack" })`:
-  calls workflow's `completePicking`, then in the same transaction:
+- **Completing a single order** `completePick({ orderId, expectedVersion, after: "queue" | "next" | "pack" })`
+  (`after`, not `then`: an object with a `then` key reads as a promise) calls workflow's `completePicking`, then in the same transaction:
   - `queue`: nothing more; the client returns to the Pending queue.
   - `next`: begins picking the first Pending order in queue order without a live claim (`FOR UPDATE SKIP
     LOCKED`, so two pickers finishing at once never get the same one) and returns its id. With none left, it
@@ -306,7 +306,7 @@ batch grouping), a line with quantity 6, and bins on some demo products so the s
    → `PICKED` → order passes **picked**.
 8. **Sort (FR-PICK-05):** bins sort naturally, lines without bins after, then name, then SKU; tested as a pure
    function.
-9. **Finish options:** `then: "next"` begins the top unclaimed Pending order (two pickers finishing at once get different orders) or returns `null` when none is left; `then: "pack"` claims the order in Packing and is forbidden without `order.pack`; a gate failure moves nothing for any option.
+9. **Finish options:** `after: "next"` begins the top unclaimed Pending order (two pickers finishing at once get different orders) or returns `null` when none is left; `after: "pack"` claims the order in Packing and is forbidden without `order.pack`; a gate failure moves nothing for any option.
 10. **Batch create:** six Pending orders become Picking with the actor's claim and slots 1–6 in queue order, in one
    transaction; one order claimed by someone else makes none move and reports that order with the holder's name.
    More than `pickBatchMaxOrders` (tested at a lowered setting), or a second open batch, is refused. Concurrent creates over a shared order: exactly one succeeds.
