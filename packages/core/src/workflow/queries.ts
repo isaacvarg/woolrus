@@ -212,7 +212,7 @@ function toAddress(json: Prisma.JsonValue): OrderAddress {
 const StoredAttributes = z.array(LineAttribute);
 
 /** Stored JSON that isn't a list of attributes (older shape, hand edits) reads as none. */
-function toAttributes(stored: Prisma.JsonValue): LineAttribute[] {
+export function toAttributes(stored: Prisma.JsonValue): LineAttribute[] {
   const parsed = StoredAttributes.safeParse(stored);
   return parsed.success ? parsed.data : [];
 }
@@ -233,6 +233,7 @@ export async function getOrder(
         include: {
           product: { select: { physical: true } },
           voids: { where: { undoneAt: null }, select: { quantity: true } },
+          pickedBy: { select: nameFields },
         },
       },
       packages: {
@@ -270,6 +271,8 @@ export async function getOrder(
       pickStatus: i.pickStatus,
       pickedQuantity: i.pickedQuantity,
       substitutionNote: i.substitutionNote,
+      pickedBy: i.pickedBy ? { name: displayName(i.pickedBy) } : null,
+      pickedAt: i.pickedAt,
       attributes: toAttributes(i.attributes),
       noteCount: notes.items.get(i.id) ?? 0,
     })),

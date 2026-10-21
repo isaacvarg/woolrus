@@ -26,6 +26,9 @@ export type LineSpec = {
   voids?: { quantity: number; undone?: boolean }[];
   /** Line has no product row (deleted in Woo). */
   noProduct?: boolean;
+  /** The product's bin location. */
+  bin?: string;
+  imageUrl?: string;
   /** Variation attributes and product options, as sync stores them (raw JSON). */
   attributes?: unknown;
 };
@@ -141,6 +144,7 @@ async function createLine(db: Db, orderId: string, line: LineSpec): Promise<Orde
           name,
           sku,
           physical: line.physical ?? true,
+          binLocation: line.bin ?? null,
           rawPayload: {},
           syncedAt: new Date(),
         },
@@ -155,6 +159,7 @@ async function createLine(db: Db, orderId: string, line: LineSpec): Promise<Orde
       sku,
       quantity,
       unitPriceCents: 1000,
+      imageUrl: line.imageUrl ?? null,
       pickStatus,
       pickedQuantity: line.pickedQuantity ?? (picked ? quantity : 0),
       pickedAt: picked ? new Date() : null,

@@ -468,6 +468,11 @@
     "settings": {
       "encryptionKeyMissing": "No se pueden guardar secretos: falta la clave de cifrado del servidor o no es válida. Pide a quien administra el servidor que configure SETTINGS_ENCRYPTION_KEY."
     },
+    "picking": {
+      "notPicking": "Este pedido no está en surtido, así que sus líneas no pueden cambiar.",
+      "claimRequired": "Reclama este pedido para surtirlo.",
+      "lineNotPickable": "No hay nada que surtir en esta línea."
+    },
     "workflow": {
       "illegalTransition": "Ese cambio no está permitido desde el estado actual del pedido.",
       "stale": "Este pedido cambió desde que lo abriste. Se actualizó; revísalo e inténtalo de nuevo.",

@@ -12,6 +12,7 @@ import {
   getEmailSender,
   getOrder,
   getOrderHistory,
+  getPickView,
   getPublicSettings,
   getSettings,
   getSyncStatus,
@@ -29,6 +30,7 @@ import {
   lockStation,
   orderMutations,
   permissionsFor,
+  pickLine,
   queueCounts,
   reactivateUser,
   registerStation,
@@ -47,6 +49,7 @@ import {
   touchStation,
   unlockWithBadge,
   unlockWithPin,
+  unpickLine,
   updateNote,
   updatePreferences,
   updatePriorityRule,
@@ -186,6 +189,15 @@ export const router = implementer.router({
       updateNote(db, storage(), context.actor, input),
     ),
     delete: api.notes.delete.handler(({ input, context }) => deleteNote(db, context.actor, input)),
+  },
+  picking: {
+    view: api.picking.view.handler(({ input, context }) => getPickView(db, context.actor, input)),
+    pickLine: api.picking.pickLine.handler(({ input, context }) =>
+      pickLine(db, context.actor, input),
+    ),
+    unpickLine: api.picking.unpickLine.handler(({ input, context }) =>
+      unpickLine(db, context.actor, input),
+    ),
   },
   sync: {
     status: api.sync.status.handler(({ context }) => getSyncStatus(db, context.actor)),

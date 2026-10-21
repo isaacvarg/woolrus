@@ -184,6 +184,9 @@ export const OrderLine = z.object({
   pickStatus: PickStatus,
   pickedQuantity: z.number().int(),
   substitutionNote: z.string().nullable(),
+  /** Who picked the line and when (FR-WF-04); null until it's picked. */
+  pickedBy: z.object({ name: z.string() }).nullable(),
+  pickedAt: z.date().nullable(),
   /** What the floor needs to pick the right thing: size, pack, and options chosen at checkout. */
   attributes: z.array(LineAttribute),
   /** Notes on this line. */

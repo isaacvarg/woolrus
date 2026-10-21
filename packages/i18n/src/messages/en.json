@@ -468,6 +468,11 @@
     "settings": {
       "encryptionKeyMissing": "Secrets can't be saved: the server's encryption key is missing or invalid. Ask whoever runs the server to set SETTINGS_ENCRYPTION_KEY."
     },
+    "picking": {
+      "notPicking": "This order isn't being picked, so its lines can't change.",
+      "claimRequired": "Claim this order to pick it.",
+      "lineNotPickable": "Nothing on this line needs picking."
+    },
     "workflow": {
       "illegalTransition": "That move isn't allowed from the order's current status.",
       "stale": "This order changed since you loaded it. It has been refreshed; check it and try again.",

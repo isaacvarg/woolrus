@@ -3,6 +3,7 @@ import { invitations } from "./invitations";
 import { me } from "./me";
 import { notes } from "./notes";
 import { orders } from "./orders";
+import { picking } from "./picking";
 import { priorityRules } from "./priority-rules";
 import { settings } from "./settings";
 import { station, stations } from "./stations";
@@ -15,6 +16,7 @@ export * from "./invitations";
 export * from "./me";
 export * from "./notes";
 export * from "./orders";
+export * from "./picking";
 export * from "./priority-rules";
 export * from "./settings";
 export * from "./stations";
@@ -31,6 +33,7 @@ export const contract = {
   settings,
   orders,
   notes,
+  picking,
   priorityRules,
   sync,
   users,
