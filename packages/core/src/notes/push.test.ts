@@ -22,6 +22,43 @@ const key = () => {
 const rejects = (promise: Promise<unknown>, kind: string, messageKey: string) =>
   expect(promise).rejects.toMatchObject({ kind, messageKey });
 
+/**
+ * Marks the note pushed in a transaction that stays open until `contender` is queued on a lock
+ * (or 2 s, for code that takes none), then commits. So the contender really overlaps the push.
+ */
+async function raceAPush<T>(noteId: string, contender: () => Promise<T>): Promise<T> {
+  let release!: () => void;
+  const released = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let marked!: () => void;
+  const isMarked = new Promise<void>((resolve) => {
+    marked = resolve;
+  });
+  const push = db.$transaction(
+    async (tx) => {
+      await markNotePushed(tx, { noteId, wooNoteId: 77 });
+      marked();
+      await released;
+    },
+    { timeout: 20_000 },
+  );
+  await isMarked;
+  const result = contender();
+  result.catch(() => {});
+  const deadline = Date.now() + 2_000;
+  while (Date.now() < deadline) {
+    const [row] = await db.$queryRaw<{ count: number }[]>`
+      SELECT count(*)::int AS count FROM pg_stat_activity
+      WHERE datname = current_database() AND wait_event_type = 'Lock'`;
+    if ((row?.count ?? 0) >= 1) break;
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  release();
+  await push;
+  return result;
+}
+
 describe("notes to push to WooCommerce", () => {
   it("lists unsent notes oldest first, with what shipping needs to format them", async () => {
     const author = await createActor(db, ["ADMIN"]);
@@ -208,5 +245,38 @@ describe("notes to push to WooCommerce", () => {
       const [listed] = await listNotes(db, actor, { orderId: order.id });
       expect(listed).toMatchObject({ content: "Sent", canEdit: false });
     }
+  });
+
+  it("an edit or delete that overlaps the push waits for it and is refused", async () => {
+    const author = await createActor(db, ["PICKER"]);
+    const { order } = await createOrder(db);
+    const write = (content: string) =>
+      createNote(db, storage, author, {
+        idempotencyKey: key(),
+        orderId: order.id,
+        content,
+        visibility: "INTERNAL",
+      });
+
+    const edited = await write("Sent");
+    await rejects(
+      raceAPush(edited.id, () =>
+        updateNote(db, storage, author, { id: edited.id, content: "changed" }),
+      ),
+      "CONFLICT",
+      "errors.notes.alreadySent",
+    );
+    expect(await db.note.findUniqueOrThrow({ where: { id: edited.id } })).toMatchObject({
+      content: "Sent",
+      wooNoteId: 77,
+    });
+
+    const deleted = await write("Also sent");
+    await rejects(
+      raceAPush(deleted.id, () => deleteNote(db, author, { id: deleted.id })),
+      "CONFLICT",
+      "errors.notes.alreadySent",
+    );
+    expect(await db.note.findUnique({ where: { id: deleted.id } })).not.toBeNull();
   });
 });

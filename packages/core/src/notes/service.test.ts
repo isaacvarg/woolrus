@@ -343,6 +343,26 @@ describe("notes service", () => {
       await nothingWritten();
     });
 
+    it("deletes its uploads when the same request committed while it was uploading", async () => {
+      const picker = await createActor(db, ["PICKER"]);
+      const { order } = await createOrder(db);
+      const request = input(order.id, { photos: [await photo()] });
+      // The retry passed the early replay check; the original commits during its first upload.
+      let first: Awaited<ReturnType<typeof createNote>> | undefined;
+      const racing = {
+        ...storage,
+        put: async (...args: Parameters<MemoryStorage["put"]>) => {
+          first ??= await createNote(db, storage, picker, request);
+          return storage.put(...args);
+        },
+      };
+      const retry = await createNote(db, racing, picker, request);
+      expect(retry).toEqual(first);
+      // Only the original's photo and thumbnail are left; the retry's two were deleted.
+      expect(storage.keys()).toHaveLength(2);
+      expect(storage.keys().every((k) => k.startsWith(`notes/${retry.id}/`))).toBe(true);
+    });
+
     it("uploads nothing on an idempotent replay", async () => {
       const picker = await createActor(db, ["PICKER"]);
       const { order } = await createOrder(db);
@@ -624,5 +644,41 @@ describe("notes service", () => {
       const event = { id: order.id, status: "PACKING" };
       expect(received).toEqual([event, event, event]);
     });
+  });
+});
+
+describe("refusals before any upload", () => {
+  it("checks the order and the target before processing or uploading files", async () => {
+    const picker = await createActor(db, ["PICKER"]);
+    const { order } = await createOrder(db);
+    const { items } = await createOrder(db);
+    const foreignLine = items[0];
+    if (!foreignLine) throw new Error("factory");
+    let puts = 0;
+    const counting = {
+      ...storage,
+      put: (...args: Parameters<MemoryStorage["put"]>) => {
+        puts += 1;
+        return storage.put(...args);
+      },
+    };
+    const photos = [fileOf(await solidImage(64, 48, "jpeg"), "photo.jpg")];
+
+    await rejects(
+      createNote(
+        db,
+        counting,
+        picker,
+        input(order.id, { photos, target: { kind: "item", id: foreignLine.id } }),
+      ),
+      "BAD_REQUEST",
+      "errors.notes.targetMismatch",
+    );
+    await rejects(
+      createNote(db, counting, picker, input(crypto.randomUUID(), { photos })),
+      "NOT_FOUND",
+      "errors.notFound",
+    );
+    expect(puts).toBe(0);
   });
 });

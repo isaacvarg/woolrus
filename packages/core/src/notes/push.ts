@@ -6,6 +6,11 @@ import { targetInclude, targetOf } from "./targets";
 /**
  * The contract `shipping` uses to post notes to WooCommerce exactly once (SRS §7.1 defect #8).
  * Internal: `shipping` checks its own permission and owns the HTTP call and retries.
+ *
+ * Edits and deletes lock the note row, so one that overlaps `markNotePushed` waits and is then
+ * refused. A row lock can't cover the HTTP call itself: a note edited after `notesToPush` read it
+ * but before it is marked reaches WooCommerce with its earlier text. `shipping` should keep that
+ * window short (read, post, mark per note) rather than reading every note up front.
  */
 
 export type NoteToPush = {

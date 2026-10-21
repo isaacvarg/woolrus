@@ -268,6 +268,13 @@ export async function createNote(
     where: { key: input.idempotencyKey },
     select: { key: true },
   });
+  const target = input.target ?? { kind: "order" };
+  // Refuse a missing order or a target from another order before processing files, as
+  // `updateNote` does; the transaction checks both again.
+  if (!replay) {
+    await orderStatus(db, input.orderId);
+    await resolveTarget(db, input.orderId, target);
+  }
   const noteId = uuidv7();
 
   return withUploads(
@@ -290,16 +297,12 @@ export async function createNote(
           actor,
           async () => {
             const status = await orderStatus(tx, input.orderId);
-            const target = await resolveTarget(
-              tx,
-              input.orderId,
-              input.target ?? { kind: "order" },
-            );
+            const columns = await resolveTarget(tx, input.orderId, target);
             const note = await tx.note.create({
               data: {
                 id: noteId,
                 orderId: input.orderId,
-                ...target,
+                ...columns,
                 authorId: actor.userId,
                 content,
                 visibility: input.visibility,
@@ -314,7 +317,7 @@ export async function createNote(
               action: "create",
               after: {
                 orderId: note.orderId,
-                ...target,
+                ...columns,
                 ...snapshot(note),
                 attachmentIds: prepared.map((a) => a.id),
               },
@@ -329,6 +332,16 @@ export async function createNote(
 }
 
 type NoteWithAttachments = Prisma.NoteGetPayload<{ include: { attachments: true } }>;
+
+/**
+ * The note with its row held until the transaction ends. `shipping`'s `markNotePushed` takes the
+ * same row, so an edit or delete that overlaps a push waits for it and then sees the note frozen,
+ * instead of changing a note WooCommerce already has (defect #8).
+ */
+async function findNoteForWrite(tx: DbTx, id: string): Promise<NoteWithAttachments | null> {
+  await tx.$queryRaw`SELECT id FROM notes WHERE id = ${id}::uuid FOR UPDATE`;
+  return tx.note.findUnique({ where: { id }, include: { attachments: true } });
+}
 
 /**
  * Checks an update against the note as it is: author, visibility, removals that belong to it, and
@@ -362,10 +375,11 @@ export async function updateNote(
   input: UpdateNoteInput,
 ): Promise<NoteDto> {
   assertCan(actor, "note.write");
-  const findNote = (tx: DbTx) =>
-    tx.note.findUnique({ where: { id: input.id }, include: { attachments: true } });
   // Refuse before processing files: a forbidden or invalid edit uploads nothing.
-  const before = await findNote(db);
+  const before = await db.note.findUnique({
+    where: { id: input.id },
+    include: { attachments: true },
+  });
   if (!before) throw notFound();
   planUpdate(actor, before, input);
 
@@ -379,7 +393,7 @@ export async function updateNote(
       }),
     (prepared) =>
       db.$transaction(async (tx) => {
-        const existing = await findNote(tx);
+        const existing = await findNoteForWrite(tx, input.id);
         if (!existing) throw notFound();
         const { next, removed } = planUpdate(actor, existing, input);
         if (
@@ -445,7 +459,7 @@ export async function deleteNote(
 ): Promise<{ id: string }> {
   assertCan(actor, "note.write");
   return db.$transaction(async (tx) => {
-    const existing = await tx.note.findUnique({ where: { id }, include: { attachments: true } });
+    const existing = await findNoteForWrite(tx, id);
     if (!existing) throw notFound();
     assertMayEdit(actor, existing);
     await tx.note.delete({ where: { id } });
