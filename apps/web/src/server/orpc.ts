@@ -39,6 +39,7 @@ const mapErrors = os.middleware(async ({ next, context }) => {
           params: error.params,
           unmet: error.unmet ? [...error.unmet] : undefined,
           failures: error.failures ? [...error.failures] : undefined,
+          canLink: error.canLink,
         },
       });
     }

@@ -61,6 +61,8 @@ export const permissions = [
   "user.manage",
   "station.manage",
   "report.read",
+  /** Catalog data the warehouse owns, e.g. linking a scanned barcode to a product. */
+  "product.manage",
 ] as const;
 export type Permission = (typeof permissions)[number];
 

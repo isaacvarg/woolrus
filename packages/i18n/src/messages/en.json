@@ -347,6 +347,8 @@
     "scanned": "{name}: {picked} of {quantity}",
     "scanOk": "Scanned.",
     "scanRefused": "Scan refused.",
+    "linkCode": "Link this code to {name}",
+    "linked": "{code} is now the barcode of {name}.",
     "lineActions": "More for {name}",
     "outOfStock": {
       "action": "Out of Stock",
@@ -550,6 +552,8 @@
       "scanNotOnOrder": "That's {name}. It isn't on this order.",
       "scanUnknown": "Woolrus doesn't know that code.",
       "scanAlreadyPicked": "{line} is already picked.",
+      "codeInUse": "That code already belongs to {name}.",
+      "noProductToLink": "This line has no product to link the code to.",
       "batchTooLarge": "A batch can hold at most {max} orders.",
       "batchOpen": "You already have an open batch. Finish it in My picks before starting another.",
       "batchFailed": "Some orders couldn't be taken, so none were."

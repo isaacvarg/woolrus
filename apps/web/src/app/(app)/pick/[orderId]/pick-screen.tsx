@@ -1,5 +1,6 @@
 "use client";
 
+import { ORPCError } from "@orpc/client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { PickLine, PickLineResult, PickStatus, PickView } from "@woolrus/contracts";
 import Link from "next/link";
@@ -40,8 +41,15 @@ function applyWrite(view: PickView, { line, quantity }: Write): PickView {
   return { ...view, lines, done: lines.filter((l) => isDone(l.pickStatus)).length };
 }
 
-/** What the last scan did, for the banner: counted on a line, or refused with the reason. */
-type ScanOutcome = { ok: boolean; message: string; lineId?: string; at: number };
+/**
+ * What the last scan did, for the banner: counted on a line, or refused with the reason. `linkCode`
+ * is an unknown code the viewer may link to a line's product (SPEC-picking "Code matching").
+ */
+type ScanOutcome = { ok: boolean; message: string; lineId?: string; linkCode?: string; at: number };
+
+/** True when the server offered to link a refused scan's unknown code to a product. */
+const canLinkOf = (error: unknown) =>
+  error instanceof ORPCError && (error.data as { canLink?: boolean } | undefined)?.canLink === true;
 
 function applyResult(view: PickView, result: PickLineResult): PickView {
   const lines = view.lines.map((l) => (l.id === result.line.id ? result.line : l));
@@ -128,12 +136,33 @@ function PickLayout({ view, userId, canPack }: { view: PickView } & Viewer) {
         }),
       });
     },
-    onError: (error) => {
+    onError: (error, code) => {
       playScanSound(false);
-      setScanned({ ok: false, at: Date.now(), message: errorMessage(error) });
+      setScanned({
+        ok: false,
+        at: Date.now(),
+        message: errorMessage(error),
+        linkCode: canLinkOf(error) ? code : undefined,
+      });
     },
   });
   useScanner((code) => scan.mutate(code), canPick);
+
+  const link = useMutation({
+    mutationFn: ({ line, code }: { line: PickLine; code: string }) =>
+      client.picking.linkBarcode({ orderItemId: line.id, code }),
+    onSuccess: (result) => {
+      // Nothing was counted: the next scan of the code is.
+      setScanned({
+        ok: true,
+        at: Date.now(),
+        message: t("pick.linked", { code: result.barcode, name: result.name }),
+      });
+    },
+    onError: (error) => toast.error(errorMessage(error)),
+  });
+  // An unknown code can go on any line still to pick; usually there's one.
+  const linkable = view.lines.filter((l) => l.pickStatus === "PENDING");
 
   const complete = useMutation({
     mutationFn: (after: Then) =>
@@ -166,7 +195,12 @@ function PickLayout({ view, userId, canPack }: { view: PickView } & Viewer) {
     <section className="mx-auto max-w-5xl space-y-4 pb-28">
       <PickHeader view={view} />
       <PickBanner view={view} userId={userId} />
-      <ScanBanner outcome={scanned} />
+      <ScanBanner
+        outcome={scanned}
+        linkTo={scanned?.linkCode ? linkable : []}
+        linking={link.isPending}
+        onLink={(line) => scanned?.linkCode && link.mutate({ line, code: scanned.linkCode })}
+      />
 
       {view.customerNote && (
         <div className="alert alert-info">
@@ -287,7 +321,7 @@ function PickBanner({ view, userId }: { view: PickView; userId: string | null })
   return (
     <div role="status" className="alert alert-warning">
       <span className="grow">{message}</span>
-      <Link href={`/orders/${order.id}`} className="btn btn-sm">
+      <Link href={`/orders/${order.id}`} className="btn-sm">
         {t("pick.orderDetails")}
       </Link>
     </div>
@@ -298,7 +332,18 @@ function PickBanner({ view, userId }: { view: PickView; userId: string | null })
  * The last scan's result, announced to screen readers (NFR-UX-05). The live region stays mounted so
  * every new message is read out; the banner itself shows only once something was scanned.
  */
-function ScanBanner({ outcome }: { outcome: ScanOutcome | null }) {
+function ScanBanner({
+  outcome,
+  linkTo,
+  linking,
+  onLink,
+}: {
+  outcome: ScanOutcome | null;
+  /** Lines the refused code may be linked to; empty when there's nothing to offer. */
+  linkTo: PickLine[];
+  linking: boolean;
+  onLink: (line: PickLine) => void;
+}) {
   const t = useTranslations();
   return (
     <div aria-live="assertive" aria-atomic="true">
@@ -316,6 +361,20 @@ function ScanBanner({ outcome }: { outcome: ScanOutcome | null }) {
             </span>
             {outcome.message}
           </span>
+          {linkTo.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {linkTo.map((line) => (
+                <Button
+                  key={line.id}
+                  className="btn-sm"
+                  isDisabled={linking}
+                  onPress={() => onLink(line)}
+                >
+                  {t("pick.linkCode", { name: line.name })}
+                </Button>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>

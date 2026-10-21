@@ -92,6 +92,22 @@ export const ScanInput = z.object({
 });
 export type ScanInput = z.infer<typeof ScanInput>;
 
+export const LinkBarcodeInput = z.object({
+  orderItemId: Id,
+  /** The scanned code; stored trimmed, matched trimmed and case-insensitive. */
+  code: z.string().trim().min(1).max(200),
+});
+export type LinkBarcodeInput = z.infer<typeof LinkBarcodeInput>;
+
+export const LinkBarcodeResult = z.object({
+  barcode: z.string(),
+  /** Where the code went: the line's variation, else its product. */
+  linkedTo: z.enum(["variation", "product"]),
+  /** That variation's or product's name. */
+  name: z.string(),
+});
+export type LinkBarcodeResult = z.infer<typeof LinkBarcodeResult>;
+
 /** `foundQuantity` is below the active quantity; core checks the upper bound against the line. */
 export const MarkOutOfStockInput = z.object({
   itemId: Id,
@@ -224,6 +240,15 @@ export const picking = {
     })
     .input(ScanInput)
     .output(PickLineResult),
+  linkBarcode: base
+    .route({
+      method: "POST",
+      path: "/order-items/{orderItemId}/link-barcode",
+      tags,
+      summary: "Make a scanned code the barcode of the line's variation, else its product (Admin)",
+    })
+    .input(LinkBarcodeInput)
+    .output(LinkBarcodeResult),
   markOutOfStock: base
     .route({
       method: "POST",
