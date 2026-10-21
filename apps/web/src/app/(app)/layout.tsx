@@ -52,6 +52,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <label htmlFor="nav" aria-label={t("nav.closeMenu")} className="drawer-overlay" />
         <DrawerNav toggleId="nav">
           <span className="mb-4 px-2 text-xl font-bold">{t("common.appName")}</span>
+          {can(actor, "order.pick") && (
+            <li className="mb-2">
+              <Link href="/pick">{t("nav.myPicks")}</Link>
+            </li>
+          )}
           <QueueNav />
           <div className="mt-2">
             <SyncIndicator />

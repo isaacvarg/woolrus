@@ -3,6 +3,7 @@ import {
   clearPin,
   clearSecret,
   completePick,
+  createBatch,
   createBox,
   createInvitation,
   createNote,
@@ -10,6 +11,7 @@ import {
   deactivateUser,
   deleteNote,
   deletePriorityRule,
+  getBatch,
   getEmailSender,
   getOrder,
   getOrderHistory,
@@ -30,6 +32,7 @@ import {
   listUsers,
   lockStation,
   markOutOfStock,
+  myPicks,
   orderMutations,
   permissionsFor,
   pickLine,
@@ -212,6 +215,13 @@ export const router = implementer.router({
     substitute: api.picking.substitute.handler(({ input, context }) =>
       substitute(db, context.actor, input),
     ),
+    myPicks: api.picking.myPicks.handler(({ context }) => myPicks(db, context.actor)),
+  },
+  pickBatches: {
+    create: api.pickBatches.create.handler(({ input, context }) =>
+      createBatch(db, context.actor, input),
+    ),
+    get: api.pickBatches.get.handler(({ input, context }) => getBatch(db, context.actor, input)),
   },
   sync: {
     status: api.sync.status.handler(({ context }) => getSyncStatus(db, context.actor)),

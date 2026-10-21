@@ -19,6 +19,7 @@
     "onHold": "On Hold",
     "allOrders": "All Orders",
     "queues": "Queues",
+    "myPicks": "My picks",
     "priorityRules": "Priority rules",
     "sync": "Sync",
     "users": "Users",
@@ -74,6 +75,8 @@
     "stationIdleLock": "Station idle lock (minutes)",
     "claimExpiry": "Order claim expiry (minutes)",
     "claimExpiryHint": "A claimed order is freed for others this long after its holder last worked on it.",
+    "pickBatchMaxOrders": "Most orders in a pick batch",
+    "pickBatchMaxOrdersHint": "How many orders a picker can take with Pick together: one cart. Batches already open keep their orders.",
     "sla": {
       "title": "SLA per stage (minutes)",
       "hint": "Flag orders that stay longer than this in a stage. Leave empty for no limit.",
@@ -213,6 +216,13 @@
     "slaBreached": "Past the stage's time limit",
     "externalChange": "Changed in the store after import",
     "beginPicking": "Begin Picking",
+    "select": "Select",
+    "selectOrder": "Select #{number}",
+    "pickTogether": "Pick together ({count})",
+    "pickTogetherHint": "Tick 2 to {max} orders to pick them together.",
+    "pickTogetherTooMany": "Pick together takes {max} orders at most.",
+    "batchStarted": "Batch {number} started with {count} orders.",
+    "batchRefusedOrder": "#{number}: {reason}",
     "begunPicking": "Order {number} is now in Picking.",
     "loadMore": "Load more",
     "noOrders": "No orders in this queue."
@@ -356,6 +366,25 @@
       "submit": "Mark Substituted",
       "done": "{name} marked Substituted."
     }
+  },
+  "pickBatch": {
+    "title": "Batch {number}",
+    "summary": "{name}'s batch: {live} of {total} orders still in it.",
+    "slots": "Slots",
+    "slot": "Slot",
+    "state": "State",
+    "closed": "This batch is finished.",
+    "memberState": {
+      "live": "Picking",
+      "left": "Left: {status}",
+      "removed": "Removed"
+    }
+  },
+  "myPicks": {
+    "title": "My picks",
+    "empty": "You're not picking anything right now. Start from the queue:",
+    "openBatch": "Open batch",
+    "orders": "Orders I'm picking"
   },
   "orders": {
     "status": "Status",
@@ -520,7 +549,10 @@
       "lineNotPickable": "Nothing on this line needs picking.",
       "scanNotOnOrder": "That's {name}. It isn't on this order.",
       "scanUnknown": "Woolrus doesn't know that code.",
-      "scanAlreadyPicked": "{line} is already picked."
+      "scanAlreadyPicked": "{line} is already picked.",
+      "batchTooLarge": "A batch can hold at most {max} orders.",
+      "batchOpen": "You already have an open batch. Finish it in My picks before starting another.",
+      "batchFailed": "Some orders couldn't be taken, so none were."
     },
     "workflow": {
       "illegalTransition": "That move isn't allowed from the order's current status.",

@@ -74,6 +74,7 @@ function toAdminSettings(row: Settings): AdminSettings {
     syncIntervalMinutes: row.syncIntervalMinutes,
     stationIdleLockMinutes: row.stationIdleLockMinutes,
     claimExpiryMinutes: row.claimExpiryMinutes,
+    pickBatchMaxOrders: row.pickBatchMaxOrders,
     stageSlaMinutes: sla.success ? sla.data : {},
     weightDisplay: row.weightDisplay,
     piiRetentionDays: row.piiRetentionDays,
@@ -92,9 +93,20 @@ export async function getSettings(db: Db, actor: Actor): Promise<AdminSettings> 
 
 /** Any signed-in user: the API's `authed` middleware is what requires the session. */
 export async function getPublicSettings(db: Db, _actor: Actor): Promise<PublicSettings> {
-  const { weightDisplay, stationIdleLockMinutes, claimExpiryMinutes, stageSlaMinutes } =
-    toAdminSettings(await loadSettings(db));
-  return { weightDisplay, stationIdleLockMinutes, claimExpiryMinutes, stageSlaMinutes };
+  const {
+    weightDisplay,
+    stationIdleLockMinutes,
+    claimExpiryMinutes,
+    pickBatchMaxOrders,
+    stageSlaMinutes,
+  } = toAdminSettings(await loadSettings(db));
+  return {
+    weightDisplay,
+    stationIdleLockMinutes,
+    claimExpiryMinutes,
+    pickBatchMaxOrders,
+    stageSlaMinutes,
+  };
 }
 
 /**

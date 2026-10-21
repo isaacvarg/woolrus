@@ -8,11 +8,12 @@ import { useFormatter, useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
 import { Input, Label, SearchField } from "react-aria-components";
 import { NoteCount } from "@/components/notes/note-count";
-import { Button } from "@/components/ui/fields";
+import { Button, Checkbox } from "@/components/ui/fields";
 import { toast } from "@/components/ui/toast";
 import { useErrorMessage } from "@/lib/errors";
 import { orpc } from "@/lib/orpc";
 import { useReasonText } from "@/lib/reasons";
+import { PickTogether } from "./pick-together";
 
 const SEARCH_DEBOUNCE_MS = 250;
 
@@ -59,7 +60,17 @@ export function QueueTable({
   const now = Date.now();
   const onHold = stage === "ON_HOLD";
   const showBeginPicking = stage === "PENDING" && canBeginPicking;
-  const columns = 7 + (onHold ? 1 : 0) + (showBeginPicking ? 1 : 0);
+  const columns = 7 + (onHold ? 1 : 0) + (showBeginPicking ? 2 : 0);
+  // Ticked for Pick together, by id. Rows keep the version they were ticked at: if one changes
+  // meanwhile the batch is refused as stale and the panel says so.
+  const [selected, setSelected] = useState<Map<string, QueueRow>>(() => new Map());
+  const toggle = (row: QueueRow, on: boolean) =>
+    setSelected((current) => {
+      const next = new Map(current);
+      if (on) next.set(row.id, row);
+      else next.delete(row.id);
+      return next;
+    });
 
   const beginPicking = useMutation(
     orpc.orders.beginPicking.mutationOptions({
@@ -87,10 +98,19 @@ export function QueueTable({
         <Input className="input input-lg w-full" placeholder={t("queue.searchPlaceholder")} />
       </SearchField>
 
+      {showBeginPicking && (
+        <PickTogether selected={[...selected.values()]} onStarted={() => setSelected(new Map())} />
+      )}
+
       <div className="overflow-x-auto rounded-box bg-base-100 shadow-sm">
         <table className="table text-base">
           <thead>
             <tr>
+              {showBeginPicking && (
+                <th>
+                  <span className="sr-only">{t("queue.select")}</span>
+                </th>
+              )}
               <th>{t("queue.number")}</th>
               <th>{t("queue.customer")}</th>
               <th className="text-end">{t("queue.items")}</th>
@@ -140,9 +160,23 @@ export function QueueTable({
                   className="h-16 cursor-pointer hover:bg-base-200"
                   // The whole row is a tap target on tablets; the number link is the accessible one.
                   onClick={(event) => {
-                    if (!(event.target as HTMLElement).closest("a, button")) router.push(href);
+                    if (!(event.target as HTMLElement).closest("a, button, label"))
+                      router.push(href);
                   }}
                 >
+                  {showBeginPicking && (
+                    <td className="w-12">
+                      {!claimedByOther(row) && (
+                        <Checkbox
+                          aria-label={t("queue.selectOrder", { number: row.number })}
+                          isSelected={selected.has(row.id)}
+                          onChange={(on) => toggle(row, on)}
+                        >
+                          {null}
+                        </Checkbox>
+                      )}
+                    </td>
+                  )}
                   <td className="font-semibold whitespace-nowrap">
                     <Link href={href} className="link link-hover">
                       #{row.number}

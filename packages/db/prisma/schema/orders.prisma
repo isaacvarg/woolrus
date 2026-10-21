@@ -97,6 +97,7 @@ model Order {
   qualityIssues QualityIssue[]
   voids         ItemVoid[]
   returns       ReturnRequest[]
+  pickBatches   PickBatchOrder[]
 
   @@index([status, priority(sort: Desc), orderedAt])
   @@index([number])
@@ -213,4 +214,36 @@ model PriorityRule {
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   @@map("priority_rules")
+}
+
+/// One picker's walk through several orders with one cart (SPEC-picking "Pick batches"). Stored so it
+/// survives a reload or a change of tablet.
+model PickBatch {
+  id        String           @id @default(uuid(7)) @db.Uuid
+  /// "Batch 42" on screen.
+  number    Int              @unique @default(autoincrement())
+  ownerId   String           @map("owner_id") @db.Uuid
+  stationId String?          @map("station_id") @db.Uuid
+  createdAt DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  closedAt  DateTime?        @map("closed_at") @db.Timestamptz(3)
+  owner     User             @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  orders    PickBatchOrder[]
+
+  @@index([ownerId, closedAt])
+  @@map("pick_batches")
+}
+
+/// An order's place in a batch. Slots are given in queue order and never renumbered.
+model PickBatchOrder {
+  batchId   String    @map("batch_id") @db.Uuid
+  orderId   String    @map("order_id") @db.Uuid
+  slot      Int
+  /// Dropped on purpose, moved to another batch, or the batch closed.
+  removedAt DateTime? @map("removed_at") @db.Timestamptz(3)
+  batch     PickBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  order     Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@id([batchId, orderId])
+  @@unique([batchId, slot])
+  @@map("pick_batch_orders")
 }
