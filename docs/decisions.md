@@ -121,3 +121,9 @@ positive quantities and dimensions, single-row settings. **Keep them when editin
   bundle/composite line items before modelling them (we don't know yet whether ACF matters for orders).
 - **Google / Discord OAuth apps** need creating; redirect URI `https://<host>/api/auth/callback/<provider>`.
 - **GHCR visibility:** if the repo is private, the host needs `docker login ghcr.io` with a read-only token.
+- **Note upload memory** (notes review, 2026-10-21): a full note upload (10 photos at the 15 MB limit, 160 MB
+  request cap) peaks around 300 MB in web: the parsed multipart body plus `preparePhotos`' copies, which are all
+  checked before any is processed. Decoding one 40-megapixel photo with sharp adds about 160 MB. Three full uploads
+  at once could exhaust a small host. Real tablet photos are 3–5 MB, so this is unlikely today. Before production:
+  size the web container for it, or limit concurrent note uploads, or check each photo from its header and drop
+  its bytes before the next is read.
