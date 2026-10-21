@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { createDb } from "@woolrus/db";
 import { signInAs } from "./support/auth";
 import { createOrder, deleteCreatedOrders } from "./support/orders";
 
@@ -64,6 +65,32 @@ test("a picker writes internal notes only and can't edit someone else's", async 
   await expect(theirs.getByRole("button", { name: "Edit" })).toHaveCount(0);
   await expect(theirs.getByRole("button", { name: "Delete" })).toHaveCount(0);
   await otherContext.close();
+});
+
+test("a note sent to WooCommerce is frozen, even for an admin", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "the desktop journey");
+  const order = await createOrder({ status: "READY" });
+  await signInAs(page, ["ADMIN"]);
+  await page.goto(`/orders/${order.id}`);
+  const notes = page.getByRole("region", { name: "Notes" });
+  await notes.getByRole("textbox", { name: "New note" }).fill("Left at the front desk");
+  await notes.getByRole("button", { name: "Add note" }).click();
+  const note = notes.getByTestId("note");
+  await expect(note.getByRole("button", { name: "Edit" })).toBeVisible();
+
+  // What `shipping` does after posting it.
+  const db = createDb();
+  await db.note.updateMany({
+    where: { orderId: order.id },
+    data: { wooNoteId: 4242, pushedToWooAt: new Date() },
+  });
+  await db.$disconnect();
+
+  await page.reload();
+  await expect(note.getByText("Sent to WooCommerce", { exact: true })).toBeVisible();
+  await expect(note).toContainText("can't be edited or deleted");
+  await expect(note.getByRole("button", { name: "Edit" })).toHaveCount(0);
+  await expect(note.getByRole("button", { name: "Delete" })).toHaveCount(0);
 });
 
 test("notes need a signed-in caller", async ({ request }) => {
