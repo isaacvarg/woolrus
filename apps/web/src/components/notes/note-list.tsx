@@ -54,6 +54,7 @@ function NoteItem({ note, canWriteCustomer }: { note: Note; canWriteCustomer: bo
         {note.pushedToWooAt && <span className="badge badge-ghost">{t("notes.sentToWoo")}</span>}
       </div>
       <p className="whitespace-pre-line break-words">{note.content}</p>
+      {note.pushedToWooAt && <p className="text-sm opacity-70">{t("notes.frozen")}</p>}
       {note.canEdit && (
         <div className="flex gap-2">
           <EditNote note={note} canWriteCustomer={canWriteCustomer} />

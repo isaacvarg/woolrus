@@ -335,6 +335,7 @@
     "atStation": "en {station}",
     "edited": "editada",
     "sentToWoo": "Enviada a WooCommerce",
+    "frozen": "Enviada a WooCommerce, así que no se puede editar ni eliminar: la tienda (y quizá el cliente) ya la tiene. Agrega una nota nueva.",
     "edit": "Editar",
     "editTitle": "Editar nota",
     "saved": "Nota guardada.",
@@ -511,7 +512,8 @@
     },
     "notes": {
       "empty": "Escribe algo en la nota primero.",
-      "notAuthor": "Solo el autor de la nota o un administrador puede cambiarla."
+      "notAuthor": "Solo el autor de la nota o un administrador puede cambiarla.",
+      "alreadySent": "Esta nota ya está en WooCommerce, así que no se puede cambiar."
     }
   },
   "emails": {

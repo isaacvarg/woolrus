@@ -33,14 +33,20 @@ function assertCanWriteVisibility(actor: Actor, visibility: NoteVisibility): voi
   if (visibility === "CUSTOMER") assertCan(actor, "note.customer");
 }
 
-function mayEdit(actor: Actor, note: { authorId: string | null }): boolean {
-  if (!can(actor, "note.write")) return false;
+type Editable = { authorId: string | null; wooNoteId: number | null };
+
+function mayEdit(actor: Actor, note: Editable): boolean {
+  if (note.wooNoteId !== null || !can(actor, "note.write")) return false;
   return can(actor, "note.moderate") || (actor.userId !== null && note.authorId === actor.userId);
 }
 
-/** Authorship is by user, so on a station the note belongs to whoever unlocked it (FR-NOTE-07). */
-function assertMayEdit(actor: Actor, note: { authorId: string | null }): void {
+/**
+ * Authorship is by user, so on a station the note belongs to whoever unlocked it (FR-NOTE-07).
+ * A note already in WooCommerce is frozen for everyone, Admin included: the customer may have it.
+ */
+function assertMayEdit(actor: Actor, note: Editable): void {
   assertCan(actor, "note.write");
+  if (note.wooNoteId !== null) throw new AppError("CONFLICT", "errors.notes.alreadySent");
   if (!mayEdit(actor, note)) throw new AppError("FORBIDDEN", "errors.notes.notAuthor");
 }
 
