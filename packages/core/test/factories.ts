@@ -35,6 +35,8 @@ export type LineSpec = {
   imageUrl?: string;
   /** Variation attributes and product options, as sync stores them (raw JSON). */
   attributes?: unknown;
+  /** The same product and variation as this line (of another order), instead of new ones. */
+  sameAs?: Pick<OrderItem, "productId" | "variationId" | "name" | "sku">;
 };
 
 export type PackageSpec = {
@@ -134,26 +136,27 @@ export async function createOrder(db: Db, spec: OrderSpec = {}): Promise<BuiltOr
 async function createLine(db: Db, orderId: string, line: LineSpec): Promise<OrderItem> {
   const n = next();
   const quantity = line.quantity ?? 1;
-  const name = line.name ?? `Product ${n}`;
-  const sku = line.sku ?? `SKU-${n}`;
+  const name = line.name ?? line.sameAs?.name ?? `Product ${n}`;
+  const sku = line.sku ?? line.sameAs?.sku ?? `SKU-${n}`;
   const pickStatus = line.pickStatus ?? "PENDING";
   const picked = pickStatus === "PICKED" || pickStatus === "SUBSTITUTED";
 
-  const product = line.noProduct
-    ? null
-    : await db.product.create({
-        data: {
-          wooProductId: n,
-          type: "simple",
-          name,
-          sku,
-          physical: line.physical ?? true,
-          binLocation: line.bin ?? null,
-          barcode: line.barcode ?? null,
-          rawPayload: {},
-          syncedAt: new Date(),
-        },
-      });
+  const product =
+    line.noProduct || line.sameAs
+      ? null
+      : await db.product.create({
+          data: {
+            wooProductId: n,
+            type: "simple",
+            name,
+            sku,
+            physical: line.physical ?? true,
+            binLocation: line.bin ?? null,
+            barcode: line.barcode ?? null,
+            rawPayload: {},
+            syncedAt: new Date(),
+          },
+        });
   const variation =
     product && line.variation
       ? await db.productVariation.create({
@@ -174,8 +177,8 @@ async function createLine(db: Db, orderId: string, line: LineSpec): Promise<Orde
     data: {
       orderId,
       wooLineItemId: n,
-      productId: product?.id ?? null,
-      variationId: variation?.id ?? null,
+      productId: line.sameAs ? line.sameAs.productId : (product?.id ?? null),
+      variationId: line.sameAs ? line.sameAs.variationId : (variation?.id ?? null),
       name,
       sku,
       quantity,

@@ -23,9 +23,10 @@ type Props = {
   onResult: (result: PickLineResult) => void;
 };
 
-export function LineMenu(props: Props) {
+/** `quantity` adds a "how many picked" item, for screens without a stepper (the batch chips). */
+export function LineMenu({ quantity = false, ...props }: Props & { quantity?: boolean }) {
   const t = useTranslations();
-  const [open, setOpen] = useState<"outOfStock" | "substitute" | null>(null);
+  const [open, setOpen] = useState<"quantity" | "outOfStock" | "substitute" | null>(null);
   const close = () => setOpen(null);
   if (props.disabled) return null;
   return (
@@ -35,10 +36,14 @@ export function LineMenu(props: Props) {
         trigger="⋯"
         triggerClassName="btn-ghost btn-lg text-2xl"
       >
+        {quantity && (
+          <MenuItem onAction={() => setOpen("quantity")}>{t("pick.quantity.action")}</MenuItem>
+        )}
         {/* Out of Stock means fewer than needed were found, so a single unit can still be short. */}
         <MenuItem onAction={() => setOpen("outOfStock")}>{t("pick.outOfStock.action")}</MenuItem>
         <MenuItem onAction={() => setOpen("substitute")}>{t("pick.substitute.action")}</MenuItem>
       </Menu>
+      {open === "quantity" && <QuantityDialog {...props} onClose={close} />}
       {open === "outOfStock" && <OutOfStockDialog {...props} onClose={close} />}
       {open === "substitute" && <SubstituteDialog {...props} onClose={close} />}
     </>
@@ -63,6 +68,66 @@ function useLineWrite<I extends { idempotencyKey: string }>(
     },
     onError: (error) => toast.error(errorMessage(error)),
   });
+}
+
+/** Sets how many units are picked so far; 0 puts the line back to not picked. Absolute, so no key. */
+function QuantityDialog({ line, scope, onResult, onClose }: Props & { onClose: () => void }) {
+  const t = useTranslations();
+  const errorMessage = useErrorMessage();
+  const fieldErrors = useFieldErrors();
+  const [picked, setPicked] = useState(line.pickedQuantity);
+  const save = useMutation({
+    scope: { id: scope },
+    mutationFn: (quantity: number) =>
+      quantity === 0
+        ? client.picking.unpickLine({ itemId: line.id })
+        : client.picking.pickLine({ itemId: line.id, quantity }),
+    onSuccess: (result) => {
+      onResult(result);
+      onClose();
+    },
+    onError: (error) => toast.error(errorMessage(error)),
+  });
+
+  return (
+    <Dialog
+      title={t("pick.quantity.title", { name: line.name })}
+      isOpen
+      onOpenChange={(o) => !o && onClose()}
+    >
+      {(close) => (
+        <Form
+          className="space-y-2"
+          validationErrors={fieldErrors(save.error)}
+          onSubmit={(event) => {
+            event.preventDefault();
+            save.mutate(picked);
+          }}
+        >
+          <NumberField
+            name="quantity"
+            label={t("pick.quantity.picked")}
+            description={t("pick.quantity.hint", { quantity: line.quantity })}
+            minValue={0}
+            maxValue={line.quantity}
+            step={1}
+            isRequired
+            value={picked}
+            onChange={(v) => setPicked(Number.isNaN(v) ? 0 : v)}
+            autoFocus
+          />
+          <div className="modal-action">
+            <Button className="btn-ghost" onPress={close}>
+              {t("order.back")}
+            </Button>
+            <Button type="submit" className="btn-primary" isPending={save.isPending}>
+              {t("pick.quantity.submit")}
+            </Button>
+          </div>
+        </Form>
+      )}
+    </Dialog>
+  );
 }
 
 function OutOfStockDialog(props: Props & { onClose: () => void }) {

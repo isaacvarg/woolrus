@@ -365,6 +365,13 @@
       "note": "Nota (opcional)",
       "submit": "Marcar sustituido",
       "done": "{name} marcado como sustituido."
+    },
+    "quantity": {
+      "action": "Cantidad",
+      "title": "¿Cuántos {name}?",
+      "picked": "Surtidos hasta ahora",
+      "hint": "De los {quantity} necesarios. 0 lo deja sin surtir.",
+      "submit": "Guardar"
     }
   },
   "pickBatch": {
@@ -376,8 +383,17 @@
     "closed": "Este lote está terminado.",
     "memberState": {
       "live": "En surtido",
-      "left": "Salió: {status}",
       "removed": "Quitado"
+    },
+    "list": "Lista de surtido",
+    "nothingToPick": "No queda nada por surtir en este lote.",
+    "readOnly": "{name} está surtiendo este lote. Puedes verlo, pero solo esa persona puede surtirlo.",
+    "remaining": "Faltan {remaining} de {quantity}",
+    "chip": "Espacio {slot}, pedido #{number}: {picked} de {quantity}, {status}",
+    "left": {
+      "status": "Salió: {status}",
+      "takenOver": "Salió: lo tomó {name}",
+      "claimExpired": "Salió: venció el reclamo"
     }
   },
   "myPicks": {

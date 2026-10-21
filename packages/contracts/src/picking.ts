@@ -118,6 +118,17 @@ export type SubstituteInput = z.infer<typeof SubstituteInput>;
 export const PickBatchMemberState = z.enum(["live", "left", "removed"]);
 export type PickBatchMemberState = z.infer<typeof PickBatchMemberState>;
 
+/**
+ * Why a member left: its order moved on (`status` says where: Packing once picked, On Hold,
+ * Cancelled, or anywhere a force sent it), someone else took it over, or the owner's claim expired.
+ */
+export const PickBatchLeft = z.discriminatedUnion("reason", [
+  z.object({ reason: z.literal("status") }),
+  z.object({ reason: z.literal("takenOver"), name: z.string() }),
+  z.object({ reason: z.literal("claimExpired") }),
+]);
+export type PickBatchLeft = z.infer<typeof PickBatchLeft>;
+
 /** One slot on the cart, for the slot legend. */
 export const PickBatchMember = z.object({
   slot: z.number().int(),
@@ -127,8 +138,38 @@ export const PickBatchMember = z.object({
   status: WorkflowStatus,
   version: z.number().int(),
   state: PickBatchMemberState,
+  /** Set when `state` is `left`. */
+  left: PickBatchLeft.nullable(),
 });
 export type PickBatchMember = z.infer<typeof PickBatchMember>;
+
+/** One member order's line in a group: tapping it picks that order's line. */
+export const PickBatchChip = z.object({
+  slot: z.number().int(),
+  orderId: Id,
+  number: z.string(),
+  line: PickLine,
+});
+export type PickBatchChip = z.infer<typeof PickBatchChip>;
+
+/**
+ * One product on the shelf across the live members (variation, else product, else SKU, else name),
+ * with a chip per member line: unfinished chips by slot, then done ones.
+ */
+export const PickBatchGroup = z.object({
+  key: z.string(),
+  name: z.string(),
+  sku: z.string().nullable(),
+  imageUrl: z.string().nullable(),
+  binLocation: z.string().nullable(),
+  /** Shared by every chip; null when they differ, and each chip shows its own. */
+  attributes: z.array(LineAttribute).nullable(),
+  /** Units across the chips, and how many of them aren't picked yet. */
+  quantity: z.number().int(),
+  remaining: z.number().int(),
+  chips: z.array(PickBatchChip),
+});
+export type PickBatchGroup = z.infer<typeof PickBatchGroup>;
 
 export const PickBatch = z.object({
   id: Id,
@@ -139,6 +180,8 @@ export const PickBatch = z.object({
   closedAt: z.date().nullable(),
   /** By slot. */
   members: z.array(PickBatchMember),
+  /** The pick list: live members' lines grouped by product, groups in pick order, done ones last. */
+  groups: z.array(PickBatchGroup),
 });
 export type PickBatch = z.infer<typeof PickBatch>;
 

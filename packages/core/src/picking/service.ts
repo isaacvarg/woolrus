@@ -44,9 +44,9 @@ export const activeQuantity = (row: LineRow) =>
 export const isWorkLine = (row: LineRow) =>
   (row.product?.physical ?? true) && activeQuantity(row) > 0;
 
-const isDone = (status: PickStatus) => status === "PICKED" || status === "SUBSTITUTED";
+export const isDone = (status: PickStatus) => status === "PICKED" || status === "SUBSTITUTED";
 
-function toPickLine(row: LineRow, noteCount: number): PickLine {
+export function toPickLine(row: LineRow, noteCount: number): PickLine {
   return {
     id: row.id,
     name: row.name,

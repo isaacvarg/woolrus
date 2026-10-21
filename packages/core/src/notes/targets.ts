@@ -83,6 +83,20 @@ export async function noteCounts(
 }
 
 /** Notes on each line and package of one order, in one grouped query. */
+/** Line notes per line across several orders, in one grouped query. Lines without notes are absent. */
+export async function lineNoteCounts(
+  tx: DbTx,
+  orderIds: readonly string[],
+): Promise<Map<string, number>> {
+  if (orderIds.length === 0) return new Map();
+  const groups = await tx.note.groupBy({
+    by: ["orderItemId"],
+    where: { orderId: { in: [...orderIds] }, orderItemId: { not: null } },
+    _count: { _all: true },
+  });
+  return new Map(groups.map((g) => [g.orderItemId as string, g._count._all]));
+}
+
 export async function lineAndPackageNoteCounts(
   tx: DbTx,
   orderId: string,

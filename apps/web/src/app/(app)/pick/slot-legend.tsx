@@ -42,8 +42,11 @@ export function SlotLegend({ batch }: { batch: PickBatch }) {
               <td>{member.customerName}</td>
               <td>
                 <span className={`badge ${stateBadge[member.state]}`}>
-                  {member.state === "left"
-                    ? t("pickBatch.memberState.left", { status: t(`status.${member.status}`) })
+                  {member.left
+                    ? t(`pickBatch.left.${member.left.reason}`, {
+                        status: t(`status.${member.status}`),
+                        name: member.left.reason === "takenOver" ? member.left.name : "",
+                      })
                     : t(`pickBatch.memberState.${member.state}`)}
                 </span>
               </td>
