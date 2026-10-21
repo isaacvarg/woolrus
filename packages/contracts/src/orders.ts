@@ -42,7 +42,7 @@ export const OrderDetail = z.object({
 });
 export type OrderDetail = z.infer<typeof OrderDetail>;
 
-const ExpectedVersion = z.number().int().min(1);
+export const ExpectedVersion = z.number().int().min(1);
 
 /** A free-text reason kept in the order's history (hold, cancel, force). */
 export const Reason = z.string().trim().min(1).max(500);

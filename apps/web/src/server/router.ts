@@ -2,6 +2,7 @@ import {
   archiveBox,
   clearPin,
   clearSecret,
+  completePick,
   createBox,
   createInvitation,
   createNote,
@@ -192,6 +193,9 @@ export const router = implementer.router({
   },
   picking: {
     view: api.picking.view.handler(({ input, context }) => getPickView(db, context.actor, input)),
+    complete: api.picking.complete.handler(({ input, context }) =>
+      completePick(db, context.actor, input),
+    ),
     pickLine: api.picking.pickLine.handler(({ input, context }) =>
       pickLine(db, context.actor, input),
     ),

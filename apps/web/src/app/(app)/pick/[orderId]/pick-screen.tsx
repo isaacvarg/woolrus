@@ -43,7 +43,9 @@ function applyResult(view: PickView, result: PickLineResult): PickView {
   return { ...view, lines, done: result.done, total: result.total };
 }
 
-export function PickScreen({ orderId, userId }: { orderId: string; userId: string | null }) {
+type Viewer = { userId: string | null; canPack: boolean };
+
+export function PickScreen({ orderId, ...viewer }: { orderId: string } & Viewer) {
   const t = useTranslations();
   const errorMessage = useErrorMessage();
   const view = useQuery(orpc.picking.view.queryOptions({ input: { orderId } }));
@@ -56,10 +58,13 @@ export function PickScreen({ orderId, userId }: { orderId: string; userId: strin
       </p>
     );
   }
-  return <PickLayout view={view.data} userId={userId} />;
+  return <PickLayout view={view.data} {...viewer} />;
 }
 
-function PickLayout({ view, userId }: { view: PickView; userId: string | null }) {
+/** Where the picker goes once the order is picked (SPEC-picking decision 6). */
+type Then = "queue" | "next" | "pack";
+
+function PickLayout({ view, userId, canPack }: { view: PickView } & Viewer) {
   const t = useTranslations();
   const errorMessage = useErrorMessage();
   const queryClient = useQueryClient();
@@ -98,14 +103,18 @@ function PickLayout({ view, userId }: { view: PickView; userId: string | null })
   });
 
   const complete = useMutation({
-    mutationFn: () =>
-      client.orders.completePicking({ id: order.id, expectedVersion: order.version }),
+    mutationFn: (after: Then) =>
+      client.picking.complete({ orderId: order.id, expectedVersion: order.version, after }),
     onMutate: () => setUnmet(null),
-    onSuccess: (result) => {
-      toast.success(
-        t("order.moved", { number: result.number, status: t(`status.${result.status}`) }),
-      );
-      router.push("/queue/pending");
+    onSuccess: ({ nextOrderId }, after) => {
+      toast.success(t("order.moved", { number: order.number, status: t("status.PACKING") }));
+      // The packing screen doesn't exist yet: the order detail page stands in for it.
+      if (after === "pack") router.push(`/orders/${order.id}`);
+      else if (nextOrderId) router.push(`/pick/${nextOrderId}`);
+      else {
+        if (after === "next") toast.success(t("pick.noneLeft"));
+        router.push("/queue/pending");
+      }
     },
     onError: (error) => {
       const missing = unmetOf(error);
@@ -155,11 +164,27 @@ function PickLayout({ view, userId }: { view: PickView; userId: string | null })
       {canPick && (
         <footer className="fixed inset-x-0 bottom-0 z-10 flex justify-end gap-2 border-t border-base-300 bg-base-100 p-4">
           <Button
-            className="btn-primary btn-lg"
-            isPending={complete.isPending}
-            onPress={() => complete.mutate()}
+            className="btn-outline btn-lg"
+            isDisabled={complete.isPending}
+            onPress={() => complete.mutate("queue")}
           >
-            {t("order.actions.completePicking")}
+            {t("pick.done")}
+          </Button>
+          {canPack && (
+            <Button
+              className="btn-outline btn-lg"
+              isDisabled={complete.isPending}
+              onPress={() => complete.mutate("pack")}
+            >
+              {t("pick.donePack")}
+            </Button>
+          )}
+          <Button
+            className="btn-primary btn-lg"
+            isDisabled={complete.isPending}
+            onPress={() => complete.mutate("next")}
+          >
+            {t("pick.doneNext")}
           </Button>
         </footer>
       )}

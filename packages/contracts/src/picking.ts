@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { base, Id } from "./base";
-import { LineAttribute, OrderDetail, PickStatus } from "./orders";
+import { ExpectedVersion, LineAttribute, OrderDetail, PickStatus } from "./orders";
 
 // Picking (SPEC-picking "API"). Line writes need the order in Picking and the caller's live claim;
 // they set an absolute state, so a replay is harmless and they don't carry the order's version.
@@ -60,6 +60,20 @@ export type PickLineInput = z.infer<typeof PickLineInput>;
 export const PickItemInput = z.object({ itemId: Id });
 export type PickItemInput = z.infer<typeof PickItemInput>;
 
+export const CompletePickInput = z.object({
+  orderId: Id,
+  expectedVersion: ExpectedVersion,
+  /** Where the picker goes next: the Pending queue, the next Pending order, or packing this one. */
+  after: z.enum(["queue", "next", "pack"]),
+});
+export type CompletePickInput = z.infer<typeof CompletePickInput>;
+
+export const CompletePickResult = z.object({
+  /** The order `after: "next"` began picking; null otherwise, or when the Pending queue was empty. */
+  nextOrderId: Id.nullable(),
+});
+export type CompletePickResult = z.infer<typeof CompletePickResult>;
+
 const tags = ["Picking"];
 
 export const picking = {
@@ -90,4 +104,14 @@ export const picking = {
     })
     .input(PickItemInput)
     .output(PickLineResult),
+  complete: base
+    .route({
+      method: "POST",
+      path: "/orders/{orderId}/complete-pick",
+      tags,
+      summary:
+        "Complete picking, then go back to the queue, begin the next order, or pack this one",
+    })
+    .input(CompletePickInput)
+    .output(CompletePickResult),
 };
