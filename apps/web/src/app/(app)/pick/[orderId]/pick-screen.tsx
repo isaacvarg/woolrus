@@ -244,7 +244,10 @@ function PickLayout({ view, userId, canPack }: { view: PickView } & Viewer) {
       {unmet && <UnmetList unmet={unmet} />}
 
       {canPick && (
-        <footer className="fixed inset-x-0 bottom-0 z-10 flex justify-end gap-2 border-t border-base-300 bg-base-100 p-4">
+        <footer
+          data-toast-clearance
+          className="fixed inset-x-0 bottom-0 z-10 flex justify-end gap-2 border-t border-base-300 bg-base-100 p-4"
+        >
           <Button
             className="btn-outline btn-lg"
             isDisabled={complete.isPending}
