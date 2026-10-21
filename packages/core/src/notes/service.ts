@@ -13,6 +13,7 @@ import { withIdempotency } from "../idempotency";
 import { uuidv7 } from "../ids";
 import { type Actor, assertCan, can } from "../permissions";
 import { notifyOrderChanged } from "../workflow/notify";
+import { enqueueFileDeletion } from "./files";
 import {
   discardUploads,
   NOTE_FILE_LIMITS,
@@ -334,8 +335,8 @@ export async function updateNote(
           return { result: await loadNote(tx, actor, existing.id), used: true };
         }
 
-        // The removed files stay in storage until the orphan sweep collects them.
         await tx.noteAttachment.deleteMany({ where: { id: { in: removed.map((a) => a.id) } } });
+        await enqueueFileDeletion(tx, removed);
         await tx.noteAttachment.createMany({
           data: prepared.map((a) => attachmentRow(existing.id, a)),
         });
@@ -388,10 +389,11 @@ export async function deleteNote(
 ): Promise<{ id: string }> {
   assertCan(actor, "note.write");
   return db.$transaction(async (tx) => {
-    const existing = await tx.note.findUnique({ where: { id } });
+    const existing = await tx.note.findUnique({ where: { id }, include: { attachments: true } });
     if (!existing) throw notFound();
     assertMayEdit(actor, existing);
     await tx.note.delete({ where: { id } });
+    await enqueueFileDeletion(tx, existing.attachments);
     await recordAudit(tx, actor, {
       entityType: "Note",
       entityId: id,
