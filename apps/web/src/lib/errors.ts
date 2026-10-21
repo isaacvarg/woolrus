@@ -53,3 +53,15 @@ export function useFieldErrors() {
     );
   };
 }
+
+export type OrderFailure = {
+  orderId: string;
+  messageKey: string;
+  params: Record<string, string | number>;
+};
+
+/** Why each order of a refused all-or-nothing batch failed, from the error's `data.failures`. */
+export function failuresOf(error: unknown): OrderFailure[] | null {
+  const failures = (errorData(error) as { failures?: OrderFailure[] } | undefined)?.failures;
+  return failures?.length ? failures : null;
+}

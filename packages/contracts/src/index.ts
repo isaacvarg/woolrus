@@ -3,7 +3,7 @@ import { invitations } from "./invitations";
 import { me } from "./me";
 import { notes } from "./notes";
 import { orders } from "./orders";
-import { picking } from "./picking";
+import { pickBatches, picking } from "./picking";
 import { priorityRules } from "./priority-rules";
 import { settings } from "./settings";
 import { station, stations } from "./stations";
@@ -34,6 +34,7 @@ export const contract = {
   orders,
   notes,
   picking,
+  pickBatches,
   priorityRules,
   sync,
   users,

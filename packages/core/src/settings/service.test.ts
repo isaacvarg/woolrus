@@ -32,6 +32,7 @@ describe("settings service", () => {
       syncIntervalMinutes: 5,
       stationIdleLockMinutes: 10,
       claimExpiryMinutes: 30,
+      pickBatchMaxOrders: 10,
       stageSlaMinutes: {},
       weightDisplay: "LB_OZ",
       piiRetentionDays: null,
@@ -96,6 +97,7 @@ describe("settings service", () => {
       lumexiaBaseUrl: "https://lumexia.example.com",
       stationIdleLockMinutes: 20,
       claimExpiryMinutes: 45,
+      pickBatchMaxOrders: 6,
       stageSlaMinutes: { QA: 30 },
       weightDisplay: "LB_DECIMAL",
       piiRetentionDays: 90,
@@ -148,6 +150,7 @@ describe("settings service", () => {
         weightDisplay: "LB_DECIMAL",
         stationIdleLockMinutes: 10,
         claimExpiryMinutes: 30,
+        pickBatchMaxOrders: 10,
         stageSlaMinutes: { QA: 30 },
       });
     }

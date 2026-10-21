@@ -19,6 +19,7 @@
     "onHold": "En espera",
     "allOrders": "Todos los pedidos",
     "queues": "Colas",
+    "myPicks": "Mis surtidos",
     "priorityRules": "Reglas de prioridad",
     "sync": "Sincronización",
     "users": "Usuarios",
@@ -74,6 +75,8 @@
     "stationIdleLock": "Bloqueo de estación por inactividad (minutos)",
     "claimExpiry": "Vencimiento de la reserva de pedido (minutos)",
     "claimExpiryHint": "Un pedido reservado queda libre para otros después de este tiempo sin que su titular trabaje en él.",
+    "pickBatchMaxOrders": "Máximo de pedidos por lote de surtido",
+    "pickBatchMaxOrdersHint": "Cuántos pedidos puede tomar un surtidor con Surtir juntos: un carrito. Los lotes ya abiertos conservan sus pedidos.",
     "sla": {
       "title": "SLA por etapa (minutos)",
       "hint": "Marca los pedidos que permanecen más tiempo que esto en una etapa. Déjalo vacío para no tener límite.",
@@ -213,6 +216,13 @@
     "slaBreached": "Superó el tiempo límite de la etapa",
     "externalChange": "Modificado en la tienda después de importarlo",
     "beginPicking": "Comenzar surtido",
+    "select": "Seleccionar",
+    "selectOrder": "Seleccionar #{number}",
+    "pickTogether": "Surtir juntos ({count})",
+    "pickTogetherHint": "Marca de 2 a {max} pedidos para surtirlos juntos.",
+    "pickTogetherTooMany": "Surtir juntos admite como máximo {max} pedidos.",
+    "batchStarted": "Lote {number} iniciado con {count} pedidos.",
+    "batchRefusedOrder": "#{number}: {reason}",
     "begunPicking": "El pedido {number} está ahora en surtido.",
     "loadMore": "Cargar más",
     "noOrders": "No hay pedidos en esta cola."
@@ -330,6 +340,25 @@
     "count": "{picked} de {quantity}",
     "oneFewer": "Uno menos de {name}",
     "oneMore": "Uno más de {name}"
+  },
+  "pickBatch": {
+    "title": "Lote {number}",
+    "summary": "Lote de {name}: quedan {live} de {total} pedidos.",
+    "slots": "Espacios",
+    "slot": "Espacio",
+    "state": "Estado",
+    "closed": "Este lote está terminado.",
+    "memberState": {
+      "live": "En surtido",
+      "left": "Salió: {status}",
+      "removed": "Quitado"
+    }
+  },
+  "myPicks": {
+    "title": "Mis surtidos",
+    "empty": "No estás surtiendo nada ahora. Empieza desde la cola:",
+    "openBatch": "Abrir lote",
+    "orders": "Pedidos que estoy surtiendo"
   },
   "orders": {
     "status": "Estado",
@@ -491,7 +520,10 @@
     "picking": {
       "notPicking": "Este pedido no está en surtido, así que sus líneas no pueden cambiar.",
       "claimRequired": "Reclama este pedido para surtirlo.",
-      "lineNotPickable": "No hay nada que surtir en esta línea."
+      "lineNotPickable": "No hay nada que surtir en esta línea.",
+      "batchTooLarge": "Un lote admite como máximo {max} pedidos.",
+      "batchOpen": "Ya tienes un lote abierto. Termínalo en Mis surtidos antes de empezar otro.",
+      "batchFailed": "Algunos pedidos no se pudieron tomar, así que no se tomó ninguno."
     },
     "workflow": {
       "illegalTransition": "Ese cambio no está permitido desde el estado actual del pedido.",

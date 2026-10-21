@@ -58,6 +58,7 @@ model User {
   claimedOrders      Order[]             @relation("OrderClaimedBy")
   stageEvents        OrderStageEvent[]
   pickedItems        OrderItem[]         @relation("ItemPickedBy")
+  pickBatches        PickBatch[]
   packedItems        PackageItem[]       @relation("PackedBy")
   verifiedItems      PackageItem[]       @relation("QaVerifiedBy")
   labelsPurchased    ShippingLabel[]     @relation("LabelPurchasedBy")

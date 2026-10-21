@@ -1,6 +1,13 @@
 import { z } from "zod";
-import { base, Id } from "./base";
-import { LineAttribute, OrderDetail, PickStatus } from "./orders";
+import { base, Id, IdempotencyKey } from "./base";
+import {
+  LineAttribute,
+  OrderDetail,
+  OrderVersionInput,
+  PickStatus,
+  WorkflowStatus,
+} from "./orders";
+import { PICK_BATCH_MAX_ORDERS_CEILING } from "./settings";
 
 // Picking (SPEC-picking "API"). Line writes need the order in Picking and the caller's live claim;
 // they set an absolute state, so a replay is harmless and they don't carry the order's version.
@@ -60,6 +67,71 @@ export type PickLineInput = z.infer<typeof PickLineInput>;
 export const PickItemInput = z.object({ itemId: Id });
 export type PickItemInput = z.infer<typeof PickItemInput>;
 
+/**
+ * A batch member's standing: `live` while the order is Picking with the owner's live claim; `left`
+ * once it was completed, held, cancelled, forced or taken over; `removed` when dropped on purpose
+ * or moved to another batch.
+ */
+export const PickBatchMemberState = z.enum(["live", "left", "removed"]);
+export type PickBatchMemberState = z.infer<typeof PickBatchMemberState>;
+
+/** One slot on the cart, for the slot legend. */
+export const PickBatchMember = z.object({
+  slot: z.number().int(),
+  orderId: Id,
+  number: z.string(),
+  customerName: z.string(),
+  status: WorkflowStatus,
+  version: z.number().int(),
+  state: PickBatchMemberState,
+});
+export type PickBatchMember = z.infer<typeof PickBatchMember>;
+
+export const PickBatch = z.object({
+  id: Id,
+  /** "Batch 42" on screen. */
+  number: z.number().int(),
+  owner: z.object({ id: Id, name: z.string() }),
+  createdAt: z.date(),
+  closedAt: z.date().nullable(),
+  /** By slot. */
+  members: z.array(PickBatchMember),
+});
+export type PickBatch = z.infer<typeof PickBatch>;
+
+export const PICK_BATCH_MIN_ORDERS = 2;
+
+/** 2 to Settings.pickBatchMaxOrders orders; the contract only enforces the setting's ceiling. */
+export const CreatePickBatchInput = z.object({
+  idempotencyKey: IdempotencyKey,
+  orders: z
+    .array(OrderVersionInput)
+    .min(PICK_BATCH_MIN_ORDERS)
+    .max(PICK_BATCH_MAX_ORDERS_CEILING)
+    .refine((orders) => new Set(orders.map((o) => o.id)).size === orders.length, {
+      message: "errors.field.invalid",
+    }),
+});
+export type CreatePickBatchInput = z.infer<typeof CreatePickBatchInput>;
+
+/** An order the actor is picking, for **My picks**. */
+export const MyPickOrder = z.object({
+  id: Id,
+  number: z.string(),
+  customerName: z.string(),
+  priority: z.number().int(),
+  claimedAt: z.date(),
+});
+export type MyPickOrder = z.infer<typeof MyPickOrder>;
+
+export const MyPicks = z.object({
+  /** The actor's open batch, if any. */
+  batch: PickBatch.nullable(),
+  /** The actor's live-claimed orders in Picking that aren't live members of that batch. */
+  orders: z.array(MyPickOrder),
+});
+export type MyPicks = z.infer<typeof MyPicks>;
+
 const tags = ["Picking"];
 
 export const picking = {
@@ -90,4 +162,28 @@ export const picking = {
     })
     .input(PickItemInput)
     .output(PickLineResult),
+  myPicks: base
+    .route({
+      method: "GET",
+      path: "/me/picks",
+      tags,
+      summary: "My open pick batch and the orders I'm picking",
+    })
+    .output(MyPicks),
+};
+
+export const pickBatches = {
+  create: base
+    .route({
+      method: "POST",
+      path: "/pick-batches",
+      tags,
+      summary: "Begin picking several orders together as one batch, all or nothing",
+    })
+    .input(CreatePickBatchInput)
+    .output(PickBatch),
+  get: base
+    .route({ method: "GET", path: "/pick-batches/{id}", tags, summary: "A pick batch" })
+    .input(z.object({ id: Id }))
+    .output(PickBatch),
 };
