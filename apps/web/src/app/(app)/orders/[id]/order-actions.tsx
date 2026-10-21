@@ -8,6 +8,7 @@ import {
   type OrderView,
   WorkflowStatus,
 } from "@woolrus/contracts";
+import { useRouter } from "next/navigation";
 import { useFormatter, useTranslations } from "next-intl";
 import { useState } from "react";
 import { Form } from "react-aria-components";
@@ -25,6 +26,25 @@ export function unmetOf(error: unknown): Unmet[] | null {
   if (!(error instanceof ORPCError)) return null;
   const unmet = (error.data as { unmet?: Unmet[] } | undefined)?.unmet;
   return unmet?.length ? unmet : null;
+}
+
+/** What a refused completion still needs, one line per condition. */
+export function UnmetList({ unmet }: { unmet: Unmet[] }) {
+  const t = useTranslations();
+  return (
+    <div role="alert" className="alert alert-error flex-col items-start">
+      <p className="font-semibold">{t("errors.workflow.gateFailed")}</p>
+      <ul className="list-disc ps-6">
+        {unmet.map((condition) => (
+          <li key={`${condition.messageKey}:${JSON.stringify(condition.params)}`}>
+            {t.has(condition.messageKey)
+              ? t(condition.messageKey, condition.params as never)
+              : t("errors.internal")}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
 }
 
 type Run = {
@@ -53,6 +73,7 @@ export function OrderActions({ order, userId }: { order: OrderView; userId: stri
   const format = useFormatter();
   const errorMessage = useErrorMessage();
   const queryClient = useQueryClient();
+  const router = useRouter();
   const [unmet, setUnmet] = useState<Unmet[] | null>(null);
   const can = (action: OrderAction) => order.allowedActions.includes(action);
   const versioned = { id: order.id, expectedVersion: order.version };
@@ -61,7 +82,10 @@ export function OrderActions({ order, userId }: { order: OrderView; userId: stri
   const mutation = useMutation({
     mutationFn: ({ call }: Run) => call(),
     onMutate: () => setUnmet(null),
-    onSuccess: (result, { done }) => toast.success(done(result)),
+    onSuccess: (result, { action, done }) => {
+      toast.success(done(result));
+      if (action === "beginPicking") router.push(`/pick/${result.id}`);
+    },
     onError: (error) => {
       const missing = unmetOf(error);
       if (missing) setUnmet(missing);
@@ -168,20 +192,7 @@ export function OrderActions({ order, userId }: { order: OrderView; userId: stri
         </p>
       )}
 
-      {unmet && (
-        <div role="alert" className="alert alert-error flex-col items-start">
-          <p className="font-semibold">{t("errors.workflow.gateFailed")}</p>
-          <ul className="list-disc ps-6">
-            {unmet.map((condition) => (
-              <li key={`${condition.messageKey}:${JSON.stringify(condition.params)}`}>
-                {t.has(condition.messageKey)
-                  ? t(condition.messageKey, condition.params as never)
-                  : t("errors.internal")}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+      {unmet && <UnmetList unmet={unmet} />}
 
       <div className="flex flex-wrap gap-2">
         {moves.filter(can).map((action) => (

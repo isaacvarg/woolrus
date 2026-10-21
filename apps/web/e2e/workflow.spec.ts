@@ -246,6 +246,9 @@ test("the detail page shows the header, read-only lines and the history", async 
 
   await page.getByRole("button", { name: "Begin Picking" }).click();
   await expect(toasts(page).getByText(`Order ${order.number} is now in Picking.`)).toBeVisible();
+  // Begin Picking lands on the pick screen (SPEC-picking); this test is about the detail page.
+  await expect(page).toHaveURL(`/pick/${order.id}`);
+  await page.goto(`/orders/${order.id}`);
   await expect(page.getByText("Claimed by E2E PICKER")).toBeVisible();
   await expect(historyPanel(page).getByRole("listitem").first()).toContainText("Pending → Picking");
   await expect(historyPanel(page).getByRole("listitem").first()).toContainText("E2E PICKER");
@@ -270,6 +273,9 @@ test("a completion refused by its gate shows what's missing", async ({ page }) =
   await signInAs(page, ["PICKER"]);
   await page.goto(`/orders/${order.id}`);
   await page.getByRole("button", { name: "Begin Picking" }).click();
+  // Begin Picking lands on the pick screen (SPEC-picking); this test is about the detail page.
+  await expect(page).toHaveURL(`/pick/${order.id}`);
+  await page.goto(`/orders/${order.id}`);
   await page.getByRole("button", { name: "Complete Picking" }).click();
 
   const refused = page.getByRole("alert").filter({ hasText: "This stage isn't finished yet." });
@@ -317,6 +323,9 @@ test("an order put on hold appears in On Hold and resumes to its stage", async (
   await signInAs(page, ["PICKER"]);
   await page.goto(`/orders/${order.id}`);
   await page.getByRole("button", { name: "Begin Picking" }).click();
+  // Begin Picking lands on the pick screen (SPEC-picking); this test is about the detail page.
+  await expect(page).toHaveURL(`/pick/${order.id}`);
+  await page.goto(`/orders/${order.id}`);
   await expect(page.getByTestId("order-status")).toHaveText("Picking");
 
   await page.getByRole("button", { name: "Hold" }).click();

@@ -33,8 +33,8 @@ function invalidateLists(queryClient: QueryClient) {
   }
 }
 
-/** Every query that follows the order event stream: orders, and their notes. */
-const followed = () => [orpc.orders.key(), orpc.notes.key()];
+/** Every query that follows the order event stream: orders, their pick views, and their notes. */
+const followed = () => [orpc.orders.key(), orpc.picking.key(), orpc.notes.key()];
 
 function invalidateFollowed(queryClient: QueryClient) {
   for (const queryKey of followed()) void queryClient.invalidateQueries({ queryKey });
@@ -45,6 +45,9 @@ function invalidateOrders(queryClient: QueryClient, ids: Iterable<string>) {
   for (const id of ids) {
     void queryClient.invalidateQueries({ queryKey: orpc.orders.get.key({ input: { id } }) });
     void queryClient.invalidateQueries({ queryKey: orpc.orders.history.key({ input: { id } }) });
+    void queryClient.invalidateQueries({
+      queryKey: orpc.picking.view.key({ input: { orderId: id } }),
+    });
     // Notes change without touching the order, and say so with the same event.
     void queryClient.invalidateQueries({
       queryKey: orpc.notes.list.key({ input: { orderId: id } }),

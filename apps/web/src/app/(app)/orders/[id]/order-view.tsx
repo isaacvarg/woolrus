@@ -2,6 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import type { OrderView as Order } from "@woolrus/contracts";
+import Link from "next/link";
 import { useFormatter, useTranslations } from "next-intl";
 import type { TargetOption } from "@/components/notes/note-composer";
 import { useTargetName } from "@/components/notes/note-list";
@@ -78,12 +79,18 @@ function OrderLayout({
   userId: string | null;
   canWriteCustomer: boolean;
 }) {
+  const t = useTranslations();
   const targets = useNoteTargets(order);
   const notes = { orderId: order.id, canWriteCustomer, targets };
   return (
     <section className="mx-auto max-w-6xl space-y-6">
       <OrderHeader order={order} />
       <ExternalChangeBanner order={order} />
+      {order.status === "PICKING" && (
+        <Link href={`/pick/${order.id}`} className="btn btn-secondary btn-lg">
+          {t("order.openPickScreen")}
+        </Link>
+      )}
       <OrderActions order={order} userId={userId} />
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
@@ -170,6 +177,7 @@ type NotesProps = { orderId: string; canWriteCustomer: boolean; targets: NoteTar
 
 function OrderLines({ order, notes }: { order: Order; notes: NotesProps }) {
   const t = useTranslations();
+  const format = useFormatter();
   return (
     <div className="overflow-x-auto rounded-box bg-base-100 shadow-sm">
       <table className="table text-base" aria-label={t("order.lines")}>
@@ -220,6 +228,17 @@ function OrderLines({ order, notes }: { order: Order; notes: NotesProps }) {
                           expected: line.activeQuantity,
                         })}
                       </span>
+                    )}
+                    {line.pickedBy && line.pickedAt && (
+                      <div className="text-sm opacity-70">
+                        {t("order.pickedBy", {
+                          name: line.pickedBy.name,
+                          time: format.dateTime(line.pickedAt, {
+                            dateStyle: "short",
+                            timeStyle: "short",
+                          }),
+                        })}
+                      </div>
                     )}
                   </>
                 )}

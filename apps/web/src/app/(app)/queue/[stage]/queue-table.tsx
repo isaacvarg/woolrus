@@ -63,7 +63,10 @@ export function QueueTable({
 
   const beginPicking = useMutation(
     orpc.orders.beginPicking.mutationOptions({
-      onSuccess: (order) => toast.success(t("queue.begunPicking", { number: order.number })),
+      onSuccess: (order) => {
+        toast.success(t("queue.begunPicking", { number: order.number }));
+        router.push(`/pick/${order.id}`);
+      },
       onError: (error) => toast.error(errorMessage(error)),
       // A stale version means another station moved it: refetch either way so the row is current.
       onSettled: () => queryClient.invalidateQueries({ queryKey: orpc.orders.key() }),

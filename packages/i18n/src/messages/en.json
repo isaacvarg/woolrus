@@ -309,7 +309,27 @@
         "shippingMethod": "Shipping",
         "refunds": "Refunded"
       }
-    }
+    },
+    "pickedBy": "{name}, {time}",
+    "openPickScreen": "Open pick screen"
+  },
+  "pick": {
+    "title": "Pick #{number}",
+    "orderDetails": "Order details",
+    "progress": "{done} of {total} lines picked",
+    "progressLabel": "Picking progress",
+    "lines": "Items to pick",
+    "nothingToPick": "Nothing on this order needs picking.",
+    "voidedLines": "{count, plural, one {# line was voided and isn't shown.} other {# lines were voided and aren't shown.}}",
+    "notPicking": "This order is in {status}, so it can't be picked here.",
+    "unclaimed": "Your claim on this order expired. Claim it again from the order details to keep picking.",
+    "claimedByOther": "{name} is picking this order. Take it over from the order details to pick it yourself.",
+    "partial": "Partly picked",
+    "sku": "SKU {sku}",
+    "bin": "Bin {bin}",
+    "count": "{picked} of {quantity}",
+    "oneFewer": "One fewer {name}",
+    "oneMore": "One more {name}"
   },
   "orders": {
     "status": "Status",
