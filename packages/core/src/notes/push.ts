@@ -11,6 +11,10 @@ import { targetInclude, targetOf } from "./targets";
  * refused. A row lock can't cover the HTTP call itself: a note edited after `notesToPush` read it
  * but before it is marked reaches WooCommerce with its earlier text. `shipping` should keep that
  * window short (read, post, mark per note) rather than reading every note up front.
+ *
+ * `content` is what staff typed, unescaped. WooCommerce puts a customer note into an email it
+ * sends under the store's name without stripping HTML, so `shipping` must send notes as plain
+ * text (escape `&`, `<`, `>`), never as markup.
  */
 
 export type NoteToPush = {

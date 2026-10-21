@@ -127,3 +127,9 @@ positive quantities and dimensions, single-row settings. **Keep them when editin
   at once could exhaust a small host. Real tablet photos are 3–5 MB, so this is unlikely today. Before production:
   size the web container for it, or limit concurrent note uploads, or check each photo from its header and drop
   its bytes before the next is read.
+- **Voice memo checks** (notes ship review, 2026-10-21): a voice memo is accepted by its container's magic bytes
+  and stored as uploaded, up to 15 MB; `durationMs` comes from the client and is only range-checked. So any
+  signed-in user can store arbitrary bytes behind an audio header (an MP4 video passes as `audio/mp4`), and
+  nothing limits uploads per user. Served as `audio/*` with `nosniff` and a sandbox CSP, so it can't run in the
+  browser. Before production: a per-user upload rate limit and byte budget, refusing memos far larger than
+  their duration allows (about 40 bytes per ms), refusing MP4s with a video track, and tracking bucket size.
