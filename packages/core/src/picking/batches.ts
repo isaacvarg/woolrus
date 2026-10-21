@@ -1,20 +1,28 @@
 import {
   type CreatePickBatchInput,
+  type LineAttribute,
   type MyPicks,
   PICK_BATCH_MIN_ORDERS,
   type PickBatch,
+  type PickBatchChip,
+  type PickBatchGroup,
+  type PickBatchLeft,
   type PickBatchMemberState,
 } from "@woolrus/contracts";
 import type { Db, DbTx, Prisma } from "@woolrus/db";
 import { recordAudit } from "../audit";
 import { AppError, forbidden, notFound, type OrderFailure } from "../errors";
 import { withIdempotency } from "../idempotency";
+import { lineNoteCounts } from "../notes/targets";
 import { type Actor, assertCan, type UserActor } from "../permissions";
 import { loadSettings } from "../settings/service";
 import { claimExpiryMinutes, holdsClaim, isClaimLive, touchClaim } from "../workflow/claims";
 import { lockOrders } from "../workflow/lock";
 import { displayName, holderName, nameFields } from "../workflow/people";
 import { transition } from "../workflow/service";
+import { normalizeCode } from "./codes";
+import { isDone, isWorkLine, type LineRow, lineInclude, toPickLine } from "./service";
+import { pickOrder } from "./sort";
 
 // Pick batches (SPEC-picking "Pick batches"). A batch is stored so it survives a reload or a change of
 // tablet, but workflow knows nothing about it: a member is live only while its order is Picking with
@@ -36,6 +44,7 @@ const batchInclude = {
           version: true,
           claimedById: true,
           claimedAt: true,
+          claimedBy: { select: nameFields },
         },
       },
     },
@@ -51,32 +60,120 @@ function memberState(
   expiry: number,
   now: Date,
 ): PickBatchMemberState {
-  if (member.removedAt) return "removed";
-  const { order } = member;
-  return order.status === "PICKING" &&
-    order.claimedById === ownerId &&
-    isClaimLive(order, expiry, now)
-    ? "live"
-    : "left";
+  return member.removedAt ? "removed" : leftReason(member, ownerId, expiry, now) ? "left" : "live";
 }
 
-function toPickBatch(row: BatchRow, expiry: number, now: Date): PickBatch {
+/** Why a member that wasn't removed has left the batch, or null while it is live. */
+function leftReason(
+  { order }: MemberRow,
+  ownerId: string,
+  expiry: number,
+  now: Date,
+): PickBatchLeft | null {
+  if (order.status !== "PICKING") return { reason: "status" };
+  if (!isClaimLive(order, expiry, now)) return { reason: "claimExpired" };
+  if (order.claimedById !== ownerId) {
+    return { reason: "takenOver", name: order.claimedBy ? displayName(order.claimedBy) : "" };
+  }
+  return null;
+}
+
+function toPickBatch(
+  row: BatchRow,
+  groups: PickBatchGroup[],
+  expiry: number,
+  now: Date,
+): PickBatch {
   return {
     id: row.id,
     number: row.number,
     owner: { id: row.owner.id, name: displayName(row.owner) },
     createdAt: row.createdAt,
     closedAt: row.closedAt,
-    members: row.orders.map((member) => ({
-      slot: member.slot,
-      orderId: member.order.id,
-      number: member.order.number,
-      customerName: member.order.customerName,
-      status: member.order.status,
-      version: member.order.version,
-      state: memberState(member, row.ownerId, expiry, now),
-    })),
+    members: row.orders.map((member) => {
+      const state = memberState(member, row.ownerId, expiry, now);
+      return {
+        slot: member.slot,
+        orderId: member.order.id,
+        number: member.order.number,
+        customerName: member.order.customerName,
+        status: member.order.status,
+        version: member.order.version,
+        state,
+        left: state === "left" ? leftReason(member, row.ownerId, expiry, now) : null,
+      };
+    }),
+    groups,
   };
+}
+
+/** What's on the shelf: the variation, else the product, else the SKU as a scanner reads it, else the name. */
+function shelfKey(row: LineRow): string {
+  if (row.variationId) return `variation:${row.variationId}`;
+  if (row.productId) return `product:${row.productId}`;
+  const sku = normalizeCode(row.sku ?? "");
+  return sku ? `sku:${sku}` : `name:${row.name.trim().toLowerCase()}`;
+}
+
+const sameAttributes = (a: LineAttribute[], b: LineAttribute[]) =>
+  a.length === b.length && a.every((x, i) => x.name === b[i]?.name && x.option === b[i]?.option);
+
+/**
+ * The batch pick list (SPEC-picking "Batch list"): the live members' lines grouped by what's on the
+ * shelf, groups in pick order with finished ones last, chips by slot with finished ones last.
+ */
+async function batchGroups(tx: DbTx, live: MemberRow[]): Promise<PickBatchGroup[]> {
+  if (live.length === 0) return [];
+  const orderIds = live.map((m) => m.order.id);
+  const members = new Map(live.map((m) => [m.order.id, m]));
+  const [rows, notes] = await Promise.all([
+    tx.orderItem.findMany({ where: { orderId: { in: orderIds } }, include: lineInclude }),
+    lineNoteCounts(tx, orderIds),
+  ]);
+
+  const byKey = new Map<string, PickBatchChip[]>();
+  for (const row of rows.filter(isWorkLine)) {
+    const member = members.get(row.orderId) as MemberRow;
+    const chip = {
+      slot: member.slot,
+      orderId: row.orderId,
+      number: member.order.number,
+      line: toPickLine(row, notes.get(row.id) ?? 0),
+    };
+    const key = shelfKey(row);
+    byKey.set(key, [...(byKey.get(key) ?? []), chip]);
+  }
+
+  const groups = [...byKey].map(([key, chips]): PickBatchGroup & { id: string } => {
+    chips.sort(
+      (a, b) =>
+        Number(isDone(a.line.pickStatus)) - Number(isDone(b.line.pickStatus)) || a.slot - b.slot,
+    );
+    // The first chip in pick order stands for the group, so a bin on any of them sorts it.
+    const [lead] = pickOrder(chips.map((c) => c.line)) as [PickBatchChip["line"]];
+    const attributes = chips.every((c) => sameAttributes(c.line.attributes, lead.attributes))
+      ? lead.attributes
+      : null;
+    return {
+      id: lead.id,
+      key,
+      name: lead.name,
+      sku: lead.sku,
+      imageUrl: lead.imageUrl,
+      binLocation: lead.binLocation,
+      attributes,
+      quantity: chips.reduce((sum, c) => sum + c.line.quantity, 0),
+      remaining: chips.reduce(
+        (sum, c) => sum + (isDone(c.line.pickStatus) ? 0 : c.line.quantity - c.line.pickedQuantity),
+        0,
+      ),
+      chips,
+    };
+  });
+  // Groups with nothing left move below the rest; otherwise pick order (the sort is stable).
+  return pickOrder(groups)
+    .sort((a, b) => Number(a.remaining === 0) - Number(b.remaining === 0))
+    .map(({ id: _, ...group }) => group);
 }
 
 /**
@@ -127,7 +224,10 @@ async function readBatch(
   if (!row.closedAt && (await closeIfSpent(tx, actor, row, expiry, now))) {
     return readBatch(tx, actor, id, expiry, now);
   }
-  return toPickBatch(row, expiry, now);
+  const live = row.closedAt
+    ? []
+    : row.orders.filter((m) => memberState(m, row.ownerId, expiry, now) === "live");
+  return toPickBatch(row, await batchGroups(tx, live), expiry, now);
 }
 
 function assertMayPick(actor: Actor): asserts actor is UserActor {

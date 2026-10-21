@@ -1,10 +1,11 @@
 import type { Db } from "@woolrus/db";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { createActor, resetDb, testDb } from "../../test/db";
-import { createOrder } from "../../test/factories";
+import { createOrder, type LineSpec } from "../../test/factories";
 import { systemActor, type UserActor } from "../permissions";
 import { updateSettings } from "../settings/service";
 import { createBatch, getBatch, myPicks } from "./batches";
+import { pickLine } from "./service";
 
 const db: Db = testDb();
 afterAll(() => db.$disconnect());
@@ -359,6 +360,151 @@ describe("getBatch", () => {
     await expect(
       getBatch(db, packer, { id: "01900000-0000-7000-8000-000000000000" }),
     ).rejects.toMatchObject({ kind: "NOT_FOUND" });
+  });
+});
+
+describe("batch list", () => {
+  /** Begins the given orders as one batch for the picker; slots follow creation order. */
+  async function batchOf(picker: UserActor, specs: Parameters<typeof createOrder>[1][]) {
+    const built = [];
+    for (const [i, spec] of specs.entries()) {
+      built.push(await createOrder(db, { orderedAt: minutesAgo(100 - i), ...spec }));
+    }
+    const batch = await createBatch(db, picker, {
+      orders: refs(built.map((b) => b.order)),
+      idempotencyKey: key(),
+    });
+    return { batch, built };
+  }
+
+  /** Adds a line to an order already in the batch. */
+  async function createLineOn(orderId: string | undefined, line: LineSpec) {
+    const { items } = await createOrder(db, { lines: [line] });
+    await db.orderItem.update({
+      where: { id: items[0]?.id },
+      data: { orderId: orderId as string },
+    });
+  }
+
+  it("shows a variation on three orders once, with its total and a chip per order", async () => {
+    const picker = await createActor(db, ["PICKER"]);
+    const { batch, built } = await batchOf(picker, [
+      {
+        lines: [
+          { name: "Lavender soap", sku: "LAV-8", bin: "B1", variation: {}, quantity: 2 },
+          { name: "Mint balm", bin: "A1" },
+        ],
+      },
+      {},
+      {},
+    ]);
+    const [one, two, three] = built;
+    const shared = one?.items[0] as NonNullable<NonNullable<typeof one>["items"][0]>;
+    // The other two orders get their share of the same variation (and two gets an unbinned line).
+    await createLineOn(two?.order.id, { sameAs: shared, quantity: 3 });
+    await createLineOn(three?.order.id, { sameAs: shared, quantity: 4 });
+    // Slot 2's share is picked: its chip sorts below the others.
+    const twoShare = await db.orderItem.findFirstOrThrow({
+      where: { orderId: two?.order.id, variationId: shared.variationId },
+    });
+    await pickLine(db, picker, { itemId: twoShare.id });
+
+    const read = await getBatch(db, picker, { id: batch.id });
+
+    const lavender = read.groups.find((g) => g.name === "Lavender soap");
+    expect(lavender).toMatchObject({ sku: "LAV-8", binLocation: "B1", quantity: 9, remaining: 6 });
+    expect(
+      lavender?.chips.map((c) => [c.slot, c.number, c.line.quantity, c.line.pickStatus]),
+    ).toEqual([
+      [1, one?.order.number, 2, "PENDING"],
+      [3, three?.order.number, 4, "PENDING"],
+      [2, two?.order.number, 3, "PICKED"],
+    ]);
+    // Pick order: bin A1, bin B1, then the lines without a bin.
+    expect(read.groups.slice(0, 2).map((g) => g.name)).toEqual(["Mint balm", "Lavender soap"]);
+    expect(read.groups).toHaveLength(4);
+  });
+
+  it("groups by product without a variation, then SKU, then name; shared attributes once", async () => {
+    const picker = await createActor(db, ["PICKER"]);
+    const size = (option: string) => [{ name: "Size", option }];
+    const base = await createOrder(db, { lines: [{ name: "Candle", attributes: size("S") }] });
+    const candle = base.items[0] as NonNullable<(typeof base.items)[0]>;
+    const { batch } = await batchOf(picker, [
+      {
+        lines: [
+          { sameAs: candle, attributes: size("S") },
+          { noProduct: true, name: "Old tote", sku: "tote-1" },
+          { noProduct: true, name: "Gift card", sku: "" },
+        ],
+      },
+      {
+        lines: [
+          { sameAs: candle, attributes: size("L") },
+          { noProduct: true, name: "Old tote (renamed)", sku: " TOTE-1 " },
+          { noProduct: true, name: "Gift card", sku: "" },
+        ],
+      },
+    ]);
+
+    const byName = new Map(batch.groups.map((g) => [g.name, g]));
+    expect(batch.groups).toHaveLength(3);
+    // Same product, different options: each chip shows its own.
+    expect(byName.get("Candle")?.chips).toHaveLength(2);
+    expect(byName.get("Candle")?.attributes).toBeNull();
+    expect(byName.get("Old tote")?.chips).toHaveLength(2);
+    expect(byName.get("Gift card")?.chips).toHaveLength(2);
+    expect(byName.get("Gift card")?.attributes).toEqual([]);
+  });
+
+  it("drops members that left from the list and says why", async () => {
+    const picker = await createActor(db, ["PICKER"]);
+    const other = await createActor(db, ["PICKER"]);
+    await db.user.update({ where: { id: other.userId }, data: { name: "Ana" } });
+    const { batch } = await batchOf(picker, [{}, {}, {}, {}, {}]);
+    const [, held, taken, expired, cancelled] = batch.members.map((m) => m.orderId);
+    await db.order.update({ where: { id: held }, data: { status: "ON_HOLD" } });
+    await db.order.update({ where: { id: taken }, data: { claimedById: other.userId } });
+    await db.order.update({ where: { id: expired }, data: { claimedAt: minutesAgo(10_000) } });
+    await db.order.update({ where: { id: cancelled }, data: { status: "CANCELLED" } });
+
+    const read = await getBatch(db, picker, { id: batch.id });
+
+    expect(read.members.map((m) => [m.state, m.left])).toEqual([
+      ["live", null],
+      ["left", { reason: "status" }],
+      ["left", { reason: "takenOver", name: "Ana" }],
+      ["left", { reason: "claimExpired" }],
+      ["left", { reason: "status" }],
+    ]);
+    expect(read.groups.flatMap((g) => g.chips.map((c) => c.slot))).toEqual([1]);
+  });
+
+  it("lets only the owner act on the batch's lines; anyone who can read orders can look", async () => {
+    const picker = await createActor(db, ["PICKER"]);
+    const other = await createActor(db, ["PICKER"]);
+    const { batch } = await batchOf(picker, [{}, {}]);
+    const chip = batch.groups[0]?.chips[0];
+    const itemId = chip?.line.id as string;
+
+    await expect(pickLine(db, other, { itemId })).rejects.toMatchObject({
+      messageKey: "errors.picking.claimRequired",
+    });
+    expect((await getBatch(db, other, { id: batch.id })).groups[0]?.chips[0]?.line.pickStatus).toBe(
+      "PENDING",
+    );
+    const packer = await createActor(db, ["PACKER"]);
+    await expect(pickLine(db, packer, { itemId })).rejects.toMatchObject({ kind: "FORBIDDEN" });
+
+    const { line } = await pickLine(db, picker, { itemId });
+    expect(line.pickStatus).toBe("PICKED");
+    const read = await getBatch(db, packer, { id: batch.id });
+    expect(read.groups.find((g) => g.chips[0]?.line.id === itemId)?.remaining).toBe(0);
+
+    const nobody = await createActor(db, []);
+    await expect(getBatch(db, nobody, { id: batch.id })).rejects.toMatchObject({
+      kind: "FORBIDDEN",
+    });
   });
 });
 

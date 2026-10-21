@@ -367,6 +367,13 @@
       "note": "Note (optional)",
       "submit": "Mark Substituted",
       "done": "{name} marked Substituted."
+    },
+    "quantity": {
+      "action": "Quantity",
+      "title": "How many {name}?",
+      "picked": "Picked so far",
+      "hint": "Of the {quantity} needed. 0 puts it back to not picked.",
+      "submit": "Save"
     }
   },
   "pickBatch": {
@@ -378,8 +385,17 @@
     "closed": "This batch is finished.",
     "memberState": {
       "live": "Picking",
-      "left": "Left: {status}",
       "removed": "Removed"
+    },
+    "list": "Pick list",
+    "nothingToPick": "Nothing left in this batch needs picking.",
+    "readOnly": "{name} is picking this batch. You can look, but only they can pick it.",
+    "remaining": "{remaining} of {quantity} left",
+    "chip": "Slot {slot}, order #{number}: {picked} of {quantity}, {status}",
+    "left": {
+      "status": "Left: {status}",
+      "takenOver": "Left: {name} took it over",
+      "claimExpired": "Left: claim expired"
     }
   },
   "myPicks": {

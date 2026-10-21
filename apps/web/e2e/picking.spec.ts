@@ -337,3 +337,72 @@ test("Pick together moves none and says which order someone else took", async ({
     }),
   ).toBeVisible();
 });
+
+test("the batch list picks lines from chips; a takeover elsewhere drops the order live", async ({
+  page,
+  browser,
+}) => {
+  const tag = `E2E batch ${crypto.randomUUID()}`;
+  const orders = [];
+  for (const [index, name] of ["A", "B", "C"].entries()) {
+    // Same SKU on every order: one card with three chips. Oldest first, so slots follow creation.
+    orders.push(
+      await createOrder({
+        customerName: `${tag} ${name}`,
+        orderedAt: new Date(Date.now() - (10 - index) * 60_000),
+      }),
+    );
+  }
+  await signInAs(page, ["PICKER"]);
+  await page.goto("/queue/pending");
+  await page.getByRole("searchbox", { name: "Search orders" }).fill(tag);
+  for (const order of orders) {
+    await tick(page, order.number);
+  }
+  await page.getByRole("button", { name: "Pick together (3)" }).click();
+  await expect(page).toHaveURL(/\/pick\/batch\/[0-9a-f-]+$/);
+
+  const groups = page.getByTestId("batch-group");
+  await expect(groups).toHaveCount(1);
+  const group = groups.first();
+  await expect(group.getByRole("heading", { name: "E2E item" })).toBeVisible();
+  await expect(group.getByTestId("group-left")).toHaveText("6 of 6 left");
+
+  // Tap slot 1's chip: its share is picked.
+  await group.getByRole("button", { name: /^Slot 1, order/ }).click();
+  await expect(page.getByTestId("chip-1")).toHaveAttribute("data-status", "PICKED");
+  await expect(group.getByTestId("group-left")).toHaveText("4 of 6 left");
+
+  // Slot 2 through the chip menu: one of its two.
+  await page.getByTestId("chip-2").getByRole("button", { name: "More for E2E item" }).click();
+  await page.getByRole("menuitem", { name: "Quantity" }).click();
+  const dialog = page.getByRole("dialog", { name: "How many E2E item?" });
+  await dialog.getByRole("textbox", { name: "Picked so far" }).fill("1");
+  await dialog.getByRole("button", { name: "Save" }).click();
+  await expect(dialog).toBeHidden();
+  await expect(page.getByTestId("chip-2")).toContainText("1 of 2");
+  await expect(group.getByTestId("group-left")).toHaveText("3 of 6 left");
+
+  await page.reload();
+  await expect(page.getByTestId("chip-1")).toHaveAttribute("data-status", "PICKED");
+  await expect(page.getByTestId("chip-2")).toContainText("1 of 2");
+
+  // Someone else takes slot 3's order over: it leaves the list without a reload here.
+  const taken = orders[2] as (typeof orders)[number];
+  const other = await (await browser.newContext()).newPage();
+  try {
+    await signInAs(other, ["PICKER", "PACKER"]);
+    await other.goto(`/orders/${taken.id}`);
+    await other.getByRole("button", { name: "Take over" }).click();
+    await other
+      .getByRole("dialog", { name: "Take over this order?" })
+      .getByRole("button", { name: "Take over" })
+      .click();
+    await expect(other.getByText("Claimed by E2E PICKER+PACKER")).toBeVisible();
+  } finally {
+    await other.context().close();
+  }
+  await expect(page.getByTestId("chip-3")).toHaveCount(0);
+  await expect(group.getByTestId("group-left")).toHaveText("1 of 4 left");
+  await expect(page.getByTestId("slot-3")).toContainText("Left: E2E PICKER+PACKER took it over");
+});
