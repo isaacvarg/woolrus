@@ -3,7 +3,7 @@ import type { Db, DbTx } from "@woolrus/db";
 import { recordAudit } from "../audit";
 import { AppError, notFound } from "../errors";
 import { type Actor, assertCan } from "../permissions";
-import { normalizeCode } from "./codes";
+import { CODE_PADDING, normalizeCode } from "./codes";
 
 // Linking a barcode (SPEC-picking "Code matching", decision 2): an admin puts an unknown scanned code
 // on the line's variation, else its product, so the next scan of it matches on every order. Store
@@ -14,7 +14,8 @@ type Own = { productId: string; variationId: string | null };
 
 /**
  * The product or variation a normalized code is already a barcode or SKU of, variations first.
- * Codes are stored as the store typed them, so both sides compare normalized, as on the lines.
+ * Codes are stored as the store typed them, so both sides compare normalized, as on the lines (the
+ * same padding stripped as `normalizeCode`, which a plain SQL `trim` wouldn't).
  */
 export async function findCodeOwner(
   tx: DbTx,
@@ -23,14 +24,15 @@ export async function findCodeOwner(
 ): Promise<{ name: string } | undefined> {
   const productId = own?.productId ?? null;
   const variationId = own?.variationId ?? null;
+  const pad = CODE_PADDING;
   const [found] = await tx.$queryRaw<{ name: string }[]>`
     SELECT name FROM (
       SELECT v.name, 1 AS rank FROM product_variations v
-        WHERE (upper(trim(v.barcode)) = ${code} OR upper(trim(v.sku)) = ${code})
+        WHERE (upper(btrim(v.barcode, ${pad})) = ${code} OR upper(btrim(v.sku, ${pad})) = ${code})
           AND v.id IS DISTINCT FROM ${variationId}::uuid
       UNION ALL
       SELECT p.name, 2 AS rank FROM products p
-        WHERE (upper(trim(p.barcode)) = ${code} OR upper(trim(p.sku)) = ${code})
+        WHERE (upper(btrim(p.barcode, ${pad})) = ${code} OR upper(btrim(p.sku, ${pad})) = ${code})
           AND p.id IS DISTINCT FROM ${productId}::uuid
     ) AS found ORDER BY rank, name LIMIT 1`;
   return found;

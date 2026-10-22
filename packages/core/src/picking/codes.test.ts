@@ -1,9 +1,20 @@
 import { describe, expect, it } from "vitest";
-import { codesForLine, normalizeCode } from "./codes";
+import { CODE_PADDING, codesForLine, normalizeCode } from "./codes";
 
 describe("normalizeCode", () => {
   it("trims and upper-cases", () => {
     expect(normalizeCode("  lav-8oz \t")).toBe("LAV-8OZ");
+  });
+
+  it("strips exactly the padding characters SQL is told to strip", () => {
+    // findCodeOwner trims stored codes in SQL with CODE_PADDING; it must match JavaScript's trim.
+    const trimmed = [];
+    for (let c = 0; c <= 0xffff; c++) {
+      const char = String.fromCharCode(c);
+      if (char.trim() === "") trimmed.push(char);
+    }
+    expect([...CODE_PADDING].sort()).toEqual(trimmed.sort());
+    expect(normalizeCode("\u00a0\tlav-8oz\n\u3000")).toBe("LAV-8OZ");
   });
 });
 

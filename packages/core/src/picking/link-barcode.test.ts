@@ -113,6 +113,11 @@ describe("linkBarcode", () => {
       ["another product's SKU", { name: "Rose soap", sku: "TAKEN" }],
       ["another variation's barcode", { name: "Rose soap", variation: { barcode: "TAKEN" } }],
       ["another variation's SKU", { name: "Rose soap", variation: { sku: "taken " } }],
+      ["another product's barcode stored with a tab", { name: "Rose soap", barcode: "\tTAKEN\n" }],
+      [
+        "another variation's barcode stored with a no-break space",
+        { name: "Rose soap", variation: { barcode: "\u00a0taken" } },
+      ],
     ] as const)("a code that is %s, naming it", async (_, owner) => {
       const { actor, item } = await picking([{ sku: "LAV-8" }]);
       await createOrder(db, { lines: [owner] });
