@@ -2,7 +2,7 @@
 
 **Milestone:** M2 · **Depends on:** `workflow` (transitions, claims, gates, live updates), `notes` (line notes) ·
 **Used by:** `exceptions` (calls `reconcilePick` after a void or unvoid), `packing` (reads what was picked and
-substituted), `reporting` (pick events) · **State:** in progress
+substituted), `reporting` (pick events) · **State:** done
 
 Project-wide commands, structure, code style, testing levels and boundaries are in [`../../SPEC.md`](../../SPEC.md);
 this spec only adds what is specific to `picking`.

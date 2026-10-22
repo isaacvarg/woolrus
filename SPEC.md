@@ -28,7 +28,7 @@ paid orders in, pick, pack, QA, buy labels and ship from one app, with every rul
 | `notes` | Notes and attachments, storage adapter, visibility, author rules, upload limits | FR-NOTE-\* | workflow |
 | `picking` | Pick cards, scan to confirm, out-of-stock/substituted, bin sort, batch pick list | FR-PICK-\* | workflow |
 | `packing` | Box admin, packages, PackageItem split/merge, weights and overrides, box suggestion, scale | FR-PACK-\*, FR-SET-01 | workflow |
-| `exceptions` | Item voids (including partial) and quality issues | FR-VOID-\*, FR-QI-01…06/08 | workflow, notes |
+| `exceptions` | Item voids (including partial) and quality issues | FR-VOID-\*, FR-QI-01…06/08 | workflow, notes, picking |
 | `carriers` | ShipStation adapter, carrier and service settings, rates with expiry, address validation | FR-SHIP-01…03/12, FR-SET-02 | settings, packing |
 | `qa` | Per-item verification, rate choice, idempotent label purchase, blocking on open critical issues | FR-QA-\* | carriers, exceptions |
 | `shipping` | Ready queue, print separate from ship, merged PDF, repack/void, Woo push with retries, customs, manifests | FR-SHIP-04…14 | qa, store-sync |
@@ -63,7 +63,7 @@ States: `not started` → `spec draft` → `spec approved` → `planned` → `in
 | `workflow` | M1 | [SPEC-workflow](docs/specs/SPEC-workflow.md) | [#20](https://github.com/isaacvarg/woolrus/issues/20) | done |
 | `identity` | M2 | [SPEC-identity](docs/specs/SPEC-identity.md) | [#21](https://github.com/isaacvarg/woolrus/issues/21) | done |
 | `notes` | M2 | [SPEC-notes](docs/specs/SPEC-notes.md) | [#22](https://github.com/isaacvarg/woolrus/issues/22) | done |
-| `picking` | M2 | [SPEC-picking](docs/specs/SPEC-picking.md) | [#23](https://github.com/isaacvarg/woolrus/issues/23) | in progress |
+| `picking` | M2 | [SPEC-picking](docs/specs/SPEC-picking.md) | [#23](https://github.com/isaacvarg/woolrus/issues/23) | done |
 | `packing` | M2 | — | [#24](https://github.com/isaacvarg/woolrus/issues/24) | not started |
 | `exceptions` | M3 | — | [#25](https://github.com/isaacvarg/woolrus/issues/25) | not started |
 | `carriers` | M4 | — | [#26](https://github.com/isaacvarg/woolrus/issues/26) | not started |
