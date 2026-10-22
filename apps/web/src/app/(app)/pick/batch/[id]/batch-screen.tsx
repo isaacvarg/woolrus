@@ -20,6 +20,7 @@ import { playScanSound, useScanner } from "@/lib/scanner";
 import { LineMenu } from "../../[orderId]/line-dialogs";
 import { canLinkOf, ScanBanner, type ScanOutcome } from "../../[orderId]/pick-screen";
 import { SlotLegend } from "../../slot-legend";
+import { BatchFooter, CompletionResults, SlotActions, useBatchActions } from "./batch-actions";
 
 // The batch screen (SPEC-picking "UI", FR-PICK-05): the pick list for the whole walk, one card per
 // product with a chip per slot, and the slot legend. Chips act on their order's line with the same
@@ -45,6 +46,9 @@ function withLine(batch: PickBatch, line: PickLine): PickBatch {
 
 type Viewer = { userId: string | null; canPick: boolean };
 
+/** The last scan's outcome; a counted one carries the slot it filled, for the callout. */
+type BatchScan = ScanOutcome & { slot?: ScanBatchResult; name?: string };
+
 export function BatchScreen({ batchId, userId, canPick }: { batchId: string } & Viewer) {
   const t = useTranslations();
   const errorMessage = useErrorMessage();
@@ -53,9 +57,7 @@ export function BatchScreen({ batchId, userId, canPick }: { batchId: string } & 
   const canAct =
     canPick && batch.data?.owner.id === userId && batch.data !== undefined && !batch.data.closedAt;
 
-  const [scanned, setScanned] = useState<
-    (ScanOutcome & { slot?: ScanBatchResult; name?: string }) | null
-  >(null);
+  const [scanned, setScanned] = useState<BatchScan | null>(null);
   const scan = useMutation({
     // One lane for the batch's scans: each one counts against what the one before left.
     scope: { id: `pickBatch:${batchId}` },
@@ -112,14 +114,42 @@ export function BatchScreen({ batchId, userId, canPick }: { batchId: string } & 
       </p>
     );
   }
-  const { data } = batch;
+  return (
+    <BatchView
+      data={batch.data}
+      userId={userId}
+      canAct={canAct}
+      scanned={scanned}
+      linking={link.isPending}
+      onLink={(line, code) => link.mutate({ line, code })}
+    />
+  );
+}
+
+function BatchView({
+  data,
+  userId,
+  canAct,
+  scanned,
+  linking,
+  onLink,
+}: {
+  data: PickBatch;
+  userId: string | null;
+  canAct: boolean;
+  scanned: BatchScan | null;
+  linking: boolean;
+  onLink: (line: PickLine, code: string) => void;
+}) {
+  const t = useTranslations();
+  const actions = useBatchActions(data);
   const mine = data.owner.id === userId;
   // An unknown code can go on any product still to pick: one line of each stands for it.
   const linkable = data.groups
     .filter((g) => g.remaining > 0)
     .map((g) => (g.chips[0] as PickBatchChip).line);
   return (
-    <section className="mx-auto max-w-5xl space-y-4">
+    <section className={`mx-auto max-w-5xl space-y-4 ${canAct ? "pb-28" : ""}`}>
       <header className="space-y-1">
         <h1 className="text-3xl font-bold">{t("pickBatch.title", { number: data.number })}</h1>
         <p className="text-lg">
@@ -146,8 +176,8 @@ export function BatchScreen({ batchId, userId, canPick }: { batchId: string } & 
         <ScanBanner
           outcome={scanned}
           linkTo={scanned?.linkCode ? linkable : []}
-          linking={link.isPending}
-          onLink={(line) => scanned?.linkCode && link.mutate({ line, code: scanned.linkCode })}
+          linking={linking}
+          onLink={(line) => scanned?.linkCode && onLink(line, scanned.linkCode)}
         />
       )}
 
@@ -172,8 +202,14 @@ export function BatchScreen({ batchId, userId, canPick }: { batchId: string } & 
         </>
       )}
 
+      <CompletionResults actions={actions} />
+
       <h2 className="text-xl font-semibold">{t("pickBatch.slots")}</h2>
-      <SlotLegend batch={data} />
+      <SlotLegend
+        batch={data}
+        actions={canAct ? (member) => <SlotActions member={member} actions={actions} /> : undefined}
+      />
+      {canAct && <BatchFooter batch={data} actions={actions} />}
     </section>
   );
 }

@@ -233,6 +233,44 @@ export const ScanBatchResult = z.object({
 });
 export type ScanBatchResult = z.infer<typeof ScanBatchResult>;
 
+/** One order of a batch, for **Remove** (the order stays in Picking, still the picker's). */
+export const PickBatchOrderInput = z.object({ id: Id, orderId: Id });
+export type PickBatchOrderInput = z.infer<typeof PickBatchOrderInput>;
+
+/** Orders to complete picking for, each moved on its own (SPEC-picking "Complete"). */
+export const CompletePickBatchInput = z.object({
+  id: Id,
+  orders: z
+    .array(OrderVersionInput)
+    .min(1)
+    .max(PICK_BATCH_MAX_ORDERS_CEILING)
+    .refine((orders) => new Set(orders.map((o) => o.id)).size === orders.length, {
+      message: "errors.field.invalid",
+    }),
+});
+export type CompletePickBatchInput = z.infer<typeof CompletePickBatchInput>;
+
+/** One order's outcome: moved to Packing, or why not (with the picked gate's unmet list). */
+export const PickBatchCompletion = z.discriminatedUnion("moved", [
+  z.object({ orderId: Id, moved: z.literal(true) }),
+  z.object({
+    orderId: Id,
+    moved: z.literal(false),
+    messageKey: z.string(),
+    params: z.record(z.string(), z.union([z.string(), z.number()])),
+    unmet: z.array(Unmet),
+  }),
+]);
+export type PickBatchCompletion = z.infer<typeof PickBatchCompletion>;
+
+export const CompletePickBatchResult = z.object({
+  /** In the order asked. */
+  results: z.array(PickBatchCompletion),
+  /** The batch afterwards; closed when nothing in it is live any more. */
+  batch: PickBatch,
+});
+export type CompletePickBatchResult = z.infer<typeof CompletePickBatchResult>;
+
 /** An order the actor is picking, for **My picks**. */
 export const MyPickOrder = z.object({
   id: Id,
@@ -360,4 +398,31 @@ export const pickBatches = {
     })
     .input(ScanBatchInput)
     .output(ScanBatchResult),
+  complete: base
+    .route({
+      method: "POST",
+      path: "/pick-batches/{id}/complete",
+      tags,
+      summary: "Complete picking for some of a batch's orders, each on its own",
+    })
+    .input(CompletePickBatchInput)
+    .output(CompletePickBatchResult),
+  removeOrder: base
+    .route({
+      method: "POST",
+      path: "/pick-batches/{id}/remove-order",
+      tags,
+      summary: "Take an order out of the batch; it stays in Picking, still yours",
+    })
+    .input(PickBatchOrderInput)
+    .output(PickBatch),
+  finish: base
+    .route({
+      method: "POST",
+      path: "/pick-batches/{id}/finish",
+      tags,
+      summary: "Finish the batch; its orders stay where they are",
+    })
+    .input(z.object({ id: Id }))
+    .output(PickBatch),
 };

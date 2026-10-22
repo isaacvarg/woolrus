@@ -1,13 +1,21 @@
 "use client";
 
-import type { PickBatch } from "@woolrus/contracts";
+import type { PickBatch, PickBatchMember } from "@woolrus/contracts";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
+import type { ReactNode } from "react";
 
 const stateBadge = { live: "badge-success", left: "badge-ghost", removed: "badge-ghost" } as const;
 
 /** Slot → order and its state; members that left or were removed are greyed (SPEC-picking "UI"). */
-export function SlotLegend({ batch }: { batch: PickBatch }) {
+export function SlotLegend({
+  batch,
+  actions,
+}: {
+  batch: PickBatch;
+  /** Per-slot buttons, for the batch's owner. */
+  actions?: (member: PickBatchMember) => ReactNode;
+}) {
   const t = useTranslations();
   return (
     <div className="overflow-x-auto rounded-box bg-base-100 shadow-sm">
@@ -18,6 +26,11 @@ export function SlotLegend({ batch }: { batch: PickBatch }) {
             <th>{t("queue.number")}</th>
             <th>{t("queue.customer")}</th>
             <th>{t("pickBatch.state")}</th>
+            {actions && (
+              <th>
+                <span className="sr-only">{t("pickBatch.actions")}</span>
+              </th>
+            )}
           </tr>
         </thead>
         <tbody>
@@ -50,6 +63,7 @@ export function SlotLegend({ batch }: { batch: PickBatch }) {
                     : t(`pickBatch.memberState.${member.state}`)}
                 </span>
               </td>
+              {actions && <td>{actions(member)}</td>}
             </tr>
           ))}
         </tbody>

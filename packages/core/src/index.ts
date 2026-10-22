@@ -27,6 +27,7 @@ export * from "./notes/files";
 export * from "./notes/push";
 export * from "./notes/service";
 export * from "./permissions";
+export * from "./picking/batch-complete";
 export * from "./picking/batch-scan";
 export * from "./picking/batches";
 export * from "./picking/complete";
