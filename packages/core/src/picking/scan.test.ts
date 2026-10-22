@@ -106,6 +106,18 @@ describe("scan", () => {
     expect(await lineRow(id(items[0]))).toMatchObject({ pickedQuantity: 1 });
   });
 
+  it("answers a replayed scanId after the order left Picking", async () => {
+    const { picker, order, items } = await picking([{ sku: "LAV-8", quantity: 3 }]);
+    const input = { orderId: order.id, code: "LAV-8", scanId: scanId() };
+    await scan(db, picker, input);
+    await db.order.update({ where: { id: order.id }, data: { status: "ON_HOLD" } });
+
+    const replay = await scan(db, picker, input);
+
+    expect(replay.line).toMatchObject({ id: id(items[0]), pickedQuantity: 1 });
+    expect(await lineRow(id(items[0]))).toMatchObject({ pickedQuantity: 1 });
+  });
+
   it("is audited as pick.scan and leaves the order's version alone", async () => {
     const { picker, order, items } = await picking([{ sku: "LAV-8", quantity: 3 }]);
 

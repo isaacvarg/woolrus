@@ -294,6 +294,15 @@ function PickHeader({ view }: { view: PickView }) {
         <span className={`badge badge-lg ${priorityBadge[level] ?? "badge-ghost"}`}>
           {t(`queue.priorityLevel.${level}`)}
         </span>
+        {view.batch && (
+          <Link
+            href={`/pick/batch/${view.batch.id}`}
+            className="badge badge-lg badge-info"
+            data-testid="pick-batch-link"
+          >
+            {t("pick.inBatch", { slot: view.batch.slot, number: view.batch.number })}
+          </Link>
+        )}
         <Link href={`/orders/${order.id}`} className="btn btn-ghost btn-sm ms-auto">
           {t("pick.orderDetails")}
         </Link>

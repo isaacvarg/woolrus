@@ -1,6 +1,6 @@
 "use client";
 
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useIsMutating, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { PickBatch, PickBatchCompletion, PickBatchMember } from "@woolrus/contracts";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -40,9 +40,11 @@ export function useBatchActions(batch: PickBatch) {
   };
   const numberOf = (orderId: string) =>
     batch.members.find((m) => m.orderId === orderId)?.number ?? "";
-  // Batch writes and the chips' line writes don't share a lane: completing reads the lines the
-  // server already has, and a refused order says what's missing.
+  // Batch writes and the chips' line writes don't share a lane, and completing reads the lines the
+  // server already has. So Complete waits while a chip tap is still saving: "ready" is worked out
+  // from the screen, which shows the tap before the server has it.
   const scope = { id: `pickBatch:${batch.id}` };
+  const saving = useIsMutating({ mutationKey: ["pickWrite"] }) > 0;
 
   const complete = useMutation({
     scope,
@@ -84,7 +86,7 @@ export function useBatchActions(batch: PickBatch) {
   });
 
   const busy = complete.isPending || remove.isPending || finish.isPending;
-  return { complete, remove, finish, results, numberOf, busy };
+  return { complete, remove, finish, results, numberOf, busy, canComplete: !busy && !saving };
 }
 
 export type BatchActions = ReturnType<typeof useBatchActions>;
@@ -104,7 +106,7 @@ export function SlotActions({
     <div className="flex justify-end gap-2">
       <Button
         className="btn-outline"
-        isDisabled={actions.busy}
+        isDisabled={!actions.canComplete}
         aria-label={t("pickBatch.completeSlot", label)}
         onPress={() => actions.complete.mutate([member])}
       >
@@ -174,7 +176,7 @@ export function BatchFooter({ batch, actions }: { batch: PickBatch; actions: Bat
       </Button>
       <Button
         className="btn-primary btn-lg"
-        isDisabled={actions.busy || ready.length === 0}
+        isDisabled={!actions.canComplete || ready.length === 0}
         onPress={() => actions.complete.mutate(ready)}
       >
         {t("pickBatch.completeReady", { count: ready.length })}

@@ -325,6 +325,7 @@
   },
   "pick": {
     "title": "Pick #{number}",
+    "inBatch": "Slot {slot} in batch {number}",
     "orderDetails": "Order details",
     "progress": "{done} of {total} lines picked",
     "progressLabel": "Picking progress",

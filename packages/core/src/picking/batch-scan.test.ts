@@ -125,6 +125,38 @@ describe("scanBatch", () => {
     expect(await picked(built[0]?.order.id as string)).toEqual([{ pickedQuantity: 1 }]);
   });
 
+  it("answers a replayed scanId after the batch closed", async () => {
+    const picker = await createActor(db, ["PICKER"]);
+    const { batch, built } = await batchOf(picker, [[{ sku: "LAV-8", quantity: 3 }], [{}]]);
+    const input = { batchId: batch.id, code: "LAV-8", scanId: scanId() };
+    const first = await scanBatch(db, picker, input);
+    await db.pickBatch.update({ where: { id: batch.id }, data: { closedAt: new Date() } });
+
+    await expect(scanBatch(db, picker, input)).resolves.toEqual(first);
+    expect(await picked(built[0]?.order.id as string)).toEqual([{ pickedQuantity: 1 }]);
+  });
+
+  it("closes a batch with nothing live left, then refuses the scan", async () => {
+    const picker = await createActor(db, ["PICKER"]);
+    const { batch } = await batchOf(picker, [[{ sku: "LAV-8" }], [{ sku: "LAV-8" }]]);
+    await db.order.updateMany({
+      where: { id: { in: batch.members.map((m) => m.orderId) } },
+      data: { status: "ON_HOLD" },
+    });
+
+    await expect(
+      scanBatch(db, picker, { batchId: batch.id, code: "LAV-8", scanId: scanId() }),
+    ).rejects.toMatchObject({ kind: "CONFLICT", messageKey: "errors.picking.batchClosed" });
+
+    // The close commits even though the scan was refused.
+    expect(await db.pickBatch.findUniqueOrThrow({ where: { id: batch.id } })).toMatchObject({
+      closedAt: expect.any(Date),
+    });
+    expect(
+      await db.auditEvent.count({ where: { entityId: batch.id, action: "pickBatch.close" } }),
+    ).toBe(1);
+  });
+
   it("shows on the batch list", async () => {
     const picker = await createActor(db, ["PICKER"]);
     const { batch } = await batchOf(picker, [[{ sku: "LAV-8", quantity: 2 }], [{ sku: "LAV-8" }]]);

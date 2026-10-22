@@ -332,10 +332,15 @@ export async function getPickView(
   });
   if (!order) throw notFound();
 
-  const [[detail], notes, snapshot] = await Promise.all([
+  const [[detail], notes, snapshot, membership] = await Promise.all([
     toOrderDetails(db, [order], { now }),
     lineAndPackageNoteCounts(db, orderId),
     loadGateSnapshot(db, orderId),
+    // At most one row: an order is in one open batch at a time (the partial unique index).
+    db.pickBatchOrder.findFirst({
+      where: { orderId, removedAt: null, batch: { closedAt: null } },
+      select: { slot: true, batch: { select: { id: true, number: true } } },
+    }),
   ]);
   if (!detail) throw notFound();
 
@@ -350,5 +355,6 @@ export async function getPickView(
     done: lines.filter((l) => isDone(l.pickStatus)).length,
     total: lines.length,
     unmet: evaluateGate("picked", snapshot),
+    batch: membership ? { ...membership.batch, slot: membership.slot } : null,
   };
 }

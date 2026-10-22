@@ -49,6 +49,8 @@ export const PickView = z.object({
   total: z.number().int(),
   /** What the picked gate still needs; empty when the order can complete. */
   unmet: z.array(Unmet),
+  /** The open batch the order is in, and its slot there; null when it's in none. */
+  batch: z.object({ id: Id, number: z.number().int(), slot: z.number().int() }).nullable(),
 });
 export type PickView = z.infer<typeof PickView>;
 

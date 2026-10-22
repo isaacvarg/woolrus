@@ -2,7 +2,7 @@ import type { PickLineResult, ScanInput } from "@woolrus/contracts";
 import type { Db, DbTx } from "@woolrus/db";
 import type { ErrorCode } from "@woolrus/i18n";
 import { AppError } from "../errors";
-import { withIdempotency } from "../idempotency";
+import { storedResult, withIdempotency } from "../idempotency";
 import { type Actor, assertCan, can } from "../permissions";
 import { codesForLine, normalizeCode } from "./codes";
 import { findCodeOwner } from "./link-barcode";
@@ -34,8 +34,17 @@ export async function scan(
   assertCan(actor, "order.pick");
   const wanted = normalizeCode(code);
   return db.$transaction(async (tx) => {
+    // Only the line id is stored: a replay answers with the line as it is now, even when the order
+    // has left Picking since (the retried request already counted).
+    const replay = await storedResult<{ itemId: string }>(tx, scanId, "picking.scan", actor);
+    if (replay) {
+      const row = await lineRow(tx, replay.itemId);
+      return lineResult(tx, row.orderId, row);
+    }
+
+    // The lock comes before the idempotency check too, so a duplicate sent at the same moment waits
+    // for the first and then replays it.
     await lockForPicking(tx, actor, orderId, now);
-    // Only the line id is stored: a replay answers with the line as it is now.
     const { itemId } = await withIdempotency(tx, scanId, "picking.scan", actor, async () => {
       const rows = await tx.orderItem.findMany({ where: { orderId }, include: lineInclude });
       const matching = matchingLines(rows, wanted);
@@ -47,13 +56,12 @@ export async function scan(
       await writeLineIn(tx, actor, target.id, "scan", addUnit(actor), now);
       return { itemId: target.id };
     });
-    const row = await tx.orderItem.findUniqueOrThrow({
-      where: { id: itemId },
-      include: lineInclude,
-    });
-    return lineResult(tx, orderId, row);
+    return lineResult(tx, orderId, await lineRow(tx, itemId));
   });
 }
+
+const lineRow = (tx: DbTx, id: string) =>
+  tx.orderItem.findUniqueOrThrow({ where: { id }, include: lineInclude });
 
 /** The work lines the code matches, in pick order. */
 export function matchingLines(rows: LineRow[], wanted: string): LineRow[] {

@@ -325,6 +325,7 @@
   },
   "pick": {
     "title": "Surtir #{number}",
+    "inBatch": "Espacio {slot} del lote {number}",
     "orderDetails": "Detalles del pedido",
     "progress": "{done} de {total} líneas surtidas",
     "progressLabel": "Avance del surtido",

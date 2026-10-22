@@ -316,6 +316,28 @@ describe("getPickView", () => {
 
     expect(view.customerNote).toBe("Gift wrap");
   });
+
+  it("names the open batch the order is in, and not one it was removed from or that closed", async () => {
+    const { picker, order } = await picking();
+    const ownerId = picker.userId as string;
+    const batch = await db.pickBatch.create({
+      data: { ownerId, orders: { create: [{ orderId: order.id, slot: 3 }] } },
+    });
+
+    const view = await getPickView(db, picker, { orderId: order.id });
+    expect(view.batch).toEqual({ id: batch.id, number: batch.number, slot: 3 });
+
+    await db.pickBatchOrder.updateMany({
+      where: { orderId: order.id },
+      data: { removedAt: new Date() },
+    });
+    expect((await getPickView(db, picker, { orderId: order.id })).batch).toBeNull();
+
+    // A closed batch whose row wasn't marked removed still doesn't count.
+    await db.pickBatchOrder.updateMany({ where: { orderId: order.id }, data: { removedAt: null } });
+    await db.pickBatch.update({ where: { id: batch.id }, data: { closedAt: new Date() } });
+    expect((await getPickView(db, picker, { orderId: order.id })).batch).toBeNull();
+  });
 });
 
 let keySeq = 0;

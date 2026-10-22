@@ -43,8 +43,23 @@ test("a batch completes its ready orders, says what the other still needs, and f
   await expect(completeReady).toHaveText("Complete ready orders (0)");
   await expect(completeReady).toBeDisabled();
 
-  // Slots 1 and 3 picked; slot 2 left as it is.
+  // Slots 1 and 3 picked; slot 2 left as it is. While a tap is still saving, Complete waits: the
+  // screen counts the order ready before the server has the pick.
+  let release = () => {};
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const pickLine = /\/rpc\/picking\/pickLine/;
+  await page.route(pickLine, async (route) => {
+    await held;
+    await route.continue();
+  });
   await page.getByRole("button", { name: /^Slot 1, order/ }).click();
+  await expect(completeReady).toHaveText("Complete ready orders (1)");
+  await expect(completeReady).toBeDisabled();
+  release();
+  await expect(completeReady).toBeEnabled();
+  await page.unroute(pickLine);
   await page.getByRole("button", { name: /^Slot 3, order/ }).click();
   await expect(page.getByTestId("chip-3")).toHaveAttribute("data-status", "PICKED");
   await expect(completeReady).toHaveText("Complete ready orders (2)");
@@ -100,6 +115,15 @@ test("Remove takes an order out of the batch; it stays mine in My picks", async 
     .click();
   await expect(page.getByTestId("slot-2")).toContainText("Removed");
   await expect(page.getByTestId("chip-2")).toHaveCount(0);
+
+  // A member's own pick screen leads back to its batch; the removed order's doesn't.
+  const batchUrl = page.url();
+  await page.goto(`/pick/${removed.id}`);
+  await expect(page.getByRole("heading", { name: `Pick #${removed.number}` })).toBeVisible();
+  await expect(page.getByTestId("pick-batch-link")).toHaveCount(0);
+  await page.goto(`/pick/${(orders[0] as (typeof orders)[number]).id}`);
+  await page.getByTestId("pick-batch-link").click();
+  await expect(page).toHaveURL(batchUrl);
 
   await page.goto("/pick");
   await expect(page.getByRole("link", { name: "Open batch" })).toBeVisible();
