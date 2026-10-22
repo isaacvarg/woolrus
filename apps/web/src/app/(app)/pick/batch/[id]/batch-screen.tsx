@@ -373,6 +373,9 @@ function Chip({
       // Later taps on this order are already on screen; only the last answer may replace them.
       if (queryClient.isMutating({ mutationKey: writeKey }) > 1) return;
       apply(result);
+      // A refetch an order event started before this write committed can land after it and put
+      // the chip back; invalidating cancels that one and reads again after the commit.
+      void queryClient.invalidateQueries({ queryKey: batchKey });
     },
     onError: (error, _quantity, context) => {
       if (context?.previous) queryClient.setQueryData(batchKey, context.previous);

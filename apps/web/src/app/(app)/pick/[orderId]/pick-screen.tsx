@@ -114,6 +114,9 @@ function PickLayout({ view, userId, canPack }: { view: PickView } & Viewer) {
       // Later taps are already on screen; only the last answer may replace them.
       if (queryClient.isMutating({ mutationKey: writeKey }) > 1) return;
       queryClient.setQueryData<PickView>(viewKey, (v) => (v ? applyResult(v, result) : v));
+      // A refetch an order event started before this write committed can land after it and undo
+      // the card; invalidating cancels that one and reads again after the commit.
+      void queryClient.invalidateQueries({ queryKey: viewKey });
     },
     onError: (error, _w, context) => {
       if (context?.previous) queryClient.setQueryData(viewKey, context.previous);

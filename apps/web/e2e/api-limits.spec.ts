@@ -77,7 +77,9 @@ function raw(
       }
       req.write(chunk.subarray(0, Math.min(chunk.length, bytes - sent)));
       sent += chunk.length;
-      setTimeout(pump, 5);
+      // Slow enough that a busy server (CI runs the suite in parallel) answers well before the
+      // last chunk: a reply after the body is all sent can arrive as ECONNRESET instead.
+      setTimeout(pump, 20);
     };
     if (declaredLength === undefined) pump();
     else req.flushHeaders();

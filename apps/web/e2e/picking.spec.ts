@@ -54,9 +54,12 @@ test("Begin Picking lands on the pick screen; tap, stepper and undo pick a line"
   await expect(card.getByTestId("pick-status")).toHaveText(/Picked/);
   await expect(page.getByTestId("pick-progress")).toHaveText("1 of 1 lines picked");
 
-  // Undo, then reload: what's shown is what the server kept.
+  // Undo, then reload: what's shown is what the server kept. The undo shows before the server has
+  // it, so wait for it to save; a reload sooner would cancel the request.
+  const undone = page.waitForResponse(/\/rpc\/picking\/unpickLine/);
   await card.getByRole("button", { name: /^E2E item/, pressed: true }).click();
   await expect(card).toContainText("0 of 3");
+  expect((await undone).ok()).toBe(true);
   await page.reload();
   await expect(page.getByTestId("pick-card").first()).toContainText("0 of 3");
 });
