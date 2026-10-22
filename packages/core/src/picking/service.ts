@@ -9,7 +9,7 @@ import type {
 import type { Db, DbTx, PickStatus, Prisma } from "@woolrus/db";
 import { recordAudit } from "../audit";
 import { AppError, notFound } from "../errors";
-import { withIdempotency } from "../idempotency";
+import { storedResult, withIdempotency } from "../idempotency";
 import { createTextNote } from "../notes/service";
 import { lineAndPackageNoteCounts } from "../notes/targets";
 import { type Actor, assertCan } from "../permissions";
@@ -99,8 +99,8 @@ type WithNote = { idempotencyKey: string; note: (row: LineRow) => string };
 /**
  * Runs one line write: permission, the order lock, the Picking + live-claim checks, then the write,
  * its audit, an optional line note, the claim refresh and the order_changed notify, all in one
- * transaction. With a note the write runs once per `idempotencyKey`; a replay returns the line as
- * it is now.
+ * transaction. With a note the write runs once per `idempotencyKey`; a replay returns the line it
+ * wrote as it is now, and the key reused for another line is refused.
  */
 async function writeLine(
   db: Db,
@@ -114,10 +114,25 @@ async function writeLine(
   assertCan(actor, "order.pick");
   return db.$transaction(async (tx) => {
     if (!withNote) return writeLineIn(tx, actor, itemId, op, decide, now);
-    await withIdempotency(tx, withNote.idempotencyKey, `picking.${op}`, actor, async () => {
-      await writeLineIn(tx, actor, itemId, op, decide, now, withNote.note);
-      return {};
-    });
+    const { idempotencyKey: key } = withNote;
+    const procedure = `picking.${op}`;
+    // A replay is answered before the checks, which may no longer pass (the order moved on).
+    let written = await storedResult<{ itemId: string }>(tx, key, procedure, actor);
+    if (!written) {
+      // The lock comes before the idempotency check too, so a duplicate sent at the same moment
+      // waits for the first and then replays it instead of failing on the key.
+      const ref = await tx.orderItem.findUnique({
+        where: { id: itemId },
+        select: { orderId: true },
+      });
+      if (!ref) throw notFound();
+      await lockForPicking(tx, actor, ref.orderId, now);
+      written = await withIdempotency(tx, key, procedure, actor, async () => {
+        await writeLineIn(tx, actor, itemId, op, decide, now, withNote.note);
+        return { itemId };
+      });
+    }
+    if (written.itemId !== itemId) throw new AppError("CONFLICT", "errors.conflict");
     const line = await tx.orderItem.findUniqueOrThrow({
       where: { id: itemId },
       include: lineInclude,
@@ -310,8 +325,14 @@ export async function reconcilePick(tx: DbTx, itemId: string): Promise<void> {
   const pickedQuantity =
     row.pickStatus === "SUBSTITUTED" ? active : Math.min(row.pickedQuantity, active);
   let pickStatus = row.pickStatus;
-  // The missing units were voided: what was found is all that's needed.
-  if (pickStatus === "OUT_OF_STOCK" && pickedQuantity === active) pickStatus = "PICKED";
+  // The missing units were voided: what was found (or picked so far) is all that's needed. A pending
+  // line with nothing picked stays pending, even when nothing of it is left to pick.
+  if (
+    pickedQuantity === active &&
+    (pickStatus === "OUT_OF_STOCK" || (pickStatus === "PENDING" && active > 0))
+  ) {
+    pickStatus = "PICKED";
+  }
   // A void was undone: the line needs more units again.
   if (pickStatus === "PICKED" && pickedQuantity < active) pickStatus = "PENDING";
   if (pickStatus === row.pickStatus && pickedQuantity === row.pickedQuantity) return;

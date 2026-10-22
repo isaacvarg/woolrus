@@ -283,6 +283,15 @@ describe("getPickView", () => {
     expect(view.lines[0]).toMatchObject({ binLocation: "A2", noteCount: 0 });
   });
 
+  it("is forbidden without order.read", async () => {
+    const { order } = await picking();
+    const nobody = await createActor(db, []);
+
+    await expect(getPickView(db, nobody, { orderId: order.id })).rejects.toMatchObject({
+      kind: "FORBIDDEN",
+    });
+  });
+
   it("counts lines done and says what the picked gate still needs", async () => {
     const { picker, order } = await picking([
       { name: "Aloe gel", pickStatus: "PICKED" },
@@ -388,6 +397,39 @@ describe("markOutOfStock", () => {
     const replay = await markOutOfStock(db, picker, input);
 
     expect(replay.line).toMatchObject({ pickStatus: "OUT_OF_STOCK", pickedQuantity: 0 });
+    expect(await lineNotes(item.id)).toHaveLength(1);
+    expect(await db.auditEvent.count({ where: { entityId: item.id } })).toBe(1);
+  });
+
+  it("answers a replay with the line it wrote, and refuses the key for another line", async () => {
+    const { picker, items } = await picking([
+      { name: "Clay mask", quantity: 2 },
+      { name: "Aloe gel", quantity: 2 },
+    ]);
+    const [mask, aloe] = items as [(typeof items)[0], (typeof items)[0]];
+    const input = { itemId: mask.id, foundQuantity: 1, note: "One short", idempotencyKey: key() };
+    await markOutOfStock(db, picker, input);
+
+    const replay = await markOutOfStock(db, picker, input);
+    expect(replay.line).toMatchObject({ id: mask.id, pickStatus: "OUT_OF_STOCK" });
+
+    await expect(markOutOfStock(db, picker, { ...input, itemId: aloe.id })).rejects.toMatchObject({
+      kind: "CONFLICT",
+      messageKey: "errors.conflict",
+    });
+    expect(await lineRow(aloe.id)).toMatchObject({ pickStatus: "PENDING" });
+  });
+
+  it("replays a duplicate sent at the same moment instead of failing it", async () => {
+    const { picker, item } = await picking([{ quantity: 2 }]);
+    const input = { itemId: item.id, foundQuantity: 0, note: "None left", idempotencyKey: key() };
+
+    const results = await Promise.all([
+      markOutOfStock(db, picker, input),
+      markOutOfStock(db, picker, input),
+    ]);
+
+    expect(results.map((r) => r.line.pickStatus)).toEqual(["OUT_OF_STOCK", "OUT_OF_STOCK"]);
     expect(await lineNotes(item.id)).toHaveLength(1);
     expect(await db.auditEvent.count({ where: { entityId: item.id } })).toBe(1);
   });
@@ -547,6 +589,31 @@ describe("substitute", () => {
     expect(await lineNotes(item.id)).toMatchObject([{ content: "Substituted: Rose soap" }]);
   });
 
+  it("answers a replay with the line it wrote, and refuses the key for another line", async () => {
+    const { picker, items } = await picking([{ name: "Clay mask" }, { name: "Aloe gel" }]);
+    const [mask, aloe] = items as [(typeof items)[0], (typeof items)[0]];
+    const input = { itemId: mask.id, substitute: "Rose soap", idempotencyKey: key() };
+    await substitute(db, picker, input);
+
+    expect((await substitute(db, picker, input)).line).toMatchObject({
+      id: mask.id,
+      pickStatus: "SUBSTITUTED",
+    });
+    await expect(substitute(db, picker, { ...input, itemId: aloe.id })).rejects.toMatchObject({
+      messageKey: "errors.conflict",
+    });
+    expect(await lineRow(aloe.id)).toMatchObject({ pickStatus: "PENDING" });
+  });
+
+  it("replays a duplicate sent at the same moment instead of failing it", async () => {
+    const { picker, item } = await picking();
+    const input = { itemId: item.id, substitute: "Rose soap", idempotencyKey: key() };
+
+    await Promise.all([substitute(db, picker, input), substitute(db, picker, input)]);
+
+    expect(await lineNotes(item.id)).toHaveLength(1);
+  });
+
   it("shows on the order detail line", async () => {
     const { picker, order, item } = await picking();
     await substitute(db, picker, {
@@ -600,13 +667,54 @@ describe("reconcilePick", () => {
     });
   const reconcile = (itemId: string) => db.$transaction((tx) => reconcilePick(tx, itemId));
 
-  it("clamps a picked count above the active quantity", async () => {
+  it("clamps a picked count above the active quantity, which leaves the line picked", async () => {
     const { order, item } = await picking([{ quantity: 3, pickedQuantity: 2 }]);
     await voidUnits(order.id, item.id, 2);
 
     await reconcile(item.id);
 
-    expect(await lineRow(item.id)).toMatchObject({ pickStatus: "PENDING", pickedQuantity: 1 });
+    expect(await lineRow(item.id)).toMatchObject({ pickStatus: "PICKED", pickedQuantity: 1 });
+  });
+
+  it("turns a partly picked line into Picked once its remaining units are voided", async () => {
+    const { order, item } = await picking([{ quantity: 3, pickedQuantity: 1 }]);
+    await voidUnits(order.id, item.id, 2);
+
+    await reconcile(item.id);
+
+    expect(await lineRow(item.id)).toMatchObject({ pickStatus: "PICKED", pickedQuantity: 1 });
+    expect(await pickedGate(order.id)).toEqual([]);
+  });
+
+  it("leaves an untouched line pending when it is voided entirely", async () => {
+    const { order, item } = await picking([{ quantity: 2 }]);
+    await voidUnits(order.id, item.id, 2);
+
+    await reconcile(item.id);
+
+    expect(await lineRow(item.id)).toMatchObject({ pickStatus: "PENDING", pickedQuantity: 0 });
+  });
+
+  it("clamps an Out of Stock found count above the new active quantity, then Picked", async () => {
+    const { order, item } = await picking([
+      { quantity: 3, pickStatus: "OUT_OF_STOCK", pickedQuantity: 2 },
+    ]);
+    await voidUnits(order.id, item.id, 2);
+
+    await reconcile(item.id);
+
+    expect(await lineRow(item.id)).toMatchObject({ pickStatus: "PICKED", pickedQuantity: 1 });
+  });
+
+  it("keeps an Out of Stock line that is still short after a partial void", async () => {
+    const { order, item } = await picking([
+      { quantity: 4, pickStatus: "OUT_OF_STOCK", pickedQuantity: 1 },
+    ]);
+    await voidUnits(order.id, item.id, 1);
+
+    await reconcile(item.id);
+
+    expect(await lineRow(item.id)).toMatchObject({ pickStatus: "OUT_OF_STOCK", pickedQuantity: 1 });
   });
 
   it("turns a partial Out of Stock into Picked once the rest is voided, and the order passes picked", async () => {

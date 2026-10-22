@@ -104,6 +104,7 @@ text-only note written inside the caller's transaction, with the same `note.writ
 quantity changes, without a claim check (the caller has its own permission):
 - `pickedQuantity > active` → clamp to active.
 - `OUT_OF_STOCK` with `pickedQuantity = active` → `PICKED` (the missing units were voided).
+- `PENDING` with `pickedQuantity = active > 0` → `PICKED` (the units still to pick were voided).
 - `PICKED` with `pickedQuantity < active` (a void was undone) → `PENDING`.
 - `SUBSTITUTED` → `pickedQuantity = active`.
 `exceptions` calls it in the same transaction as each void and unvoid. Store-sync's quantity edits already refuse
@@ -302,7 +303,7 @@ batch grouping), a line with quantity 6, and bins on some demo products so the s
    Admins; a fully picked line is refused as already picked.
 6. **Link barcode:** an Admin links a code to the line's variation (or product) and the next scan of it matches;
    a code already used by another product is refused; a Picker is forbidden.
-7. **Reconcile:** each of the four `reconcilePick` cases is tested, including partial Out of Stock → void the rest
+7. **Reconcile:** each of the five `reconcilePick` cases is tested, including partial Out of Stock → void the rest
    → `PICKED` → order passes **picked**.
 8. **Sort (FR-PICK-05):** bins sort naturally, lines without bins after, then name, then SKU; tested as a pure
    function.
