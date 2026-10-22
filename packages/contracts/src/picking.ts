@@ -216,6 +216,23 @@ export const CreatePickBatchInput = z.object({
 });
 export type CreatePickBatchInput = z.infer<typeof CreatePickBatchInput>;
 
+export const ScanBatchInput = z.object({
+  batchId: Id,
+  code: ScanInput.shape.code,
+  scanId: ScanInput.shape.scanId,
+});
+export type ScanBatchInput = z.infer<typeof ScanBatchInput>;
+
+/** Where a batch scan put the unit, so the screen can say "Slot 3 · #26237" large. */
+export const ScanBatchResult = z.object({
+  orderId: Id,
+  slot: z.number().int(),
+  /** The order's number, for the callout. */
+  number: z.string(),
+  itemId: Id,
+});
+export type ScanBatchResult = z.infer<typeof ScanBatchResult>;
+
 /** An order the actor is picking, for **My picks**. */
 export const MyPickOrder = z.object({
   id: Id,
@@ -334,4 +351,13 @@ export const pickBatches = {
     .route({ method: "GET", path: "/pick-batches/{id}", tags, summary: "A pick batch" })
     .input(z.object({ id: Id }))
     .output(PickBatch),
+  scan: base
+    .route({
+      method: "POST",
+      path: "/pick-batches/{batchId}/scan",
+      tags,
+      summary: "Count one scanned unit on the first slot whose order still needs it",
+    })
+    .input(ScanBatchInput)
+    .output(ScanBatchResult),
 };

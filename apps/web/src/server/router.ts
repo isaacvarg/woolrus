@@ -48,6 +48,7 @@ import {
   revokeInvitation,
   revokeStation,
   scan,
+  scanBatch,
   sendTestEmail,
   setPin,
   setSecret,
@@ -226,6 +227,7 @@ export const router = implementer.router({
       createBatch(db, context.actor, input),
     ),
     get: api.pickBatches.get.handler(({ input, context }) => getBatch(db, context.actor, input)),
+    scan: api.pickBatches.scan.handler(({ input, context }) => scanBatch(db, context.actor, input)),
   },
   sync: {
     status: api.sync.status.handler(({ context }) => getSyncStatus(db, context.actor)),

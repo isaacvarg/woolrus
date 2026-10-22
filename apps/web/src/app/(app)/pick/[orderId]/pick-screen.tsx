@@ -45,10 +45,16 @@ function applyWrite(view: PickView, { line, quantity }: Write): PickView {
  * What the last scan did, for the banner: counted on a line, or refused with the reason. `linkCode`
  * is an unknown code the viewer may link to a line's product (SPEC-picking "Code matching").
  */
-type ScanOutcome = { ok: boolean; message: string; lineId?: string; linkCode?: string; at: number };
+export type ScanOutcome = {
+  ok: boolean;
+  message: string;
+  lineId?: string;
+  linkCode?: string;
+  at: number;
+};
 
 /** True when the server offered to link a refused scan's unknown code to a product. */
-const canLinkOf = (error: unknown) =>
+export const canLinkOf = (error: unknown) =>
   error instanceof ORPCError && (error.data as { canLink?: boolean } | undefined)?.canLink === true;
 
 function applyResult(view: PickView, result: PickLineResult): PickView {
@@ -335,7 +341,7 @@ function PickBanner({ view, userId }: { view: PickView; userId: string | null })
  * The last scan's result, announced to screen readers (NFR-UX-05). The live region stays mounted so
  * every new message is read out; the banner itself shows only once something was scanned.
  */
-function ScanBanner({
+export function ScanBanner({
   outcome,
   linkTo,
   linking,

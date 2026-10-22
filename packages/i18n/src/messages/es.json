@@ -390,6 +390,7 @@
     "list": "Lista de surtido",
     "nothingToPick": "No queda nada por surtir en este lote.",
     "readOnly": "{name} está surtiendo este lote. Puedes verlo, pero solo esa persona puede surtirlo.",
+    "callout": "Espacio {slot} · #{number}",
     "remaining": "Faltan {remaining} de {quantity}",
     "chip": "Espacio {slot}, pedido #{number}: {picked} de {quantity}, {status}",
     "left": {
@@ -568,6 +569,8 @@
       "scanNotOnOrder": "Eso es {name}. No está en este pedido.",
       "scanUnknown": "Woolrus no conoce ese código.",
       "scanAlreadyPicked": "{line} ya está surtido.",
+      "batchClosed": "Este lote ya está terminado.",
+      "scanNotInBatch": "Eso es {name}. No está en este lote.",
       "codeInUse": "Ese código ya pertenece a {name}.",
       "noProductToLink": "Esta línea no tiene un producto al que vincular el código.",
       "batchTooLarge": "Un lote admite como máximo {max} pedidos.",

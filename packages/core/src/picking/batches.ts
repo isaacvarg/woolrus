@@ -30,7 +30,7 @@ import { pickOrder } from "./sort";
 
 export type BatchOptions = { now?: Date };
 
-const batchInclude = {
+export const batchInclude = {
   owner: { select: { id: true, ...nameFields } },
   orders: {
     orderBy: { slot: "asc" },
@@ -52,9 +52,9 @@ const batchInclude = {
 } as const satisfies Prisma.PickBatchInclude;
 
 type BatchRow = Prisma.PickBatchGetPayload<{ include: typeof batchInclude }>;
-type MemberRow = BatchRow["orders"][number];
+export type MemberRow = BatchRow["orders"][number];
 
-function memberState(
+export function memberState(
   member: MemberRow,
   ownerId: string,
   expiry: number,
@@ -181,7 +181,7 @@ async function batchGroups(tx: DbTx, live: MemberRow[]): Promise<PickBatchGroup[
  * join another batch (the one-open-batch-per-order index). Batches close lazily, on the next read or
  * write, like claims expire. Returns whether the batch is (now) closed.
  */
-async function closeIfSpent(
+export async function closeIfSpent(
   tx: DbTx,
   actor: Actor,
   row: BatchRow,
@@ -230,7 +230,7 @@ async function readBatch(
   return toPickBatch(row, await batchGroups(tx, live), expiry, now);
 }
 
-function assertMayPick(actor: Actor): asserts actor is UserActor {
+export function assertMayPick(actor: Actor): asserts actor is UserActor {
   assertCan(actor, "order.pick");
   // The system actor has no user to own a batch or hold claims.
   if (actor.userId === null) throw forbidden();

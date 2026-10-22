@@ -8,19 +8,24 @@ import type {
   PickLine,
   PickLineResult,
   PickStatus,
+  ScanBatchResult,
 } from "@woolrus/contracts";
 import { useTranslations } from "next-intl";
+import { useState } from "react";
 import { ToggleButton } from "react-aria-components";
 import { toast } from "@/components/ui/toast";
 import { useErrorMessage } from "@/lib/errors";
 import { client, orpc } from "@/lib/orpc";
+import { playScanSound, useScanner } from "@/lib/scanner";
 import { LineMenu } from "../../[orderId]/line-dialogs";
+import { canLinkOf, ScanBanner, type ScanOutcome } from "../../[orderId]/pick-screen";
 import { SlotLegend } from "../../slot-legend";
 
 // The batch screen (SPEC-picking "UI", FR-PICK-05): the pick list for the whole walk, one card per
 // product with a chip per slot, and the slot legend. Chips act on their order's line with the same
 // operations as the single-order screen, in the same per-order write lane. Members that leave drop
-// out live: every order event refetches the batch.
+// out live: every order event refetches the batch. A scan fills the first slot that still needs the
+// product, and a large callout says which slot to drop it in.
 
 const isDone = (status: PickStatus) => status === "PICKED" || status === "SUBSTITUTED";
 
@@ -43,7 +48,61 @@ type Viewer = { userId: string | null; canPick: boolean };
 export function BatchScreen({ batchId, userId, canPick }: { batchId: string } & Viewer) {
   const t = useTranslations();
   const errorMessage = useErrorMessage();
+  const queryClient = useQueryClient();
   const batch = useQuery(orpc.pickBatches.get.queryOptions({ input: { id: batchId } }));
+  const canAct =
+    canPick && batch.data?.owner.id === userId && batch.data !== undefined && !batch.data.closedAt;
+
+  const [scanned, setScanned] = useState<
+    (ScanOutcome & { slot?: ScanBatchResult; name?: string }) | null
+  >(null);
+  const scan = useMutation({
+    // One lane for the batch's scans: each one counts against what the one before left.
+    scope: { id: `pickBatch:${batchId}` },
+    mutationFn: (code: string) =>
+      client.pickBatches.scan({ batchId, code, scanId: crypto.randomUUID() }),
+    onSuccess: (result) => {
+      playScanSound(true);
+      const name = batch.data?.groups
+        .flatMap((g) => g.chips)
+        .find((c) => c.line.id === result.itemId)?.line.name;
+      setScanned({
+        ok: true,
+        at: Date.now(),
+        message: "",
+        slot: result,
+        name,
+        lineId: result.itemId,
+      });
+      void queryClient.invalidateQueries({
+        queryKey: orpc.pickBatches.get.queryKey({ input: { id: batchId } }),
+      });
+    },
+    onError: (error, code) => {
+      playScanSound(false);
+      setScanned({
+        ok: false,
+        at: Date.now(),
+        message: errorMessage(error),
+        linkCode: canLinkOf(error) ? code : undefined,
+      });
+    },
+  });
+  useScanner((code) => scan.mutate(code), canAct);
+
+  const link = useMutation({
+    mutationFn: ({ line, code }: { line: PickLine; code: string }) =>
+      client.picking.linkBarcode({ orderItemId: line.id, code }),
+    onSuccess: (result) => {
+      // Nothing was counted: the next scan of the code is.
+      setScanned({
+        ok: true,
+        at: Date.now(),
+        message: t("pick.linked", { code: result.barcode, name: result.name }),
+      });
+    },
+    onError: (error) => toast.error(errorMessage(error)),
+  });
 
   if (batch.isPending) return <p>{t("common.loading")}</p>;
   if (batch.error) {
@@ -55,7 +114,10 @@ export function BatchScreen({ batchId, userId, canPick }: { batchId: string } & 
   }
   const { data } = batch;
   const mine = data.owner.id === userId;
-  const canAct = canPick && mine && data.closedAt === null;
+  // An unknown code can go on any product still to pick: one line of each stands for it.
+  const linkable = data.groups
+    .filter((g) => g.remaining > 0)
+    .map((g) => (g.chips[0] as PickBatchChip).line);
   return (
     <section className="mx-auto max-w-5xl space-y-4">
       <header className="space-y-1">
@@ -78,6 +140,17 @@ export function BatchScreen({ batchId, userId, canPick }: { batchId: string } & 
         )
       )}
 
+      {scanned?.slot ? (
+        <SlotCallout key={scanned.at} result={scanned.slot} name={scanned.name} />
+      ) : (
+        <ScanBanner
+          outcome={scanned}
+          linkTo={scanned?.linkCode ? linkable : []}
+          linking={link.isPending}
+          onLink={(line) => scanned?.linkCode && link.mutate({ line, code: scanned.linkCode })}
+        />
+      )}
+
       {data.closedAt === null && (
         <>
           <h2 className="text-xl font-semibold">{t("pickBatch.list")}</h2>
@@ -86,7 +159,13 @@ export function BatchScreen({ batchId, userId, canPick }: { batchId: string } & 
           ) : (
             <ul className="space-y-4" aria-label={t("pickBatch.list")}>
               {data.groups.map((group) => (
-                <GroupCard key={group.key} batchId={data.id} group={group} canAct={canAct} />
+                <GroupCard
+                  key={group.key}
+                  batchId={data.id}
+                  group={group}
+                  canAct={canAct}
+                  lastScanned={scanned?.slot?.itemId}
+                />
               ))}
             </ul>
           )}
@@ -99,14 +178,37 @@ export function BatchScreen({ batchId, userId, canPick }: { batchId: string } & 
   );
 }
 
+/** Where the scanned unit goes on the cart, large enough to read from the shelf. */
+function SlotCallout({ result, name }: { result: ScanBatchResult; name?: string }) {
+  const t = useTranslations();
+  return (
+    <div aria-live="assertive" aria-atomic="true">
+      <div
+        className="alert alert-success flex-col items-start gap-1"
+        data-testid="slot-callout"
+        data-slot={result.slot}
+      >
+        <span className="sr-only">{t("pick.scanOk")} </span>
+        <span className="text-5xl font-bold tabular-nums">
+          {t("pickBatch.callout", { slot: result.slot, number: result.number })}
+        </span>
+        {name && <span className="text-lg font-semibold">{name}</span>}
+      </div>
+    </div>
+  );
+}
+
 function GroupCard({
   batchId,
   group,
   canAct,
+  lastScanned,
 }: {
   batchId: string;
   group: PickBatchGroup;
   canAct: boolean;
+  /** The line the last scan counted on, ringed so the picker sees which chip moved. */
+  lastScanned?: string;
 }) {
   const t = useTranslations();
   const finished = group.remaining === 0;
@@ -143,6 +245,7 @@ function GroupCard({
             chip={chip}
             showAttributes={group.attributes === null}
             canAct={canAct}
+            scanned={chip.line.id === lastScanned}
           />
         ))}
       </ul>
@@ -186,11 +289,13 @@ function Chip({
   chip,
   showAttributes,
   canAct,
+  scanned,
 }: {
   batchId: string;
   chip: PickBatchChip;
   showAttributes: boolean;
   canAct: boolean;
+  scanned: boolean;
 }) {
   const t = useTranslations();
   const errorMessage = useErrorMessage();
@@ -244,8 +349,9 @@ function Chip({
   const statusText = partial ? t("pick.partial") : t(`order.pickStatus.${line.pickStatus}`);
   return (
     <li
-      className={`flex items-stretch rounded-box border-2 ${statusTone[line.pickStatus]}`}
+      className={`flex items-stretch rounded-box border-2 ${statusTone[line.pickStatus]} ${scanned ? "ring-4 ring-success" : ""}`}
       data-testid={`chip-${chip.slot}`}
+      data-scanned={scanned || undefined}
       data-status={line.pickStatus}
     >
       <ToggleButton

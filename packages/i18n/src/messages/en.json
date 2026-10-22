@@ -390,6 +390,7 @@
     "list": "Pick list",
     "nothingToPick": "Nothing left in this batch needs picking.",
     "readOnly": "{name} is picking this batch. You can look, but only they can pick it.",
+    "callout": "Slot {slot} · #{number}",
     "remaining": "{remaining} of {quantity} left",
     "chip": "Slot {slot}, order #{number}: {picked} of {quantity}, {status}",
     "left": {
@@ -568,6 +569,8 @@
       "scanNotOnOrder": "That's {name}. It isn't on this order.",
       "scanUnknown": "Woolrus doesn't know that code.",
       "scanAlreadyPicked": "{line} is already picked.",
+      "batchClosed": "This batch is finished.",
+      "scanNotInBatch": "That's {name}. It isn't in this batch.",
       "codeInUse": "That code already belongs to {name}.",
       "noProductToLink": "This line has no product to link the code to.",
       "batchTooLarge": "A batch can hold at most {max} orders.",

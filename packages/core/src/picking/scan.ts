@@ -1,5 +1,6 @@
 import type { PickLineResult, ScanInput } from "@woolrus/contracts";
 import type { Db, DbTx } from "@woolrus/db";
+import type { ErrorCode } from "@woolrus/i18n";
 import { AppError } from "../errors";
 import { withIdempotency } from "../idempotency";
 import { type Actor, assertCan, can } from "../permissions";
@@ -9,6 +10,7 @@ import {
   activeQuantity,
   isWorkLine,
   type LineRow,
+  type LineWrite,
   lineInclude,
   lineResult,
   lockForPicking,
@@ -36,36 +38,13 @@ export async function scan(
     // Only the line id is stored: a replay answers with the line as it is now.
     const { itemId } = await withIdempotency(tx, scanId, "picking.scan", actor, async () => {
       const rows = await tx.orderItem.findMany({ where: { orderId }, include: lineInclude });
-      const matching = pickOrder(
-        rows
-          .filter((row) => isWorkLine(row) && codesForLine(row).has(wanted))
-          .map((row) => ({ ...row, binLocation: binOf(row) })),
-      );
-      if (matching.length === 0) throw await notOnOrder(tx, wanted, can(actor, "product.manage"));
-      const target = matching.find(
-        (row) => row.pickStatus === "PENDING" && row.pickedQuantity < activeQuantity(row),
-      );
-      if (!target) {
-        throw new AppError("CONFLICT", "errors.picking.scanAlreadyPicked", undefined, {
-          params: { line: (matching[0] as LineRow).name },
-        });
+      const matching = matchingLines(rows, wanted);
+      if (matching.length === 0) {
+        throw await notOnOrder(tx, wanted, can(actor, "product.manage"));
       }
-      await writeLineIn(
-        tx,
-        actor,
-        target.id,
-        "scan",
-        (row, at) => {
-          const picked = row.pickedQuantity + 1;
-          return {
-            pickStatus: picked === activeQuantity(row) ? "PICKED" : "PENDING",
-            pickedQuantity: picked,
-            pickedById: actor.userId,
-            pickedAt: at,
-          };
-        },
-        now,
-      );
+      const target = matching.find(needsUnit);
+      if (!target) throw alreadyPicked(matching);
+      await writeLineIn(tx, actor, target.id, "scan", addUnit(actor), now);
       return { itemId: target.id };
     });
     const row = await tx.orderItem.findUniqueOrThrow({
@@ -76,14 +55,51 @@ export async function scan(
   });
 }
 
+/** The work lines the code matches, in pick order. */
+export function matchingLines(rows: LineRow[], wanted: string): LineRow[] {
+  return pickOrder(
+    rows
+      .filter((row) => isWorkLine(row) && codesForLine(row).has(wanted))
+      .map((row) => ({ ...row, binLocation: binOf(row) })),
+  );
+}
+
+/** A line a scanned unit can go on. */
+export const needsUnit = (row: LineRow) =>
+  row.pickStatus === "PENDING" && row.pickedQuantity < activeQuantity(row);
+
+/** The write for one scanned unit: picked once the last one is in. */
+export const addUnit =
+  (actor: Actor) =>
+  (row: LineRow, at: Date): LineWrite => {
+    const picked = row.pickedQuantity + 1;
+    return {
+      pickStatus: picked === activeQuantity(row) ? "PICKED" : "PENDING",
+      pickedQuantity: picked,
+      pickedById: actor.userId,
+      pickedAt: at,
+    };
+  };
+
+/** The refusal when every line the code matches is done, naming the first. */
+export const alreadyPicked = (matching: LineRow[]) =>
+  new AppError("CONFLICT", "errors.picking.scanAlreadyPicked", undefined, {
+    params: { line: (matching[0] as LineRow).name },
+  });
+
 /**
- * The refusal for a code no line of the order has: naming the product it belongs to, if any, else
- * offering `canLink` to callers who may link it.
+ * The refusal for a code no line of the order (or batch) has: naming the product it belongs to, if
+ * any, else offering `canLink` to callers who may link it.
  */
-async function notOnOrder(tx: DbTx, code: string, canLink: boolean): Promise<AppError> {
+export async function notOnOrder(
+  tx: DbTx,
+  code: string,
+  canLink: boolean,
+  notOnKey: ErrorCode = "errors.picking.scanNotOnOrder",
+): Promise<AppError> {
   const known = await findCodeOwner(tx, code);
   return known
-    ? new AppError("CONFLICT", "errors.picking.scanNotOnOrder", undefined, {
+    ? new AppError("CONFLICT", notOnKey, undefined, {
         params: { name: known.name },
       })
     : new AppError("CONFLICT", "errors.picking.scanUnknown", undefined, canLink ? { canLink } : {});
