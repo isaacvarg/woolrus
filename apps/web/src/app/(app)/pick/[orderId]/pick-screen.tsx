@@ -126,8 +126,9 @@ function PickLayout({ view, userId, canPack }: { view: PickView } & Viewer) {
   const scan = useMutation({
     // Same lane as taps: a scan and a tap on the same line land in the order they were made.
     scope: { id: `pick:${order.id}` },
-    mutationFn: (code: string) =>
-      client.picking.scan({ orderId: order.id, code, scanId: crypto.randomUUID() }),
+    // The key is made with the scan, not per request, so a retried request replays it.
+    mutationFn: ({ code, scanId }: { code: string; scanId: string }) =>
+      client.picking.scan({ orderId: order.id, code, scanId }),
     onSuccess: (result) => {
       queryClient.setQueryData<PickView>(viewKey, (v) => (v ? applyResult(v, result) : v));
       playScanSound(true);
@@ -142,7 +143,7 @@ function PickLayout({ view, userId, canPack }: { view: PickView } & Viewer) {
         }),
       });
     },
-    onError: (error, code) => {
+    onError: (error, { code }) => {
       playScanSound(false);
       setScanned({
         ok: false,
@@ -152,7 +153,7 @@ function PickLayout({ view, userId, canPack }: { view: PickView } & Viewer) {
       });
     },
   });
-  useScanner((code) => scan.mutate(code), canPick);
+  useScanner((code) => scan.mutate({ code, scanId: crypto.randomUUID() }), canPick);
 
   const link = useMutation({
     mutationFn: ({ line, code }: { line: PickLine; code: string }) =>

@@ -61,8 +61,9 @@ export function BatchScreen({ batchId, userId, canPick }: { batchId: string } & 
   const scan = useMutation({
     // One lane for the batch's scans: each one counts against what the one before left.
     scope: { id: `pickBatch:${batchId}` },
-    mutationFn: (code: string) =>
-      client.pickBatches.scan({ batchId, code, scanId: crypto.randomUUID() }),
+    // The key is made with the scan, not per request, so a retried request replays it.
+    mutationFn: ({ code, scanId }: { code: string; scanId: string }) =>
+      client.pickBatches.scan({ batchId, code, scanId }),
     onSuccess: (result) => {
       playScanSound(true);
       const name = batch.data?.groups
@@ -80,7 +81,7 @@ export function BatchScreen({ batchId, userId, canPick }: { batchId: string } & 
         queryKey: orpc.pickBatches.get.queryKey({ input: { id: batchId } }),
       });
     },
-    onError: (error, code) => {
+    onError: (error, { code }) => {
       playScanSound(false);
       setScanned({
         ok: false,
@@ -90,7 +91,7 @@ export function BatchScreen({ batchId, userId, canPick }: { batchId: string } & 
       });
     },
   });
-  useScanner((code) => scan.mutate(code), canAct);
+  useScanner((code) => scan.mutate({ code, scanId: crypto.randomUUID() }), canAct);
 
   const link = useMutation({
     mutationFn: ({ line, code }: { line: PickLine; code: string }) =>
