@@ -30,7 +30,7 @@ import { pickOrder } from "./sort";
 
 export type BatchOptions = { now?: Date };
 
-const batchInclude = {
+export const batchInclude = {
   owner: { select: { id: true, ...nameFields } },
   orders: {
     orderBy: { slot: "asc" },
@@ -51,10 +51,10 @@ const batchInclude = {
   },
 } as const satisfies Prisma.PickBatchInclude;
 
-type BatchRow = Prisma.PickBatchGetPayload<{ include: typeof batchInclude }>;
+export type BatchRow = Prisma.PickBatchGetPayload<{ include: typeof batchInclude }>;
 type MemberRow = BatchRow["orders"][number];
 
-function memberState(
+export function memberState(
   member: MemberRow,
   ownerId: string,
   expiry: number,
@@ -181,7 +181,7 @@ async function batchGroups(tx: DbTx, live: MemberRow[]): Promise<PickBatchGroup[
  * join another batch (the one-open-batch-per-order index). Batches close lazily, on the next read or
  * write, like claims expire. Returns whether the batch is (now) closed.
  */
-async function closeIfSpent(
+export async function closeIfSpent(
   tx: DbTx,
   actor: Actor,
   row: BatchRow,
@@ -190,29 +190,43 @@ async function closeIfSpent(
 ): Promise<boolean> {
   if (row.closedAt) return true;
   if (row.orders.some((m) => memberState(m, row.ownerId, expiry, now) === "live")) return false;
-  // Guarded on closedAt so two readers closing at once audit it once.
+  await closeBatch(tx, actor, row.id, now, { action: "pickBatch.close", reason: "noLiveOrders" });
+  return true;
+}
+
+/**
+ * Closes a batch and marks its rows removed, so its orders can join another batch (the
+ * one-open-batch-per-order index); the orders themselves stay as they are. Guarded on closedAt, so
+ * two callers closing at once audit it once.
+ */
+export async function closeBatch(
+  tx: DbTx,
+  actor: Actor,
+  batchId: string,
+  now: Date,
+  { action, reason }: { action: "pickBatch.close" | "pickBatch.finish"; reason?: string },
+): Promise<void> {
   const { count } = await tx.pickBatch.updateMany({
-    where: { id: row.id, closedAt: null },
+    where: { id: batchId, closedAt: null },
     data: { closedAt: now },
   });
   await tx.pickBatchOrder.updateMany({
-    where: { batchId: row.id, removedAt: null },
+    where: { batchId, removedAt: null },
     data: { removedAt: now },
   });
   if (count > 0) {
     await recordAudit(tx, actor, {
       entityType: "PickBatch",
-      entityId: row.id,
-      action: "pickBatch.close",
-      after: { reason: "noLiveOrders" },
+      entityId: batchId,
+      action,
+      after: reason ? { reason } : undefined,
       at: now,
     });
   }
-  return true;
 }
 
 /** The batch as it stands, closing it first if nothing in it is live any more. */
-async function readBatch(
+export async function readBatch(
   tx: DbTx,
   actor: Actor,
   id: string,
@@ -230,7 +244,7 @@ async function readBatch(
   return toPickBatch(row, await batchGroups(tx, live), expiry, now);
 }
 
-function assertMayPick(actor: Actor): asserts actor is UserActor {
+export function assertMayPick(actor: Actor): asserts actor is UserActor {
   assertCan(actor, "order.pick");
   // The system actor has no user to own a batch or hold claims.
   if (actor.userId === null) throw forbidden();

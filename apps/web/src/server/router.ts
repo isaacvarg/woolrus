@@ -2,6 +2,7 @@ import {
   archiveBox,
   clearPin,
   clearSecret,
+  completeBatchMembers,
   completePick,
   createBatch,
   createBox,
@@ -11,6 +12,7 @@ import {
   deactivateUser,
   deleteNote,
   deletePriorityRule,
+  finishBatch,
   getBatch,
   getEmailSender,
   getOrder,
@@ -40,6 +42,7 @@ import {
   queueCounts,
   reactivateUser,
   registerStation,
+  removeFromBatch,
   renameStation,
   reorderPriorityRules,
   requestSync,
@@ -226,6 +229,15 @@ export const router = implementer.router({
       createBatch(db, context.actor, input),
     ),
     get: api.pickBatches.get.handler(({ input, context }) => getBatch(db, context.actor, input)),
+    complete: api.pickBatches.complete.handler(({ input, context }) =>
+      completeBatchMembers(db, context.actor, input),
+    ),
+    removeOrder: api.pickBatches.removeOrder.handler(({ input, context }) =>
+      removeFromBatch(db, context.actor, input),
+    ),
+    finish: api.pickBatches.finish.handler(({ input, context }) =>
+      finishBatch(db, context.actor, input),
+    ),
   },
   sync: {
     status: api.sync.status.handler(({ context }) => getSyncStatus(db, context.actor)),

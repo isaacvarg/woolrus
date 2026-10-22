@@ -396,7 +396,21 @@
       "status": "Left: {status}",
       "takenOver": "Left: {name} took it over",
       "claimExpired": "Left: claim expired"
-    }
+    },
+    "actions": "Actions",
+    "complete": "Complete",
+    "completeSlot": "Complete slot {slot}, order #{number}",
+    "remove": "Remove",
+    "removeSlot": "Remove slot {slot}, order #{number} from the batch",
+    "completeReady": "Complete ready orders ({count})",
+    "finish": "Finish batch",
+    "results": "Completion results",
+    "moved": "{count, plural, one {# order} other {# orders}} moved to Packing.",
+    "movedOrders": "Moved to Packing: {numbers}",
+    "notAllMoved": "Some orders couldn't move to Packing yet.",
+    "notMoved": "#{number} stays in Picking:",
+    "removedOrder": "#{number} is out of the batch. It's still yours in My picks.",
+    "finished": "Batch {number} finished."
   },
   "myPicks": {
     "title": "My picks",
@@ -572,7 +586,9 @@
       "noProductToLink": "This line has no product to link the code to.",
       "batchTooLarge": "A batch can hold at most {max} orders.",
       "batchOpen": "You already have an open batch. Finish it in My picks before starting another.",
-      "batchFailed": "Some orders couldn't be taken, so none were."
+      "batchFailed": "Some orders couldn't be taken, so none were.",
+      "batchClosed": "This batch is finished.",
+      "notInBatch": "This order isn't in the batch any more."
     },
     "workflow": {
       "illegalTransition": "That move isn't allowed from the order's current status.",

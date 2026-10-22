@@ -16,6 +16,7 @@ import { useErrorMessage } from "@/lib/errors";
 import { client, orpc } from "@/lib/orpc";
 import { LineMenu } from "../../[orderId]/line-dialogs";
 import { SlotLegend } from "../../slot-legend";
+import { BatchFooter, CompletionResults, SlotActions, useBatchActions } from "./batch-actions";
 
 // The batch screen (SPEC-picking "UI", FR-PICK-05): the pick list for the whole walk, one card per
 // product with a chip per slot, and the slot legend. Chips act on their order's line with the same
@@ -53,11 +54,16 @@ export function BatchScreen({ batchId, userId, canPick }: { batchId: string } & 
       </p>
     );
   }
-  const { data } = batch;
+  return <BatchView data={batch.data} userId={userId} canPick={canPick} />;
+}
+
+function BatchView({ data, userId, canPick }: { data: PickBatch } & Viewer) {
+  const t = useTranslations();
+  const actions = useBatchActions(data);
   const mine = data.owner.id === userId;
   const canAct = canPick && mine && data.closedAt === null;
   return (
-    <section className="mx-auto max-w-5xl space-y-4">
+    <section className={`mx-auto max-w-5xl space-y-4 ${canAct ? "pb-28" : ""}`}>
       <header className="space-y-1">
         <h1 className="text-3xl font-bold">{t("pickBatch.title", { number: data.number })}</h1>
         <p className="text-lg">
@@ -93,8 +99,14 @@ export function BatchScreen({ batchId, userId, canPick }: { batchId: string } & 
         </>
       )}
 
+      <CompletionResults actions={actions} />
+
       <h2 className="text-xl font-semibold">{t("pickBatch.slots")}</h2>
-      <SlotLegend batch={data} />
+      <SlotLegend
+        batch={data}
+        actions={canAct ? (member) => <SlotActions member={member} actions={actions} /> : undefined}
+      />
+      {canAct && <BatchFooter batch={data} actions={actions} />}
     </section>
   );
 }

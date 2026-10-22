@@ -396,7 +396,21 @@
       "status": "Salió: {status}",
       "takenOver": "Salió: lo tomó {name}",
       "claimExpired": "Salió: venció el reclamo"
-    }
+    },
+    "actions": "Acciones",
+    "complete": "Completar",
+    "completeSlot": "Completar el espacio {slot}, pedido #{number}",
+    "remove": "Quitar",
+    "removeSlot": "Quitar del lote el espacio {slot}, pedido #{number}",
+    "completeReady": "Completar pedidos listos ({count})",
+    "finish": "Terminar lote",
+    "results": "Resultados",
+    "moved": "{count, plural, one {# pedido pasó} other {# pedidos pasaron}} a Empaque.",
+    "movedOrders": "Pasaron a Empaque: {numbers}",
+    "notAllMoved": "Algunos pedidos todavía no pueden pasar a Empaque.",
+    "notMoved": "#{number} sigue en Surtido:",
+    "removedOrder": "#{number} salió del lote. Sigue siendo tuyo en Mis surtidos.",
+    "finished": "Lote {number} terminado."
   },
   "myPicks": {
     "title": "Mis surtidos",
@@ -572,7 +586,9 @@
       "noProductToLink": "Esta línea no tiene un producto al que vincular el código.",
       "batchTooLarge": "Un lote admite como máximo {max} pedidos.",
       "batchOpen": "Ya tienes un lote abierto. Termínalo en Mis surtidos antes de empezar otro.",
-      "batchFailed": "Algunos pedidos no se pudieron tomar, así que no se tomó ninguno."
+      "batchFailed": "Algunos pedidos no se pudieron tomar, así que no se tomó ninguno.",
+      "batchClosed": "Este lote ya está terminado.",
+      "notInBatch": "Este pedido ya no está en el lote."
     },
     "workflow": {
       "illegalTransition": "Ese cambio no está permitido desde el estado actual del pedido.",
