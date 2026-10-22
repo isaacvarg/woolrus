@@ -1,10 +1,17 @@
 import type { Db } from "@woolrus/db";
-import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { createActor, resetDb, testDb } from "../../test/db";
 import { createOrder, type LineSpec } from "../../test/factories";
 import type { UserActor } from "../permissions";
 import { completeBatchMembers, finishBatch, removeFromBatch } from "./batch-complete";
 import { createBatch, getBatch, myPicks } from "./batches";
+import { completePick } from "./complete";
+
+// Wrapped so one test can make a single order's completion fail unexpectedly.
+vi.mock("./complete", async (actual) => {
+  const real = await actual<typeof import("./complete")>();
+  return { ...real, completePick: vi.fn(real.completePick) };
+});
 
 const db: Db = testDb();
 afterAll(() => db.$disconnect());
@@ -107,6 +114,47 @@ describe("completeBatchMembers", () => {
     expect((await orderRow(stranger?.id as string)).status).toBe("PICKING");
   });
 
+  it("reports an unexpected failure for that order and still moves the others", async () => {
+    const picker = await createActor(db, ["PICKER"]);
+    const batch = await batchOf(picker, [picked, picked, picked]);
+    const [a, b, c] = batch.members.map((m) => m.orderId) as [string, string, string];
+    const boom = new Error("connection lost");
+    const real = vi.mocked(completePick).getMockImplementation() as typeof completePick;
+    vi.mocked(completePick).mockImplementationOnce(real).mockRejectedValueOnce(boom);
+    const onError = vi.fn();
+
+    const { results } = await completeBatchMembers(
+      db,
+      picker,
+      { id: batch.id, orders: refsOf(batch.members) },
+      { onError },
+    );
+
+    expect(results).toEqual([
+      { orderId: a, moved: true },
+      { orderId: b, moved: false, messageKey: "errors.internal", params: {}, unmet: [] },
+      { orderId: c, moved: true },
+    ]);
+    expect(onError).toHaveBeenCalledWith(b, boom);
+    expect((await orderRow(b)).status).toBe("PICKING");
+  });
+
+  it("reports orders a retried Complete already moved as moved", async () => {
+    const picker = await createActor(db, ["PICKER"]);
+    const batch = await batchOf(picker, [picked, { name: "Blue yarn" }]);
+    const input = { id: batch.id, orders: refsOf(batch.members) };
+    const [a, b] = batch.members.map((m) => m.orderId) as [string, string];
+    await completeBatchMembers(db, picker, input);
+
+    const { results } = await completeBatchMembers(db, picker, input);
+
+    expect(results.map((r) => [r.orderId, r.moved ? "moved" : r.messageKey])).toEqual([
+      [a, "moved"],
+      [b, "errors.workflow.gateFailed"],
+    ]);
+    expect(await db.orderStageEvent.count({ where: { toStatus: "PACKING" } })).toBe(1);
+  });
+
   it("lets only the owner complete, and not on a finished batch", async () => {
     const picker = await createActor(db, ["PICKER"]);
     const other = await createActor(db, ["PICKER"]);
@@ -179,6 +227,10 @@ describe("removeFromBatch", () => {
     await expect(
       removeFromBatch(db, other, { id: batch.id, orderId: batch.members[0]?.orderId as string }),
     ).rejects.toMatchObject({ kind: "FORBIDDEN" });
+    const packer = await createActor(db, ["PACKER"]);
+    await expect(
+      removeFromBatch(db, packer, { id: batch.id, orderId: batch.members[0]?.orderId as string }),
+    ).rejects.toMatchObject({ kind: "FORBIDDEN" });
     expect(await db.pickBatchOrder.count({ where: { removedAt: { not: null } } })).toBe(0);
   });
 });
@@ -216,6 +268,10 @@ describe("finishBatch", () => {
     const batch = await batchOf(picker, [{}, {}]);
 
     await expect(finishBatch(db, other, { id: batch.id })).rejects.toMatchObject({
+      kind: "FORBIDDEN",
+    });
+    const packer = await createActor(db, ["PACKER"]);
+    await expect(finishBatch(db, packer, { id: batch.id })).rejects.toMatchObject({
       kind: "FORBIDDEN",
     });
     const first = await finishBatch(db, picker, { id: batch.id });

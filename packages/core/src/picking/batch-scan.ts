@@ -50,7 +50,7 @@ export async function lockBatchForOwner(
     where: { id: batchId },
     include: batchInclude,
   });
-  if (await closeIfSpent(tx, actor, row, expiry, now)) return null;
+  if (await closeIfSpent(tx, row, expiry, now)) return null;
   return { live: row.orders.filter((m) => memberState(m, row.ownerId, expiry, now) === "live") };
 }
 

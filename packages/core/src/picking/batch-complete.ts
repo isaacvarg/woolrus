@@ -36,32 +36,43 @@ async function lockOwnBatch(tx: DbTx, actor: UserActor, id: string): Promise<Bat
 
 const batchClosed = () => new AppError("CONFLICT", "errors.picking.batchClosed");
 
+export type CompleteBatchOptions = BatchOptions & {
+  /** Told about an order whose completion failed unexpectedly; the others still go ahead. */
+  onError?: (orderId: string, error: unknown) => void;
+};
+
 /**
  * **Complete ready orders** / per-slot **Complete**: the single-order completion (`completePick`,
  * workflow's `completePicking` and its picked gate) for each order, each in its own transaction, and
- * a result per order. Orders that aren't live in the batch are reported, not moved.
+ * a result per order. Orders that aren't live in the batch are reported, not moved, except members
+ * already in Packing: a retried Complete reports what the first one moved.
  */
 export async function completeBatchMembers(
   db: Db,
   actor: Parameters<typeof assertMayPick>[0],
   { id, orders }: CompletePickBatchInput,
-  { now = new Date() }: BatchOptions = {},
+  { now = new Date(), onError }: CompleteBatchOptions = {},
 ): Promise<CompletePickBatchResult> {
   assertMayPick(actor);
 
-  const live = await db.$transaction(async (tx) => {
+  const { live, moved } = await db.$transaction(async (tx) => {
     const expiry = await claimExpiryMinutes(tx);
     const row = await lockOwnBatch(tx, actor, id);
     if (row.closedAt) throw batchClosed();
-    return new Set(
-      row.orders
-        .filter((m) => memberState(m, row.ownerId, expiry, now) === "live")
-        .map((m) => m.orderId),
-    );
+    const ids = (keep: (m: BatchRow["orders"][number]) => boolean) =>
+      new Set(row.orders.filter(keep).map((m) => m.orderId));
+    return {
+      live: ids((m) => memberState(m, row.ownerId, expiry, now) === "live"),
+      moved: ids((m) => m.removedAt === null && m.order.status === "PACKING"),
+    };
   });
 
   const results: PickBatchCompletion[] = [];
   for (const { id: orderId, expectedVersion } of orders) {
+    if (moved.has(orderId)) {
+      results.push({ orderId, moved: true });
+      continue;
+    }
     if (!live.has(orderId)) {
       results.push({
         orderId,
@@ -76,7 +87,19 @@ export async function completeBatchMembers(
       await completePick(db, actor, { orderId, expectedVersion, after: "queue" }, { now });
       results.push({ orderId, moved: true });
     } catch (error) {
-      if (!(error instanceof AppError)) throw error;
+      // Earlier orders have committed, so even an unexpected failure is reported per order rather
+      // than thrown: the picker still learns which ones moved.
+      if (!(error instanceof AppError)) {
+        onError?.(orderId, error);
+        results.push({
+          orderId,
+          moved: false,
+          messageKey: "errors.internal",
+          params: {},
+          unmet: [],
+        });
+        continue;
+      }
       results.push({
         orderId,
         moved: false,
@@ -89,7 +112,7 @@ export async function completeBatchMembers(
 
   // Read last: it closes the batch if nothing in it is live any more.
   const batch = await db.$transaction(async (tx) =>
-    readBatch(tx, actor, id, await claimExpiryMinutes(tx), now),
+    readBatch(tx, id, await claimExpiryMinutes(tx), now),
   );
   return { results, batch };
 }
@@ -108,7 +131,7 @@ export async function removeFromBatch(
     const member = row.orders.find((m) => m.orderId === orderId);
     if (!member) throw notFound();
     // Already out (a replay, or the batch closed): nothing to do.
-    if (member.removedAt) return readBatch(tx, actor, id, expiry, now);
+    if (member.removedAt) return readBatch(tx, id, expiry, now);
     if (row.closedAt) throw batchClosed();
 
     await tx.pickBatchOrder.update({
@@ -122,7 +145,7 @@ export async function removeFromBatch(
       after: { orderId, slot: member.slot },
       at: now,
     });
-    return readBatch(tx, actor, id, expiry, now);
+    return readBatch(tx, id, expiry, now);
   });
 }
 
@@ -138,6 +161,6 @@ export async function finishBatch(
     const expiry = await claimExpiryMinutes(tx);
     const row = await lockOwnBatch(tx, actor, id);
     if (!row.closedAt) await closeBatch(tx, actor, id, now, { action: "pickBatch.finish" });
-    return readBatch(tx, actor, id, expiry, now);
+    return readBatch(tx, id, expiry, now);
   });
 }

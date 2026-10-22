@@ -38,6 +38,11 @@ export function useBatchActions(batch: PickBatch) {
     queryClient.setQueryData(batchKey, next);
     void queryClient.invalidateQueries({ queryKey: orpc.picking.myPicks.key() });
   };
+  // Refused as a whole (say, finished on another tablet): show the batch as it is now.
+  const refused = (error: Error) => {
+    toast.error(errorMessage(error));
+    void queryClient.invalidateQueries({ queryKey: batchKey });
+  };
   const numberOf = (orderId: string) =>
     batch.members.find((m) => m.orderId === orderId)?.number ?? "";
   // Batch writes and the chips' line writes don't share a lane, and completing reads the lines the
@@ -60,7 +65,7 @@ export function useBatchActions(batch: PickBatch) {
       if (moved > 0) toast.success(t("pickBatch.moved", { count: moved }));
       if (moved < next.length) toast.error(t("pickBatch.notAllMoved"));
     },
-    onError: (error) => toast.error(errorMessage(error)),
+    onError: refused,
   });
 
   const remove = useMutation({
@@ -71,7 +76,7 @@ export function useBatchActions(batch: PickBatch) {
       show(after);
       toast.success(t("pickBatch.removedOrder", { number: member.number }));
     },
-    onError: (error) => toast.error(errorMessage(error)),
+    onError: refused,
   });
 
   const finish = useMutation({
@@ -82,7 +87,7 @@ export function useBatchActions(batch: PickBatch) {
       toast.success(t("pickBatch.finished", { number: after.number }));
       router.push("/pick");
     },
-    onError: (error) => toast.error(errorMessage(error)),
+    onError: refused,
   });
 
   const busy = complete.isPending || remove.isPending || finish.isPending;

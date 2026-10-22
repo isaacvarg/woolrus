@@ -183,14 +183,15 @@ async function batchGroups(tx: DbTx, live: MemberRow[]): Promise<PickBatchGroup[
  */
 export async function closeIfSpent(
   tx: DbTx,
-  actor: Actor,
   row: BatchRow,
   expiry: number,
   now: Date,
 ): Promise<boolean> {
   if (row.closedAt) return true;
   if (row.orders.some((m) => memberState(m, row.ownerId, expiry, now) === "live")) return false;
-  await closeBatch(tx, actor, row.id, now, { action: "pickBatch.close", reason: "noLiveOrders" });
+  // The batch ran out on its own: audited as its owner's, not as whoever happened to read it.
+  const owner: UserActor = { userId: row.ownerId, roles: [], stationId: null };
+  await closeBatch(tx, owner, row.id, now, { action: "pickBatch.close", reason: "noLiveOrders" });
   return true;
 }
 
@@ -228,15 +229,14 @@ export async function closeBatch(
 /** The batch as it stands, closing it first if nothing in it is live any more. */
 export async function readBatch(
   tx: DbTx,
-  actor: Actor,
   id: string,
   expiry: number,
   now: Date,
 ): Promise<PickBatch> {
   const row = await tx.pickBatch.findUnique({ where: { id }, include: batchInclude });
   if (!row) throw notFound();
-  if (!row.closedAt && (await closeIfSpent(tx, actor, row, expiry, now))) {
-    return readBatch(tx, actor, id, expiry, now);
+  if (!row.closedAt && (await closeIfSpent(tx, row, expiry, now))) {
+    return readBatch(tx, id, expiry, now);
   }
   const live = row.closedAt
     ? []
@@ -293,17 +293,17 @@ export async function createBatch(
   }
 
   return db.$transaction(async (tx) => {
+    // One picker's creates run one at a time, so two at once can't both pass the open-batch check
+    // (the partial unique index would turn the loser into a 500). Taken before the idempotency
+    // check, so a duplicate sent at the same moment waits for the first and then replays it. Taken
+    // before any row lock, and nothing else takes it, so it can't join a deadlock.
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`pick-batch:${actor.userId}`}))`;
     const { id } = await withIdempotency(
       tx,
       idempotencyKey,
       "pickBatches.create",
       actor,
       async () => {
-        // One picker's creates run one at a time, so two at once can't both pass the open-batch check
-        // (the partial unique index would turn the loser into a 500). Taken before any row lock, and
-        // nothing else takes it, so it can't join a deadlock.
-        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`pick-batch:${actor.userId}`}))`;
-
         // Settings before the order locks: the lock order workflow uses everywhere.
         const settings = await loadSettings(tx);
         const expiry = settings.claimExpiryMinutes;
@@ -317,7 +317,7 @@ export async function createBatch(
           where: { ownerId: actor.userId, closedAt: null },
           include: batchInclude,
         });
-        if (open && !(await closeIfSpent(tx, actor, open, expiry, now))) {
+        if (open && !(await closeIfSpent(tx, open, expiry, now))) {
           throw new AppError("CONFLICT", "errors.picking.batchOpen");
         }
 
@@ -388,7 +388,7 @@ export async function createBatch(
       },
     );
 
-    return readBatch(tx, actor, id, await claimExpiryMinutes(tx), now);
+    return readBatch(tx, id, await claimExpiryMinutes(tx), now);
   });
 }
 
@@ -400,7 +400,7 @@ export async function getBatch(
   { now = new Date() }: BatchOptions = {},
 ): Promise<PickBatch> {
   assertCan(actor, "order.read");
-  return db.$transaction(async (tx) => readBatch(tx, actor, id, await claimExpiryMinutes(tx), now));
+  return db.$transaction(async (tx) => readBatch(tx, id, await claimExpiryMinutes(tx), now));
 }
 
 /** **My picks**: the actor's open batch and the other orders they hold a live claim on in Picking. */
@@ -419,7 +419,7 @@ export async function myPicks(
       where: { ownerId: userId, closedAt: null },
       select: { id: true },
     });
-    const batch = open ? await readBatch(tx, actor, open.id, expiry, now) : null;
+    const batch = open ? await readBatch(tx, open.id, expiry, now) : null;
     const inBatch = new Set(
       batch?.closedAt === null
         ? batch.members.filter((m) => m.state === "live").map((m) => m.orderId)

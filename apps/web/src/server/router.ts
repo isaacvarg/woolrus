@@ -69,6 +69,7 @@ import {
   updateUserRoles,
 } from "@woolrus/core";
 import { db } from "@woolrus/db";
+import { createLogger } from "@woolrus/logger";
 import { preferenceCookie } from "@/lib/preferences";
 import { auth } from "./auth";
 import { badgeQrSvg } from "./badge";
@@ -76,6 +77,8 @@ import { env } from "./env";
 import { api, type BaseContext, implementer, stationApi } from "./orpc";
 import { stationCookie } from "./station-cookie";
 import { storage } from "./storage";
+
+const log = createLogger({ module: "router" });
 
 /** Signs out the request's Better Auth session, if any, passing its cookie-clearing headers on. */
 async function endPersonalSession(context: BaseContext): Promise<void> {
@@ -232,7 +235,9 @@ export const router = implementer.router({
     get: api.pickBatches.get.handler(({ input, context }) => getBatch(db, context.actor, input)),
     scan: api.pickBatches.scan.handler(({ input, context }) => scanBatch(db, context.actor, input)),
     complete: api.pickBatches.complete.handler(({ input, context }) =>
-      completeBatchMembers(db, context.actor, input),
+      completeBatchMembers(db, context.actor, input, {
+        onError: (orderId, err) => log.error({ err, orderId }, "batch complete: order failed"),
+      }),
     ),
     removeOrder: api.pickBatches.removeOrder.handler(({ input, context }) =>
       removeFromBatch(db, context.actor, input),

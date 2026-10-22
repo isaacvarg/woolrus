@@ -285,6 +285,20 @@ describe("createBatch", () => {
     expect(await db.pickBatchOrder.count({ where: { orderId: shared?.id } })).toBe(1);
   });
 
+  it("replays a duplicate create sent at the same moment instead of failing it", async () => {
+    await settingsRow();
+    const picker = await createActor(db, ["PICKER"]);
+    const input = { orders: refs(await pending(2)), idempotencyKey: key() };
+
+    const [first, second] = await Promise.all([
+      createBatch(db, picker, input),
+      createBatch(db, picker, input),
+    ]);
+
+    expect(second.id).toBe(first.id);
+    expect(await db.pickBatch.count()).toBe(1);
+  });
+
   it("lets one of two concurrent creates by the same picker succeed, the other is batchOpen", async () => {
     await settingsRow();
     const picker = await createActor(db, ["PICKER"]);
@@ -349,6 +363,35 @@ describe("getBatch", () => {
     expect(read.closedAt).toBeInstanceOf(Date);
     // Its rows no longer hold the orders: they can join a new batch.
     expect(await db.pickBatchOrder.count({ where: { removedAt: null } })).toBe(0);
+  });
+
+  it("audits a lazy close under the batch's owner, not whoever read it", async () => {
+    const picker = await createActor(db, ["PICKER"]);
+    const batch = await started(picker, 2);
+    await db.order.updateMany({
+      where: { id: { in: batch.members.map((m) => m.orderId) } },
+      data: { status: "ON_HOLD" },
+    });
+    const packer = await createActor(db, ["PACKER"]);
+
+    await getBatch(db, packer, { id: batch.id });
+
+    expect(
+      await db.auditEvent.findMany({
+        where: { entityId: batch.id, action: "pickBatch.close" },
+        select: { actorId: true },
+      }),
+    ).toEqual([{ actorId: picker.userId }]);
+  });
+
+  it("is forbidden without order.read", async () => {
+    const picker = await createActor(db, ["PICKER"]);
+    const batch = await started(picker, 2);
+    const nobody = await createActor(db, []);
+
+    await expect(getBatch(db, nobody, { id: batch.id })).rejects.toMatchObject({
+      kind: "FORBIDDEN",
+    });
   });
 
   it("can be read by anyone who can read orders, and not found otherwise", async () => {
