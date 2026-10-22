@@ -8,7 +8,8 @@
     "build": "next build",
     "start": "next start --port 3000",
     "typecheck": "next typegen && tsc",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test": "vitest run --dir src"
   },
   "dependencies": {
     "@orpc/client": "1.15.7",
@@ -43,6 +44,7 @@
     "@woolrus/config": "workspace:*",
     "daisyui": "5.7.50",
     "dotenv": "^18.0.7",
-    "tailwindcss": "4.3.3"
+    "tailwindcss": "4.3.3",
+    "vitest": "5.0.4"
   }
 }

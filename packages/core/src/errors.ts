@@ -28,6 +28,8 @@ export class AppError extends Error {
       unmet?: readonly UnmetCondition[];
       /** Per-order failures of an all-or-nothing batch. */
       failures?: readonly OrderFailure[];
+      /** An unknown scanned code the caller may link to a product (SPEC-picking "Code matching"). */
+      canLink?: boolean;
     } = {},
   ) {
     super(messageKey);
@@ -35,11 +37,13 @@ export class AppError extends Error {
     this.params = details.params;
     this.unmet = details.unmet;
     this.failures = details.failures;
+    this.canLink = details.canLink;
   }
 
   readonly params?: Record<string, string | number>;
   readonly unmet?: readonly UnmetCondition[];
   readonly failures?: readonly OrderFailure[];
+  readonly canLink?: boolean;
 }
 
 export const notFound = () => new AppError("NOT_FOUND", "errors.notFound");

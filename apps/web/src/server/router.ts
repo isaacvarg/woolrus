@@ -2,6 +2,9 @@ import {
   archiveBox,
   clearPin,
   clearSecret,
+  completeBatchMembers,
+  completePick,
+  createBatch,
   createBox,
   createInvitation,
   createNote,
@@ -9,13 +12,17 @@ import {
   deactivateUser,
   deleteNote,
   deletePriorityRule,
+  finishBatch,
+  getBatch,
   getEmailSender,
   getOrder,
   getOrderHistory,
+  getPickView,
   getPublicSettings,
   getSettings,
   getSyncStatus,
   issueBadge,
+  linkBarcode,
   listBoxes,
   listInvitations,
   listNotes,
@@ -27,11 +34,15 @@ import {
   listSyncRuns,
   listUsers,
   lockStation,
+  markOutOfStock,
+  myPicks,
   orderMutations,
   permissionsFor,
+  pickLine,
   queueCounts,
   reactivateUser,
   registerStation,
+  removeFromBatch,
   renameStation,
   reorderPriorityRules,
   requestSync,
@@ -39,14 +50,18 @@ import {
   revokeBadge,
   revokeInvitation,
   revokeStation,
+  scan,
+  scanBatch,
   sendTestEmail,
   setPin,
   setSecret,
   stationStatus,
+  substitute,
   testStoreConnection,
   touchStation,
   unlockWithBadge,
   unlockWithPin,
+  unpickLine,
   updateNote,
   updatePreferences,
   updatePriorityRule,
@@ -54,6 +69,7 @@ import {
   updateUserRoles,
 } from "@woolrus/core";
 import { db } from "@woolrus/db";
+import { createLogger } from "@woolrus/logger";
 import { preferenceCookie } from "@/lib/preferences";
 import { auth } from "./auth";
 import { badgeQrSvg } from "./badge";
@@ -61,6 +77,8 @@ import { env } from "./env";
 import { api, type BaseContext, implementer, stationApi } from "./orpc";
 import { stationCookie } from "./station-cookie";
 import { storage } from "./storage";
+
+const log = createLogger({ module: "router" });
 
 /** Signs out the request's Better Auth session, if any, passing its cookie-clearing headers on. */
 async function endPersonalSession(context: BaseContext): Promise<void> {
@@ -186,6 +204,47 @@ export const router = implementer.router({
       updateNote(db, storage(), context.actor, input),
     ),
     delete: api.notes.delete.handler(({ input, context }) => deleteNote(db, context.actor, input)),
+  },
+  picking: {
+    view: api.picking.view.handler(({ input, context }) => getPickView(db, context.actor, input)),
+    complete: api.picking.complete.handler(({ input, context }) =>
+      completePick(db, context.actor, input),
+    ),
+    pickLine: api.picking.pickLine.handler(({ input, context }) =>
+      pickLine(db, context.actor, input),
+    ),
+    unpickLine: api.picking.unpickLine.handler(({ input, context }) =>
+      unpickLine(db, context.actor, input),
+    ),
+    scan: api.picking.scan.handler(({ input, context }) => scan(db, context.actor, input)),
+    linkBarcode: api.picking.linkBarcode.handler(({ input, context }) =>
+      linkBarcode(db, context.actor, input),
+    ),
+    markOutOfStock: api.picking.markOutOfStock.handler(({ input, context }) =>
+      markOutOfStock(db, context.actor, input),
+    ),
+    substitute: api.picking.substitute.handler(({ input, context }) =>
+      substitute(db, context.actor, input),
+    ),
+    myPicks: api.picking.myPicks.handler(({ context }) => myPicks(db, context.actor)),
+  },
+  pickBatches: {
+    create: api.pickBatches.create.handler(({ input, context }) =>
+      createBatch(db, context.actor, input),
+    ),
+    get: api.pickBatches.get.handler(({ input, context }) => getBatch(db, context.actor, input)),
+    scan: api.pickBatches.scan.handler(({ input, context }) => scanBatch(db, context.actor, input)),
+    complete: api.pickBatches.complete.handler(({ input, context }) =>
+      completeBatchMembers(db, context.actor, input, {
+        onError: (orderId, err) => log.error({ err, orderId }, "batch complete: order failed"),
+      }),
+    ),
+    removeOrder: api.pickBatches.removeOrder.handler(({ input, context }) =>
+      removeFromBatch(db, context.actor, input),
+    ),
+    finish: api.pickBatches.finish.handler(({ input, context }) =>
+      finishBatch(db, context.actor, input),
+    ),
   },
   sync: {
     status: api.sync.status.handler(({ context }) => getSyncStatus(db, context.actor)),

@@ -43,6 +43,13 @@ describe("permissions", () => {
     }
   });
 
+  it("lets only admins manage products", () => {
+    expect(can(actor(["ADMIN"]), "product.manage")).toBe(true);
+    for (const role of ["PICKER", "PACKER", "QA", "SHIPPER"] as const) {
+      expect(can(actor([role]), "product.manage")).toBe(false);
+    }
+  });
+
   it("gives the system actor no user and no station", () => {
     expect(systemActor).toMatchObject({ userId: null, stationId: null, system: "store-sync" });
     expect(can(systemActor, "order.cancel")).toBe(true);

@@ -84,6 +84,9 @@ const SyncIntervalMinutes = z.number().int().min(1).max(60);
 const StationIdleLockMinutes = z.number().int().min(1).max(120);
 /** How long an order claim lasts after the holder last acted on it (FR-WF-07). */
 const ClaimExpiryMinutes = z.number().int().min(5).max(480);
+/** Most orders one picker takes in a pick batch (SPEC-picking decision 5); 50 is claimMany's ceiling. */
+export const PICK_BATCH_MAX_ORDERS_CEILING = 50;
+const PickBatchMaxOrders = z.number().int().min(2).max(PICK_BATCH_MAX_ORDERS_CEILING);
 /** Null keeps customer PII forever (NFR-SEC-06). */
 const PiiRetentionDays = z.number().int().min(30).max(3650).nullable();
 
@@ -110,6 +113,7 @@ export const AdminSettings = z.object({
   syncIntervalMinutes: z.number(),
   stationIdleLockMinutes: z.number(),
   claimExpiryMinutes: z.number(),
+  pickBatchMaxOrders: z.number(),
   stageSlaMinutes: StageSlaMinutes,
   weightDisplay: WeightDisplay,
   piiRetentionDays: z.number().nullable(),
@@ -123,6 +127,7 @@ export const PublicSettings = AdminSettings.pick({
   weightDisplay: true,
   stationIdleLockMinutes: true,
   claimExpiryMinutes: true,
+  pickBatchMaxOrders: true,
   stageSlaMinutes: true,
 });
 export type PublicSettings = z.infer<typeof PublicSettings>;
@@ -136,6 +141,7 @@ export const UpdateSettingsInput = z.object({
   syncIntervalMinutes: SyncIntervalMinutes.optional(),
   stationIdleLockMinutes: StationIdleLockMinutes.optional(),
   claimExpiryMinutes: ClaimExpiryMinutes.optional(),
+  pickBatchMaxOrders: PickBatchMaxOrders.optional(),
   stageSlaMinutes: StageSlaMinutes.optional(),
   weightDisplay: WeightDisplay.optional(),
   piiRetentionDays: PiiRetentionDays.optional(),

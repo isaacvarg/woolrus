@@ -333,6 +333,41 @@ export async function createNote(
   );
 }
 
+/**
+ * An internal, text-only note written inside the caller's transaction (SPEC-picking "Line
+ * notes"), so it commits or rolls back with the caller's write. The caller handles idempotency
+ * and tells open pages about the change; photos can be added afterwards with `updateNote`.
+ */
+export async function createTextNote(
+  tx: DbTx,
+  actor: Actor,
+  input: { orderId: string; orderItemId?: string; content: string },
+): Promise<{ id: string }> {
+  assertCan(actor, "note.write");
+  const content = cleanContent(input.content);
+  const columns = await resolveTarget(
+    tx,
+    input.orderId,
+    input.orderItemId ? { kind: "item", id: input.orderItemId } : { kind: "order" },
+  );
+  const note = await tx.note.create({
+    data: {
+      orderId: input.orderId,
+      ...columns,
+      authorId: actor.userId,
+      content,
+      visibility: "INTERNAL",
+    },
+  });
+  await recordAudit(tx, actor, {
+    entityType: "Note",
+    entityId: note.id,
+    action: "create",
+    after: { orderId: note.orderId, ...columns, ...snapshot(note), attachmentIds: [] },
+  });
+  return { id: note.id };
+}
+
 type NoteWithAttachments = Prisma.NoteGetPayload<{ include: { attachments: true } }>;
 
 /**

@@ -8,7 +8,14 @@ import { createMemoryStorage, type MemoryStorage } from "../adapters/storage/mem
 import type { Actor } from "../permissions";
 import { ORDER_CHANGED_CHANNEL } from "../workflow/notify";
 import { NOTE_FILE_LIMITS } from "./media";
-import { createNote, deleteNote, getAttachment, listNotes, updateNote } from "./service";
+import {
+  createNote,
+  createTextNote,
+  deleteNote,
+  getAttachment,
+  listNotes,
+  updateNote,
+} from "./service";
 import { audioBytes, fileOf, solidImage } from "./test-files";
 
 const db: Db = testDb();
@@ -708,5 +715,85 @@ describe("refusals before any upload", () => {
       "errors.notFound",
     );
     expect(puts).toBe(0);
+  });
+});
+
+describe("createTextNote", () => {
+  it("writes an internal text note on the line inside the caller's transaction, audited", async () => {
+    const picker = await createActor(db, ["PICKER"]);
+    const { order, items } = await createOrder(db);
+    const line = items[0];
+    if (!line) throw new Error("factory");
+
+    const note = await db.$transaction((tx) =>
+      createTextNote(tx, picker, {
+        orderId: order.id,
+        orderItemId: line.id,
+        content: "  Only 1 on the shelf ",
+      }),
+    );
+
+    expect(await db.note.findUniqueOrThrow({ where: { id: note.id } })).toMatchObject({
+      orderId: order.id,
+      orderItemId: line.id,
+      authorId: picker.userId,
+      content: "Only 1 on the shelf",
+      visibility: "INTERNAL",
+    });
+    expect(await db.auditEvent.findMany({ where: { entityId: note.id } })).toMatchObject([
+      {
+        entityType: "Note",
+        action: "create",
+        actorId: picker.userId,
+        after: { orderItemId: line.id, content: "Only 1 on the shelf", visibility: "INTERNAL" },
+      },
+    ]);
+  });
+
+  it("is rolled back with the caller's transaction", async () => {
+    const picker = await createActor(db, ["PICKER"]);
+    const { order } = await createOrder(db);
+
+    await expect(
+      db.$transaction(async (tx) => {
+        await createTextNote(tx, picker, { orderId: order.id, content: "x" });
+        throw new Error("caller failed");
+      }),
+    ).rejects.toThrow("caller failed");
+    expect(await db.note.count()).toBe(0);
+  });
+
+  it("refuses an empty note and a line from another order", async () => {
+    const picker = await createActor(db, ["PICKER"]);
+    const { order } = await createOrder(db);
+    const { items } = await createOrder(db);
+
+    await rejects(
+      db.$transaction((tx) => createTextNote(tx, picker, { orderId: order.id, content: "  " })),
+      "BAD_REQUEST",
+      "errors.notes.empty",
+    );
+    await rejects(
+      db.$transaction((tx) =>
+        createTextNote(tx, picker, {
+          orderId: order.id,
+          orderItemId: items[0]?.id as string,
+          content: "x",
+        }),
+      ),
+      "BAD_REQUEST",
+      "errors.notes.targetMismatch",
+    );
+  });
+
+  it("needs note.write", async () => {
+    const nobody = await createActor(db, []);
+    const { order } = await createOrder(db);
+
+    await rejects(
+      db.$transaction((tx) => createTextNote(tx, nobody, { orderId: order.id, content: "x" })),
+      "FORBIDDEN",
+      "errors.forbidden",
+    );
   });
 });

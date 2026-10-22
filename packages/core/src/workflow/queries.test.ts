@@ -226,6 +226,25 @@ describe("getOrder", () => {
     ).rejects.toMatchObject({ kind: "NOT_FOUND" });
   });
 
+  it("shows who picked each line and when (FR-WF-04)", async () => {
+    const pickedAt = minutesAgo(5);
+    const { order, items } = await createOrder(db, {
+      status: "PICKING",
+      lines: [{ name: "Wool", pickStatus: "PICKED" }, { name: "Clay" }],
+    });
+    await db.orderItem.update({
+      where: { id: items[0]?.id },
+      data: { pickedById: picker.userId, pickedAt },
+    });
+
+    const view = await getOrder(db, picker, { id: order.id });
+
+    expect(view.lines.map((l) => [l.name, l.pickedBy, l.pickedAt])).toEqual([
+      ["Wool", { name: "Test User" }, pickedAt],
+      ["Clay", null, null],
+    ]);
+  });
+
   it("returns the header, addresses, lines with active quantity and packages", async () => {
     const { order, items } = await createOrder(db, {
       status: "PACKING",

@@ -1,7 +1,12 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { AdminSettings, UpdateSettingsInput, WeightDisplay } from "@woolrus/contracts";
+import {
+  type AdminSettings,
+  PICK_BATCH_MAX_ORDERS_CEILING,
+  type UpdateSettingsInput,
+  type WeightDisplay,
+} from "@woolrus/contracts";
 import { formatWeight } from "@woolrus/core/format";
 import { useLocale, useTranslations } from "next-intl";
 import { useId, useState } from "react";
@@ -40,6 +45,7 @@ type FormState = {
   syncIntervalMinutes: number;
   stationIdleLockMinutes: number;
   claimExpiryMinutes: number;
+  pickBatchMaxOrders: number;
   sla: Record<Stage, number>;
   weightDisplay: WeightDisplay;
   piiRetentionDays: number;
@@ -56,6 +62,7 @@ function toForm(settings: AdminSettings): FormState {
     syncIntervalMinutes: settings.syncIntervalMinutes,
     stationIdleLockMinutes: settings.stationIdleLockMinutes,
     claimExpiryMinutes: settings.claimExpiryMinutes,
+    pickBatchMaxOrders: settings.pickBatchMaxOrders,
     sla: Object.fromEntries(
       stages.map((s) => [s, settings.stageSlaMinutes[s] ?? Number.NaN]),
     ) as Record<Stage, number>,
@@ -80,6 +87,7 @@ function toInput(form: FormState): UpdateSettingsInput {
     syncIntervalMinutes: form.syncIntervalMinutes,
     stationIdleLockMinutes: form.stationIdleLockMinutes,
     claimExpiryMinutes: form.claimExpiryMinutes,
+    pickBatchMaxOrders: form.pickBatchMaxOrders,
     stageSlaMinutes: Object.fromEntries(
       stages.filter((s) => !Number.isNaN(form.sla[s])).map((s) => [s, form.sla[s]]),
     ),
@@ -229,6 +237,17 @@ function GeneralForm({ settings }: { settings: AdminSettings }) {
             formatOptions={{ maximumFractionDigits: 0 }}
             value={form.claimExpiryMinutes}
             onChange={(claimExpiryMinutes) => edit("claimExpiryMinutes", { claimExpiryMinutes })}
+          />
+          <NumberField
+            label={t("settings.pickBatchMaxOrders")}
+            description={t("settings.pickBatchMaxOrdersHint")}
+            name="pickBatchMaxOrders"
+            isRequired
+            minValue={2}
+            maxValue={PICK_BATCH_MAX_ORDERS_CEILING}
+            formatOptions={{ maximumFractionDigits: 0 }}
+            value={form.pickBatchMaxOrders}
+            onChange={(pickBatchMaxOrders) => edit("pickBatchMaxOrders", { pickBatchMaxOrders })}
           />
         </div>
 

@@ -84,7 +84,8 @@ async function refusalFor(
   return null;
 }
 
-async function writeClaim(
+/** Writes a claim on an order already locked in `tx`: version bump, audit and notify. Callers check first. */
+export async function writeClaim(
   tx: DbTx,
   actor: Actor,
   order: LockedOrder,

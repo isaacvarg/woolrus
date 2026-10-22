@@ -19,6 +19,7 @@
     "onHold": "En espera",
     "allOrders": "Todos los pedidos",
     "queues": "Colas",
+    "myPicks": "Mis surtidos",
     "priorityRules": "Reglas de prioridad",
     "sync": "Sincronización",
     "users": "Usuarios",
@@ -74,6 +75,8 @@
     "stationIdleLock": "Bloqueo de estación por inactividad (minutos)",
     "claimExpiry": "Vencimiento de la reserva de pedido (minutos)",
     "claimExpiryHint": "Un pedido reservado queda libre para otros después de este tiempo sin que su titular trabaje en él.",
+    "pickBatchMaxOrders": "Máximo de pedidos por lote de surtido",
+    "pickBatchMaxOrdersHint": "Cuántos pedidos puede tomar un surtidor con Surtir juntos: un carrito. Los lotes ya abiertos conservan sus pedidos.",
     "sla": {
       "title": "SLA por etapa (minutos)",
       "hint": "Marca los pedidos que permanecen más tiempo que esto en una etapa. Déjalo vacío para no tener límite.",
@@ -213,6 +216,13 @@
     "slaBreached": "Superó el tiempo límite de la etapa",
     "externalChange": "Modificado en la tienda después de importarlo",
     "beginPicking": "Comenzar surtido",
+    "select": "Seleccionar",
+    "selectOrder": "Seleccionar #{number}",
+    "pickTogether": "Surtir juntos ({count})",
+    "pickTogetherHint": "Marca de 2 a {max} pedidos para surtirlos juntos.",
+    "pickTogetherTooMany": "Surtir juntos admite como máximo {max} pedidos.",
+    "batchStarted": "Lote {number} iniciado con {count} pedidos.",
+    "batchRefusedOrder": "#{number}: {reason}",
     "begunPicking": "El pedido {number} está ahora en surtido.",
     "loadMore": "Cargar más",
     "noOrders": "No hay pedidos en esta cola."
@@ -309,7 +319,106 @@
         "shippingMethod": "Envío",
         "refunds": "Reembolsado"
       }
+    },
+    "pickedBy": "{name}, {time}",
+    "openPickScreen": "Abrir pantalla de surtido"
+  },
+  "pick": {
+    "title": "Surtir #{number}",
+    "inBatch": "Espacio {slot} del lote {number}",
+    "orderDetails": "Detalles del pedido",
+    "progress": "{done} de {total} líneas surtidas",
+    "progressLabel": "Avance del surtido",
+    "lines": "Artículos por surtir",
+    "nothingToPick": "No hay nada que surtir en este pedido.",
+    "done": "Listo",
+    "doneNext": "Listo, siguiente pedido",
+    "donePack": "Listo, abrir en Empaque",
+    "noneLeft": "No quedan pedidos pendientes por surtir.",
+    "voidedLines": "{count, plural, one {# línea se anuló y no se muestra.} other {# líneas se anularon y no se muestran.}}",
+    "notPicking": "Este pedido está en {status}, así que no se puede surtir aquí.",
+    "unclaimed": "Tu reclamo de este pedido venció. Reclámalo otra vez desde los detalles del pedido para seguir surtiendo.",
+    "claimedByOther": "{name} está surtiendo este pedido. Tómalo desde los detalles del pedido para surtirlo tú.",
+    "partial": "Surtido en parte",
+    "sku": "SKU {sku}",
+    "bin": "Ubicación {bin}",
+    "count": "{picked} de {quantity}",
+    "oneFewer": "Uno menos de {name}",
+    "oneMore": "Uno más de {name}",
+    "scanned": "{name}: {picked} de {quantity}",
+    "scanOk": "Escaneado.",
+    "scanRefused": "Escaneo rechazado.",
+    "linkCode": "Vincular este código a {name}",
+    "linked": "{code} ahora es el código de barras de {name}.",
+    "lineActions": "Más opciones para {name}",
+    "outOfStock": {
+      "action": "Sin existencias",
+      "title": "{name} está agotado",
+      "found": "¿Cuántos encontraste?",
+      "foundHint": "Menos de los {quantity} necesarios. El pedido no puede salir de surtido hasta que esta línea se anule o se sustituya.",
+      "note": "Nota",
+      "submit": "Marcar sin existencias",
+      "done": "{name} marcado sin existencias."
+    },
+    "substitute": {
+      "action": "Sustituido",
+      "title": "Sustituir {name}",
+      "instead": "Qué se puso en su lugar",
+      "insteadHint": "Empaque y control de calidad lo ven en la línea.",
+      "note": "Nota (opcional)",
+      "submit": "Marcar sustituido",
+      "done": "{name} marcado como sustituido."
+    },
+    "quantity": {
+      "action": "Cantidad",
+      "title": "¿Cuántos {name}?",
+      "picked": "Surtidos hasta ahora",
+      "hint": "De los {quantity} necesarios. 0 lo deja sin surtir.",
+      "submit": "Guardar"
     }
+  },
+  "pickBatch": {
+    "title": "Lote {number}",
+    "summary": "Lote de {name}: quedan {live} de {total} pedidos.",
+    "slots": "Espacios",
+    "slot": "Espacio",
+    "state": "Estado",
+    "closed": "Este lote está terminado.",
+    "memberState": {
+      "live": "En surtido",
+      "removed": "Quitado"
+    },
+    "list": "Lista de surtido",
+    "nothingToPick": "No queda nada por surtir en este lote.",
+    "readOnly": "{name} está surtiendo este lote. Puedes verlo, pero solo esa persona puede surtirlo.",
+    "callout": "Espacio {slot} · #{number}",
+    "remaining": "Faltan {remaining} de {quantity}",
+    "chip": "Espacio {slot}, pedido #{number}: {picked} de {quantity}, {status}",
+    "left": {
+      "status": "Salió: {status}",
+      "takenOver": "Salió: lo tomó {name}",
+      "claimExpired": "Salió: venció el reclamo"
+    },
+    "actions": "Acciones",
+    "complete": "Completar",
+    "completeSlot": "Completar el espacio {slot}, pedido #{number}",
+    "remove": "Quitar",
+    "removeSlot": "Quitar del lote el espacio {slot}, pedido #{number}",
+    "completeReady": "Completar pedidos listos ({count})",
+    "finish": "Terminar lote",
+    "results": "Resultados",
+    "moved": "{count, plural, one {# pedido pasó} other {# pedidos pasaron}} a Empaque.",
+    "movedOrders": "Pasaron a Empaque: {numbers}",
+    "notAllMoved": "Algunos pedidos todavía no pueden pasar a Empaque.",
+    "notMoved": "#{number} sigue en Surtido:",
+    "removedOrder": "#{number} salió del lote. Sigue siendo tuyo en Mis surtidos.",
+    "finished": "Lote {number} terminado."
+  },
+  "myPicks": {
+    "title": "Mis surtidos",
+    "empty": "No estás surtiendo nada ahora. Empieza desde la cola:",
+    "openBatch": "Abrir lote",
+    "orders": "Pedidos que estoy surtiendo"
   },
   "orders": {
     "status": "Estado",
@@ -467,6 +576,22 @@
     },
     "settings": {
       "encryptionKeyMissing": "No se pueden guardar secretos: falta la clave de cifrado del servidor o no es válida. Pide a quien administra el servidor que configure SETTINGS_ENCRYPTION_KEY."
+    },
+    "picking": {
+      "notPicking": "Este pedido no está en surtido, así que sus líneas no pueden cambiar.",
+      "claimRequired": "Reclama este pedido para surtirlo.",
+      "lineNotPickable": "No hay nada que surtir en esta línea.",
+      "scanNotOnOrder": "Eso es {name}. No está en este pedido.",
+      "scanUnknown": "Woolrus no conoce ese código.",
+      "scanAlreadyPicked": "{line} ya está surtido.",
+      "batchClosed": "Este lote ya está terminado.",
+      "scanNotInBatch": "Eso es {name}. No está en este lote.",
+      "codeInUse": "Ese código ya pertenece a {name}.",
+      "noProductToLink": "Esta línea no tiene un producto al que vincular el código.",
+      "batchTooLarge": "Un lote admite como máximo {max} pedidos.",
+      "batchOpen": "Ya tienes un lote abierto. Termínalo en Mis surtidos antes de empezar otro.",
+      "batchFailed": "Algunos pedidos no se pudieron tomar, así que no se tomó ninguno.",
+      "notInBatch": "Este pedido ya no está en el lote."
     },
     "workflow": {
       "illegalTransition": "Ese cambio no está permitido desde el estado actual del pedido.",

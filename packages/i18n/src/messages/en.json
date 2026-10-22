@@ -19,6 +19,7 @@
     "onHold": "On Hold",
     "allOrders": "All Orders",
     "queues": "Queues",
+    "myPicks": "My picks",
     "priorityRules": "Priority rules",
     "sync": "Sync",
     "users": "Users",
@@ -74,6 +75,8 @@
     "stationIdleLock": "Station idle lock (minutes)",
     "claimExpiry": "Order claim expiry (minutes)",
     "claimExpiryHint": "A claimed order is freed for others this long after its holder last worked on it.",
+    "pickBatchMaxOrders": "Most orders in a pick batch",
+    "pickBatchMaxOrdersHint": "How many orders a picker can take with Pick together: one cart. Batches already open keep their orders.",
     "sla": {
       "title": "SLA per stage (minutes)",
       "hint": "Flag orders that stay longer than this in a stage. Leave empty for no limit.",
@@ -213,6 +216,13 @@
     "slaBreached": "Past the stage's time limit",
     "externalChange": "Changed in the store after import",
     "beginPicking": "Begin Picking",
+    "select": "Select",
+    "selectOrder": "Select #{number}",
+    "pickTogether": "Pick together ({count})",
+    "pickTogetherHint": "Tick 2 to {max} orders to pick them together.",
+    "pickTogetherTooMany": "Pick together takes {max} orders at most.",
+    "batchStarted": "Batch {number} started with {count} orders.",
+    "batchRefusedOrder": "#{number}: {reason}",
     "begunPicking": "Order {number} is now in Picking.",
     "loadMore": "Load more",
     "noOrders": "No orders in this queue."
@@ -309,7 +319,106 @@
         "shippingMethod": "Shipping",
         "refunds": "Refunded"
       }
+    },
+    "pickedBy": "{name}, {time}",
+    "openPickScreen": "Open pick screen"
+  },
+  "pick": {
+    "title": "Pick #{number}",
+    "inBatch": "Slot {slot} in batch {number}",
+    "orderDetails": "Order details",
+    "progress": "{done} of {total} lines picked",
+    "progressLabel": "Picking progress",
+    "lines": "Items to pick",
+    "nothingToPick": "Nothing on this order needs picking.",
+    "done": "Done",
+    "doneNext": "Done, next order",
+    "donePack": "Done, open in Packing",
+    "noneLeft": "No more Pending orders to pick.",
+    "voidedLines": "{count, plural, one {# line was voided and isn't shown.} other {# lines were voided and aren't shown.}}",
+    "notPicking": "This order is in {status}, so it can't be picked here.",
+    "unclaimed": "Your claim on this order expired. Claim it again from the order details to keep picking.",
+    "claimedByOther": "{name} is picking this order. Take it over from the order details to pick it yourself.",
+    "partial": "Partly picked",
+    "sku": "SKU {sku}",
+    "bin": "Bin {bin}",
+    "count": "{picked} of {quantity}",
+    "oneFewer": "One fewer {name}",
+    "oneMore": "One more {name}",
+    "scanned": "{name}: {picked} of {quantity}",
+    "scanOk": "Scanned.",
+    "scanRefused": "Scan refused.",
+    "linkCode": "Link this code to {name}",
+    "linked": "{code} is now the barcode of {name}.",
+    "lineActions": "More for {name}",
+    "outOfStock": {
+      "action": "Out of Stock",
+      "title": "{name} is out of stock",
+      "found": "How many did you find?",
+      "foundHint": "Fewer than the {quantity} needed. The order can't leave Picking until this line is voided or substituted.",
+      "note": "Note",
+      "submit": "Mark Out of Stock",
+      "done": "{name} marked Out of Stock."
+    },
+    "substitute": {
+      "action": "Substituted",
+      "title": "Substitute {name}",
+      "instead": "What went in instead",
+      "insteadHint": "Packing and QA see this on the line.",
+      "note": "Note (optional)",
+      "submit": "Mark Substituted",
+      "done": "{name} marked Substituted."
+    },
+    "quantity": {
+      "action": "Quantity",
+      "title": "How many {name}?",
+      "picked": "Picked so far",
+      "hint": "Of the {quantity} needed. 0 puts it back to not picked.",
+      "submit": "Save"
     }
+  },
+  "pickBatch": {
+    "title": "Batch {number}",
+    "summary": "{name}'s batch: {live} of {total} orders still in it.",
+    "slots": "Slots",
+    "slot": "Slot",
+    "state": "State",
+    "closed": "This batch is finished.",
+    "memberState": {
+      "live": "Picking",
+      "removed": "Removed"
+    },
+    "list": "Pick list",
+    "nothingToPick": "Nothing left in this batch needs picking.",
+    "readOnly": "{name} is picking this batch. You can look, but only they can pick it.",
+    "callout": "Slot {slot} · #{number}",
+    "remaining": "{remaining} of {quantity} left",
+    "chip": "Slot {slot}, order #{number}: {picked} of {quantity}, {status}",
+    "left": {
+      "status": "Left: {status}",
+      "takenOver": "Left: {name} took it over",
+      "claimExpired": "Left: claim expired"
+    },
+    "actions": "Actions",
+    "complete": "Complete",
+    "completeSlot": "Complete slot {slot}, order #{number}",
+    "remove": "Remove",
+    "removeSlot": "Remove slot {slot}, order #{number} from the batch",
+    "completeReady": "Complete ready orders ({count})",
+    "finish": "Finish batch",
+    "results": "Completion results",
+    "moved": "{count, plural, one {# order} other {# orders}} moved to Packing.",
+    "movedOrders": "Moved to Packing: {numbers}",
+    "notAllMoved": "Some orders couldn't move to Packing yet.",
+    "notMoved": "#{number} stays in Picking:",
+    "removedOrder": "#{number} is out of the batch. It's still yours in My picks.",
+    "finished": "Batch {number} finished."
+  },
+  "myPicks": {
+    "title": "My picks",
+    "empty": "You're not picking anything right now. Start from the queue:",
+    "openBatch": "Open batch",
+    "orders": "Orders I'm picking"
   },
   "orders": {
     "status": "Status",
@@ -467,6 +576,22 @@
     },
     "settings": {
       "encryptionKeyMissing": "Secrets can't be saved: the server's encryption key is missing or invalid. Ask whoever runs the server to set SETTINGS_ENCRYPTION_KEY."
+    },
+    "picking": {
+      "notPicking": "This order isn't being picked, so its lines can't change.",
+      "claimRequired": "Claim this order to pick it.",
+      "lineNotPickable": "Nothing on this line needs picking.",
+      "scanNotOnOrder": "That's {name}. It isn't on this order.",
+      "scanUnknown": "Woolrus doesn't know that code.",
+      "scanAlreadyPicked": "{line} is already picked.",
+      "batchClosed": "This batch is finished.",
+      "scanNotInBatch": "That's {name}. It isn't in this batch.",
+      "codeInUse": "That code already belongs to {name}.",
+      "noProductToLink": "This line has no product to link the code to.",
+      "batchTooLarge": "A batch can hold at most {max} orders.",
+      "batchOpen": "You already have an open batch. Finish it in My picks before starting another.",
+      "batchFailed": "Some orders couldn't be taken, so none were.",
+      "notInBatch": "This order isn't in the batch any more."
     },
     "workflow": {
       "illegalTransition": "That move isn't allowed from the order's current status.",

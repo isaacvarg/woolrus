@@ -44,6 +44,12 @@ describe("seedDemoOrders", () => {
     }).toEqual(before);
   });
 
+  it("gives some products barcodes to scan", async () => {
+    await seedDemoOrders(db);
+
+    expect(await db.product.count({ where: { barcode: { not: null } } })).toBeGreaterThan(2);
+  });
+
   it("puts a non-physical Rush Order line on an Urgent order, at the top of Pending", async () => {
     await seedDemoOrders(db);
 

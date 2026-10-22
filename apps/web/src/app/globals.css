@@ -61,3 +61,8 @@
     border: none;
   }
 }
+
+/* Toasts sit above a page's fixed action bar, so they never cover its buttons (the pick screen's Done). */
+body:has([data-toast-clearance]) .toast-bottom {
+  bottom: 5.5rem;
+}
