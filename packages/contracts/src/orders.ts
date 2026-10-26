@@ -38,6 +38,8 @@ export const OrderDetail = z.object({
   claim: OrderClaim.nullable(),
   completedAt: z.date().nullable(),
   externalChange: z.boolean(),
+  /** Has lines, and every one is voided down to nothing: the order can't leave Picking, Packing or QA. */
+  allVoided: z.boolean(),
   version: z.number().int(),
 });
 export type OrderDetail = z.infer<typeof OrderDetail>;

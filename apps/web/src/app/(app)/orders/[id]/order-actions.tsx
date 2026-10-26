@@ -12,6 +12,7 @@ import { useRouter } from "next/navigation";
 import { useFormatter, useTranslations } from "next-intl";
 import { useState } from "react";
 import { Form } from "react-aria-components";
+import { AllVoidedBanner } from "@/components/exceptions/all-voided-banner";
 import { Dialog, DialogTrigger } from "@/components/ui/dialog";
 import { Button, Radio, RadioGroup, TextField } from "@/components/ui/fields";
 import { toast } from "@/components/ui/toast";
@@ -194,21 +195,28 @@ export function OrderActions({ order, userId }: { order: OrderView; userId: stri
         </p>
       )}
 
-      {unmet && <UnmetList unmet={unmet} />}
+      {order.allVoided && <AllVoidedBanner />}
+      {unmet && !order.allVoided && <UnmetList unmet={unmet} />}
 
       <div className="flex flex-wrap gap-2">
-        {moves.filter(can).map((action) => (
-          <Button
-            key={action}
-            className="btn-primary btn-lg"
-            isPending={pending(action)}
-            onPress={() =>
-              mutation.mutate({ action, call: () => client.orders[action](versioned), done: moved })
-            }
-          >
-            {t(`order.actions.${action}`)}
-          </Button>
-        ))}
+        {moves
+          .filter((action) => can(action) && !(order.allVoided && action.startsWith("complete")))
+          .map((action) => (
+            <Button
+              key={action}
+              className="btn-primary btn-lg"
+              isPending={pending(action)}
+              onPress={() =>
+                mutation.mutate({
+                  action,
+                  call: () => client.orders[action](versioned),
+                  done: moved,
+                })
+              }
+            >
+              {t(`order.actions.${action}`)}
+            </Button>
+          ))}
         {can("hold") && (
           <ReasonDialog
             action="hold"
