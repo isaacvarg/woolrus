@@ -1,5 +1,6 @@
 import { boxes } from "./boxes";
 import { invitations } from "./invitations";
+import { issues } from "./issues";
 import { me } from "./me";
 import { notes } from "./notes";
 import { orders } from "./orders";
@@ -10,10 +11,12 @@ import { settings } from "./settings";
 import { station, stations } from "./stations";
 import { sync } from "./sync";
 import { users } from "./users";
+import { voids } from "./voids";
 
 export * from "./base";
 export * from "./boxes";
 export * from "./invitations";
+export * from "./issues";
 export * from "./me";
 export * from "./notes";
 export * from "./orders";
@@ -24,6 +27,7 @@ export * from "./settings";
 export * from "./stations";
 export * from "./sync";
 export * from "./users";
+export * from "./voids";
 
 /**
  * The whole API surface. Web and (later) Android clients are generated or typed from this;
@@ -44,5 +48,7 @@ export const contract = {
   invitations,
   stations,
   station,
+  voids,
+  issues,
 };
 export type Contract = typeof contract;

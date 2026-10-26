@@ -24,7 +24,12 @@ type Props = {
 };
 
 /** `quantity` adds a "how many picked" item, for screens without a stepper (the batch chips). */
-export function LineMenu({ quantity = false, ...props }: Props & { quantity?: boolean }) {
+export function LineMenu({
+  quantity = false,
+  onVoid,
+  onReport,
+  ...props
+}: Props & { quantity?: boolean; onVoid?: () => void; onReport?: () => void }) {
   const t = useTranslations();
   const [open, setOpen] = useState<"quantity" | "outOfStock" | "substitute" | null>(null);
   const close = () => setOpen(null);
@@ -42,6 +47,8 @@ export function LineMenu({ quantity = false, ...props }: Props & { quantity?: bo
         {/* Out of Stock means fewer than needed were found, so a single unit can still be short. */}
         <MenuItem onAction={() => setOpen("outOfStock")}>{t("pick.outOfStock.action")}</MenuItem>
         <MenuItem onAction={() => setOpen("substitute")}>{t("pick.substitute.action")}</MenuItem>
+        {onVoid && <MenuItem onAction={onVoid}>{t("voids.button")}</MenuItem>}
+        {onReport && <MenuItem onAction={onReport}>{t("issues.button")}</MenuItem>}
       </Menu>
       {open === "quantity" && <QuantityDialog {...props} onClose={close} />}
       {open === "outOfStock" && <OutOfStockDialog {...props} onClose={close} />}

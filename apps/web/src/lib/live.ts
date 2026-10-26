@@ -26,6 +26,10 @@ function invalidateLists(queryClient: QueryClient) {
     orpc.orders.queue.key(),
     orpc.orders.counts.key(),
     orpc.orders.list.key(),
+    // Resolving a void notifies its order; the Voids page and its nav count follow.
+    orpc.voids.key(),
+    // Reporting, editing or resolving an issue notifies its order; the Issues page and nav follow.
+    orpc.issues.key(),
     orpc.sync.status.key(),
     // A batch's slot legend and My picks show the state of every member order.
     orpc.pickBatches.key(),

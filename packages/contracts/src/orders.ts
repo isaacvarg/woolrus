@@ -38,6 +38,8 @@ export const OrderDetail = z.object({
   claim: OrderClaim.nullable(),
   completedAt: z.date().nullable(),
   externalChange: z.boolean(),
+  /** Has lines, and every one is voided down to nothing: the order can't leave Picking, Packing or QA. */
+  allVoided: z.boolean(),
   version: z.number().int(),
 });
 export type OrderDetail = z.infer<typeof OrderDetail>;
@@ -102,6 +104,9 @@ export const QueueInput = z.object({
 });
 export type QueueInput = z.input<typeof QueueInput>;
 
+export const QualityIssueSeverity = z.enum(["MINOR", "MAJOR", "CRITICAL"]);
+export type QualityIssueSeverity = z.infer<typeof QualityIssueSeverity>;
+
 /** One queue row. Sorted by priority, then oldest order first. */
 export const QueueRow = z.object({
   id: Id,
@@ -121,6 +126,11 @@ export const QueueRow = z.object({
   version: z.number().int(),
   /** Notes on the order, any target (FR-NOTE-05). */
   noteCount: z.number().int(),
+  /** Quality issues still open on the order, and the worst severity among them (null when none). */
+  openIssueCount: z.number().int(),
+  topOpenSeverity: QualityIssueSeverity.nullable(),
+  /** Voids that are neither undone nor resolved yet. */
+  unresolvedVoidCount: z.number().int(),
 });
 export type QueueRow = z.infer<typeof QueueRow>;
 
@@ -194,6 +204,85 @@ export const OrderLine = z.object({
 });
 export type OrderLine = z.infer<typeof OrderLine>;
 
+/** Where in the process something happened; stored on voids and quality issues, never typed by the actor. */
+export const FulfillmentStage = z.enum([
+  "INTAKE",
+  "PICKING",
+  "PACKING",
+  "QA",
+  "SHIPPING",
+  "CUSTOMER",
+]);
+export type FulfillmentStage = z.infer<typeof FulfillmentStage>;
+
+export const VoidResolution = z.enum(["HANDLED_MANUALLY", "REFUNDED", "LINE_EDITED"]);
+export type VoidResolution = z.infer<typeof VoidResolution>;
+
+/** A void as the order detail and the voids page show it, with its undone and resolved state. */
+export const ItemVoidView = z.object({
+  id: Id,
+  orderId: Id,
+  orderItemId: Id,
+  lineName: z.string(),
+  sku: z.string().nullable(),
+  quantity: z.number().int(),
+  reason: z.string(),
+  stage: FulfillmentStage,
+  voidedBy: z.object({ name: z.string() }).nullable(),
+  voidedAt: z.date(),
+  undoneAt: z.date().nullable(),
+  undoneBy: z.object({ name: z.string() }).nullable(),
+  resolvedAt: z.date().nullable(),
+  resolution: VoidResolution.nullable(),
+  resolutionNotes: z.string().nullable(),
+  resolvedBy: z.object({ name: z.string() }).nullable(),
+});
+export type ItemVoidView = z.infer<typeof ItemVoidView>;
+
+export const QualityIssueType = z.enum([
+  "WRONG_ITEM",
+  "DAMAGED_ITEM",
+  "MISSING_ITEM",
+  "WRONG_QUANTITY",
+  "PACKAGING_DAMAGE",
+  "LABELING_ERROR",
+  "WRONG_BOX_SIZE",
+  "OTHER",
+]);
+export type QualityIssueType = z.infer<typeof QualityIssueType>;
+
+export const QualityIssueStatus = z.enum(["OPEN", "RESOLVED", "DISMISSED"]);
+export type QualityIssueStatus = z.infer<typeof QualityIssueStatus>;
+
+/** A quality issue as the order detail's Exceptions panel shows it. */
+export const QualityIssueView = z.object({
+  id: Id,
+  orderId: Id,
+  orderItemId: Id.nullable(),
+  /** Name of the line the issue is on, if any. */
+  lineName: z.string().nullable(),
+  packageId: Id.nullable(),
+  packageNumber: z.number().int().nullable(),
+  type: QualityIssueType,
+  severity: QualityIssueSeverity,
+  status: QualityIssueStatus,
+  description: z.string(),
+  discoveredStage: FulfillmentStage,
+  originStage: FulfillmentStage.nullable(),
+  customerReported: z.boolean(),
+  reporterId: Id.nullable(),
+  reporter: z.object({ name: z.string() }).nullable(),
+  /** Inferred from the origin stage, or chosen by a person (`responsibleManual`). */
+  responsible: z.object({ id: Id, name: z.string() }).nullable(),
+  responsibleManual: z.boolean(),
+  resolutionNotes: z.string().nullable(),
+  resolvedAt: z.date().nullable(),
+  createdAt: z.date(),
+  /** Notes (photos, voice memos) on the issue. */
+  noteCount: z.number().int(),
+});
+export type QualityIssueView = z.infer<typeof QualityIssueView>;
+
 export const OrderPackageSummary = z.object({
   id: Id,
   number: z.number().int(),
@@ -262,6 +351,10 @@ export const OrderView = OrderDetail.extend({
   billingAddress: OrderAddress,
   lines: z.array(OrderLine),
   packages: z.array(OrderPackageSummary),
+  /** Every void on the order, newest first, including undone and resolved ones. */
+  voids: z.array(ItemVoidView),
+  /** Every quality issue on the order, open first, then newest. */
+  issues: z.array(QualityIssueView),
   allowedActions: z.array(OrderAction),
 });
 export type OrderView = z.infer<typeof OrderView>;

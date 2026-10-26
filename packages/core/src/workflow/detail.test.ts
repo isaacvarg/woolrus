@@ -44,6 +44,32 @@ describe("toOrderDetails", () => {
   });
 });
 
+describe("allVoided", () => {
+  it("is true only when every line is voided down to nothing, and clears on undo", async () => {
+    const { order, items } = await createOrder(db, {
+      status: "PICKING",
+      lines: [
+        { quantity: 2, voids: [{ quantity: 2 }] },
+        { quantity: 1, voids: [{ quantity: 1 }] },
+      ],
+    });
+    const open = await createOrder(db, { status: "PICKING", lines: [{ quantity: 1 }] });
+    const empty = await createOrder(db, { status: "PICKING", lines: [] });
+
+    const [voided, notVoided, none] = await toOrderDetails(db, [order, open.order, empty.order]);
+    expect(voided?.allVoided).toBe(true);
+    expect(notVoided?.allVoided).toBe(false);
+    expect(none?.allVoided).toBe(false);
+
+    await db.itemVoid.updateMany({
+      where: { orderItemId: items[0]?.id },
+      data: { undoneAt: new Date() },
+    });
+    const [after] = await toOrderDetails(db, [order]);
+    expect(after?.allVoided).toBe(false);
+  });
+});
+
 describe("orderMutations", () => {
   it("takes the API's `id` and returns the order detail", async () => {
     const picker = await createActor(db, ["PICKER"]);

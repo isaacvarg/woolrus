@@ -2,12 +2,21 @@
 
 import { ORPCError } from "@orpc/client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { PickLine, PickLineResult, PickStatus, PickView } from "@woolrus/contracts";
+import type {
+  PickLine,
+  PickLineResult,
+  PickStatus,
+  PickView,
+  VoidedLine,
+} from "@woolrus/contracts";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { type ReactNode, useEffect, useState } from "react";
 import { ToggleButton } from "react-aria-components";
+import { AllVoidedBanner } from "@/components/exceptions/all-voided-banner";
+import { ReportIssueFlow } from "@/components/exceptions/report-issue-flow";
+import { VoidDialog } from "@/components/exceptions/void-dialog";
 import { Button } from "@/components/ui/fields";
 import { toast } from "@/components/ui/toast";
 import { useErrorMessage } from "@/lib/errors";
@@ -62,7 +71,39 @@ function applyResult(view: PickView, result: PickLineResult): PickView {
   return { ...view, lines, done: result.done, total: result.total };
 }
 
-type Viewer = { userId: string | null; canPack: boolean };
+/**
+ * A void's answer on the screen: the line's new active quantity and status, and gone once nothing
+ * of it is left to pick. The refetch after it settles what this can't know (the gate's list).
+ */
+function applyVoided(view: PickView, voided: VoidedLine): PickView {
+  const gone = voided.activeQuantity === 0;
+  const lines = view.lines.flatMap((l) => {
+    if (l.id !== voided.id) return [l];
+    if (gone) return [];
+    const pickedQuantity =
+      voided.pickStatus === "SUBSTITUTED"
+        ? voided.activeQuantity
+        : Math.min(l.pickedQuantity, voided.activeQuantity);
+    return [
+      { ...l, quantity: voided.activeQuantity, pickedQuantity, pickStatus: voided.pickStatus },
+    ];
+  });
+  return {
+    ...view,
+    lines,
+    voidedLines: view.voidedLines + (gone ? 1 : 0),
+    done: lines.filter((l) => isDone(l.pickStatus)).length,
+    total: lines.length,
+  };
+}
+
+type Viewer = {
+  userId: string | null;
+  canPack: boolean;
+  canVoid: boolean;
+  canReport: boolean;
+  canWriteCustomer: boolean;
+};
 
 export function PickScreen({ orderId, ...viewer }: { orderId: string } & Viewer) {
   const t = useTranslations();
@@ -83,7 +124,14 @@ export function PickScreen({ orderId, ...viewer }: { orderId: string } & Viewer)
 /** Where the picker goes once the order is picked (SPEC-picking decision 6). */
 type Then = "queue" | "next" | "pack";
 
-function PickLayout({ view, userId, canPack }: { view: PickView } & Viewer) {
+function PickLayout({
+  view,
+  userId,
+  canPack,
+  canVoid,
+  canReport,
+  canWriteCustomer,
+}: { view: PickView } & Viewer) {
   const t = useTranslations();
   const errorMessage = useErrorMessage();
   const queryClient = useQueryClient();
@@ -174,6 +222,25 @@ function PickLayout({ view, userId, canPack }: { view: PickView } & Viewer) {
   // An unknown code can go on any line still to pick; usually there's one.
   const linkable = view.lines.filter((l) => l.pickStatus === "PENDING");
 
+  const [voidingId, setVoidingId] = useState<string | null>(null);
+  const voiding = view.lines.find((l) => l.id === voidingId);
+  const voidLine = useMutation({
+    scope: { id: writeScope },
+    mutationFn: (input: { orderItemId: string; quantity: number; reason: string }) =>
+      client.voids.void({ orderId: order.id, ...input }),
+    onSuccess: ({ line }, input) => {
+      setUnmet(null);
+      const name = view.lines.find((l) => l.id === input.orderItemId)?.name ?? "";
+      queryClient.setQueryData<PickView>(viewKey, (v) => (v ? applyVoided(v, line) : v));
+      toast.success(t("voids.done", { count: input.quantity, name }));
+    },
+    onError: (error) => toast.error(errorMessage(error)),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: viewKey }),
+  });
+  const [reportingId, setReportingId] = useState<string | null>(null);
+  const outOfStock =
+    canPick && canVoid ? view.lines.filter((l) => l.pickStatus === "OUT_OF_STOCK") : [];
+
   const complete = useMutation({
     mutationFn: (after: Then) =>
       client.picking.complete({ orderId: order.id, expectedVersion: order.version, after }),
@@ -211,6 +278,40 @@ function PickLayout({ view, userId, canPack }: { view: PickView } & Viewer) {
         onLink={(line) => scanned?.linkCode && link.mutate({ line, code: scanned.linkCode })}
       />
 
+      {outOfStock.map((line) => (
+        <div key={line.id} role="status" className="alert alert-warning" data-testid="oos-banner">
+          <span className="grow">{t("pick.outOfStockBanner", { name: line.name })}</span>
+          <Button className="btn-sm" onPress={() => setVoidingId(line.id)}>
+            {t("pick.voidLine", { name: line.name })}
+          </Button>
+        </div>
+      ))}
+      {voiding && (
+        <VoidDialog
+          key={voiding.id}
+          line={{ id: voiding.id, name: voiding.name, activeQuantity: voiding.quantity }}
+          isOpen
+          onOpenChange={(open) => !open && setVoidingId(null)}
+          isPending={voidLine.isPending}
+          onConfirm={(input) => voidLine.mutateAsync({ orderItemId: voiding.id, ...input })}
+        />
+      )}
+
+      {reportingId && (
+        <ReportIssueFlow
+          // Remounts per line so the dialog starts fresh on it.
+          key={reportingId}
+          order={order}
+          canWriteCustomer={canWriteCustomer}
+          targets={view.lines.map((l) => ({
+            orderItemId: l.id,
+            label: t("issues.line", { name: l.name }),
+          }))}
+          initialTarget={{ orderItemId: reportingId }}
+          onClose={() => setReportingId(null)}
+        />
+      )}
+
       {view.customerNote && (
         <div className="alert alert-info">
           <span className="font-semibold">{t("order.customerNote")}:</span>
@@ -234,6 +335,8 @@ function PickLayout({ view, userId, canPack }: { view: PickView } & Viewer) {
                   line={line}
                   disabled={!canPick}
                   scope={writeScope}
+                  onVoid={canVoid ? () => setVoidingId(line.id) : undefined}
+                  onReport={canReport ? () => setReportingId(line.id) : undefined}
                   onResult={(result) => {
                     setUnmet(null);
                     queryClient.setQueryData<PickView>(viewKey, (v) =>
@@ -250,9 +353,10 @@ function PickLayout({ view, userId, canPack }: { view: PickView } & Viewer) {
         <p className="text-sm opacity-70">{t("pick.voidedLines", { count: view.voidedLines })}</p>
       )}
 
-      {unmet && <UnmetList unmet={unmet} />}
+      {view.order.allVoided && <AllVoidedBanner />}
+      {unmet && !view.order.allVoided && <UnmetList unmet={unmet} />}
 
-      {canPick && (
+      {canPick && !view.order.allVoided && (
         <footer
           data-toast-clearance
           className="fixed inset-x-0 bottom-0 z-10 flex justify-end gap-2 border-t border-base-300 bg-base-100 p-4"

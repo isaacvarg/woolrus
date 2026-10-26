@@ -1,14 +1,24 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
-import type { OrderView as Order } from "@woolrus/contracts";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { ItemVoidView, OrderView as Order } from "@woolrus/contracts";
 import Link from "next/link";
 import { useFormatter, useTranslations } from "next-intl";
+import { useState } from "react";
+import { IssueCard } from "@/components/exceptions/issue-card";
+import {
+  ReportIssueDialog,
+  type ReportIssueDialogInput,
+} from "@/components/exceptions/report-issue-dialog";
+import { VoidDialog } from "@/components/exceptions/void-dialog";
+import { VoidRow } from "@/components/exceptions/void-row";
 import type { TargetOption } from "@/components/notes/note-composer";
 import { useTargetName } from "@/components/notes/note-list";
 import { NoteOnTarget, NotesPanel } from "@/components/notes/notes-panel";
+import { Button } from "@/components/ui/fields";
+import { toast } from "@/components/ui/toast";
 import { useErrorMessage } from "@/lib/errors";
-import { orpc } from "@/lib/orpc";
+import { client, orpc } from "@/lib/orpc";
 import { formatAddress } from "./address";
 import { ExternalChangeBanner } from "./external-change-banner";
 import { HistoryPanel } from "./history-panel";
@@ -50,10 +60,14 @@ export function OrderView({
   id,
   userId,
   canWriteCustomer,
+  canVoid,
+  canReport,
 }: {
   id: string;
   userId: string | null;
   canWriteCustomer: boolean;
+  canVoid: boolean;
+  canReport: boolean;
 }) {
   const t = useTranslations();
   const errorMessage = useErrorMessage();
@@ -67,17 +81,29 @@ export function OrderView({
       </p>
     );
   }
-  return <OrderLayout order={order.data} userId={userId} canWriteCustomer={canWriteCustomer} />;
+  return (
+    <OrderLayout
+      order={order.data}
+      userId={userId}
+      canWriteCustomer={canWriteCustomer}
+      canVoid={canVoid}
+      canReport={canReport}
+    />
+  );
 }
 
 function OrderLayout({
   order,
   userId,
   canWriteCustomer,
+  canVoid,
+  canReport,
 }: {
   order: Order;
   userId: string | null;
   canWriteCustomer: boolean;
+  canVoid: boolean;
+  canReport: boolean;
 }) {
   const t = useTranslations();
   const targets = useNoteTargets(order);
@@ -99,8 +125,13 @@ function OrderLayout({
       <OrderActions order={order} userId={userId} />
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
-          <OrderLines order={order} notes={notes} />
+          <OrderLines order={order} notes={notes} canVoid={canVoid} />
           <OrderPackages order={order} notes={notes} />
+          <ExceptionsPanel
+            order={order}
+            canReport={canReport}
+            canWriteCustomer={canWriteCustomer}
+          />
           <NotesPanel
             orderId={order.id}
             canWriteCustomer={canWriteCustomer}
@@ -180,11 +211,69 @@ function OrderHeader({ order }: { order: Order }) {
 
 type NotesProps = { orderId: string; canWriteCustomer: boolean; targets: NoteTargets };
 
-function OrderLines({ order, notes }: { order: Order; notes: NotesProps }) {
+/** Whether a void or an undo can still change this order; the server checks it again. */
+function isVoidable(order: Order): boolean {
+  return (
+    order.status !== "COMPLETED" &&
+    order.status !== "CANCELLED" &&
+    !order.packages.some((p) => p.liveLabel)
+  );
+}
+
+function OrderLines({
+  order,
+  notes,
+  canVoid,
+}: {
+  order: Order;
+  notes: NotesProps;
+  canVoid: boolean;
+}) {
   const t = useTranslations();
   const format = useFormatter();
+  const errorMessage = useErrorMessage();
+  const queryClient = useQueryClient();
+  const [voidingId, setVoidingId] = useState<string | null>(null);
+  const voiding = order.lines.find((l) => l.id === voidingId);
+  const mayVoid = canVoid && isVoidable(order);
+
+  // The pick and pack screens show the same lines, so they refetch too.
+  const refresh = () =>
+    Promise.all(
+      [orpc.orders.key(), orpc.picking.key(), orpc.packing.key()].map((queryKey) =>
+        queryClient.invalidateQueries({ queryKey }),
+      ),
+    );
+  const voidMutation = useMutation({
+    mutationFn: (input: { orderItemId: string; quantity: number; reason: string }) =>
+      client.voids.void({ orderId: order.id, ...input }),
+    onSuccess: (result, input) => {
+      const name = order.lines.find((l) => l.id === input.orderItemId)?.name ?? "";
+      toast.success(t("voids.done", { count: input.quantity, name }));
+      return result;
+    },
+    onError: (error) => toast.error(errorMessage(error)),
+    onSettled: refresh,
+  });
+  const undoMutation = useMutation({
+    mutationFn: (voided: ItemVoidView) => client.voids.undo({ voidId: voided.id }),
+    onSuccess: () => toast.success(t("voids.undone")),
+    onError: (error) => toast.error(errorMessage(error)),
+    onSettled: refresh,
+  });
+
   return (
     <div className="overflow-x-auto rounded-box bg-base-100 shadow-sm">
+      {voiding && (
+        <VoidDialog
+          key={voiding.id}
+          line={voiding}
+          isOpen
+          onOpenChange={(open) => !open && setVoidingId(null)}
+          isPending={voidMutation.isPending}
+          onConfirm={(input) => voidMutation.mutateAsync({ orderItemId: voiding.id, ...input })}
+        />
+      )}
       <table className="table text-base" aria-label={t("order.lines")}>
         <thead>
           <tr>
@@ -217,6 +306,26 @@ function OrderLines({ order, notes }: { order: Order; notes: NotesProps }) {
                   <span className="badge badge-ghost badge-sm">{t("order.notPhysical")}</span>
                 )}
                 {line.substitutionNote && <div className="text-sm">{line.substitutionNote}</div>}
+                {/* An undone void is history, not state: the line is whole again. */}
+                {order.voids
+                  .filter((v) => v.orderItemId === line.id && v.undoneAt === null)
+                  .map((voided) => (
+                    <VoidRow
+                      key={voided.id}
+                      voided={voided}
+                      lineQuantity={line.quantity}
+                      onUndo={mayVoid ? (v) => undoMutation.mutate(v) : undefined}
+                      isPending={undoMutation.isPending && undoMutation.variables?.id === voided.id}
+                    />
+                  ))}
+                {mayVoid && line.activeQuantity > 0 && (
+                  <Button
+                    className="btn-outline btn-error btn-sm mt-1"
+                    onPress={() => setVoidingId(line.id)}
+                  >
+                    {t("voids.button")}
+                  </Button>
+                )}
               </td>
               <td className="hidden md:table-cell">{line.sku}</td>
               <td className="text-end tabular-nums">{line.quantity}</td>
@@ -320,5 +429,77 @@ function OrderPackages({ order, notes }: { order: Order; notes: NotesProps }) {
         ))}
       </ul>
     </div>
+  );
+}
+
+/** The order's quality issues, open first, with the button that reports a new one (FR-QI-01). */
+function ExceptionsPanel({
+  order,
+  canReport,
+  canWriteCustomer,
+}: {
+  order: Order;
+  canReport: boolean;
+  canWriteCustomer: boolean;
+}) {
+  const t = useTranslations();
+  const errorMessage = useErrorMessage();
+  const queryClient = useQueryClient();
+  const [reporting, setReporting] = useState(false);
+  const report = useMutation({
+    mutationFn: (input: ReportIssueDialogInput) =>
+      client.issues.report({ orderId: order.id, ...input }),
+    onSuccess: () => toast.success(t("issues.reported")),
+    onError: (error) => toast.error(errorMessage(error)),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: orpc.orders.key() }),
+  });
+  const targets = [
+    ...order.lines.map((l) => ({
+      orderItemId: l.id,
+      label: t("issues.line", { name: l.name }),
+    })),
+    ...order.packages.map((p) => ({
+      packageId: p.id,
+      label: t("issues.package", { number: p.number }),
+    })),
+  ];
+
+  return (
+    <section aria-labelledby="exceptions-heading" className="space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <h2 id="exceptions-heading" className="text-xl font-bold">
+          {t("issues.panel")}
+        </h2>
+        {canReport && order.status !== "CANCELLED" && (
+          <Button className="btn-outline btn-warning" onPress={() => setReporting(true)}>
+            {t("issues.button")}
+          </Button>
+        )}
+      </div>
+      {reporting && (
+        <ReportIssueDialog
+          orderId={order.id}
+          status={order.status}
+          heldFromStatus={order.heldFromStatus}
+          canWriteCustomer={canWriteCustomer}
+          targets={targets}
+          isOpen
+          onOpenChange={(open) => !open && setReporting(false)}
+          isPending={report.isPending}
+          onReport={report.mutateAsync}
+        />
+      )}
+      {order.issues.length === 0 ? (
+        <p className="text-sm opacity-70">{t("issues.none")}</p>
+      ) : (
+        <ul className="space-y-2">
+          {order.issues.map((issue) => (
+            <li key={issue.id}>
+              <IssueCard issue={issue} />
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }

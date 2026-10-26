@@ -11,6 +11,7 @@ import type { Db, DbTx, Order } from "@woolrus/db";
 import type { Actor } from "../permissions";
 import { applyExternalChange, dismissExternalChange } from "../sync/review";
 import { claim, claimExpiryMinutes, claimMany, isClaimLive, release, takeOver } from "./claims";
+import { isAllVoided } from "./gates";
 import { displayName, nameFields } from "./people";
 import {
   beginPicking,
@@ -23,11 +24,16 @@ import {
   resume,
 } from "./service";
 
-/** Orders as the API returns them. The claim shows only while it's live, with the holder's name. */
+type VoidableLine = { quantity: number; voidedQuantity: number };
+
+/**
+ * Orders as the API returns them. The claim shows only while it's live, with the holder's name.
+ * `lines` is for a caller that has the single order's lines already, so they aren't read twice.
+ */
 export async function toOrderDetails(
   db: DbTx,
   orders: readonly Order[],
-  { now = new Date() }: { now?: Date } = {},
+  { now = new Date(), lines: known }: { now?: Date; lines?: readonly VoidableLine[] } = {},
 ): Promise<OrderDetail[]> {
   const expiry = await claimExpiryMinutes(db);
   const holderIds = orders.flatMap((o) =>
@@ -41,6 +47,29 @@ export async function toOrderDetails(
       })
     ).map((u) => [u.id, displayName(u)]),
   );
+
+  const linesByOrder = new Map<string, VoidableLine[]>();
+  const [only] = orders;
+  if (known && orders.length === 1 && only) {
+    linesByOrder.set(only.id, [...known]);
+  } else {
+    const items = await db.orderItem.findMany({
+      where: { orderId: { in: orders.map((o) => o.id) } },
+      select: {
+        orderId: true,
+        quantity: true,
+        voids: { where: { undoneAt: null }, select: { quantity: true } },
+      },
+    });
+    for (const it of items) {
+      const lines = linesByOrder.get(it.orderId) ?? [];
+      lines.push({
+        quantity: it.quantity,
+        voidedQuantity: it.voids.reduce((sum, v) => sum + v.quantity, 0),
+      });
+      linesByOrder.set(it.orderId, lines);
+    }
+  }
 
   return orders.map((o) => {
     const holder = o.claimedById ? holders.get(o.claimedById) : undefined;
@@ -61,6 +90,7 @@ export async function toOrderDetails(
           : null,
       completedAt: o.completedAt,
       externalChange: o.externalChangeDetectedAt !== null,
+      allVoided: isAllVoided(linesByOrder.get(o.id) ?? []),
       version: o.version,
     };
   });

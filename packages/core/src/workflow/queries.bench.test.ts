@@ -63,6 +63,16 @@ beforeAll(async () => {
       CASE WHEN i.woo_line_item_id % 3 = 0 THEN now() END
     FROM order_items i WHERE i.woo_line_item_id % 37 = 0`;
 
+  // Every 20th order has an open issue, some of them a second, closed one.
+  await db.$executeRaw`
+    INSERT INTO quality_issues (id, order_id, type, severity, status, description, discovered_stage,
+      updated_at)
+    SELECT gen_random_uuid(), o.id, 'OTHER', s.severity::quality_issue_severity,
+      s.status::quality_issue_status, 'bench', 'PICKING', now()
+    FROM orders o
+    CROSS JOIN LATERAL (VALUES ('MINOR', 'OPEN'), ('CRITICAL', 'RESOLVED')) s(severity, status)
+    WHERE o.woo_order_id % 20 = 0`;
+
   await db.$executeRawUnsafe("ANALYZE");
 }, 60_000);
 

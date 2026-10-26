@@ -2,6 +2,8 @@ import type { Db } from "@woolrus/db";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { createActor, resetDb, testDb } from "../../test/db";
 import { createOrder } from "../../test/factories";
+import { reportIssue } from "../exceptions/issues";
+import { undoVoid, voidItem } from "../exceptions/voids";
 import { systemActor, type UserActor } from "../permissions";
 import { claim, takeOver } from "./claims";
 import { getOrder, getOrderHistory, listOrders, listQueue, queueCounts } from "./queries";
@@ -187,6 +189,53 @@ describe("listQueue", () => {
       version: 4,
     });
   });
+
+  it("counts open issues, their top severity and unresolved voids per row", async () => {
+    const { order, items } = await createOrder(db, {
+      number: "3001",
+      lines: [{ name: "Wool", quantity: 3 }],
+    });
+    await createOrder(db, { number: "3002" });
+    const base = { orderId: order.id, description: "Bent" };
+    await reportIssue(db, picker, { ...base, type: "OTHER", severity: "MINOR" });
+    const major = await reportIssue(db, picker, { ...base, type: "OTHER", severity: "MAJOR" });
+    const closed = await reportIssue(db, picker, { ...base, type: "OTHER", severity: "CRITICAL" });
+    await db.qualityIssue.update({ where: { id: closed.id }, data: { status: "DISMISSED" } });
+    const orderItemId = items[0]?.id as string;
+    await voidItem(db, picker, { orderId: order.id, orderItemId, quantity: 1, reason: "Gone" });
+    const undone = await voidItem(db, picker, {
+      orderId: order.id,
+      orderItemId,
+      quantity: 1,
+      reason: "Oops",
+    });
+    await undoVoid(db, picker, { voidId: undone.void.id });
+
+    const page = await listQueue(db, picker, { stage: "PENDING" });
+    const row = (n: string) => page.rows.find((r) => r.number === n);
+
+    expect(row("3001")).toMatchObject({
+      openIssueCount: 2,
+      topOpenSeverity: "MAJOR",
+      unresolvedVoidCount: 1,
+    });
+    expect(row("3002")).toMatchObject({
+      openIssueCount: 0,
+      topOpenSeverity: null,
+      unresolvedVoidCount: 0,
+    });
+    await db.qualityIssue.update({ where: { id: major.id }, data: { status: "RESOLVED" } });
+    await db.itemVoid.updateMany({
+      where: { orderId: order.id },
+      data: { resolvedAt: new Date() },
+    });
+    const after = await listQueue(db, picker, { stage: "PENDING" });
+    expect(after.rows.find((r) => r.number === "3001")).toMatchObject({
+      openIssueCount: 1,
+      topOpenSeverity: "MINOR",
+      unresolvedVoidCount: 0,
+    });
+  });
 });
 
 describe("queueCounts", () => {
@@ -243,6 +292,41 @@ describe("getOrder", () => {
       ["Wool", { name: "Test User" }, pickedAt],
       ["Clay", null, null],
     ]);
+  });
+
+  it("lists every void on the order, newest first, with its undone state", async () => {
+    const { order, items } = await createOrder(db, {
+      status: "PICKING",
+      lines: [{ name: "Wool", quantity: 3 }],
+    });
+    const orderItemId = items[0]?.id as string;
+    const first = await voidItem(db, picker, {
+      orderId: order.id,
+      orderItemId,
+      quantity: 1,
+      reason: "Damaged",
+    });
+    await voidItem(db, picker, {
+      orderId: order.id,
+      orderItemId,
+      quantity: 1,
+      reason: "Out of stock",
+    });
+    await undoVoid(db, picker, { voidId: first.void.id });
+
+    const view = await getOrder(db, picker, { id: order.id });
+
+    expect(view.lines[0]?.activeQuantity).toBe(2);
+    expect(view.voids.map((v) => [v.reason, v.stage, v.undoneAt !== null])).toEqual([
+      ["Out of stock", "PICKING", false],
+      ["Damaged", "PICKING", true],
+    ]);
+    expect(view.voids[0]).toMatchObject({
+      lineName: "Wool",
+      quantity: 1,
+      voidedBy: { name: "Test User" },
+      resolvedAt: null,
+    });
   });
 
   it("returns the header, addresses, lines with active quantity and packages", async () => {

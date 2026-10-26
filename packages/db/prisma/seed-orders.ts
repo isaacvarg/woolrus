@@ -1,4 +1,13 @@
-import type { Db, DbTx, PickStatus, Prisma, WorkflowStatus } from "../src/index";
+import type {
+  Db,
+  DbTx,
+  PickStatus,
+  Prisma,
+  QualityIssueSeverity,
+  QualityIssueStatus,
+  QualityIssueType,
+  WorkflowStatus,
+} from "../src/index";
 
 // Demo orders for the dev stack (SPEC-workflow "Dev data"), so queues and order pages can be used
 // before store-sync exists. Never run in production: seed.ts skips this when NODE_ENV=production.
@@ -90,6 +99,22 @@ type DemoOrder = {
   reason?: string;
   /** Void this many units of the first line. */
   voidFirst?: number;
+  /** Voids on lines by index (exceptions dev data); `resolved` marks one as handled. */
+  voids?: { line: number; quantity: number; resolved?: boolean }[];
+  /** Quality issues (exceptions dev data). */
+  issues?: DemoIssue[];
+};
+
+type DemoIssue = {
+  type: QualityIssueType;
+  severity: QualityIssueSeverity;
+  description: string;
+  stage: "PICKING" | "PACKING" | "QA" | "SHIPPING" | "CUSTOMER";
+  status?: QualityIssueStatus;
+  customerReported?: boolean;
+  /** An internal note on the issue. */
+  note?: string;
+  resolution?: string;
 };
 
 // biome-ignore format: one order per line reads as a table
@@ -133,6 +158,12 @@ const orders: DemoOrder[] = [
   { customer: "Beatriz Molina", status: "ON_HOLD", lines: [["WOOL-MER-RED", 2]], progress: "none", ageHours: 28, inStageMinutes: 200, from: "PENDING", reason: "Customer asked to change the shipping address" },
   { customer: "César Rojas", status: "ON_HOLD", lines: [["WOOL-ALP-CRM", 1], ["KIT-BEANIE", 1]], progress: "picked", ageHours: 34, inStageMinutes: 400, from: "PACKING", reason: "Beanie kit box damaged, waiting for a replacement" },
   { customer: "Daniela Vargas", status: "CANCELLED", lines: [["NDL-CIRC-5", 3]], progress: "none", ageHours: 40, inStageMinutes: 1000, from: "PENDING", reason: "Duplicate order" },
+  // Exceptions dev data: voids and issues (SPEC-exceptions "Dev data"). Paula Gil's order above is the
+  // partial void (1 of 3, unresolved).
+  { customer: "Fabiola Reyes", status: "PACKING", lines: [["WOOL-MER-RED", 2], ["NDL-CIRC-5", 1]], progress: "picked", ageHours: 16, inStageMinutes: 55, issues: [{ type: "DAMAGED_ITEM", severity: "CRITICAL", description: "Needles snapped in the bin", stage: "PACKING", note: "Photo taken, rest of the bin needs a check" }] },
+  { customer: "Gonzalo Pardo", status: "PACKING", lines: [["WOOL-ALP-CRM", 2]], progress: "picked", ageHours: 21, inStageMinutes: 80, voids: [{ line: 0, quantity: 2 }] },
+  { customer: "Hilda Cano", status: "COMPLETED", lines: [["KIT-BEANIE", 3]], progress: "labeled", ageHours: 120, inStageMinutes: 96 * 60, voids: [{ line: 0, quantity: 1, resolved: true }], issues: [{ type: "WRONG_ITEM", severity: "MAJOR", description: "Customer received a Navy beanie kit", stage: "CUSTOMER", customerReported: true }] },
+  { customer: "Ignacio Lara", status: "COMPLETED", lines: [["BOOK-WINTER", 1]], progress: "labeled", ageHours: 130, inStageMinutes: 100 * 60, issues: [{ type: "LABELING_ERROR", severity: "MINOR", description: "Label printed upside down", stage: "SHIPPING", status: "RESOLVED", resolution: "Reprinted and re-taped" }] },
 ];
 
 const flow: WorkflowStatus[] = ["PENDING", "PICKING", "PACKING", "QA", "READY", "COMPLETED"];
@@ -260,7 +291,9 @@ async function createDemoOrder(
   for (const [lineIndex, [sku, quantity]] of spec.lines.entries()) {
     const product = catalog.get(sku);
     if (!product) throw new Error(`Demo order uses unknown SKU ${sku}`);
-    const voided = lineIndex === 0 ? (spec.voidFirst ?? 0) : 0;
+    const voided =
+      (lineIndex === 0 ? (spec.voidFirst ?? 0) : 0) +
+      (spec.voids ?? []).filter((v) => v.line === lineIndex).reduce((n, v) => n + v.quantity, 0);
     const active = quantity - voided;
     const pickStatus: PickStatus = picked && product.physical ? "PICKED" : "PENDING";
     const item = await tx.orderItem.create({
@@ -289,7 +322,49 @@ async function createDemoOrder(
         },
       });
     }
+    for (const v of spec.voids?.filter((x) => x.line === lineIndex) ?? []) {
+      await tx.itemVoid.create({
+        data: {
+          orderId: order.id,
+          orderItemId: item.id,
+          quantity: v.quantity,
+          reason: "Out of stock",
+          stage: "PICKING",
+          voidedAt: enteredAt,
+          ...(v.resolved
+            ? {
+                resolution: "REFUNDED" as const,
+                resolutionNotes: "Refunded in WooCommerce",
+                resolvedAt: now,
+              }
+            : {}),
+        },
+      });
+    }
     if (product.physical) physicalLines.push({ id: item.id, active });
+  }
+
+  for (const issue of spec.issues ?? []) {
+    const resolved = (issue.status ?? "OPEN") !== "OPEN";
+    const row = await tx.qualityIssue.create({
+      data: {
+        orderId: order.id,
+        type: issue.type,
+        severity: issue.severity,
+        description: issue.description,
+        discoveredStage: issue.stage,
+        customerReported: issue.customerReported ?? false,
+        status: issue.status ?? "OPEN",
+        resolutionNotes: resolved ? (issue.resolution ?? null) : null,
+        resolvedAt: resolved ? now : null,
+        createdAt: enteredAt,
+      },
+    });
+    if (issue.note) {
+      await tx.note.create({
+        data: { orderId: order.id, qualityIssueId: row.id, content: issue.note },
+      });
+    }
   }
 
   if (spec.progress === "packed" || spec.progress === "verified" || spec.progress === "labeled") {

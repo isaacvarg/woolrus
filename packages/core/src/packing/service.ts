@@ -103,7 +103,7 @@ async function lockPackage(tx: DbTx, actor: Actor, packageId: string, now: Date)
  * verified the old contents, so a contents change clears it; a box change doesn't. Labels are
  * never touched.
  */
-async function invalidate(tx: DbTx, packageId: string, contentsChanged: boolean) {
+export async function invalidate(tx: DbTx, packageId: string, contentsChanged: boolean) {
   await tx.shippingRate.deleteMany({ where: { packageId } });
   await tx.package.updateMany({
     where: { id: packageId, weightOz: { not: null } },

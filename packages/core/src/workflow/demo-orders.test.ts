@@ -144,4 +144,29 @@ describe("seedDemoOrders", () => {
     const line = view.lines.find((l) => l.id === voided.orderItemId);
     expect(line && line.quantity - line.activeQuantity).toBe(voided.quantity);
   });
+
+  it("seeds the exceptions dev data: voids and issues in each state", async () => {
+    await seedDemoOrders(db);
+
+    const voids = await db.itemVoid.findMany({ include: { orderItem: true } });
+    // A partial void (1 of 3), a fully voided order, and a resolved void.
+    expect(voids.some((v) => !v.resolvedAt && v.quantity === 1 && v.orderItem.quantity === 3)).toBe(
+      true,
+    );
+    expect(voids.some((v) => v.resolvedAt && v.resolution)).toBe(true);
+    const fully = await db.order.findFirstOrThrow({ where: { customerName: "Gonzalo Pardo" } });
+    expect(await getOrder(db, admin, { id: fully.id })).toMatchObject({ allVoided: true });
+
+    const critical = await db.qualityIssue.findFirstOrThrow({
+      where: { severity: "CRITICAL", status: "OPEN" },
+      include: { notes: true },
+    });
+    expect(critical.notes).toHaveLength(1);
+    const customer = await db.qualityIssue.findFirstOrThrow({
+      where: { customerReported: true },
+      include: { order: true },
+    });
+    expect(customer.order.status).toBe("COMPLETED");
+    expect(await db.qualityIssue.count({ where: { status: "RESOLVED" } })).toBeGreaterThan(0);
+  });
 });

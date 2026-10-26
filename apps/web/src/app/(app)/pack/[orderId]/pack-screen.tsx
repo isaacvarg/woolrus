@@ -14,6 +14,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { useState } from "react";
+import { AllVoidedBanner } from "@/components/exceptions/all-voided-banner";
+import { ReportIssueFlow } from "@/components/exceptions/report-issue-flow";
+import { VoidDialog } from "@/components/exceptions/void-dialog";
 import { Dialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/fields";
 import { Menu, MenuItem } from "@/components/ui/menu";
@@ -63,7 +66,19 @@ function applyMove(view: PackView, { pkg, line, delta }: Move): PackView {
 
 const applyResult = (view: PackView, result: PackResult): PackView => ({ ...view, ...result });
 
-export function PackScreen({ orderId, userId }: { orderId: string; userId: string | null }) {
+export function PackScreen({
+  orderId,
+  userId,
+  canVoid,
+  canReport,
+  canWriteCustomer,
+}: {
+  orderId: string;
+  userId: string | null;
+  canVoid: boolean;
+  canReport: boolean;
+  canWriteCustomer: boolean;
+}) {
   const t = useTranslations();
   const errorMessage = useErrorMessage();
   const view = useQuery(orpc.packing.view.queryOptions({ input: { orderId } }));
@@ -76,7 +91,15 @@ export function PackScreen({ orderId, userId }: { orderId: string; userId: strin
       </p>
     );
   }
-  return <PackLayout view={view.data} userId={userId} />;
+  return (
+    <PackLayout
+      view={view.data}
+      userId={userId}
+      canVoid={canVoid}
+      canReport={canReport}
+      canWriteCustomer={canWriteCustomer}
+    />
+  );
 }
 
 type Dialogs =
@@ -88,7 +111,19 @@ type Dialogs =
 
 type Weigh = { pkg: PackPackage; weightOz: number; overrideReason?: string };
 
-function PackLayout({ view, userId }: { view: PackView; userId: string | null }) {
+function PackLayout({
+  view,
+  userId,
+  canVoid,
+  canReport,
+  canWriteCustomer,
+}: {
+  view: PackView;
+  userId: string | null;
+  canVoid: boolean;
+  canReport: boolean;
+  canWriteCustomer: boolean;
+}) {
   const t = useTranslations();
   const errorMessage = useErrorMessage();
   const queryClient = useQueryClient();
@@ -104,6 +139,31 @@ function PackLayout({ view, userId }: { view: PackView; userId: string | null })
   const selected =
     view.packages.find((p) => p.id === selectedId) ?? view.packages[view.packages.length - 1];
   const [dialog, setDialog] = useState<Dialogs | null>(null);
+  const [voidingId, setVoidingId] = useState<string | null>(null);
+  const voiding = view.lines.find((l) => l.id === voidingId);
+  const [reporting, setReporting] = useState<{ orderItemId?: string; packageId?: string } | null>(
+    null,
+  );
+  // Like voids, any stage and no claim; the server refuses a finished or cancelled order.
+  const mayReport = canReport && order.status !== "COMPLETED" && order.status !== "CANCELLED";
+  // Any stage can void and it needs no claim; the server also refuses an order with a live label.
+  const mayVoid = canVoid && order.status !== "COMPLETED" && order.status !== "CANCELLED";
+  const voidMutation = useMutation({
+    mutationFn: (input: { orderItemId: string; quantity: number; reason: string }) =>
+      client.voids.void({ orderId: order.id, ...input }),
+    onSuccess: (_result, input) => {
+      const name = view.lines.find((l) => l.id === input.orderItemId)?.name ?? "";
+      toast.success(t("voids.done", { count: input.quantity, name }));
+    },
+    onError: (error) => toast.error(errorMessage(error)),
+    // The void also changed the boxes, so the whole view is read again.
+    onSettled: () =>
+      Promise.all(
+        [orpc.packing.key(), orpc.orders.key()].map((queryKey) =>
+          queryClient.invalidateQueries({ queryKey }),
+        ),
+      ),
+  });
 
   const accept = async (result: PackResult) => {
     // A refetch started before this write committed can land after it and undo the card, so it is
@@ -279,6 +339,35 @@ function PackLayout({ view, userId }: { view: PackView; userId: string | null })
 
   return (
     <section className="mx-auto max-w-6xl space-y-4 pb-28">
+      {voiding && (
+        <VoidDialog
+          key={voiding.id}
+          line={{ id: voiding.id, name: voiding.name, activeQuantity: voiding.quantity }}
+          isOpen
+          onOpenChange={(open) => !open && setVoidingId(null)}
+          isPending={voidMutation.isPending}
+          onConfirm={(input) => voidMutation.mutateAsync({ orderItemId: voiding.id, ...input })}
+        />
+      )}
+      {reporting && (
+        <ReportIssueFlow
+          key={reporting.orderItemId ?? reporting.packageId}
+          order={order}
+          canWriteCustomer={canWriteCustomer}
+          targets={[
+            ...view.lines.map((l) => ({
+              orderItemId: l.id,
+              label: t("issues.line", { name: l.name }),
+            })),
+            ...view.packages.map((p) => ({
+              packageId: p.id,
+              label: t("issues.package", { number: p.number }),
+            })),
+          ]}
+          initialTarget={reporting}
+          onClose={() => setReporting(null)}
+        />
+      )}
       <PackHeader view={view} />
       <PackBanner view={view} userId={userId} />
       {canPack && <ScanBanner outcome={scanned} linkTo={[]} linking={false} onLink={() => {}} />}
@@ -311,6 +400,8 @@ function PackLayout({ view, userId }: { view: PackView; userId: string | null })
                     line={line}
                     disabled={!canPack || !selected}
                     onPut={(count) => putIn(line, count)}
+                    onVoid={mayVoid && line.quantity > 0 ? () => setVoidingId(line.id) : undefined}
+                    onReport={mayReport ? () => setReporting({ orderItemId: line.id }) : undefined}
                   />
                 ))}
               </ul>
@@ -344,6 +435,7 @@ function PackLayout({ view, userId }: { view: PackView; userId: string | null })
                   putAllDisabled={unassignedUnits === 0}
                   onDelete={() => setDialog({ kind: "delete", pkg })}
                   onAddNote={() => setDialog({ kind: "note", pkg })}
+                  onReport={mayReport ? () => setReporting({ packageId: pkg.id }) : undefined}
                   weightDisplay={weightDisplay}
                   weighing={weigh.isPending && weigh.variables?.pkg.id === pkg.id}
                   onWeigh={(weightOz, overrideReason) =>
@@ -367,7 +459,8 @@ function PackLayout({ view, userId }: { view: PackView; userId: string | null })
           <p className="text-sm" data-testid="pack-unweighed">
             {t("pack.noWeight", { count: unweighed })}
           </p>
-          {view.unmet.length > 0 && (
+          {view.order.allVoided && <AllVoidedBanner />}
+          {view.unmet.length > 0 && !view.order.allVoided && (
             <ul className="list-disc ps-6 text-sm" data-testid="pack-unmet">
               {view.unmet.map((condition) => (
                 <li key={`${condition.messageKey}:${JSON.stringify(condition.params)}`}>
@@ -378,7 +471,7 @@ function PackLayout({ view, userId }: { view: PackView; userId: string | null })
               ))}
             </ul>
           )}
-          {view.unmet.length === 0 && (
+          {view.unmet.length === 0 && !view.order.allVoided && (
             <div className="flex justify-end gap-2 pt-1">
               <Button
                 className="btn-outline btn-lg"
@@ -531,10 +624,14 @@ function ItemCard({
   line,
   disabled,
   onPut,
+  onVoid,
+  onReport,
 }: {
   line: PackLine;
   disabled: boolean;
   onPut: (count: number) => void;
+  onVoid?: () => void;
+  onReport?: () => void;
 }) {
   const t = useTranslations();
   const [count, setCount] = useState(1);
@@ -590,6 +687,20 @@ function ItemCard({
           {t("pack.left", { count: line.unassigned })}
         </span>
       </Button>
+      {(onVoid || onReport) && (
+        <div className="flex justify-end gap-2 border-t border-base-300 p-2">
+          {onReport && (
+            <Button className="btn-outline btn-warning btn-sm" onPress={onReport}>
+              {t("issues.button")}
+            </Button>
+          )}
+          {onVoid && (
+            <Button className="btn-outline btn-error btn-sm" onPress={onVoid}>
+              {t("voids.button")}
+            </Button>
+          )}
+        </div>
+      )}
       {line.unassigned > 1 && !disabled && (
         <div className="flex items-center justify-end gap-2 border-t border-base-300 p-2">
           <Button
@@ -630,10 +741,12 @@ function PackageCard({
   putAllDisabled,
   onDelete,
   onAddNote,
+  onReport,
   weightDisplay,
   weighing,
   onWeigh,
 }: {
+  onReport?: () => void;
   weightDisplay: WeightDisplay;
   weighing: boolean;
   onWeigh: (weightOz: number, overrideReason?: string) => void;
@@ -777,6 +890,13 @@ function PackageCard({
             );
           })}
         </ul>
+      )}
+      {onReport && (
+        <div className="flex justify-end border-t border-base-300 p-2">
+          <Button className="btn-outline btn-warning btn-sm" onPress={onReport}>
+            {t("issues.packageButton")}
+          </Button>
+        </div>
       )}
     </li>
   );
