@@ -3,7 +3,7 @@
 **Milestone:** M3 · **Depends on:** `workflow` (locks, gates, priority recompute, live updates), `notes` (evidence on
 issues), `picking` (`reconcilePick`), `packing` (unpacking a voided unit) · **Used by:** `qa` (reads open critical
 issues; embeds the report and void dialogs), `shipping` (links a label to an issue when a repack follows),
-`returns` (RMAs hang off an issue), `reporting` (void and issue data, FR-QI-07) · **State:** spec approved ·
+`returns` (RMAs hang off an issue), `reporting` (void and issue data, FR-QI-07) · **State:** planned ·
 **Issue:** [#25](https://github.com/isaacvarg/woolrus/issues/25)
 
 Project-wide commands, structure, code style, testing levels and boundaries are in [`../../SPEC.md`](../../SPEC.md);
