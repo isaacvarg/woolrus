@@ -8,6 +8,7 @@ import {
   getPackView,
   packRemaining,
   packUnits,
+  scanIntoPackage,
   setPackageBox,
   setWeight,
   unpackUnits,
@@ -779,5 +780,116 @@ describe("setWeight", () => {
     expect((await getPackView(db, packer, { orderId: (await stored(pkg)).orderId })).unmet).toEqual(
       [],
     );
+  });
+});
+
+describe("scanIntoPackage", () => {
+  async function scanning(lines: LineSpec[] = [{ sku: "AAA-1", quantity: 2 }]) {
+    const built = await packing(lines);
+    const box = await makeBox();
+    const { packages } = await addPackage(db, built.packer, {
+      orderId: built.order.id,
+      box: { boxId: box.id },
+      idempotencyKey: key(),
+    });
+    return { ...built, box, pkg: id(packages[0]) };
+  }
+  const scan = (
+    actor: Parameters<typeof scanIntoPackage>[1],
+    packageId: string,
+    code: string,
+    scanId = key(),
+  ) => scanIntoPackage(db, actor, { packageId, code, scanId });
+  const packedCount = () => db.packageItem.aggregate({ _sum: { quantity: true } });
+
+  it("packs one unit of the matching line, ignoring case and spaces", async () => {
+    const { packer, pkg, items } = await scanning();
+
+    const result = await scan(packer, pkg, " aaa-1 ");
+
+    expect(result.lines[0]).toMatchObject({ id: id(items[0]), unassigned: 1 });
+    expect(result.packages[0]?.items).toEqual([
+      expect.objectContaining({ orderItemId: id(items[0]), quantity: 1 }),
+    ]);
+    expect(await db.auditEvent.count({ where: { action: "package.scan" } })).toBe(1);
+  });
+
+  it("goes to the first line in pick order that still has unassigned units", async () => {
+    const { packer, pkg, items } = await scanning([
+      { sku: "DUP-1", quantity: 1, bin: "B1" },
+      { sku: "DUP-1", quantity: 1, bin: "A1" },
+    ]);
+
+    const first = await scan(packer, pkg, "DUP-1");
+    expect(first.packages[0]?.items.map((i) => i.orderItemId)).toEqual([id(items[1])]);
+    const second = await scan(packer, pkg, "DUP-1");
+    expect(second.lines).toEqual([
+      expect.objectContaining({ unassigned: 0 }),
+      expect.objectContaining({ unassigned: 0 }),
+    ]);
+    expect(second.packages[0]?.units).toBe(2);
+  });
+
+  it("packs nothing on a replayed scanId", async () => {
+    const { packer, pkg } = await scanning();
+    const scanId = key();
+
+    await scan(packer, pkg, "AAA-1", scanId);
+    const replay = await scan(packer, pkg, "AAA-1", scanId);
+
+    expect(replay.packages[0]?.units).toBe(1);
+    expect((await packedCount())._sum.quantity).toBe(1);
+    expect(await db.auditEvent.count({ where: { action: "package.scan" } })).toBe(1);
+  });
+
+  it("refuses a code from another product, naming it, and an unknown code", async () => {
+    const { packer, pkg } = await scanning();
+    await createOrder(db, { lines: [{ name: "Elsewhere Soap", sku: "ELSE-1" }] });
+
+    await expect(scan(packer, pkg, "ELSE-1")).rejects.toMatchObject({
+      messageKey: "errors.picking.scanNotOnOrder",
+      params: { name: "Elsewhere Soap" },
+    });
+    await expect(scan(packer, pkg, "NOPE")).rejects.toMatchObject({
+      messageKey: "errors.picking.scanUnknown",
+    });
+    expect((await packedCount())._sum.quantity).toBeNull();
+    expect(await db.auditEvent.count({ where: { action: "package.scan" } })).toBe(0);
+  });
+
+  it("refuses a line whose units are all boxed, changing nothing", async () => {
+    const { packer, pkg } = await scanning([{ sku: "AAA-1", quantity: 1 }]);
+    await scan(packer, pkg, "AAA-1");
+
+    await expect(scan(packer, pkg, "AAA-1")).rejects.toMatchObject({
+      messageKey: "errors.packing.scanAlreadyPacked",
+    });
+    expect((await packedCount())._sum.quantity).toBe(1);
+  });
+
+  it("flags a weighed package to re-weigh and clears QA verification", async () => {
+    const { packer, pkg } = await scanning();
+    await scan(packer, pkg, "AAA-1");
+    await setWeight(db, packer, { packageId: pkg, weightOz: 20 });
+
+    const result = await scan(packer, pkg, "AAA-1");
+
+    expect(result.packages[0]?.weightStale).toBe(true);
+  });
+
+  it("is refused for a Picker, without the claim, and when the order isn't Packing", async () => {
+    const { packer, order, pkg } = await scanning();
+    const picker = await createActor(db, ["PICKER"]);
+    const other = await createActor(db, ["PACKER"]);
+
+    await expect(scan(picker, pkg, "AAA-1")).rejects.toMatchObject({ kind: "FORBIDDEN" });
+    await expect(scan(other, pkg, "AAA-1")).rejects.toMatchObject({
+      messageKey: "errors.workflow.claimRequired",
+    });
+    await db.order.update({ where: { id: order.id }, data: { status: "QA" } });
+    await expect(scan(packer, pkg, "AAA-1")).rejects.toMatchObject({
+      messageKey: "errors.packing.notPacking",
+    });
+    expect(await db.packageItem.count()).toBe(0);
   });
 });

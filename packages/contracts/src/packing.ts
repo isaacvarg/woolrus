@@ -129,6 +129,15 @@ export const PackUnitsInput = z.object({
 // The input type: callers in core may leave `quantity` out, as the default applies on parse.
 export type PackUnitsInput = z.input<typeof PackUnitsInput>;
 
+export const ScanIntoPackageInput = z.object({
+  packageId: Id,
+  /** What the scanner typed: a barcode or SKU, matched like picking's. */
+  code: z.string().trim().min(1).max(200),
+  /** One per physical scan, so a retried request doesn't pack the unit twice. */
+  scanId: IdempotencyKey,
+});
+export type ScanIntoPackageInput = z.infer<typeof ScanIntoPackageInput>;
+
 export const packing = {
   view: base
     .route({
@@ -201,5 +210,14 @@ export const packing = {
       summary: "Put every unassigned unit into a package",
     })
     .input(PackageIdInput)
+    .output(PackResult),
+  scan: base
+    .route({
+      method: "POST",
+      path: "/packages/{packageId}/scan",
+      tags,
+      summary: "Scan a product into a package: one unit of the first matching line",
+    })
+    .input(ScanIntoPackageInput)
     .output(PackResult),
 };

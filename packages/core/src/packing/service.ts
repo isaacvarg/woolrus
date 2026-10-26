@@ -8,6 +8,7 @@ import {
   type PackResult,
   type PackUnitsInput,
   type PackView,
+  type ScanIntoPackageInput,
   type SetPackageBoxInput,
   type SetWeightInput,
 } from "@woolrus/contracts";
@@ -17,7 +18,9 @@ import { toBoxDto } from "../boxes/service";
 import { AppError, notFound } from "../errors";
 import { storedResult, withIdempotency } from "../idempotency";
 import { lineAndPackageNoteCounts } from "../notes/targets";
-import { type Actor, assertCan } from "../permissions";
+import { type Actor, assertCan, can } from "../permissions";
+import { normalizeCode } from "../picking/codes";
+import { matchingLines, notOnOrder } from "../picking/scan";
 import { activeQuantity, isWorkLine, type LineRow, lineInclude } from "../picking/service";
 import { pickOrder } from "../picking/sort";
 import { toNumber } from "../units";
@@ -518,6 +521,59 @@ export async function setWeight(
       "setWeight",
       packageId,
       { before: record(pkg), after: record(after) },
+      now,
+    );
+  });
+}
+
+/**
+ * A scanned code packs one unit of the first line in pick order that matches it and still has
+ * unassigned units. Refusals (unknown code, another product, everything boxed) throw before any
+ * write, so they change and audit nothing. Idempotent on `scanId`.
+ */
+export async function scanIntoPackage(
+  db: Db,
+  actor: Actor,
+  { packageId, code, scanId }: ScanIntoPackageInput,
+  { now = new Date() }: PackOptions = {},
+): Promise<PackResult> {
+  assertCan(actor, "order.pack");
+  const wanted = normalizeCode(code);
+  return db.$transaction(async (tx) => {
+    const ref = await tx.package.findUnique({
+      where: { id: packageId },
+      select: { orderId: true },
+    });
+    if (!ref) throw notFound();
+    // A replay is answered before the checks, which may no longer pass (the order moved on).
+    if (await storedResult(tx, scanId, "packing.scan", actor)) return packResult(tx, ref.orderId);
+
+    const { order, pkg } = await lockPackage(tx, actor, packageId, now);
+    await withIdempotency(tx, scanId, "packing.scan", actor, async () => {
+      const lines = await unassignedByLine(tx, order.id);
+      const unassigned = new Map(lines.map((l) => [l.row.id, l.unassigned]));
+      const matching = matchingLines(lines.map((l) => l.row).filter(isPhysical), wanted);
+      if (matching.length === 0) {
+        throw await notOnOrder(tx, wanted, can(actor, "product.manage"));
+      }
+      const target = matching.find((row) => (unassigned.get(row.id) ?? 0) > 0);
+      if (!target) {
+        throw new AppError("CONFLICT", "errors.packing.scanAlreadyPacked", undefined, {
+          params: { line: (matching[0] as LineRow).name },
+        });
+      }
+      await addUnits(tx, actor, packageId, target.id, 1, now);
+      return { orderItemId: target.id };
+    });
+    await invalidate(tx, packageId, true);
+    const after = await reload(tx, packageId);
+    return finish(
+      tx,
+      actor,
+      order,
+      "scan",
+      packageId,
+      { before: snapshot(pkg), after: snapshot(after) },
       now,
     );
   });

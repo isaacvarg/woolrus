@@ -52,7 +52,7 @@ test("Start packing opens the pack screen; add packages, split a line, unpack, d
   // The Rush Order line isn't packed by anyone, so it isn't shown.
   await expect(item).toHaveCount(1);
   await expect(item.getByTestId("pack-left")).toHaveText("6 left");
-  await expect(page.getByText("Add a package first")).toBeVisible();
+  await expect(page.getByText("Add a package or pick one first")).toBeVisible();
 
   await addCustomPackage(page);
   const packages = page.getByTestId("pack-package");
@@ -184,4 +184,42 @@ test("a weight over the box's max needs a reason; changing a weighed package ask
   await page.reload();
   await expect(page.getByTestId("pack-unweighed")).toHaveText("0 packages without a weight");
   await expect(page.getByTestId("pack-package").getByLabel("lb", { exact: true })).toHaveValue("3");
+});
+
+/** Types `code` the way an HID scanner does: a fast burst of keys, then Enter. */
+async function scanCode(page: Page, code: string) {
+  await page.keyboard.type(code, { delay: 5 });
+  await page.keyboard.press("Enter");
+}
+
+test("scans go into the selected package; a wrong scan shows red and changes nothing", async ({
+  page,
+}) => {
+  await startPacking(page, 3);
+  const banner = page.getByTestId("scan-banner");
+  const item = page.getByTestId("pack-item");
+
+  // With no package yet, a scan asks to add or pick one.
+  await scanCode(page, "E2E-SKU");
+  await expect(banner).toHaveAttribute("data-ok", "false");
+  await expect(banner).toContainText("Add a package or pick one first");
+
+  await addCustomPackage(page);
+  await scanCode(page, "e2e-sku");
+  await expect(banner).toHaveAttribute("data-ok", "true");
+  await expect(banner).toContainText("Packed E2E item in package 1: 2 left");
+  await expect(item.getByTestId("pack-left")).toHaveText("2 left");
+  await scanCode(page, "E2E-SKU");
+  await expect(item.getByTestId("pack-left")).toHaveText("1 left");
+  await expect(page.getByTestId("pack-package").first()).toContainText("×2");
+
+  await scanCode(page, "NOT-A-CODE-1");
+  await expect(banner).toHaveAttribute("data-ok", "false");
+  await expect(banner).toContainText("Woolrus doesn't know that code");
+  await expect(item.getByTestId("pack-left")).toHaveText("1 left");
+
+  // What's shown is what the server kept: the refused scan added nothing.
+  await page.reload();
+  await expect(page.getByTestId("pack-item").getByTestId("pack-left")).toHaveText("1 left");
+  await expect(page.getByTestId("pack-package").first()).toContainText("×2");
 });

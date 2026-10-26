@@ -3,7 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createActor, resetDb, testDb } from "../../test/db";
 import { createOrder } from "../../test/factories";
 import type { UserActor } from "../permissions";
-import { addPackage, getPackView, packUnits, unpackUnits } from "./service";
+import { addPackage, getPackView, packUnits, scanIntoPackage, unpackUnits } from "./service";
 
 /**
  * SPEC-packing criterion 15 / NFR-PERF-02: a tap is confirmed by the server in under 300 ms at
@@ -31,6 +31,7 @@ beforeAll(async () => {
       quantity: 3,
       pickStatus: "PICKED" as const,
       bin: `A${i}`,
+      sku: `bench-sku-${i}`,
       voids: i % 4 === 0 ? [{ quantity: 1 }] : [],
     })),
   });
@@ -72,6 +73,24 @@ describe("packing timing", () => {
     }
     expect(p95(times)).toBeLessThan(300);
   });
+
+  it("confirms a scan under 300 ms at p95", async () => {
+    const times: number[] = [];
+    for (let run = 0; run < RUNS; run += 1) {
+      const i = run % itemIds.length;
+      const input = { packageId: packageIds[i % 5] as string, orderItemId: itemIds[i] as string };
+      // Each pass takes a unit out first so there is always something to scan back in.
+      await unpackUnits(db, packer, input);
+      const start = performance.now();
+      await scanIntoPackage(db, packer, {
+        packageId: input.packageId,
+        code: `bench-sku-${i}`,
+        scanId: crypto.randomUUID(),
+      });
+      times.push(performance.now() - start);
+    }
+    expect(p95(times)).toBeLessThan(300);
+  }, 30_000);
 
   it("loads the pack view of 30 lines over 5 packages under 300 ms at p95", async () => {
     const times: number[] = [];

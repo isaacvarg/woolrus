@@ -57,6 +57,7 @@ import {
   revokeStation,
   scan,
   scanBatch,
+  scanIntoPackage,
   sendTestEmail,
   setPackageBox,
   setPin,
@@ -258,6 +259,9 @@ export const router = implementer.router({
     ),
     packRemaining: api.packing.packRemaining.handler(({ input, context }) =>
       packRemaining(db, context.actor, input),
+    ),
+    scan: api.packing.scan.handler(({ input, context }) =>
+      scanIntoPackage(db, context.actor, input),
     ),
   },
   pickBatches: {
