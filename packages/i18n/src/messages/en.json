@@ -26,7 +26,8 @@
     "stations": "Stations",
     "openMenu": "Open menu",
     "closeMenu": "Close menu",
-    "voids": "Voids"
+    "voids": "Voids",
+    "issues": "Issues"
   },
   "navFooter": {
     "preferences": "Preferences",
@@ -656,7 +657,53 @@
     "responsibleNone": "Responsible: nobody yet",
     "reportedBy": "Reported by {name}",
     "notes": "{count, plural, one {# note} other {# notes}}",
-    "none": "No issues on this order."
+    "none": "No issues on this order.",
+    "page": {
+      "title": "Issues",
+      "intro": "Quality issues reported on orders. Open the row for the details, notes and photos.",
+      "all": "All",
+      "open": "Open",
+      "resolved": "Resolved",
+      "severity": "Severity",
+      "type": "Type",
+      "anySeverity": "Any severity",
+      "anyType": "Any type",
+      "search": "Search by order number or customer",
+      "empty": "No issues to show.",
+      "loadMore": "Load more",
+      "order": "Order",
+      "age": "Reported",
+      "critical": "Critical",
+      "openCritical": "Open Critical issues",
+      "openCount": "Open issues",
+      "close": "Close",
+      "details": "Issue on #{number}",
+      "openOrder": "Open order",
+      "resolution": "Resolution: {notes}",
+      "edit": "Edit",
+      "save": "Save",
+      "cancel": "Cancel",
+      "saved": "Issue updated.",
+      "change": "Change responsible",
+      "nobody": "Nobody",
+      "responsibleSaved": "Responsible updated.",
+      "resolve": "Resolve",
+      "dismiss": "Dismiss",
+      "reopen": "Reopen",
+      "reopened": "Issue reopened.",
+      "resolveTitle": "Resolve issue",
+      "dismissTitle": "Dismiss issue",
+      "note": "Note",
+      "noteHint": "What was done, or why it is not an issue.",
+      "confirmResolve": "Resolve",
+      "confirmDismiss": "Dismiss",
+      "resolvedToast": "Issue resolved.",
+      "dismissedToast": "Issue dismissed.",
+      "notes": "Notes and photos",
+      "noNotes": "No notes on this issue."
+    },
+    "statusLabel": "Status",
+    "responsibleLabel": "Responsible"
   },
   "notes": {
     "title": "Notes",
@@ -843,7 +890,9 @@
     },
     "issues": {
       "orderClosed": "This order is finished or cancelled, so a new issue can't be reported on it.",
-      "customerStage": "Only a Ready or Completed order can have a customer-reported issue."
+      "customerStage": "Only a Ready or Completed order can have a customer-reported issue.",
+      "notOpen": "Only an open issue can be changed.",
+      "alreadyOpen": "This issue is already open."
     },
     "workflow": {
       "illegalTransition": "That move isn't allowed from the order's current status.",

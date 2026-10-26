@@ -26,7 +26,8 @@
     "stations": "Estaciones",
     "openMenu": "Abrir menú",
     "closeMenu": "Cerrar menú",
-    "voids": "Anulaciones"
+    "voids": "Anulaciones",
+    "issues": "Incidencias"
   },
   "navFooter": {
     "preferences": "Preferencias",
@@ -656,7 +657,53 @@
     "responsibleNone": "Responsable: nadie aún",
     "reportedBy": "Reportado por {name}",
     "notes": "{count, plural, one {# nota} other {# notas}}",
-    "none": "No hay problemas en este pedido."
+    "none": "No hay problemas en este pedido.",
+    "page": {
+      "title": "Incidencias",
+      "intro": "Incidencias de calidad reportadas en los pedidos. Abre la fila para ver detalles, notas y fotos.",
+      "all": "Todas",
+      "open": "Abiertas",
+      "resolved": "Resueltas",
+      "severity": "Gravedad",
+      "type": "Tipo",
+      "anySeverity": "Cualquier gravedad",
+      "anyType": "Cualquier tipo",
+      "search": "Buscar por número de pedido o cliente",
+      "empty": "No hay incidencias que mostrar.",
+      "loadMore": "Cargar más",
+      "order": "Pedido",
+      "age": "Reportada",
+      "critical": "Crítica",
+      "openCritical": "Incidencias críticas abiertas",
+      "openCount": "Incidencias abiertas",
+      "close": "Cerrar",
+      "details": "Incidencia en #{number}",
+      "openOrder": "Abrir pedido",
+      "resolution": "Resolución: {notes}",
+      "edit": "Editar",
+      "save": "Guardar",
+      "cancel": "Cancelar",
+      "saved": "Incidencia actualizada.",
+      "change": "Cambiar responsable",
+      "nobody": "Nadie",
+      "responsibleSaved": "Responsable actualizado.",
+      "resolve": "Resolver",
+      "dismiss": "Descartar",
+      "reopen": "Reabrir",
+      "reopened": "Incidencia reabierta.",
+      "resolveTitle": "Resolver incidencia",
+      "dismissTitle": "Descartar incidencia",
+      "note": "Nota",
+      "noteHint": "Qué se hizo, o por qué no es una incidencia.",
+      "confirmResolve": "Resolver",
+      "confirmDismiss": "Descartar",
+      "resolvedToast": "Incidencia resuelta.",
+      "dismissedToast": "Incidencia descartada.",
+      "notes": "Notas y fotos",
+      "noNotes": "Esta incidencia no tiene notas."
+    },
+    "statusLabel": "Estado",
+    "responsibleLabel": "Responsable"
   },
   "notes": {
     "title": "Notas",
@@ -843,7 +890,9 @@
     },
     "issues": {
       "orderClosed": "Este pedido está terminado o cancelado, así que no se puede reportar un problema nuevo.",
-      "customerStage": "Solo un pedido Listo o Completado puede tener un problema reportado por el cliente."
+      "customerStage": "Solo un pedido Listo o Completado puede tener un problema reportado por el cliente.",
+      "notOpen": "Solo se puede cambiar una incidencia abierta.",
+      "alreadyOpen": "Esta incidencia ya está abierta."
     },
     "workflow": {
       "illegalTransition": "Ese cambio no está permitido desde el estado actual del pedido.",

@@ -211,3 +211,98 @@ test("an admin resolves a void with a note on the Voids page and the nav count d
     wooRefundId: null,
   });
 });
+
+test("an admin filters Issues to Open, resolves one with a note, then reopens it", async ({
+  page,
+}) => {
+  const customerName = `E2E issues ${crypto.randomUUID()}`;
+  const order = await createOrder({ customerName, status: "QA" });
+  const make = (severity: "MINOR" | "CRITICAL", description: string) =>
+    db.qualityIssue.create({
+      data: {
+        orderId: order.id,
+        type: "PACKAGING_DAMAGE",
+        severity,
+        description,
+        discoveredStage: "QA",
+      },
+    });
+  const minor = await make("MINOR", "Scuffed label");
+  await make("CRITICAL", "Leaking bottle");
+  await signInAs(page, ["ADMIN"]);
+  await page.goto("/issues");
+
+  await expect(page.getByTestId("issues-count")).not.toHaveText("…");
+  // The nav sits in a closed drawer on a tablet, so check it is there, not that it shows.
+  await expect(page.getByTestId("issues-critical")).toBeAttached();
+  await page
+    .getByRole("searchbox", { name: "Search by order number or customer" })
+    .fill(customerName);
+  const rows = page.getByTestId("issue-row");
+  await expect(rows).toHaveCount(2);
+  // Open Critical first, with the word as well as the colour.
+  await expect(rows.first()).toContainText("Critical");
+  await expect(rows.first()).toContainText("Leaking bottle");
+
+  await page.getByRole("tab", { name: "Open", exact: true }).click();
+  await expect(rows).toHaveCount(2);
+
+  // The row opens a drawer with the details; resolving needs a note.
+  await rows.nth(1).getByRole("button", { name: "Packaging damage" }).click();
+  const drawer = page.getByTestId("issue-drawer");
+  await expect(drawer).toContainText("Scuffed label");
+  await drawer.getByRole("button", { name: "Resolve", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Resolve issue" });
+  await dialog.getByRole("button", { name: "Resolve", exact: true }).click();
+  await expect(dialog.getByText("This field is required.")).toBeVisible();
+  await dialog.getByRole("textbox", { name: "Note" }).fill("Relabelled");
+  await dialog.getByRole("button", { name: "Resolve", exact: true }).click();
+  await expect(drawer.getByTestId("issue-resolution")).toContainText("Relabelled", {
+    timeout: 15_000,
+  });
+  expect(await db.qualityIssue.findUniqueOrThrow({ where: { id: minor.id } })).toMatchObject({
+    status: "RESOLVED",
+    resolutionNotes: "Relabelled",
+  });
+
+  await drawer.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(rows).toHaveCount(1);
+  await page.getByRole("tab", { name: "Resolved", exact: true }).click();
+  await expect(rows).toHaveCount(1);
+  await rows.first().getByRole("button", { name: "Packaging damage" }).click();
+  await drawer.getByRole("button", { name: "Reopen" }).click();
+  await expect(drawer.getByRole("button", { name: "Resolve", exact: true })).toBeVisible();
+  expect(await db.qualityIssue.findUniqueOrThrow({ where: { id: minor.id } })).toMatchObject({
+    status: "OPEN",
+    resolutionNotes: null,
+  });
+  await expect(drawer).toContainText("Resolved: Relabelled", { timeout: 15_000 });
+});
+
+test("a QA user sees Issues but no resolve controls", async ({ page }) => {
+  const customerName = `E2E issues ${crypto.randomUUID()}`;
+  const order = await createOrder({ customerName, status: "QA" });
+  await db.qualityIssue.create({
+    data: {
+      orderId: order.id,
+      type: "OTHER",
+      severity: "MAJOR",
+      description: "Odd smell",
+      discoveredStage: "QA",
+    },
+  });
+  await signInAs(page, ["QA"]);
+  await page.goto("/issues");
+  await page
+    .getByRole("searchbox", { name: "Search by order number or customer" })
+    .fill(customerName);
+  await page
+    .getByTestId("issue-row")
+    .filter({ hasText: "Odd smell" })
+    .getByRole("button", { name: "Other" })
+    .click();
+  const drawer = page.getByTestId("issue-drawer");
+  await expect(drawer).toContainText("Odd smell");
+  await expect(drawer.getByRole("button", { name: "Resolve", exact: true })).toHaveCount(0);
+  await expect(drawer.getByRole("button", { name: "Dismiss" })).toHaveCount(0);
+});

@@ -13,6 +13,7 @@ export function QueueNav() {
   const pathname = usePathname();
   const counts = useQuery(orpc.orders.counts.queryOptions());
   const voidCounts = useQuery(orpc.voids.counts.queryOptions());
+  const issueCounts = useQuery(orpc.issues.counts.queryOptions());
 
   return (
     <>
@@ -38,6 +39,24 @@ export function QueueNav() {
           <span className="grow">{t("nav.voids")}</span>
           <span className="badge badge-sm" data-testid="voids-count">
             {voidCounts.data?.unresolvedOrders ?? "…"}
+          </span>
+        </Link>
+      </li>
+      <li>
+        <Link href="/issues" className={pathname === "/issues" ? "menu-active" : undefined}>
+          <span className="grow">{t("nav.issues")}</span>
+          {(issueCounts.data?.openCritical ?? 0) > 0 && (
+            <span
+              className="badge badge-error badge-sm"
+              data-testid="issues-critical"
+              title={t("issues.page.openCritical")}
+            >
+              <span aria-hidden="true">⚠</span>
+              <span className="sr-only">{t("issues.page.critical")}</span>
+            </span>
+          )}
+          <span className="badge badge-sm" data-testid="issues-count">
+            {issueCounts.data?.open ?? "…"}
           </span>
         </Link>
       </li>

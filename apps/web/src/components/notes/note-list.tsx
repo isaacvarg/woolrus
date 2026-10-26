@@ -61,9 +61,12 @@ function groupByTarget(notes: Note[]): Group[] {
 export function NoteList({
   orderId,
   canWriteCustomer,
+  issueId,
 }: {
   orderId: string;
   canWriteCustomer: boolean;
+  /** Shows only the notes on this quality issue, without the target filter. */
+  issueId?: string;
 }) {
   const t = useTranslations();
   const errorMessage = useErrorMessage();
@@ -74,36 +77,41 @@ export function NoteList({
 
   if (notes.isPending) return <p>{t("common.loading")}</p>;
   if (notes.error) return <p className="text-error">{errorMessage(notes.error)}</p>;
-  if (notes.data.length === 0) return <p>{t("notes.empty")}</p>;
+  const shown = issueId
+    ? notes.data.filter((n) => n.target.kind === "issue" && n.target.id === issueId)
+    : notes.data;
+  if (shown.length === 0) return <p>{t("notes.empty")}</p>;
 
-  const groups = groupByTarget(notes.data).filter(
-    (g) => filter === "all" || g.target.kind === filter,
+  const groups = groupByTarget(shown).filter(
+    (g) => issueId || filter === "all" || g.target.kind === filter,
   );
   return (
     <div className="space-y-3">
-      <ToggleButtonGroup
-        aria-label={t("notes.filter")}
-        selectionMode="single"
-        disallowEmptySelection
-        selectedKeys={[filter]}
-        onSelectionChange={(keys) => {
-          const [key] = [...keys];
-          if (key) setFilter(key as NoteTargetKind | "all");
-        }}
-        className="flex flex-wrap gap-2"
-      >
-        {(["all", ...kinds] as const).map((key) => (
-          <ToggleButton
-            key={key}
-            id={key}
-            className={({ isSelected }) =>
-              `btn min-h-12 ${isSelected ? "btn-primary" : "btn-outline"}`
-            }
-          >
-            {t(key === "all" ? "notes.filterAll" : filterLabel[key])}
-          </ToggleButton>
-        ))}
-      </ToggleButtonGroup>
+      {!issueId && (
+        <ToggleButtonGroup
+          aria-label={t("notes.filter")}
+          selectionMode="single"
+          disallowEmptySelection
+          selectedKeys={[filter]}
+          onSelectionChange={(keys) => {
+            const [key] = [...keys];
+            if (key) setFilter(key as NoteTargetKind | "all");
+          }}
+          className="flex flex-wrap gap-2"
+        >
+          {(["all", ...kinds] as const).map((key) => (
+            <ToggleButton
+              key={key}
+              id={key}
+              className={({ isSelected }) =>
+                `btn min-h-12 ${isSelected ? "btn-primary" : "btn-outline"}`
+              }
+            >
+              {t(key === "all" ? "notes.filterAll" : filterLabel[key])}
+            </ToggleButton>
+          ))}
+        </ToggleButtonGroup>
+      )}
       {groups.length === 0 && <p>{t("notes.noneInFilter")}</p>}
       {groups.map((group) => (
         <section

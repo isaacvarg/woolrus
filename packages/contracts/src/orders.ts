@@ -265,6 +265,7 @@ export const QualityIssueView = z.object({
   discoveredStage: FulfillmentStage,
   originStage: FulfillmentStage.nullable(),
   customerReported: z.boolean(),
+  reporterId: Id.nullable(),
   reporter: z.object({ name: z.string() }).nullable(),
   /** Inferred from the origin stage, or chosen by a person (`responsibleManual`). */
   responsible: z.object({ id: Id, name: z.string() }).nullable(),
