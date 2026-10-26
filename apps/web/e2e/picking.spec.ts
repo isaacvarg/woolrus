@@ -412,3 +412,34 @@ test("the batch list picks lines from chips; a takeover elsewhere drops the orde
   await expect(group.getByTestId("group-left")).toHaveText("1 of 4 left");
   await expect(page.getByTestId("slot-3")).toContainText("Left: E2E PICKER+PACKER took it over");
 });
+
+test("voiding the missing units from the Out of Stock banner lets the picker finish", async ({
+  page,
+}) => {
+  await beginPicking(page, 2);
+  const card = page.getByTestId("pick-card").first();
+
+  await card.getByRole("button", { name: "More for E2E item" }).click();
+  await page.getByRole("menuitem", { name: "Out of Stock" }).click();
+  const outOfStock = page.getByRole("dialog", { name: "E2E item is out of stock" });
+  await outOfStock.getByRole("textbox", { name: "How many did you find?" }).fill("1");
+  await outOfStock.getByRole("textbox", { name: "Note" }).fill("Only one on the shelf");
+  await outOfStock.getByRole("button", { name: "Mark Out of Stock" }).click();
+  await expect(card.getByTestId("pick-status")).toHaveText(/Out of stock/);
+
+  await page.getByTestId("oos-banner").getByRole("button", { name: "Void E2E item" }).click();
+  const dialog = page.getByRole("dialog", { name: "Void E2E item" });
+  await dialog.getByRole("textbox", { name: "How many to void" }).fill("1");
+  await dialog.getByRole("radio", { name: "Out of stock" }).click();
+  await dialog.getByRole("button", { name: "Void", exact: true }).click();
+  await expect(dialog).toBeHidden();
+
+  // One unit left to pick, and it was found: the line is Picked and the banner is gone.
+  await expect(card).toContainText("1 of 1");
+  await expect(card.getByTestId("pick-status")).toHaveText(/Picked/);
+  await expect(page.getByTestId("oos-banner")).toHaveCount(0);
+  await expect(page.getByTestId("pick-progress")).toHaveText("1 of 1 lines picked");
+
+  await page.getByRole("button", { name: "Done", exact: true }).click();
+  await expect(page).toHaveURL("/queue/pending");
+});

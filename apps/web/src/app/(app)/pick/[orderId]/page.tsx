@@ -14,6 +14,7 @@ export default async function PickPage({ params }: { params: Promise<{ orderId: 
       orderId={id.data}
       userId={actor?.userId ?? null}
       canPack={actor ? can(actor, "order.pack") : false}
+      canVoid={actor ? can(actor, "void.create") : false}
     />
   );
 }
