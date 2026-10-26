@@ -11,6 +11,7 @@ import {
   createNote,
   createPriorityRule,
   deactivateUser,
+  deleteBox,
   deleteNote,
   deletePackage,
   deletePriorityRule,
@@ -52,6 +53,7 @@ import {
   reorderPriorityRules,
   requestSync,
   resendInvitation,
+  restoreBox,
   revokeBadge,
   revokeInvitation,
   revokeStation,
@@ -70,6 +72,7 @@ import {
   unlockWithPin,
   unpackUnits,
   unpickLine,
+  updateBox,
   updateNote,
   updatePreferences,
   updatePriorityRule,
@@ -127,6 +130,11 @@ export const router = implementer.router({
     archive: api.boxes.archive.handler(({ input, context }) =>
       archiveBox(db, context.actor, input),
     ),
+    update: api.boxes.update.handler(({ input, context }) => updateBox(db, context.actor, input)),
+    restore: api.boxes.restore.handler(({ input, context }) =>
+      restoreBox(db, context.actor, input),
+    ),
+    delete: api.boxes.delete.handler(({ input, context }) => deleteBox(db, context.actor, input)),
   },
   settings: {
     get: api.settings.get.handler(({ context }) => getSettings(db, context.actor)),
