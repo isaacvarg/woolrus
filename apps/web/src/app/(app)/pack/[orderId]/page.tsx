@@ -15,6 +15,8 @@ export default async function PackPage({ params }: { params: Promise<{ orderId: 
       userId={actor?.userId ?? null}
       // Only for showing the button; the API checks it again.
       canVoid={actor ? can(actor, "void.create") : false}
+      canReport={actor ? can(actor, "issue.report") : false}
+      canWriteCustomer={actor ? can(actor, "note.customer") : false}
     />
   );
 }

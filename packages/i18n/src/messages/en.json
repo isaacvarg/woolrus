@@ -218,6 +218,8 @@
     "disabledToast": "Rule “{name}” disabled."
   },
   "queue": {
+    "openIssues": "{count, plural, one {# open issue} other {# open issues}}, worst: {severity}",
+    "unresolvedVoids": "{count, plural, one {# unresolved void} other {# unresolved voids}}",
     "search": "Search orders",
     "searchPlaceholder": "Order number or customer",
     "number": "Order",
@@ -607,6 +609,7 @@
     }
   },
   "issues": {
+    "packageButton": "Report packaging issue",
     "panel": "Exceptions",
     "button": "Report issue",
     "title": "Report an issue",

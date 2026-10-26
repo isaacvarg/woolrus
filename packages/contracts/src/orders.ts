@@ -104,6 +104,9 @@ export const QueueInput = z.object({
 });
 export type QueueInput = z.input<typeof QueueInput>;
 
+export const QualityIssueSeverity = z.enum(["MINOR", "MAJOR", "CRITICAL"]);
+export type QualityIssueSeverity = z.infer<typeof QualityIssueSeverity>;
+
 /** One queue row. Sorted by priority, then oldest order first. */
 export const QueueRow = z.object({
   id: Id,
@@ -123,6 +126,11 @@ export const QueueRow = z.object({
   version: z.number().int(),
   /** Notes on the order, any target (FR-NOTE-05). */
   noteCount: z.number().int(),
+  /** Quality issues still open on the order, and the worst severity among them (null when none). */
+  openIssueCount: z.number().int(),
+  topOpenSeverity: QualityIssueSeverity.nullable(),
+  /** Voids that are neither undone nor resolved yet. */
+  unresolvedVoidCount: z.number().int(),
 });
 export type QueueRow = z.infer<typeof QueueRow>;
 
@@ -242,9 +250,6 @@ export const QualityIssueType = z.enum([
   "OTHER",
 ]);
 export type QualityIssueType = z.infer<typeof QualityIssueType>;
-
-export const QualityIssueSeverity = z.enum(["MINOR", "MAJOR", "CRITICAL"]);
-export type QualityIssueSeverity = z.infer<typeof QualityIssueSeverity>;
 
 export const QualityIssueStatus = z.enum(["OPEN", "RESOLVED", "DISMISSED"]);
 export type QualityIssueStatus = z.infer<typeof QualityIssueStatus>;

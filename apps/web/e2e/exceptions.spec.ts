@@ -306,3 +306,63 @@ test("a QA user sees Issues but no resolve controls", async ({ page }) => {
   await expect(drawer.getByRole("button", { name: "Resolve", exact: true })).toHaveCount(0);
   await expect(drawer.getByRole("button", { name: "Dismiss" })).toHaveCount(0);
 });
+
+test("a picker reports an issue from the pick screen and the queue row shows the badge", async ({
+  page,
+}) => {
+  const customerName = `E2E ${crypto.randomUUID()}`;
+  const order = await createOrder({ customerName, quantity: 2 });
+  await signInAs(page, ["PICKER"]);
+  await page.goto("/queue/pending");
+  await page.getByRole("searchbox", { name: "Search orders" }).fill(customerName);
+  const row = page.getByRole("row", { name: new RegExp(order.number) });
+  await expect(row.getByTestId("queue-issue-badge")).toHaveCount(0);
+  await row.getByRole("button", { name: "Begin Picking" }).click();
+  await expect(page).toHaveURL(`/pick/${order.id}`);
+
+  const card = page.getByTestId("pick-card").first();
+  await card.getByRole("button", { name: "More for E2E item" }).click();
+  await page.getByRole("menuitem", { name: "Report issue" }).click();
+  const dialog = page.getByRole("dialog", { name: "Report an issue" });
+  await expect(dialog.getByRole("combobox", { name: "About" })).toHaveValue(/^item:/);
+  await dialog.getByRole("textbox", { name: "What went wrong" }).fill("Lid cracked");
+  await dialog.getByRole("button", { name: "Report issue" }).click();
+  await dialog.getByRole("button", { name: "Skip" }).click();
+  await expect(dialog).toBeHidden();
+
+  const saved = await db.qualityIssue.findFirstOrThrow({ where: { orderId: order.id } });
+  expect(saved.orderItemId).not.toBeNull();
+
+  // A second tab's queue row carries the badge.
+  await page.goto("/queue/picking");
+  await page.getByRole("searchbox", { name: "Search orders" }).fill(customerName);
+  await expect(
+    page.getByRole("row", { name: new RegExp(order.number) }).getByTestId("queue-issue-badge"),
+  ).toHaveAttribute("data-severity", "MINOR");
+});
+
+test("a packer reports a packaging issue on a package, linked to it", async ({ page }) => {
+  const order = await createOrder({ quantity: 2, status: "PACKING" });
+  const item = await db.orderItem.findFirstOrThrow({ where: { orderId: order.id } });
+  const pkg = await db.package.create({
+    data: { orderId: order.id, number: 1, lengthIn: 12, widthIn: 9, heightIn: 4 },
+  });
+  await db.packageItem.create({ data: { packageId: pkg.id, orderItemId: item.id, quantity: 1 } });
+  await signInAs(page, ["PACKER"]);
+  await page.goto(`/pack/${order.id}`);
+
+  await page
+    .getByTestId("pack-package")
+    .getByRole("button", { name: "Report packaging issue" })
+    .click();
+  const dialog = page.getByRole("dialog", { name: "Report an issue" });
+  await dialog.getByRole("combobox", { name: "Type" }).selectOption("PACKAGING_DAMAGE");
+  await dialog.getByRole("textbox", { name: "What went wrong" }).fill("Box crushed");
+  await dialog.getByRole("button", { name: "Report issue" }).click();
+  await dialog.getByRole("button", { name: "Skip" }).click();
+  await expect(dialog).toBeHidden();
+
+  const saved = await db.qualityIssue.findFirstOrThrow({ where: { orderId: order.id } });
+  expect(saved.packageId).toBe(pkg.id);
+  expect(saved.type).toBe("PACKAGING_DAMAGE");
+});
