@@ -202,3 +202,84 @@ describe("box service", () => {
     expect(await listBoxes(db, packer, { includeArchived: false })).toHaveLength(1);
   });
 });
+
+describe("box admin: guards and races", () => {
+  it("forbids a Packer from archiving or creating boxes", async () => {
+    const admin = await createActor(db, ["ADMIN"]);
+    const packer = await createActor(db, ["PACKER"]);
+    const box = await createBox(db, admin, input);
+
+    await expect(archiveBox(db, packer, { id: box.id })).rejects.toMatchObject({
+      kind: "FORBIDDEN",
+    });
+    await expect(createBox(db, packer, { ...input, name: "Other" })).rejects.toMatchObject({
+      kind: "FORBIDDEN",
+    });
+    expect((await listBoxes(db, admin, { includeArchived: true }))[0]?.archived).toBe(false);
+  });
+
+  it("counts a package on any order as use, however old, so the box can't be deleted", async () => {
+    const admin = await createActor(db, ["ADMIN"]);
+    const box = await createBox(db, admin, input);
+    await createOrder(db, { status: "COMPLETED", packages: [{ items: [] }] });
+    const { packages } = await createOrder(db, { status: "COMPLETED", packages: [{ items: [] }] });
+    await db.package.update({ where: { id: packages[0]?.id }, data: { boxId: box.id } });
+
+    await expect(deleteBox(db, admin, { id: box.id })).rejects.toMatchObject({
+      messageKey: "errors.box.inUse",
+    });
+    expect((await listBoxes(db, admin, { includeArchived: false }))[0]).toMatchObject({
+      inUse: true,
+    });
+  });
+
+  it("refuses to shrink the outer size below the inner on update", async () => {
+    const admin = await createActor(db, ["ADMIN"]);
+    const box = await createBox(db, admin, {
+      ...input,
+      outerLengthIn: 11,
+      outerWidthIn: 9.5,
+      outerHeightIn: 5,
+    });
+
+    await expect(updateBox(db, admin, { id: box.id, outerLengthIn: 9 })).rejects.toMatchObject({
+      messageKey: "errors.box.outerSmaller",
+    });
+  });
+
+  it("a delete waits for a package being added and is then refused, not a server error", async () => {
+    const admin = await createActor(db, ["ADMIN"]);
+    const box = await createBox(db, admin, input);
+    const { order } = await createOrder(db, { status: "PACKING" });
+
+    let release!: () => void;
+    const released = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let inserted!: () => void;
+    const isInserted = new Promise<void>((resolve) => {
+      inserted = resolve;
+    });
+    // Another packer's addPackage, mid-transaction: the package row exists but isn't committed.
+    const adding = db.$transaction(
+      async (tx) => {
+        await tx.package.create({ data: { orderId: order.id, number: 1, boxId: box.id } });
+        inserted();
+        await released;
+      },
+      { timeout: 20_000 },
+    );
+    await isInserted;
+
+    const deleting = deleteBox(db, admin, { id: box.id });
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    release();
+    await adding;
+
+    await expect(deleting).rejects.toMatchObject({
+      kind: "CONFLICT",
+      messageKey: "errors.box.inUse",
+    });
+    expect(await db.box.count({ where: { id: box.id } })).toBe(1);
+  });
+});

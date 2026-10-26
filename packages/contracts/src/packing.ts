@@ -130,6 +130,9 @@ export type SetPackageBoxInput = z.infer<typeof SetPackageBoxInput>;
 export const PackageIdInput = z.object({ packageId: Id });
 export type PackageIdInput = z.infer<typeof PackageIdInput>;
 
+/** Packages one order can hold: far above any real order, so a runaway client stops somewhere. */
+export const MAX_PACKAGES_PER_ORDER = 50;
+
 /** The heaviest parcel the carriers take (SPEC-packing assumption 6). */
 export const MAX_PACKAGE_WEIGHT_OZ = 2400;
 

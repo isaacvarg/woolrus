@@ -180,17 +180,27 @@ export async function deleteBox(
   { id }: { id: string },
 ): Promise<{ id: string }> {
   assertCan(actor, "box.manage");
-  await db.$transaction(async (tx) => {
-    const existing = await tx.box.findUnique({ where: { id }, include: withUse });
-    if (!existing) throw notFound();
-    if (existing._count.packages > 0) throw new AppError("CONFLICT", "errors.box.inUse");
-    await tx.box.delete({ where: { id } });
-    await recordAudit(tx, actor, {
-      entityType: "Box",
-      entityId: id,
-      action: "delete",
-      before: toBoxDtoWithUse(existing),
+  try {
+    await db.$transaction(async (tx) => {
+      // As in updateBox: wait for a package being added, so the in-use count below sees it.
+      await tx.$queryRaw`SELECT id FROM boxes WHERE id = ${id}::uuid FOR UPDATE`;
+      const existing = await tx.box.findUnique({ where: { id }, include: withUse });
+      if (!existing) throw notFound();
+      if (existing._count.packages > 0) throw new AppError("CONFLICT", "errors.box.inUse");
+      await tx.box.delete({ where: { id } });
+      await recordAudit(tx, actor, {
+        entityType: "Box",
+        entityId: id,
+        action: "delete",
+        before: toBoxDtoWithUse(existing),
+      });
     });
-  });
+  } catch (error) {
+    // A package that got in anyway: the foreign key refuses the delete, as the count would have.
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2003") {
+      throw new AppError("CONFLICT", "errors.box.inUse");
+    }
+    throw error;
+  }
   return { id };
 }

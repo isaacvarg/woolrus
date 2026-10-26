@@ -3,7 +3,9 @@ import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { createActor, resetDb, testDb } from "../../test/db";
 import { createOrder, type PackageSpec } from "../../test/factories";
 import type { UserActor } from "../permissions";
+import { transition } from "../workflow/service";
 import { completePack } from "./complete";
+import { addPackage, packUnits, setWeight } from "./service";
 
 const db: Db = testDb();
 afterAll(() => db.$disconnect());
@@ -123,7 +125,10 @@ describe("completePack", () => {
     await expect(finish(packer, order, "queue", 2)).rejects.toMatchObject({
       messageKey: "errors.workflow.stale",
     });
-    await expect(finish(other, order, "queue")).rejects.toMatchObject({ kind: "CONFLICT" });
+    await expect(finish(other, order, "queue")).rejects.toMatchObject({
+      kind: "CONFLICT",
+      messageKey: "errors.workflow.claimRequired",
+    });
     await expect(finish(picker, order, "queue")).rejects.toMatchObject({ kind: "FORBIDDEN" });
     expect(await orderRow(order.id)).toMatchObject({ status: "PACKING", version: 3 });
   });
@@ -161,5 +166,153 @@ describe("the re-weigh note", () => {
     await expect(finish(packer, order, "queue")).rejects.toMatchObject({ kind: "CONFLICT" });
 
     expect(await db.note.count()).toBe(0);
+  });
+});
+
+describe("the overweight gate, end to end", () => {
+  /** A weighed package of 50 oz in a box that held 100, then the box's max lowered to 40. */
+  async function lowered() {
+    const built = await packed(undefined, [{ items: [{ line: 0, quantity: 2 }], weightOz: 50 }]);
+    const box = await db.box.create({
+      data: { name: "Capped", lengthIn: 10, widthIn: 10, heightIn: 10, maxWeightOz: 100 },
+    });
+    await db.package.update({ where: { id: built.packages[0]?.id }, data: { boxId: box.id } });
+    await db.box.update({ where: { id: box.id }, data: { maxWeightOz: 40 } });
+    return built;
+  }
+
+  it.each(["completePack", "completePacking"] as const)(
+    "%s: refuses a package over its box's max with no reason, and moves nothing",
+    async (through) => {
+      const { packer, order } = await lowered();
+
+      const refused =
+        through === "completePack"
+          ? finish(packer, order, "queue")
+          : db.$transaction((tx) =>
+              transition(tx, packer, {
+                orderId: order.id,
+                expectedVersion: 3,
+                to: "QA",
+                kind: "completePacking",
+              }),
+            );
+
+      await expect(refused).rejects.toMatchObject({
+        kind: "CONFLICT",
+        unmet: [
+          {
+            messageKey: "errors.workflow.gate.packageOverweight",
+            params: { package: 1, maxOz: 40 },
+          },
+        ],
+      });
+      expect(await orderRow(order.id)).toMatchObject({ status: "PACKING", version: 3 });
+      expect(await db.note.count()).toBe(0);
+    },
+  );
+
+  it("completes once the weight is saved again with a reason", async () => {
+    const { packer, order, packages } = await lowered();
+
+    await setWeight(db, packer, {
+      packageId: packages[0]?.id as string,
+      weightOz: 50,
+      overrideReason: "Dense kit, carrier agreed",
+    });
+
+    expect(await finish(packer, order, "queue")).toEqual({ nextOrderId: null });
+    expect(await orderRow(order.id)).toMatchObject({ status: "QA" });
+  });
+
+  it("a custom-size package has no max, so its weight is never over", async () => {
+    const { packer, order } = await packed(undefined, [
+      {
+        items: [{ line: 0, quantity: 2 }],
+        boxed: false,
+        dimensions: { lengthIn: 5, widthIn: 5, heightIn: 5 },
+        weightOz: 2000,
+      },
+    ]);
+
+    expect(await finish(packer, order, "queue")).toEqual({ nextOrderId: null });
+  });
+});
+
+describe("the re-weigh note, through the screen's own writes", () => {
+  const notesOf = (orderId: string) => db.note.findMany({ where: { orderId } });
+
+  async function reweighable() {
+    const packer = await createActor(db, ["PACKER"]);
+    const { order, items } = await createOrder(db, {
+      status: "PACKING",
+      version: 3,
+      claimedById: packer.userId,
+      claimedAt: new Date(),
+      lines: [{ quantity: 2, pickStatus: "PICKED" }],
+    });
+    const box = await db.box.create({
+      data: { name: "Plain", lengthIn: 10, widthIn: 10, heightIn: 10 },
+    });
+    const { packages } = await addPackage(db, packer, {
+      orderId: order.id,
+      box: { boxId: box.id },
+      idempotencyKey: crypto.randomUUID(),
+    });
+    const packageId = packages[0]?.id as string;
+    const orderItemId = items[0]?.id as string;
+    await packUnits(db, packer, { packageId, orderItemId, quantity: 1 });
+    await setWeight(db, packer, { packageId, weightOz: 20.5 });
+    await packUnits(db, packer, { packageId, orderItemId, quantity: 1 });
+    return { packer, order, packageId };
+  }
+
+  it("a package flagged by packing a unit after weighing gets one note, in the display unit", async () => {
+    const { packer, order } = await reweighable();
+
+    await finish(packer, order, "next");
+
+    const [note, ...rest] = await notesOf(order.id);
+    expect(rest).toEqual([]);
+    expect(note?.content).toBe(
+      "Contents changed after weighing; weight 1 lb 4.5 oz not re-checked",
+    );
+  });
+
+  it("a weight confirmed after the change gets no note", async () => {
+    const { packer, order, packageId } = await reweighable();
+    await setWeight(db, packer, { packageId, weightOz: 20.5 });
+
+    await finish(packer, order, "queue");
+
+    expect(await notesOf(order.id)).toEqual([]);
+  });
+
+  it("an order sent back to Packing and finished again unconfirmed is not noted twice", async () => {
+    const { packer, order } = await reweighable();
+    await finish(packer, order, "queue");
+    // QA sends it back; the same packer claims and finishes it again without a re-weigh.
+    await db.order.update({
+      where: { id: order.id },
+      data: { status: "PACKING", claimedById: packer.userId, claimedAt: new Date(), version: 9 },
+    });
+
+    await finish(packer, order, "queue", 9);
+
+    expect(await notesOf(order.id)).toHaveLength(1);
+  });
+});
+
+describe("next: a claim with no claim time counts as expired", () => {
+  it("is taken, as isClaimLive reads it", async () => {
+    const { packer, order } = await packed();
+    const someone = await createActor(db, ["PACKER"]);
+    const odd = await waiting(minutesAgo(10));
+    await db.order.update({
+      where: { id: odd.id },
+      data: { claimedById: someone.userId, claimedAt: null },
+    });
+
+    expect(await finish(packer, order, "next")).toEqual({ nextOrderId: odd.id });
   });
 });

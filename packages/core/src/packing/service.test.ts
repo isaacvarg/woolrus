@@ -215,7 +215,7 @@ describe("packUnits / unpackUnits", () => {
 
     await expect(
       unpackUnits(db, packer, { packageId: id(packages[0]), orderItemId: id(items[0]) }),
-    ).rejects.toMatchObject({ messageKey: "errors.packing.nothingToPack" });
+    ).rejects.toMatchObject({ messageKey: "errors.packing.notInPackage" });
   });
 
   it("counts voided units out of what can be packed", async () => {
@@ -821,6 +821,9 @@ describe("setWeight", () => {
 
   it("flags a weighed package when its contents or box change, and not an unweighed one", async () => {
     const { packer, order, items, box, pkg } = await boxed();
+    const other = await db.box.create({
+      data: { name: "Other", lengthIn: 12, widthIn: 10, heightIn: 8, maxWeightOz: 400 },
+    });
     await packUnits(db, packer, { packageId: pkg, orderItemId: id(items[0]) });
     expect((await stored(pkg)).weightStale).toBe(false);
     await setWeight(db, packer, { packageId: pkg, weightOz: 20 });
@@ -829,15 +832,14 @@ describe("setWeight", () => {
       () => packUnits(db, packer, { packageId: pkg, orderItemId: id(items[0]) }),
       () => unpackUnits(db, packer, { packageId: pkg, orderItemId: id(items[0]) }),
       () => packRemaining(db, packer, { packageId: pkg }),
-      () => setPackageBox(db, packer, { packageId: pkg, box: { boxId: box.id } }),
+      () => setPackageBox(db, packer, { packageId: pkg, box: { boxId: other.id } }),
     ]) {
       await setWeight(db, packer, { packageId: pkg, weightOz: 20 });
       expect((await stored(pkg)).weightStale).toBe(false);
       await change();
-      expect(await stored(pkg), "flagged").toMatchObject({
-        weightStale: true,
-        weightOz: expect.anything(),
-      });
+      const flagged = await stored(pkg);
+      expect(flagged.weightStale, "flagged").toBe(true);
+      expect(Number(flagged.weightOz), "weight kept").toBe(20);
     }
 
     // Saving the same weight confirms it; a package never weighed isn't flagged.
@@ -1076,10 +1078,15 @@ describe("scanIntoPackage", () => {
     const { packer, pkg } = await scanning();
     await scan(packer, pkg, "AAA-1");
     await setWeight(db, packer, { packageId: pkg, weightOz: 20 });
+    await db.packageItem.updateMany({
+      where: { packageId: pkg },
+      data: { qaVerifiedAt: new Date(), qaVerifiedById: packer.userId },
+    });
 
     const result = await scan(packer, pkg, "AAA-1");
 
-    expect(result.packages[0]?.weightStale).toBe(true);
+    expect(result.packages[0]).toMatchObject({ weightStale: true, weightOz: 20 });
+    expect((await rows(pkg))[0]).toMatchObject({ qaVerifiedAt: null, qaVerifiedById: null });
   });
 
   it("is refused for a Picker, without the claim, and when the order isn't Packing", async () => {

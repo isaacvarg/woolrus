@@ -6,7 +6,7 @@ import type {
   PackView,
 } from "@woolrus/contracts";
 import type { DbTx, Prisma } from "@woolrus/db";
-import { toBoxDto, toBoxDtoWithUse, withUse } from "../boxes/service";
+import { type BoxWithUse, toBoxDto, toBoxDtoWithUse, withUse } from "../boxes/service";
 import { notFound } from "../errors";
 import { lineAndPackageNoteCounts } from "../notes/targets";
 import { type Actor, assertCan } from "../permissions";
@@ -87,7 +87,11 @@ function toPackPackage(
 }
 
 /** The pack screen's data for one order: lines, packages, the active boxes and the gate's unmet list. */
-async function readPack(tx: DbTx, orderId: string): Promise<PackResult & { boxes: BoxDto[] }> {
+async function readPack(
+  tx: DbTx,
+  orderId: string,
+  { boxCounts }: { boxCounts: boolean },
+): Promise<PackResult & { boxes: BoxDto[] }> {
   const [rows, packages, notes, gate, boxRows] = await Promise.all([
     tx.orderItem.findMany({ where: { orderId }, include: lineInclude }),
     tx.package.findMany({
@@ -97,9 +101,16 @@ async function readPack(tx: DbTx, orderId: string): Promise<PackResult & { boxes
     }),
     lineAndPackageNoteCounts(tx, orderId),
     loadGateSnapshot(tx, orderId),
-    tx.box.findMany({ where: { archivedAt: null }, orderBy: { name: "asc" }, include: withUse }),
+    // Whether a box is in use is only shown on the screen's box list, not in a write's answer.
+    tx.box.findMany({
+      where: { archivedAt: null },
+      orderBy: { name: "asc" },
+      ...(boxCounts ? { include: withUse } : {}),
+    }),
   ]);
-  const boxes = boxRows.map(toBoxDtoWithUse);
+  const boxes = boxRows.map((box) =>
+    "_count" in box ? toBoxDtoWithUse(box as BoxWithUse) : toBoxDto(box),
+  );
   const rowById = new Map(rows.map((row) => [row.id, row]));
 
   const packedIn = new Map<string, PackLine["packedIn"]>();
@@ -169,7 +180,7 @@ async function readPack(tx: DbTx, orderId: string): Promise<PackResult & { boxes
 
 /** The lines and packages as every package write returns them, one round trip for both sides. */
 export async function packResult(tx: DbTx, orderId: string): Promise<PackResult> {
-  const { boxes: _boxes, ...result } = await readPack(tx, orderId);
+  const { boxes: _boxes, ...result } = await readPack(tx, orderId, { boxCounts: false });
   return result;
 }
 
@@ -186,7 +197,7 @@ export async function getPackView(
 
   const [[detail], result] = await Promise.all([
     toOrderDetails(db, [order], { now }),
-    readPack(db, orderId),
+    readPack(db, orderId, { boxCounts: true }),
   ]);
   if (!detail) throw notFound();
   return { order: detail, customerNote: order.customerNote, ...result };

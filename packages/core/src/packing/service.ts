@@ -1,6 +1,7 @@
 import {
   type AddPackageInput,
   MAX_PACKAGE_WEIGHT_OZ,
+  MAX_PACKAGES_PER_ORDER,
   type PackageBoxInput,
   type PackageIdInput,
   type PackResult,
@@ -70,6 +71,8 @@ const reload = (tx: DbTx, packageId: string) =>
 /** The box a package is given: its columns, and the max weight that box allows. */
 async function boxColumns(tx: DbTx, box: PackageBoxInput) {
   if ("boxId" in box) {
+    // Held to commit, so an archive can't land between this read and the package write.
+    await tx.$queryRaw`SELECT id FROM boxes WHERE id = ${box.boxId}::uuid FOR SHARE`;
     const found = await tx.box.findUnique({ where: { id: box.boxId } });
     if (!found) throw notFound();
     if (found.archivedAt) throw new AppError("CONFLICT", "errors.packing.boxArchived");
@@ -156,8 +159,16 @@ export async function addPackage(
 ): Promise<PackResult> {
   assertCan(actor, "order.pack");
   return db.$transaction(async (tx) => {
-    // A replay is answered before the checks, which may no longer pass (the order moved on).
-    if (await storedResult(tx, idempotencyKey, "packing.addPackage", actor)) {
+    // A replay is answered before the checks, which may no longer pass (the order moved on), but
+    // only for the order the key was used for: another order's pack data isn't this key's to read.
+    const replay = await storedResult<{ id: string; orderId: string }>(
+      tx,
+      idempotencyKey,
+      "packing.addPackage",
+      actor,
+    );
+    if (replay) {
+      if (replay.orderId !== orderId) throw new AppError("CONFLICT", "errors.conflict");
       return packResult(tx, orderId);
     }
     const order = await lockForPacking(tx, actor, orderId, now);
@@ -168,11 +179,20 @@ export async function addPackage(
       "packing.addPackage",
       actor,
       async () => {
-        const last = await tx.package.aggregate({ where: { orderId }, _max: { number: true } });
-        const pkg = await tx.package.create({
-          data: { orderId, number: (last._max.number ?? 0) + 1, ...columns },
+        const { _count, _max } = await tx.package.aggregate({
+          where: { orderId },
+          _count: { _all: true },
+          _max: { number: true },
         });
-        return { id: pkg.id };
+        if (_count._all >= MAX_PACKAGES_PER_ORDER) {
+          throw new AppError("CONFLICT", "errors.packing.tooManyPackages", undefined, {
+            params: { max: MAX_PACKAGES_PER_ORDER },
+          });
+        }
+        const pkg = await tx.package.create({
+          data: { orderId, number: (_max.number ?? 0) + 1, ...columns },
+        });
+        return { id: pkg.id, orderId };
       },
     );
     return finish(tx, actor, order, "add", { packageId: created.id }, now);
@@ -193,6 +213,18 @@ export async function setPackageBox(
   return db.$transaction(async (tx) => {
     const { order, pkg } = await lockPackage(tx, actor, packageId, now);
     const { columns, maxWeightOz } = await boxColumns(tx, box);
+    // Decimals from the row against plain numbers from the request.
+    const same = (a: unknown, b: unknown) =>
+      (a == null ? null : Number(a)) === (b == null ? null : Number(b));
+    // The same box again changes nothing, so it deletes no rates and flags no weight.
+    if (
+      pkg.boxId === columns.boxId &&
+      same(pkg.lengthIn, columns.lengthIn) &&
+      same(pkg.widthIn, columns.widthIn) &&
+      same(pkg.heightIn, columns.heightIn)
+    ) {
+      return packResult(tx, order.id);
+    }
     const weightOz = toNumber(pkg.weightOz);
     const withinMax = weightOz === null || maxWeightOz === null || weightOz <= maxWeightOz;
     await tx.package.update({
@@ -304,7 +336,7 @@ export async function unpackUnits(
     if (!line || !isPhysical(line))
       throw new AppError("CONFLICT", "errors.packing.lineNotPackable");
     const held = pkg.items.find((it) => it.orderItemId === orderItemId)?.quantity ?? 0;
-    if (quantity > held) throw new AppError("CONFLICT", "errors.packing.nothingToPack");
+    if (quantity > held) throw new AppError("CONFLICT", "errors.packing.notInPackage");
 
     const where = { packageId_orderItemId: { packageId, orderItemId } };
     if (quantity === held) await tx.packageItem.delete({ where });

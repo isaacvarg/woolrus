@@ -709,7 +709,9 @@
       "packageHasLabels": "This package has a shipping label and can't be deleted. Take its items out instead.",
       "scanAlreadyPacked": "All {line} are already in packages.",
       "nothingToPack": "There's nothing more of that to move.",
-      "overweight": "That weight is over the box's limit of {maxOz} oz. Give a reason to keep it."
+      "overweight": "That weight is over the box's limit of {maxOz} oz. Give a reason to keep it.",
+      "tooManyPackages": "An order can have at most {max} packages.",
+      "notInPackage": "That package doesn't hold that many."
     },
     "workflow": {
       "illegalTransition": "That move isn't allowed from the order's current status.",

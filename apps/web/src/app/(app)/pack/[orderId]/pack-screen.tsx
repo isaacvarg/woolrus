@@ -105,11 +105,12 @@ function PackLayout({ view, userId }: { view: PackView; userId: string | null })
     view.packages.find((p) => p.id === selectedId) ?? view.packages[view.packages.length - 1];
   const [dialog, setDialog] = useState<Dialogs | null>(null);
 
-  const accept = (result: PackResult) => {
+  const accept = async (result: PackResult) => {
+    // A refetch started before this write committed can land after it and undo the card, so it is
+    // cancelled first. The write's own answer is the new state; the order_changed event it sent
+    // makes the screen read again once it has committed, so there's no refetch to ask for here.
+    await queryClient.cancelQueries({ queryKey: viewKey });
     queryClient.setQueryData<PackView>(viewKey, (v) => (v ? applyResult(v, result) : v));
-    // A refetch started before this write committed can land after it and undo the card;
-    // invalidating cancels that one and reads again after the commit.
-    void queryClient.invalidateQueries({ queryKey: viewKey });
   };
   const refuse = (error: unknown) => {
     toast.error(errorMessage(error));
@@ -118,6 +119,8 @@ function PackLayout({ view, userId }: { view: PackView; userId: string | null })
 
   const [scanned, setScanned] = useState<ScanOutcome | null>(null);
   const scan = useMutation({
+    // Same key as the taps, so a tap's answer waits while a scan is still in flight.
+    mutationKey: writeKey,
     // Same lane as taps: a scan and a tap on the same line land in the order they were made.
     scope: { id: writeScope },
     // The key is made with the scan, not per request, so a retried request replays it.
@@ -127,13 +130,9 @@ function PackLayout({ view, userId }: { view: PackView; userId: string | null })
       accept(result);
       playScanSound(true);
       // The line the unit went on is the one whose share in this package grew.
-      const before = view.lines.map(
-        (l) => l.packedIn.find((p) => p.packageId === pkg.id)?.quantity,
-      );
-      const line = result.lines.find(
-        (l, i) =>
-          (l.packedIn.find((p) => p.packageId === pkg.id)?.quantity ?? 0) > (before[i] ?? 0),
-      );
+      const held = (l: PackLine) => l.packedIn.find((p) => p.packageId === pkg.id)?.quantity ?? 0;
+      const before = new Map(view.lines.map((l) => [l.id, held(l)]));
+      const line = result.lines.find((l) => held(l) > (before.get(l.id) ?? 0));
       setScanned({
         ok: true,
         at: Date.now(),

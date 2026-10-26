@@ -24,7 +24,8 @@ async function lockNextPacking(tx: DbTx, actor: Actor, now: Date): Promise<{ id:
   const [row] = await tx.$queryRaw<{ id: string }[]>`
     SELECT id FROM orders
     WHERE status = 'PACKING'
-      AND (claimed_by_id IS NULL OR claimed_by_id = ${actor.userId}::uuid OR claimed_at <= ${cutoff})
+      AND (claimed_by_id IS NULL OR claimed_by_id = ${actor.userId}::uuid
+        OR claimed_at IS NULL OR claimed_at <= ${cutoff})
     ORDER BY priority DESC, ordered_at ASC, id ASC
     LIMIT 1
     FOR UPDATE SKIP LOCKED`;
@@ -45,11 +46,12 @@ async function noteStaleWeights(tx: DbTx, actor: Actor, orderId: string): Promis
   const { weightDisplay } = await loadSettings(tx);
   for (const pkg of stale) {
     const weight = formatWeight(toNumber(pkg.weightOz) ?? 0, weightDisplay, "en");
-    await createTextNote(tx, actor, {
-      orderId,
-      packageId: pkg.id,
-      content: `Contents changed after weighing; weight ${weight} not re-checked`,
-    });
+    const content = `Contents changed after weighing; weight ${weight} not re-checked`;
+    // An order sent back to Packing and finished again, still unconfirmed, says it once.
+    if (await tx.note.findFirst({ where: { packageId: pkg.id, content }, select: { id: true } })) {
+      continue;
+    }
+    await createTextNote(tx, actor, { orderId, packageId: pkg.id, content });
   }
 }
 

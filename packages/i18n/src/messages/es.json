@@ -709,7 +709,9 @@
       "packageHasLabels": "Este paquete tiene una etiqueta de envío y no se puede eliminar. Saca sus artículos en su lugar.",
       "scanAlreadyPacked": "Todo {line} ya está en paquetes.",
       "nothingToPack": "No hay más de eso que mover.",
-      "overweight": "Ese peso supera el límite de la caja de {maxOz} oz. Indica un motivo para conservarlo."
+      "overweight": "Ese peso supera el límite de la caja de {maxOz} oz. Indica un motivo para conservarlo.",
+      "tooManyPackages": "Un pedido puede tener como máximo {max} paquetes.",
+      "notInPackage": "Ese paquete no tiene tantas unidades."
     },
     "workflow": {
       "illegalTransition": "Ese cambio no está permitido desde el estado actual del pedido.",
