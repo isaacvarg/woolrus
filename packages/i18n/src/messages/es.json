@@ -425,7 +425,10 @@
     "drawerLines": "Líneas",
     "drawerNoPicker": "Aún sin recoger",
     "addNote": "Añadir nota",
-    "addNoteTitle": "Añadir una nota al paquete {number}"
+    "addNoteTitle": "Añadir una nota al paquete {number}",
+    "done": "Listo",
+    "doneNext": "Listo, siguiente pedido",
+    "noneLeft": "No hay más pedidos de Empaque."
   },
   "pick": {
     "title": "Surtir #{number}",

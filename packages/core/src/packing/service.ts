@@ -34,7 +34,6 @@ import { notifyOrderChanged } from "../workflow/notify";
 import { toAttributes } from "../workflow/queries";
 import {
   estimateWeightOz,
-  type SuggestBox,
   type Suggestion,
   type SuggestUnit,
   suggestBox,

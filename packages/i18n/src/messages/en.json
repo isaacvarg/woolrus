@@ -425,7 +425,10 @@
     "drawerLines": "Lines",
     "drawerNoPicker": "Not picked yet",
     "addNote": "Add note",
-    "addNoteTitle": "Add a note to package {number}"
+    "addNoteTitle": "Add a note to package {number}",
+    "done": "Done",
+    "doneNext": "Done, next order",
+    "noneLeft": "No more Packing orders to pack."
   },
   "pick": {
     "title": "Pick #{number}",

@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { base, Id, IdempotencyKey, Inches, Ounces } from "./base";
 import { Box } from "./boxes";
-import { LineAttribute, OrderDetail } from "./orders";
+import { ExpectedVersion, LineAttribute, OrderDetail } from "./orders";
 
 // Packing (SPEC-packing "API"). Package writes need the order in Packing and the caller's live
 // claim. Units move by adding or subtracting, so the client sends them one at a time per line.
@@ -160,6 +160,20 @@ export const ScanIntoPackageInput = z.object({
 });
 export type ScanIntoPackageInput = z.infer<typeof ScanIntoPackageInput>;
 
+export const CompletePackInput = z.object({
+  orderId: Id,
+  expectedVersion: ExpectedVersion,
+  /** Where the packer goes next: the Packing queue, or the next unclaimed Packing order. */
+  after: z.enum(["queue", "next"]),
+});
+export type CompletePackInput = z.infer<typeof CompletePackInput>;
+
+export const CompletePackResult = z.object({
+  /** The order `after: "next"` claimed; null otherwise, or when the Packing queue was empty. */
+  nextOrderId: Id.nullable(),
+});
+export type CompletePackResult = z.infer<typeof CompletePackResult>;
+
 export const packing = {
   view: base
     .route({
@@ -242,4 +256,13 @@ export const packing = {
     })
     .input(ScanIntoPackageInput)
     .output(PackResult),
+  complete: base
+    .route({
+      method: "POST",
+      path: "/orders/{orderId}/complete-pack",
+      tags,
+      summary: "Complete packing, then go back to the queue or claim the next Packing order",
+    })
+    .input(CompletePackInput)
+    .output(CompletePackResult),
 };

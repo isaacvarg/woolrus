@@ -11,6 +11,7 @@ import type {
 } from "@woolrus/contracts";
 import { formatWeight } from "@woolrus/core/format";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { useState } from "react";
 import { Dialog } from "@/components/ui/dialog";
@@ -91,6 +92,7 @@ function PackLayout({ view, userId }: { view: PackView; userId: string | null })
   const t = useTranslations();
   const errorMessage = useErrorMessage();
   const queryClient = useQueryClient();
+  const router = useRouter();
   const { order } = view;
   const viewKey = orpc.packing.view.queryKey({ input: { orderId: order.id } });
   const writeKey = ["packWrite", order.id];
@@ -225,6 +227,23 @@ function PackLayout({ view, userId }: { view: PackView; userId: string | null })
     onError: refuse,
   });
   // A weight above the box's max asks for a reason first; the same mutation saves it with one.
+  // Finishing waits for the writes before it, so the server sees the packages as they were left.
+  const complete = useMutation({
+    scope: { id: writeScope },
+    mutationFn: (after: "queue" | "next") =>
+      client.packing.complete({ orderId: order.id, expectedVersion: order.version, after }),
+    onSuccess: ({ nextOrderId }, after) => {
+      toast.success(t("order.moved", { number: order.number, status: t("status.QA") }));
+      if (nextOrderId) router.push(`/pack/${nextOrderId}`);
+      else {
+        if (after === "next") toast.success(t("pack.noneLeft"));
+        router.push("/queue/packing");
+      }
+    },
+    onError: refuse,
+    onSettled: () => queryClient.invalidateQueries({ queryKey: orpc.orders.key() }),
+  });
+
   const weigh = useMutation({
     mutationKey: writeKey,
     scope: { id: writeScope },
@@ -359,6 +378,24 @@ function PackLayout({ view, userId }: { view: PackView; userId: string | null })
                 </li>
               ))}
             </ul>
+          )}
+          {view.unmet.length === 0 && (
+            <div className="flex justify-end gap-2 pt-1">
+              <Button
+                className="btn-outline btn-lg"
+                isDisabled={complete.isPending}
+                onPress={() => complete.mutate("queue")}
+              >
+                {t("pack.done")}
+              </Button>
+              <Button
+                className="btn-primary btn-lg"
+                isDisabled={complete.isPending}
+                onPress={() => complete.mutate("next")}
+              >
+                {t("pack.doneNext")}
+              </Button>
+            </div>
           )}
         </footer>
       )}

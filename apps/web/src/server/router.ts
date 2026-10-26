@@ -4,6 +4,7 @@ import {
   clearPin,
   clearSecret,
   completeBatchMembers,
+  completePack,
   completePick,
   createBatch,
   createBox,
@@ -247,6 +248,9 @@ export const router = implementer.router({
   },
   packing: {
     view: api.packing.view.handler(({ input, context }) => getPackView(db, context.actor, input)),
+    complete: api.packing.complete.handler(({ input, context }) =>
+      completePack(db, context.actor, input),
+    ),
     addPackage: api.packing.addPackage.handler(({ input, context }) =>
       addPackage(db, context.actor, input),
     ),

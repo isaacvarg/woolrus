@@ -341,14 +341,18 @@ export async function createNote(
 export async function createTextNote(
   tx: DbTx,
   actor: Actor,
-  input: { orderId: string; orderItemId?: string; content: string },
+  input: { orderId: string; orderItemId?: string; packageId?: string; content: string },
 ): Promise<{ id: string }> {
   assertCan(actor, "note.write");
   const content = cleanContent(input.content);
   const columns = await resolveTarget(
     tx,
     input.orderId,
-    input.orderItemId ? { kind: "item", id: input.orderItemId } : { kind: "order" },
+    input.orderItemId
+      ? { kind: "item", id: input.orderItemId }
+      : input.packageId
+        ? { kind: "package", id: input.packageId }
+        : { kind: "order" },
   );
   const note = await tx.note.create({
     data: {

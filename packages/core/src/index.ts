@@ -26,6 +26,7 @@ export * from "./jobs";
 export * from "./notes/files";
 export * from "./notes/push";
 export * from "./notes/service";
+export * from "./packing/complete";
 export * from "./packing/service";
 export * from "./permissions";
 export * from "./picking/batch-complete";
