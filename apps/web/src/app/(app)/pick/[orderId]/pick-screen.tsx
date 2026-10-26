@@ -15,6 +15,7 @@ import { useTranslations } from "next-intl";
 import { type ReactNode, useEffect, useState } from "react";
 import { ToggleButton } from "react-aria-components";
 import { AllVoidedBanner } from "@/components/exceptions/all-voided-banner";
+import { ReportIssueFlow } from "@/components/exceptions/report-issue-flow";
 import { VoidDialog } from "@/components/exceptions/void-dialog";
 import { Button } from "@/components/ui/fields";
 import { toast } from "@/components/ui/toast";
@@ -96,7 +97,13 @@ function applyVoided(view: PickView, voided: VoidedLine): PickView {
   };
 }
 
-type Viewer = { userId: string | null; canPack: boolean; canVoid: boolean };
+type Viewer = {
+  userId: string | null;
+  canPack: boolean;
+  canVoid: boolean;
+  canReport: boolean;
+  canWriteCustomer: boolean;
+};
 
 export function PickScreen({ orderId, ...viewer }: { orderId: string } & Viewer) {
   const t = useTranslations();
@@ -117,7 +124,14 @@ export function PickScreen({ orderId, ...viewer }: { orderId: string } & Viewer)
 /** Where the picker goes once the order is picked (SPEC-picking decision 6). */
 type Then = "queue" | "next" | "pack";
 
-function PickLayout({ view, userId, canPack, canVoid }: { view: PickView } & Viewer) {
+function PickLayout({
+  view,
+  userId,
+  canPack,
+  canVoid,
+  canReport,
+  canWriteCustomer,
+}: { view: PickView } & Viewer) {
   const t = useTranslations();
   const errorMessage = useErrorMessage();
   const queryClient = useQueryClient();
@@ -223,6 +237,7 @@ function PickLayout({ view, userId, canPack, canVoid }: { view: PickView } & Vie
     onError: (error) => toast.error(errorMessage(error)),
     onSettled: () => queryClient.invalidateQueries({ queryKey: viewKey }),
   });
+  const [reportingId, setReportingId] = useState<string | null>(null);
   const outOfStock =
     canPick && canVoid ? view.lines.filter((l) => l.pickStatus === "OUT_OF_STOCK") : [];
 
@@ -282,6 +297,21 @@ function PickLayout({ view, userId, canPack, canVoid }: { view: PickView } & Vie
         />
       )}
 
+      {reportingId && (
+        <ReportIssueFlow
+          // Remounts per line so the dialog starts fresh on it.
+          key={reportingId}
+          order={order}
+          canWriteCustomer={canWriteCustomer}
+          targets={view.lines.map((l) => ({
+            orderItemId: l.id,
+            label: t("issues.line", { name: l.name }),
+          }))}
+          initialTarget={{ orderItemId: reportingId }}
+          onClose={() => setReportingId(null)}
+        />
+      )}
+
       {view.customerNote && (
         <div className="alert alert-info">
           <span className="font-semibold">{t("order.customerNote")}:</span>
@@ -306,6 +336,7 @@ function PickLayout({ view, userId, canPack, canVoid }: { view: PickView } & Vie
                   disabled={!canPick}
                   scope={writeScope}
                   onVoid={canVoid ? () => setVoidingId(line.id) : undefined}
+                  onReport={canReport ? () => setReportingId(line.id) : undefined}
                   onResult={(result) => {
                     setUnmet(null);
                     queryClient.setQueryData<PickView>(viewKey, (v) =>

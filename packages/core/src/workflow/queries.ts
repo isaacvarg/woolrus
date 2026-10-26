@@ -5,6 +5,7 @@ import {
   type OrderListPage,
   type OrderListSort,
   type OrderView,
+  type QualityIssueSeverity,
   type QueueCounts,
   type QueuePage,
   QueueStage,
@@ -95,6 +96,9 @@ type QueueSqlRow = {
   holdReason: string | null;
   heldFromStatus: WorkflowStatus | null;
   version: number;
+  openIssueCount: number;
+  topOpenSeverity: QualityIssueSeverity | null;
+  unresolvedVoidCount: number;
 };
 
 /**
@@ -130,9 +134,29 @@ export async function listQueue(
         ), 0), 0))
         FROM order_items i LEFT JOIN products p ON p.id = i.product_id
         WHERE i.order_id = o.id AND COALESCE(p.physical, true)
-      ), 0)::int AS "itemCount"
+      ), 0)::int AS "itemCount",
+      COALESCE(qi.open_count, 0)::int AS "openIssueCount",
+      qi.top_severity AS "topOpenSeverity",
+      COALESCE(uv.unresolved_count, 0)::int AS "unresolvedVoidCount"
     FROM orders o
     LEFT JOIN users u ON u.id = o.claimed_by_id AND o.claimed_at > ${claimCutoff}
+    -- One grouped subquery each, over this stage's orders only.
+    LEFT JOIN (
+      SELECT q.order_id, COUNT(*) AS open_count,
+        (ARRAY['CRITICAL', 'MAJOR', 'MINOR'])[MIN(CASE q.severity::text
+          WHEN 'CRITICAL' THEN 1 WHEN 'MAJOR' THEN 2 ELSE 3 END)] AS top_severity
+      FROM quality_issues q
+      WHERE q.status = 'OPEN'
+        AND q.order_id IN (SELECT id FROM orders WHERE status = ${stage}::workflow_status)
+      GROUP BY q.order_id
+    ) qi ON qi.order_id = o.id
+    LEFT JOIN (
+      SELECT v.order_id, COUNT(*) AS unresolved_count
+      FROM item_voids v
+      WHERE v.undone_at IS NULL AND v.resolved_at IS NULL
+        AND v.order_id IN (SELECT id FROM orders WHERE status = ${stage}::workflow_status)
+      GROUP BY v.order_id
+    ) uv ON uv.order_id = o.id
     WHERE o.status = ${stage}::workflow_status
       ${searchFilter(search)}
       ${afterCursor(after)}
@@ -169,6 +193,9 @@ export async function listQueue(
       heldFromStatus: r.heldFromStatus,
       version: r.version,
       noteCount: notes.get(r.id) ?? 0,
+      openIssueCount: r.openIssueCount,
+      topOpenSeverity: r.topOpenSeverity,
+      unresolvedVoidCount: r.unresolvedVoidCount,
     })),
     nextCursor: rows.length > pageSize && last ? encodeCursor(last) : null,
   };

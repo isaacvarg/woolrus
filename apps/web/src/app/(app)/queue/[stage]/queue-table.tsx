@@ -25,6 +25,14 @@ function ageParts(since: Date, now: number): { unit: "Minutes" | "Hours" | "Days
   return { unit: "Days", count: Math.floor(minutes / (24 * 60)) };
 }
 
+/** Shape and colour together, so severity isn't colour alone. */
+const severityIcon = { MINOR: "●", MAJOR: "▲", CRITICAL: "⬣" } as const;
+const severityBadge = {
+  MINOR: "badge-info",
+  MAJOR: "badge-warning",
+  CRITICAL: "badge-error",
+} as const;
+
 const priorityBadge: Record<number, string> = { 1: "badge-warning", 2: "badge-error" };
 
 export function QueueTable({
@@ -212,6 +220,37 @@ export function QueueTable({
                       </span>
                     )}
                     <NoteCount count={row.noteCount} className="ms-2" />
+                    {row.openIssueCount > 0 && row.topOpenSeverity && (
+                      <span
+                        role="img"
+                        data-testid="queue-issue-badge"
+                        data-severity={row.topOpenSeverity}
+                        aria-label={t("queue.openIssues", {
+                          count: row.openIssueCount,
+                          severity: t(`issues.severities.${row.topOpenSeverity}`),
+                        })}
+                        title={t("queue.openIssues", {
+                          count: row.openIssueCount,
+                          severity: t(`issues.severities.${row.topOpenSeverity}`),
+                        })}
+                        className={`badge badge-sm ms-2 ${severityBadge[row.topOpenSeverity]}`}
+                      >
+                        <span aria-hidden="true">
+                          {severityIcon[row.topOpenSeverity]} {row.openIssueCount}
+                        </span>
+                      </span>
+                    )}
+                    {row.unresolvedVoidCount > 0 && (
+                      <span
+                        role="img"
+                        data-testid="queue-void-icon"
+                        aria-label={t("queue.unresolvedVoids", { count: row.unresolvedVoidCount })}
+                        title={t("queue.unresolvedVoids", { count: row.unresolvedVoidCount })}
+                        className="badge badge-sm badge-outline ms-2"
+                      >
+                        <span aria-hidden="true">⊘</span>
+                      </span>
+                    )}
                   </td>
                   <td>{row.customerName}</td>
                   <td className="text-end tabular-nums">{row.itemCount}</td>

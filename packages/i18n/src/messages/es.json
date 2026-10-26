@@ -217,6 +217,8 @@
     "disabledToast": "Regla «{name}» desactivada."
   },
   "queue": {
+    "openIssues": "{count, plural, one {# problema abierto} other {# problemas abiertos}}, el peor: {severity}",
+    "unresolvedVoids": "{count, plural, one {# anulación sin resolver} other {# anulaciones sin resolver}}",
     "search": "Buscar pedidos",
     "searchPlaceholder": "Número de pedido o cliente",
     "number": "Pedido",
@@ -606,6 +608,7 @@
     }
   },
   "issues": {
+    "packageButton": "Reportar problema de embalaje",
     "panel": "Excepciones",
     "button": "Reportar problema",
     "title": "Reportar un problema",

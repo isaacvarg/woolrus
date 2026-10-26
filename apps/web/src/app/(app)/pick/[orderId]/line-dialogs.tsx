@@ -27,8 +27,9 @@ type Props = {
 export function LineMenu({
   quantity = false,
   onVoid,
+  onReport,
   ...props
-}: Props & { quantity?: boolean; onVoid?: () => void }) {
+}: Props & { quantity?: boolean; onVoid?: () => void; onReport?: () => void }) {
   const t = useTranslations();
   const [open, setOpen] = useState<"quantity" | "outOfStock" | "substitute" | null>(null);
   const close = () => setOpen(null);
@@ -47,6 +48,7 @@ export function LineMenu({
         <MenuItem onAction={() => setOpen("outOfStock")}>{t("pick.outOfStock.action")}</MenuItem>
         <MenuItem onAction={() => setOpen("substitute")}>{t("pick.substitute.action")}</MenuItem>
         {onVoid && <MenuItem onAction={onVoid}>{t("voids.button")}</MenuItem>}
+        {onReport && <MenuItem onAction={onReport}>{t("issues.button")}</MenuItem>}
       </Menu>
       {open === "quantity" && <QuantityDialog {...props} onClose={close} />}
       {open === "outOfStock" && <OutOfStockDialog {...props} onClose={close} />}
