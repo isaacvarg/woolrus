@@ -3,7 +3,7 @@
 import { ORPCError } from "@orpc/client";
 import type { WeightDisplay } from "@woolrus/contracts";
 import { formatWeight } from "@woolrus/core/format";
-import { poundsToOunces, splitPoundsOunces } from "@woolrus/core/units";
+import { combinePoundsOunces, poundsToOunces, splitPoundsOunces } from "@woolrus/core/units";
 import { useLocale, useTranslations } from "next-intl";
 import { useState } from "react";
 import { Form } from "react-aria-components";
@@ -24,9 +24,7 @@ export function overweightMax(error: unknown): number | null {
 function toOunces(display: WeightDisplay, lb: number, oz: number): number {
   const pounds = Number.isNaN(lb) ? 0 : lb;
   const ounces = Number.isNaN(oz) ? 0 : oz;
-  return display === "LB_DECIMAL"
-    ? poundsToOunces(pounds)
-    : Math.round((pounds * 16 + ounces) * 100) / 100;
+  return display === "LB_DECIMAL" ? poundsToOunces(pounds) : combinePoundsOunces(pounds, ounces);
 }
 
 export function WeightField({

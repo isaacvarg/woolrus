@@ -25,11 +25,12 @@ export function toBoxDto(box: Box, inUse = false): BoxDto {
 }
 
 type Triple = [number, number, number];
-type BoxWithUse = Box & { _count: { packages: number } };
+export type BoxWithUse = Box & { _count: { packages: number } };
 
-const withUse = { _count: { select: { packages: true } } } as const;
+/** Include for the count that says whether any package uses the box. */
+export const withUse = { _count: { select: { packages: true } } } as const;
 
-function dto(box: BoxWithUse): BoxDto {
+export function toBoxDtoWithUse(box: BoxWithUse): BoxDto {
   return toBoxDto(box, box._count.packages > 0);
 }
 
@@ -67,7 +68,7 @@ export async function listBoxes(
     orderBy: { name: "asc" },
     include: withUse,
   });
-  return boxes.map(dto);
+  return boxes.map(toBoxDtoWithUse);
 }
 
 export async function createBox(db: Db, actor: Actor, input: CreateBoxInput): Promise<BoxDto> {
@@ -100,8 +101,8 @@ export async function archiveBox(db: Db, actor: Actor, { id }: { id: string }): 
   return db.$transaction(async (tx) => {
     const existing = await tx.box.findUnique({ where: { id }, include: withUse });
     if (!existing) throw notFound();
-    if (existing.archivedAt) return dto(existing);
-    const box = dto(
+    if (existing.archivedAt) return toBoxDtoWithUse(existing);
+    const box = toBoxDtoWithUse(
       await tx.box.update({ where: { id }, data: { archivedAt: new Date() }, include: withUse }),
     );
     await recordAudit(tx, actor, { entityType: "Box", entityId: id, action: "archive" });
@@ -114,8 +115,8 @@ export async function restoreBox(db: Db, actor: Actor, { id }: { id: string }): 
   return db.$transaction(async (tx) => {
     const existing = await tx.box.findUnique({ where: { id }, include: withUse });
     if (!existing) throw notFound();
-    if (!existing.archivedAt) return dto(existing);
-    const box = dto(
+    if (!existing.archivedAt) return toBoxDtoWithUse(existing);
+    const box = toBoxDtoWithUse(
       await tx.box.update({ where: { id }, data: { archivedAt: null }, include: withUse }),
     );
     await recordAudit(tx, actor, { entityType: "Box", entityId: id, action: "restore" });
@@ -129,9 +130,12 @@ export async function updateBox(db: Db, actor: Actor, input: UpdateBoxInput): Pr
   const { id, ...changes } = input;
   try {
     return await db.$transaction(async (tx) => {
+      // Held to commit: a package being added or re-boxed holds a key-share lock on the box
+      // through its foreign key, so this waits for it and the in-use count below sees it.
+      await tx.$queryRaw`SELECT id FROM boxes WHERE id = ${id}::uuid FOR UPDATE`;
       const existing = await tx.box.findUnique({ where: { id }, include: withUse });
       if (!existing) throw notFound();
-      const before = dto(existing);
+      const before = toBoxDtoWithUse(existing);
 
       const next = {
         ...before,
@@ -153,7 +157,9 @@ export async function updateBox(db: Db, actor: Actor, input: UpdateBoxInput): Pr
         [next.outerLengthIn, next.outerWidthIn, next.outerHeightIn],
       );
 
-      const box = dto(await tx.box.update({ where: { id }, data: changes, include: withUse }));
+      const box = toBoxDtoWithUse(
+        await tx.box.update({ where: { id }, data: changes, include: withUse }),
+      );
       await recordAudit(tx, actor, {
         entityType: "Box",
         entityId: id,
@@ -183,7 +189,7 @@ export async function deleteBox(
       entityType: "Box",
       entityId: id,
       action: "delete",
-      before: dto(existing),
+      before: toBoxDtoWithUse(existing),
     });
   });
   return { id };

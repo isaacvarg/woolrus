@@ -1,51 +1,38 @@
 import {
   type AddPackageInput,
-  type Box as BoxDto,
-  type BoxSuggestion,
   MAX_PACKAGE_WEIGHT_OZ,
   type PackageBoxInput,
   type PackageIdInput,
-  type PackLine,
-  type PackPackage,
   type PackResult,
   type PackUnitsInput,
-  type PackView,
   type ScanIntoPackageInput,
   type SetPackageBoxInput,
   type SetWeightInput,
 } from "@woolrus/contracts";
-import type { Db, DbTx, Prisma } from "@woolrus/db";
+import type { Db, DbTx } from "@woolrus/db";
 import { recordAudit } from "../audit";
-import { toBoxDto } from "../boxes/service";
 import { AppError, notFound } from "../errors";
 import { storedResult, withIdempotency } from "../idempotency";
-import { lineAndPackageNoteCounts } from "../notes/targets";
 import { type Actor, assertCan, can } from "../permissions";
 import { normalizeCode } from "../picking/codes";
 import { matchingLines, notOnOrder } from "../picking/scan";
 import { activeQuantity, isWorkLine, type LineRow, lineInclude } from "../picking/service";
-import { pickOrder } from "../picking/sort";
 import { toNumber } from "../units";
 import { claimExpiryMinutes, holdsClaim, isClaimLive, touchClaim } from "../workflow/claims";
-import { toOrderDetails } from "../workflow/detail";
-import { evaluateGate, loadGateSnapshot } from "../workflow/gates";
 import { type LockedOrder, lockOrder } from "../workflow/lock";
 import { notifyOrderChanged } from "../workflow/notify";
-import { toAttributes } from "../workflow/queries";
 import {
-  estimateWeightOz,
-  type Suggestion,
-  type SuggestUnit,
-  suggestBox,
-  weightOffPercent,
-} from "./suggest";
+  isPhysical,
+  type PackageRow,
+  type PackOptions,
+  packageInclude,
+  packResult,
+} from "./queries";
 
 // Package operations (SPEC-packing "Package rules"). Only the claim holder writes an order's
 // packages, and the order row lock orders those writes against transitions. So, like pick writes,
 // they don't bump Order.version: a burst of optimistic taps would otherwise make the packer's own
 // completePack fail as stale.
-
-export type PackOptions = { now?: Date };
 
 /** Locks the order and checks it is in Packing under the actor's live claim. Run inside a transaction. */
 export async function lockForPacking(
@@ -64,186 +51,36 @@ export async function lockForPacking(
   return order;
 }
 
-const packageInclude = {
-  box: true,
-  items: { orderBy: { packedAt: "asc" } },
-} as const satisfies Prisma.PackageInclude;
-
-type PackageRow = Prisma.PackageGetPayload<{ include: typeof packageInclude }>;
-
-const isPhysical = (row: LineRow) => row.product?.physical ?? true;
-
-/** What an audit event records about a package: its box and its units per line. */
+/** What an audit event records about a package: its box, weight and units per line. */
 const snapshot = (pkg: PackageRow) => ({
   number: pkg.number,
   boxId: pkg.boxId,
   lengthIn: toNumber(pkg.lengthIn),
   widthIn: toNumber(pkg.widthIn),
   heightIn: toNumber(pkg.heightIn),
+  weightOz: toNumber(pkg.weightOz),
+  overrideReason: pkg.weightOverrideReason,
+  weightStale: pkg.weightStale,
   items: pkg.items.map((it) => ({ orderItemId: it.orderItemId, quantity: it.quantity })),
 });
 
-/** A line's size and weight for the suggestion: the variation's, else the product's. */
-function unitOf(row: LineRow, quantity: number): SuggestUnit {
-  const pick = (key: "weightOz" | "lengthIn" | "widthIn" | "heightIn") =>
-    toNumber(row.variation?.[key] ?? row.product?.[key] ?? null);
-  return {
-    name: row.name,
-    lengthIn: pick("lengthIn"),
-    widthIn: pick("widthIn"),
-    heightIn: pick("heightIn"),
-    weightOz: pick("weightOz"),
-    quantity,
-  };
-}
+const reload = (tx: DbTx, packageId: string) =>
+  tx.package.findUniqueOrThrow({ where: { id: packageId }, include: packageInclude });
 
-function toPackPackage(
-  pkg: PackageRow,
-  names: Map<string, string>,
-  noteCount: number,
-  units: SuggestUnit[],
-  boxes: BoxDto[],
-): PackPackage {
-  const estimatedWeightOz = estimateWeightOz(units, pkg.box ? toBoxDto(pkg.box) : null);
-  const percent = weightOffPercent(toNumber(pkg.weightOz), estimatedWeightOz);
-  const { lengthIn, widthIn, heightIn } = pkg;
-  return {
-    id: pkg.id,
-    number: pkg.number,
-    box: pkg.box ? toBoxDto(pkg.box) : null,
-    dimensions:
-      lengthIn && widthIn && heightIn
-        ? {
-            lengthIn: lengthIn.toNumber(),
-            widthIn: widthIn.toNumber(),
-            heightIn: heightIn.toNumber(),
-          }
-        : null,
-    weightOz: toNumber(pkg.weightOz),
-    overrideReason: pkg.weightOverrideReason,
-    estimatedWeightOz,
-    weightWarning: percent === null ? null : { percent },
-    suggestion: toSuggestion(suggestBox(units, boxes)),
-    weightStale: pkg.weightStale,
-    items: pkg.items.map((it) => ({
-      orderItemId: it.orderItemId,
-      name: names.get(it.orderItemId) ?? "",
-      quantity: it.quantity,
-    })),
-    units: pkg.items.reduce((sum, it) => sum + it.quantity, 0),
-    noteCount,
-  };
-}
-
-const toSuggestion = (s: Suggestion<BoxDto>): BoxSuggestion => s;
-
-/** The lines and packages as the pack screen shows them, with what the packed gate still needs. */
-export async function packResult(tx: DbTx, orderId: string): Promise<PackResult> {
-  const [rows, packages, notes, gate, boxRows] = await Promise.all([
-    tx.orderItem.findMany({ where: { orderId }, include: lineInclude }),
-    tx.package.findMany({
-      where: { orderId },
-      include: packageInclude,
-      orderBy: { number: "asc" },
-    }),
-    lineAndPackageNoteCounts(tx, orderId),
-    loadGateSnapshot(tx, orderId),
-    tx.box.findMany({ where: { archivedAt: null } }),
-  ]);
-  const boxes = boxRows.map((box) => toBoxDto(box));
-  const rowById = new Map(rows.map((row) => [row.id, row]));
-
-  const packedIn = new Map<string, PackLine["packedIn"]>();
-  for (const pkg of packages) {
-    for (const it of pkg.items) {
-      const where = packedIn.get(it.orderItemId) ?? [];
-      where.push({ packageId: pkg.id, number: pkg.number, quantity: it.quantity });
-      packedIn.set(it.orderItemId, where);
-    }
-  }
-
-  // A fully voided line still shows while units of it sit in a box: they must be unpacked.
-  const shown = rows.filter((row) => isPhysical(row) && (isWorkLine(row) || packedIn.has(row.id)));
-  const lines = pickOrder(
-    shown.map((row) => {
-      const active = activeQuantity(row);
-      const where = packedIn.get(row.id) ?? [];
-      const packed = where.reduce((sum, w) => sum + w.quantity, 0);
-      return {
-        id: row.id,
-        name: row.name,
-        sku: row.sku,
-        imageUrl: row.imageUrl,
-        attributes: toAttributes(row.attributes),
-        substitutionNote: row.substitutionNote,
-        quantity: active,
-        unassigned: Math.max(active - packed, 0),
-        tooMany: Math.max(packed - active, 0),
-        packedIn: where,
-        noteCount: notes.items.get(row.id) ?? 0,
-        binLocation: row.variation?.binLocation ?? row.product?.binLocation ?? null,
-      };
-    }),
-  ).map(({ binLocation: _bin, ...line }) => line);
-
-  const names = new Map(rows.map((row) => [row.id, row.name]));
-  const unassigned = lines.flatMap((line) => {
-    const row = rowById.get(line.id);
-    return row && line.unassigned > 0 ? [unitOf(row, line.unassigned)] : [];
-  });
-  return {
-    lines,
-    suggestion: toSuggestion(suggestBox(unassigned, boxes)),
-    packages: packages.map((pkg) =>
-      toPackPackage(
-        pkg,
-        names,
-        notes.packages.get(pkg.id) ?? 0,
-        pkg.items.flatMap((it) => {
-          const row = rowById.get(it.orderItemId);
-          return row ? [unitOf(row, it.quantity)] : [];
-        }),
-        boxes,
-      ),
-    ),
-    unmet: evaluateGate("packed", gate),
-  };
-}
-
-/** The pack screen for one order (SPEC-packing "Reads"). */
-export async function getPackView(
-  db: DbTx,
-  actor: Actor,
-  { orderId }: { orderId: string },
-  { now = new Date() }: PackOptions = {},
-): Promise<PackView> {
-  assertCan(actor, "order.read");
-  const order = await db.order.findUnique({ where: { id: orderId } });
-  if (!order) throw notFound();
-
-  const [[detail], result, boxes] = await Promise.all([
-    toOrderDetails(db, [order], { now }),
-    packResult(db, orderId),
-    db.box.findMany({ where: { archivedAt: null }, orderBy: { name: "asc" } }),
-  ]);
-  if (!detail) throw notFound();
-  return {
-    order: detail,
-    customerNote: order.customerNote,
-    ...result,
-    boxes: boxes.map((box) => toBoxDto(box)),
-  };
-}
-
-/** The columns a package's box choice sets: the box, or custom dimensions (never both). */
+/** The box a package is given: its columns, and the max weight that box allows. */
 async function boxColumns(tx: DbTx, box: PackageBoxInput) {
   if ("boxId" in box) {
     const found = await tx.box.findUnique({ where: { id: box.boxId } });
     if (!found) throw notFound();
     if (found.archivedAt) throw new AppError("CONFLICT", "errors.packing.boxArchived");
-    return { boxId: found.id, lengthIn: null, widthIn: null, heightIn: null };
+    return {
+      columns: { boxId: found.id, lengthIn: null, widthIn: null, heightIn: null },
+      maxWeightOz: toNumber(found.maxWeightOz),
+    };
   }
-  return { boxId: null, lengthIn: box.lengthIn, widthIn: box.widthIn, heightIn: box.heightIn };
+  // Custom dimensions are outer dimensions and have no max weight.
+  const { lengthIn, widthIn, heightIn } = box;
+  return { columns: { boxId: null, lengthIn, widthIn, heightIn }, maxWeightOz: null };
 }
 
 /** Loads a package and locks its order for packing; the package must belong to that order. */
@@ -260,7 +97,8 @@ async function lockPackage(tx: DbTx, actor: Actor, packageId: string, now: Date)
 /**
  * The package's contents or box changed: rates were fetched for the old one, and a weight read
  * before the change is kept but flagged to re-weigh or confirm (SPEC-packing decision 5). QA
- * verified the old contents, so a contents change clears it. Labels are never touched.
+ * verified the old contents, so a contents change clears it; a box change doesn't. Labels are
+ * never touched.
  */
 async function invalidate(tx: DbTx, packageId: string, contentsChanged: boolean) {
   await tx.shippingRate.deleteMany({ where: { packageId } });
@@ -276,22 +114,29 @@ async function invalidate(tx: DbTx, packageId: string, contentsChanged: boolean)
   }
 }
 
-/** The audit event, claim refresh and order_changed notify every package write ends with. */
+/**
+ * What every package write ends with: one audit event with the package before (when it existed)
+ * and after (unless it was deleted), the claim refresh and the order_changed notify.
+ */
 async function finish(
   tx: DbTx,
   actor: Actor,
   order: LockedOrder,
   op: string,
-  entityId: string,
-  { before, after }: { before?: Prisma.InputJsonValue; after?: Prisma.InputJsonValue },
+  {
+    packageId,
+    before,
+    deleted = false,
+  }: { packageId: string; before?: PackageRow; deleted?: boolean },
   now: Date,
 ): Promise<PackResult> {
+  const after = deleted ? undefined : await reload(tx, packageId);
   await recordAudit(tx, actor, {
     entityType: "Package",
-    entityId,
+    entityId: packageId,
     action: `package.${op}`,
-    before,
-    after,
+    before: before && snapshot(before),
+    after: after && snapshot(after),
     at: now,
   });
   await touchClaim(tx, actor, order.id, { now });
@@ -301,9 +146,6 @@ async function finish(
 
 const invalid = (field: string, key: "errors.field.tooBig" | "errors.field.tooSmall") =>
   new AppError("BAD_REQUEST", "errors.validation", { [field]: key });
-
-const reload = (tx: DbTx, packageId: string) =>
-  tx.package.findUniqueOrThrow({ where: { id: packageId }, include: packageInclude });
 
 /** Adds a package after the last one. Idempotent on the key. */
 export async function addPackage(
@@ -319,7 +161,7 @@ export async function addPackage(
       return packResult(tx, orderId);
     }
     const order = await lockForPacking(tx, actor, orderId, now);
-    const columns = await boxColumns(tx, box);
+    const { columns } = await boxColumns(tx, box);
     const created = await withIdempotency(
       tx,
       idempotencyKey,
@@ -329,17 +171,18 @@ export async function addPackage(
         const last = await tx.package.aggregate({ where: { orderId }, _max: { number: true } });
         const pkg = await tx.package.create({
           data: { orderId, number: (last._max.number ?? 0) + 1, ...columns },
-          include: packageInclude,
         });
         return { id: pkg.id };
       },
     );
-    const pkg = await reload(tx, created.id);
-    return finish(tx, actor, order, "add", pkg.id, { after: snapshot(pkg) }, now);
+    return finish(tx, actor, order, "add", { packageId: created.id }, now);
   });
 }
 
-/** Replaces a package's box or custom dimensions. */
+/**
+ * Replaces a package's box or custom dimensions. A reason for a weight above the old box's max
+ * goes when the new box takes the weight without one.
+ */
 export async function setPackageBox(
   db: Db,
   actor: Actor,
@@ -349,19 +192,15 @@ export async function setPackageBox(
   assertCan(actor, "order.pack");
   return db.$transaction(async (tx) => {
     const { order, pkg } = await lockPackage(tx, actor, packageId, now);
-    const columns = await boxColumns(tx, box);
-    await tx.package.update({ where: { id: packageId }, data: columns });
+    const { columns, maxWeightOz } = await boxColumns(tx, box);
+    const weightOz = toNumber(pkg.weightOz);
+    const withinMax = weightOz === null || maxWeightOz === null || weightOz <= maxWeightOz;
+    await tx.package.update({
+      where: { id: packageId },
+      data: { ...columns, ...(withinMax ? { weightOverrideReason: null } : {}) },
+    });
     await invalidate(tx, packageId, false);
-    const after = await reload(tx, packageId);
-    return finish(
-      tx,
-      actor,
-      order,
-      "setBox",
-      packageId,
-      { before: snapshot(pkg), after: snapshot(after) },
-      now,
-    );
+    return finish(tx, actor, order, "setBox", { packageId, before: pkg }, now);
   });
 }
 
@@ -391,7 +230,7 @@ export async function deletePackage(
     for (const p of later) {
       await tx.package.update({ where: { id: p.id }, data: { number: p.number - 1 } });
     }
-    return finish(tx, actor, order, "delete", packageId, { before: snapshot(pkg) }, now);
+    return finish(tx, actor, order, "delete", { packageId, before: pkg, deleted: true }, now);
   });
 }
 
@@ -443,16 +282,7 @@ export async function packUnits(
 
     await addUnits(tx, actor, packageId, orderItemId, quantity, now);
     await invalidate(tx, packageId, true);
-    const after = await reload(tx, packageId);
-    return finish(
-      tx,
-      actor,
-      order,
-      "packUnits",
-      packageId,
-      { before: snapshot(pkg), after: snapshot(after) },
-      now,
-    );
+    return finish(tx, actor, order, "packUnits", { packageId, before: pkg }, now);
   });
 }
 
@@ -476,25 +306,11 @@ export async function unpackUnits(
     const held = pkg.items.find((it) => it.orderItemId === orderItemId)?.quantity ?? 0;
     if (quantity > held) throw new AppError("CONFLICT", "errors.packing.nothingToPack");
 
-    if (quantity === held) {
-      await tx.packageItem.delete({ where: { packageId_orderItemId: { packageId, orderItemId } } });
-    } else {
-      await tx.packageItem.update({
-        where: { packageId_orderItemId: { packageId, orderItemId } },
-        data: { quantity: { decrement: quantity } },
-      });
-    }
+    const where = { packageId_orderItemId: { packageId, orderItemId } };
+    if (quantity === held) await tx.packageItem.delete({ where });
+    else await tx.packageItem.update({ where, data: { quantity: { decrement: quantity } } });
     await invalidate(tx, packageId, true);
-    const after = await reload(tx, packageId);
-    return finish(
-      tx,
-      actor,
-      order,
-      "unpackUnits",
-      packageId,
-      { before: snapshot(pkg), after: snapshot(after) },
-      now,
-    );
+    return finish(tx, actor, order, "unpackUnits", { packageId, before: pkg }, now);
   });
 }
 
@@ -515,16 +331,7 @@ export async function packRemaining(
 
     for (const l of todo) await addUnits(tx, actor, packageId, l.row.id, l.unassigned, now);
     await invalidate(tx, packageId, true);
-    const after = await reload(tx, packageId);
-    return finish(
-      tx,
-      actor,
-      order,
-      "packRemaining",
-      packageId,
-      { before: snapshot(pkg), after: snapshot(after) },
-      now,
-    );
+    return finish(tx, actor, order, "packRemaining", { packageId, before: pkg }, now);
   });
 }
 
@@ -558,29 +365,15 @@ export async function setWeight(
       data: { weightOz, weightOverrideReason: over ? reason : null, weightStale: false },
     });
     await tx.shippingRate.deleteMany({ where: { packageId } });
-    const after = await reload(tx, packageId);
-    const record = (p: PackageRow) => ({
-      ...snapshot(p),
-      weightOz: toNumber(p.weightOz),
-      overrideReason: p.weightOverrideReason,
-      weightStale: p.weightStale,
-    });
-    return finish(
-      tx,
-      actor,
-      order,
-      "setWeight",
-      packageId,
-      { before: record(pkg), after: record(after) },
-      now,
-    );
+    return finish(tx, actor, order, "setWeight", { packageId, before: pkg }, now);
   });
 }
 
 /**
  * A scanned code packs one unit of the first line in pick order that matches it and still has
  * unassigned units. Refusals (unknown code, another product, everything boxed) throw before any
- * write, so they change and audit nothing. Idempotent on `scanId`.
+ * write, so they change and audit nothing. Idempotent on `scanId`: a duplicate that waited for the
+ * lock packs nothing and changes nothing.
  */
 export async function scanIntoPackage(
   db: Db,
@@ -600,6 +393,7 @@ export async function scanIntoPackage(
     if (await storedResult(tx, scanId, "packing.scan", actor)) return packResult(tx, ref.orderId);
 
     const { order, pkg } = await lockPackage(tx, actor, packageId, now);
+    let packed = false;
     await withIdempotency(tx, scanId, "packing.scan", actor, async () => {
       const lines = await unassignedByLine(tx, order.id);
       const unassigned = new Map(lines.map((l) => [l.row.id, l.unassigned]));
@@ -614,18 +408,12 @@ export async function scanIntoPackage(
         });
       }
       await addUnits(tx, actor, packageId, target.id, 1, now);
+      packed = true;
       return { orderItemId: target.id };
     });
+    // The same scan, sent twice at once: the first one packed it, this one only answers.
+    if (!packed) return packResult(tx, order.id);
     await invalidate(tx, packageId, true);
-    const after = await reload(tx, packageId);
-    return finish(
-      tx,
-      actor,
-      order,
-      "scan",
-      packageId,
-      { before: snapshot(pkg), after: snapshot(after) },
-      now,
-    );
+    return finish(tx, actor, order, "scan", { packageId, before: pkg }, now);
   });
 }

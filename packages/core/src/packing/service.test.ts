@@ -2,10 +2,10 @@ import type { Db } from "@woolrus/db";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { createActor, resetDb, testDb } from "../../test/db";
 import { createOrder, type LineSpec } from "../../test/factories";
+import { getPackView } from "./queries";
 import {
   addPackage,
   deletePackage,
-  getPackView,
   packRemaining,
   packUnits,
   scanIntoPackage,
@@ -339,6 +339,90 @@ describe("packRemaining", () => {
       "errors.workflow.gate.lineUnderPacked",
     );
     expect((await rows(pkg)).map((r) => r.quantity).sort()).toEqual([1, 6]);
+  });
+});
+
+describe("setPackageBox: what a box change keeps and clears", () => {
+  async function weighed() {
+    const built = await packing([{ quantity: 2 }]);
+    const small = await db.box.create({
+      data: { name: "Small", lengthIn: 6, widthIn: 6, heightIn: 6, maxWeightOz: 20 },
+    });
+    const large = await db.box.create({
+      data: { name: "Large", lengthIn: 12, widthIn: 12, heightIn: 12, maxWeightOz: 400 },
+    });
+    const { packages } = await addPackage(db, built.packer, {
+      orderId: built.order.id,
+      box: { boxId: small.id },
+      idempotencyKey: key(),
+    });
+    const pkg = id(packages[0]);
+    await packUnits(db, built.packer, { packageId: pkg, orderItemId: id(built.items[0]) });
+    return { ...built, small, large, pkg };
+  }
+
+  it("deletes the package's rates but keeps QA verification", async () => {
+    const { packer, small, large, pkg } = await weighed();
+    await db.packageItem.updateMany({
+      where: { packageId: pkg },
+      data: { qaVerifiedAt: new Date(), qaVerifiedById: packer.userId },
+    });
+    await db.shippingRate.create({
+      data: {
+        packageId: pkg,
+        shipstationRateId: "r1",
+        carrierCode: "usps",
+        serviceCode: "ground",
+        serviceName: "Ground",
+        amountCents: 500,
+        currency: "USD",
+      },
+    });
+    expect(small.id).not.toBe(large.id);
+
+    await setPackageBox(db, packer, { packageId: pkg, box: { boxId: large.id } });
+
+    expect(await db.shippingRate.count({ where: { packageId: pkg } })).toBe(0);
+    expect((await rows(pkg))[0]?.qaVerifiedAt).not.toBeNull();
+  });
+
+  it("drops the override reason when the new box takes the weight, and keeps it when not", async () => {
+    const { packer, small, large, pkg } = await weighed();
+    await setWeight(db, packer, { packageId: pkg, weightOz: 30, overrideReason: "Dense" });
+    const reason = async () =>
+      (await db.package.findUniqueOrThrow({ where: { id: pkg } })).weightOverrideReason;
+
+    // Another box that is also too small for 30 oz: the reason still applies.
+    const tiny = await db.box.create({
+      data: { name: "Tiny", lengthIn: 4, widthIn: 4, heightIn: 4, maxWeightOz: 10 },
+    });
+    await setPackageBox(db, packer, { packageId: pkg, box: { boxId: tiny.id } });
+    expect(await reason()).toBe("Dense");
+
+    await setPackageBox(db, packer, { packageId: pkg, box: { boxId: large.id } });
+    expect(await reason()).toBeNull();
+    expect(small.id).not.toBe(large.id);
+  });
+});
+
+describe("boxes in the pack view", () => {
+  it("say whether a package uses them", async () => {
+    const { packer, order } = await packing();
+    const used = await makeBox("Used");
+    await makeBox("Spare");
+    await addPackage(db, packer, {
+      orderId: order.id,
+      box: { boxId: used.id },
+      idempotencyKey: key(),
+    });
+
+    const view = await getPackView(db, packer, { orderId: order.id });
+
+    expect(view.boxes.map((b) => [b.name, b.inUse])).toEqual([
+      ["Spare", false],
+      ["Used", true],
+    ]);
+    expect(view.packages[0]?.box).toMatchObject({ name: "Used", inUse: true });
   });
 });
 
@@ -917,6 +1001,21 @@ describe("scanIntoPackage", () => {
     expect(result.packages[0]?.items).toEqual([
       expect.objectContaining({ orderItemId: id(items[0]), quantity: 1 }),
     ]);
+    expect(await db.auditEvent.count({ where: { action: "package.scan" } })).toBe(1);
+  });
+
+  it("a duplicate scanId sent at the same moment packs once and writes one audit event", async () => {
+    const { packer, pkg, items } = await scanning([{ sku: "AAA-1", quantity: 3 }]);
+    await setWeight(db, packer, { packageId: pkg, weightOz: 10 });
+    const scanId = key();
+
+    const results = await Promise.all([
+      scan(packer, pkg, "AAA-1", scanId),
+      scan(packer, pkg, "AAA-1", scanId),
+    ]);
+
+    expect(results.map((r) => r.lines[0]?.unassigned)).toEqual([2, 2]);
+    expect((await rows(pkg))[0]).toMatchObject({ orderItemId: id(items[0]), quantity: 1 });
     expect(await db.auditEvent.count({ where: { action: "package.scan" } })).toBe(1);
   });
 

@@ -6,9 +6,23 @@ import { createOrder, deleteCreatedOrders, type ProductSize } from "./support/or
 const db = createDb();
 const boxIds: string[] = [];
 
+test.beforeAll(async () => {
+  // A run that died before its cleanup leaves boxes behind, and same-sized boxes tie in the
+  // suggestion. Only old ones go, so a worker still using its own box isn't disturbed.
+  await db.box.deleteMany({
+    where: {
+      name: { startsWith: "E2E " },
+      createdAt: { lt: new Date(Date.now() - 10 * 60_000) },
+      packages: { none: {} },
+    },
+  });
+});
+
+// The other project may still have a package on one of these boxes: a box in use stays, and the
+// next run's beforeAll sweeps it.
 test.afterAll(async () => {
   await deleteCreatedOrders();
-  await db.box.deleteMany({ where: { id: { in: boxIds.splice(0) } } });
+  await db.box.deleteMany({ where: { id: { in: boxIds.splice(0) }, packages: { none: {} } } });
 });
 
 /** Opens a fresh Packing order from its queue row, as a packer would. */
@@ -210,7 +224,8 @@ test("the suggested box is listed first and adding it works; a weight far off th
   await page.getByRole("button", { name: "Add package" }).click();
   const dialog = page.getByRole("dialog", { name: "Choose a box" });
   const first = dialog.getByRole("listitem").first();
-  await expect(first).toContainText(tiny.name);
+  // Another project's Tiny box is the same size, and ties go by name.
+  await expect(first).toContainText("E2E Tiny");
   await expect(first.getByTestId("box-suggestion")).toContainText("Fits everything · est. 10 oz");
   await first.getByRole("button").click();
   await expect(dialog).toBeHidden();

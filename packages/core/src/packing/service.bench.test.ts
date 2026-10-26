@@ -3,7 +3,8 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createActor, resetDb, testDb } from "../../test/db";
 import { createOrder } from "../../test/factories";
 import type { UserActor } from "../permissions";
-import { addPackage, getPackView, packUnits, scanIntoPackage, unpackUnits } from "./service";
+import { getPackView } from "./queries";
+import { addPackage, packUnits, scanIntoPackage, unpackUnits } from "./service";
 
 /**
  * SPEC-packing criterion 15 / NFR-PERF-02: a tap is confirmed by the server in under 300 ms at
