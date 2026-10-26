@@ -38,6 +38,7 @@ import {
   listSyncRunErrors,
   listSyncRuns,
   listUsers,
+  listVoids,
   lockStation,
   markOutOfStock,
   myPicks,
@@ -55,6 +56,7 @@ import {
   reportIssue,
   requestSync,
   resendInvitation,
+  resolveVoids,
   restoreBox,
   revokeBadge,
   revokeInvitation,
@@ -82,6 +84,7 @@ import {
   updatePriorityRule,
   updateSettings,
   updateUserRoles,
+  voidCounts,
   voidItem,
 } from "@woolrus/core";
 import { db } from "@woolrus/db";
@@ -378,6 +381,11 @@ export const router = implementer.router({
   voids: {
     void: api.voids.void.handler(({ input, context }) => voidItem(db, context.actor, input)),
     undo: api.voids.undo.handler(({ input, context }) => undoVoid(db, context.actor, input)),
+    resolve: api.voids.resolve.handler(({ input, context }) =>
+      resolveVoids(db, context.actor, input),
+    ),
+    list: api.voids.list.handler(({ input, context }) => listVoids(db, context.actor, input)),
+    counts: api.voids.counts.handler(({ context }) => voidCounts(db, context.actor)),
   },
   issues: {
     report: api.issues.report.handler(({ input, context }) =>

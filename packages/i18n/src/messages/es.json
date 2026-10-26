@@ -25,7 +25,8 @@
     "users": "Usuarios",
     "stations": "Estaciones",
     "openMenu": "Abrir menú",
-    "closeMenu": "Cerrar menú"
+    "closeMenu": "Cerrar menú",
+    "voids": "Anulaciones"
   },
   "navFooter": {
     "preferences": "Preferencias",
@@ -572,7 +573,37 @@
     "by": "{count} × {name} · {stage} · {who}",
     "resolved": "Resuelta",
     "undoneLabel": "Deshecha",
-    "none": "Este pedido no tiene anulaciones."
+    "none": "Este pedido no tiene anulaciones.",
+    "page": {
+      "title": "Anulaciones",
+      "intro": "Artículos retirados de los pedidos. Corrige cada uno en WooCommerce (reembolso o edición de la línea) y márcalo como resuelto aquí. No se envía nada a WooCommerce.",
+      "unresolved": "Sin resolver",
+      "resolved": "Resueltas",
+      "search": "Buscar por número de pedido o cliente",
+      "empty": "No hay anulaciones que mostrar.",
+      "line": "Línea",
+      "quantity": "Cant.",
+      "reason": "Motivo",
+      "stage": "Etapa",
+      "who": "Por",
+      "when": "Cuándo",
+      "select": "Seleccionar anulación de {name}",
+      "resolveSelected": "Resolver seleccionadas ({count})",
+      "resolveOrder": "Resolver todas",
+      "resolveTitle": "Resolver {count, plural, one {# anulación} other {# anulaciones}}",
+      "outcome": "Lo que hiciste en WooCommerce",
+      "note": "Nota",
+      "noteHint": "Por ejemplo: Reembolsados $14 en Woo.",
+      "confirm": "Marcar como resuelta",
+      "resolvedToast": "{count, plural, one {# anulación resuelta} other {# anulaciones resueltas}}.",
+      "outcomes": {
+        "HANDLED_MANUALLY": "Gestionada manualmente",
+        "REFUNDED": "Reembolsada",
+        "LINE_EDITED": "Línea editada"
+      },
+      "resolvedBy": "{outcome} por {name}",
+      "loadMore": "Cargar más"
+    }
   },
   "issues": {
     "panel": "Excepciones",

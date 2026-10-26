@@ -152,3 +152,62 @@ test("an issue can be reported without evidence", async ({ page }) => {
 
   await expect(page.getByTestId("issue-card")).toContainText("Customer-reported");
 });
+
+test("an admin resolves a void with a note on the Voids page and the nav count drops", async ({
+  page,
+}) => {
+  const customerName = `E2E voids ${crypto.randomUUID()}`;
+  const order = await createOrder({ customerName, status: "PICKING", quantity: 3 });
+  const item = await db.orderItem.findFirstOrThrow({ where: { orderId: order.id } });
+  await db.itemVoid.create({
+    data: {
+      orderId: order.id,
+      orderItemId: item.id,
+      quantity: 1,
+      reason: "Out of stock",
+      stage: "PICKING",
+    },
+  });
+  await signInAs(page, ["ADMIN"]);
+  await page.goto("/voids");
+
+  const count = page.getByTestId("voids-count");
+  await expect(count).not.toHaveText("…");
+  const before = Number(await count.textContent());
+  expect(before).toBeGreaterThan(0);
+
+  await page
+    .getByRole("searchbox", { name: "Search by order number or customer" })
+    .fill(customerName);
+  const card = page.getByTestId("void-order").filter({ hasText: customerName });
+  await expect(card.getByRole("cell", { name: "Out of stock" })).toBeVisible();
+
+  const box = card.getByRole("checkbox", { name: "Select void of E2E item" });
+  // The box is visually hidden behind its styled square: tap the square, as a person would.
+  await card.locator("td [aria-hidden]").first().click();
+  await expect(box).toBeChecked();
+  await page.getByRole("button", { name: "Resolve selected (1)" }).click();
+  const dialog = page.getByRole("dialog", { name: "Resolve 1 void" });
+  // A note is required.
+  await dialog.getByRole("button", { name: "Mark resolved" }).click();
+  await expect(dialog.getByText("This field is required.")).toBeVisible();
+  await dialog.getByText("Refunded", { exact: true }).click();
+  await expect(dialog.getByRole("radio", { name: "Refunded" })).toBeChecked();
+  await dialog.getByRole("textbox", { name: "Note" }).fill("Refunded $14 in Woo");
+  await dialog.getByRole("button", { name: "Mark resolved" }).click();
+
+  await expect(card).toHaveCount(0);
+  await expect.poll(async () => Number(await count.textContent())).toBeLessThan(before);
+
+  await page.getByRole("tab", { name: "Resolved", exact: true }).click();
+  await expect(
+    page.getByTestId("void-order").filter({ hasText: customerName }).getByText("Refunded by", {
+      exact: false,
+    }),
+  ).toBeVisible();
+  expect(await db.itemVoid.findFirstOrThrow({ where: { orderId: order.id } })).toMatchObject({
+    resolution: "REFUNDED",
+    resolutionNotes: "Refunded $14 in Woo",
+    wooRefundId: null,
+  });
+});
