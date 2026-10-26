@@ -15,6 +15,8 @@ const address = {
 // desktop and tablet projects create orders at the same time.
 const nextWooId = () => 1_000_000_000 + Math.floor(Math.random() * 1_000_000_000);
 
+export type ProductSize = { weightOz: number; lengthIn: number; widthIn: number; heightIn: number };
+
 /** Orders this worker created, for `deleteCreatedOrders`. */
 const created: string[] = [];
 /** Products made with `ownProduct`, deleted after their orders. */
@@ -36,6 +38,7 @@ export async function createOrder({
   sku = "E2E-SKU",
   attributes = [],
   ownProduct = false,
+  productSize,
 }: {
   customerName?: string;
   status?: WorkflowStatus;
@@ -51,22 +54,26 @@ export async function createOrder({
   attributes?: { name: string; option: string }[];
   /** Gives the first line a product of its own (deleted with the order), e.g. to link a barcode to. */
   ownProduct?: boolean;
+  /** The own product's weight (oz) and dimensions (in), e.g. for a box suggestion. Implies ownProduct. */
+  productSize?: ProductSize;
 } = {}) {
   const wooOrderId = nextWooId();
   const now = new Date();
   const rushOrder = rushOrderLine ? await rushOrderProduct() : null;
-  const product = ownProduct
-    ? await db.product.create({
-        data: {
-          wooProductId: wooOrderId,
-          type: "simple",
-          name: "E2E item",
-          sku: `E2E-${wooOrderId}`,
-          rawPayload: {},
-          syncedAt: now,
-        },
-      })
-    : null;
+  const product =
+    ownProduct || productSize
+      ? await db.product.create({
+          data: {
+            wooProductId: wooOrderId,
+            type: "simple",
+            name: "E2E item",
+            sku: `E2E-${wooOrderId}`,
+            ...productSize,
+            rawPayload: {},
+            syncedAt: now,
+          },
+        })
+      : null;
   if (product) createdProducts.push(product.id);
   const order = await db.order.create({
     data: {

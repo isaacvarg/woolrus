@@ -781,3 +781,109 @@ describe("setWeight", () => {
     );
   });
 });
+
+describe("box suggestion, estimate and weight warning", () => {
+  const size = { lengthIn: 4, widthIn: 4, heightIn: 3, weightOz: 3.5 };
+  const tared = (name: string, tareWeightOz: number, dims = [10, 8, 4]) =>
+    db.box.create({
+      data: {
+        name,
+        lengthIn: dims[0] as number,
+        widthIn: dims[1] as number,
+        heightIn: dims[2] as number,
+        maxWeightOz: 320,
+        tareWeightOz,
+      },
+    });
+
+  it("suggests the smallest fitting box for the unassigned units, and updates as units move", async () => {
+    const { packer, order, items } = await packing([{ quantity: 4, size }]);
+    await tared("Large", 6, [14, 12, 8]);
+    await tared("Medium", 4);
+    const view = await getPackView(db, packer, { orderId: order.id });
+    expect(view.suggestion).toMatchObject({
+      kind: "box",
+      box: { name: "Medium" },
+      estimatedWeightOz: 18,
+    });
+
+    const { packages } = await addPackage(db, packer, {
+      orderId: order.id,
+      box: { boxId: id((await db.box.findFirst({ where: { name: "Large" } })) ?? undefined) },
+      idempotencyKey: key(),
+    });
+    const all = await packRemaining(db, packer, { packageId: id(packages[0]) });
+    expect(all.suggestion).toEqual({ kind: "none" });
+    expect(all.packages[0]?.suggestion).toMatchObject({ kind: "box", box: { name: "Medium" } });
+    expect(items).toHaveLength(1);
+  });
+
+  it("names a product without dimensions or weight", async () => {
+    const { packer, order } = await packing([
+      { name: "Hat", quantity: 1, size },
+      { name: "Book", quantity: 1, size: { weightOz: 14 } },
+    ]);
+    await tared("Medium", 4);
+    const view = await getPackView(db, packer, { orderId: order.id });
+    expect(view.suggestion).toEqual({ kind: "unknown", missing: ["Book"] });
+  });
+
+  it("uses the variation's size over the product's", async () => {
+    const { packer, order } = await packing([
+      { quantity: 1, size, variation: { lengthIn: 20, widthIn: 20, heightIn: 20, weightOz: 9 } },
+    ]);
+    await tared("Medium", 4);
+    await tared("Huge", 10, [40, 40, 40]);
+    const view = await getPackView(db, packer, { orderId: order.id });
+    expect(view.suggestion).toMatchObject({ box: { name: "Huge" }, estimatedWeightOz: 19 });
+  });
+
+  it("estimates a package's weight and warns beyond 25% off, never without an estimate", async () => {
+    const { packer, order } = await packing([
+      { quantity: 4, size },
+      { quantity: 1, size: { weightOz: 1 } },
+    ]);
+    const box = await tared("Medium", 4);
+    const { packages } = await addPackage(db, packer, {
+      orderId: order.id,
+      box: { boxId: box.id },
+      idempotencyKey: key(),
+    });
+    const pkg = id(packages[0]);
+    const first = await packUnits(db, packer, {
+      packageId: pkg,
+      orderItemId: id(
+        (await db.orderItem.findFirst({
+          where: { orderId: order.id },
+          orderBy: { wooLineItemId: "asc" },
+        })) ?? undefined,
+      ),
+      quantity: 4,
+    });
+    // 4 × 3.5 + 4 tare
+    expect(first.packages[0]).toMatchObject({ estimatedWeightOz: 18, weightWarning: null });
+
+    const near = await setWeight(db, packer, { packageId: pkg, weightOz: 22 });
+    expect(near.packages[0]?.weightWarning).toBeNull();
+    const far = await setWeight(db, packer, { packageId: pkg, weightOz: 30 });
+    expect(far.packages[0]?.weightWarning).toEqual({ percent: 67 });
+
+    // Without a weight on one product there is no estimate, so no warning.
+    const noEstimate = await packing([
+      { quantity: 1, size: { lengthIn: 1, widthIn: 1, heightIn: 1 } },
+    ]);
+    const added = await addPackage(db, noEstimate.packer, {
+      orderId: noEstimate.order.id,
+      box: { boxId: box.id },
+      idempotencyKey: key(),
+    });
+    const p2 = id(added.packages[0]);
+    await packRemaining(db, noEstimate.packer, { packageId: p2 });
+    const weighed = await setWeight(db, noEstimate.packer, { packageId: p2, weightOz: 500 }).catch(
+      () => null,
+    );
+    const view = await getPackView(db, noEstimate.packer, { orderId: noEstimate.order.id });
+    expect(view.packages[0]).toMatchObject({ estimatedWeightOz: null, weightWarning: null });
+    expect(weighed === null || weighed.packages[0]?.weightWarning === null).toBe(true);
+  });
+});
