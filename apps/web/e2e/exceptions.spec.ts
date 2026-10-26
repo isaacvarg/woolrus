@@ -1,6 +1,9 @@
 import { expect, test } from "@playwright/test";
+import { createDb } from "@woolrus/db";
 import { signInAs } from "./support/auth";
 import { createOrder, deleteCreatedOrders } from "./support/orders";
+
+const db = createDb();
 
 test.afterAll(deleteCreatedOrders);
 
@@ -40,4 +43,32 @@ test("a completed order offers no void", async ({ page }) => {
 
   await expect(page.getByRole("row", { name: /E2E item/ })).toBeVisible();
   await expect(page.getByRole("button", { name: "Void" })).toHaveCount(0);
+});
+
+test("a packer voids a boxed unit from the pack screen and sees the re-weigh flag", async ({
+  page,
+}) => {
+  const order = await createOrder({ quantity: 3, status: "PACKING" });
+  const item = await db.orderItem.findFirstOrThrow({ where: { orderId: order.id } });
+  const pkg = await db.package.create({
+    data: { orderId: order.id, number: 1, lengthIn: 12, widthIn: 9, heightIn: 4, weightOz: 16 },
+  });
+  await db.packageItem.create({
+    data: { packageId: pkg.id, orderItemId: item.id, quantity: 2 },
+  });
+  // Nobody holds a claim: voiding needs none.
+  await signInAs(page, ["PACKER"]);
+  await page.goto(`/pack/${order.id}`);
+
+  const card = page.getByTestId("pack-item");
+  await expect(card.getByTestId("pack-left")).toHaveText("1 left");
+  await card.getByRole("button", { name: "Void" }).click();
+  const dialog = page.getByRole("dialog", { name: "Void E2E item" });
+  await dialog.getByRole("textbox", { name: "How many to void" }).fill("2");
+  await dialog.getByRole("radio", { name: "Damaged" }).click();
+  await dialog.getByRole("button", { name: "Void", exact: true }).click();
+
+  // 3 -> 1 active: the unassigned unit and one boxed unit are gone, the weight stays flagged.
+  await expect(page.getByTestId("pack-stale")).toBeVisible();
+  await expect(page.getByTestId("pack-all-packed")).toBeVisible();
 });

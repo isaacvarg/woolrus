@@ -8,6 +8,7 @@ import {
 import type { Db, DbTx, Prisma } from "@woolrus/db";
 import { recordAudit } from "../audit";
 import { AppError, notFound } from "../errors";
+import { invalidate } from "../packing/service";
 import { type Actor, assertCan } from "../permissions";
 import { reconcilePick } from "../picking/service";
 import { claimExpiryMinutes, touchClaim } from "../workflow/claims";
@@ -65,6 +66,30 @@ async function activeQuantityOf(tx: DbTx, orderItemId: string): Promise<number> 
     tx.itemVoid.aggregate({ where: { orderItemId, undoneAt: null }, _sum: { quantity: true } }),
   ]);
   return Math.max(item.quantity - (voided._sum.quantity ?? 0), 0);
+}
+
+/**
+ * Takes the units a line has in packages beyond its active quantity out of them, highest package
+ * number first, and invalidates each package it touched (weight kept and flagged, rates gone, QA
+ * cleared). A package left empty stays: the packer decides. Undo never puts units back.
+ */
+async function unpackExcess(tx: DbTx, orderItemId: string) {
+  const active = await activeQuantityOf(tx, orderItemId);
+  const held = await tx.packageItem.findMany({
+    where: { orderItemId },
+    orderBy: { package: { number: "desc" } },
+    select: { id: true, packageId: true, quantity: true },
+  });
+  let excess = held.reduce((n, h) => n + h.quantity, 0) - active;
+  for (const h of held) {
+    if (excess <= 0) break;
+    const take = Math.min(h.quantity, excess);
+    if (take === h.quantity) await tx.packageItem.delete({ where: { id: h.id } });
+    else
+      await tx.packageItem.update({ where: { id: h.id }, data: { quantity: h.quantity - take } });
+    await invalidate(tx, h.packageId, true);
+    excess -= take;
+  }
 }
 
 /** The order must be open and carry no label that exists or may exist at the carrier. */
@@ -173,6 +198,7 @@ export async function voidItem(
         voidedAt: now,
       },
     });
+    await unpackExcess(tx, orderItemId);
     return finish(
       tx,
       actor,

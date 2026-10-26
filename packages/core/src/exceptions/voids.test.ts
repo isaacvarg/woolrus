@@ -248,6 +248,76 @@ describe("voidItem", () => {
     expect(result.line.packedQuantity).toBe(2);
   });
 
+  describe("unpack", () => {
+    /** A line of 6 with 4 in Package 1 and 2 in Package 2, both weighed, rated and verified. */
+    const boxed = () =>
+      setup(6, {
+        status: "PACKING",
+        packages: [
+          {
+            items: [{ line: 0, quantity: 4, verified: true }],
+            rates: [{ selected: true }],
+          },
+          {
+            items: [{ line: 0, quantity: 2, verified: true }],
+            rates: [{ selected: false }],
+          },
+        ],
+      });
+    const contents = async (packageId: string) => db.packageItem.findMany({ where: { packageId } });
+
+    it("takes the excess from the highest package first, and flags what it touched", async () => {
+      const { actor, input, packages } = await boxed();
+      const [one, two] = packages as [(typeof packages)[number], (typeof packages)[number]];
+
+      const result = await voidItem(db, actor, { ...input, quantity: 3, reason });
+
+      expect(result.line).toMatchObject({ activeQuantity: 3, packedQuantity: 3 });
+      expect((await contents(one.id)).map((i) => i.quantity)).toEqual([3]);
+      expect(await contents(two.id)).toEqual([]);
+      for (const p of [one, two]) {
+        const row = await db.package.findUniqueOrThrow({ where: { id: p.id } });
+        expect(Number(row.weightOz)).toBe(16);
+        expect(row.weightStale).toBe(true);
+        expect(await db.shippingRate.count({ where: { packageId: p.id } })).toBe(0);
+      }
+      const [left] = await contents(one.id);
+      expect(left?.qaVerifiedAt).toBeNull();
+    });
+
+    it("leaves the packages alone when the line isn't over-packed", async () => {
+      const { actor, input, packages } = await setup(6, {
+        status: "PACKING",
+        packages: [
+          { items: [{ line: 0, quantity: 4, verified: true }], rates: [{ selected: true }] },
+        ],
+      });
+
+      await voidItem(db, actor, { ...input, quantity: 2, reason });
+
+      const pkg = packages[0] as (typeof packages)[number];
+      const row = await db.package.findUniqueOrThrow({ where: { id: pkg.id } });
+      expect(row.weightStale).toBe(false);
+      expect(await db.shippingRate.count({ where: { packageId: pkg.id } })).toBe(1);
+      expect((await contents(pkg.id))[0]).toMatchObject({ quantity: 4 });
+      expect((await contents(pkg.id))[0]?.qaVerifiedAt).not.toBeNull();
+    });
+
+    it("does not put the units back in a box on undo", async () => {
+      const { actor, input, line } = await boxed();
+      const { void: voided } = await voidItem(db, actor, { ...input, quantity: 3, reason });
+
+      const undone = await undoVoid(db, actor, { voidId: voided.id });
+
+      expect(undone.line).toMatchObject({ activeQuantity: 6, packedQuantity: 3 });
+      const packed = await db.packageItem.aggregate({
+        where: { orderItemId: line },
+        _sum: { quantity: true },
+      });
+      expect(packed._sum.quantity).toBe(3);
+    });
+  });
+
   describe("recording", () => {
     let listener: pg.Client;
     let received: unknown[];

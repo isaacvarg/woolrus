@@ -14,6 +14,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { useState } from "react";
+import { VoidDialog } from "@/components/exceptions/void-dialog";
 import { Dialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/fields";
 import { Menu, MenuItem } from "@/components/ui/menu";
@@ -63,7 +64,15 @@ function applyMove(view: PackView, { pkg, line, delta }: Move): PackView {
 
 const applyResult = (view: PackView, result: PackResult): PackView => ({ ...view, ...result });
 
-export function PackScreen({ orderId, userId }: { orderId: string; userId: string | null }) {
+export function PackScreen({
+  orderId,
+  userId,
+  canVoid,
+}: {
+  orderId: string;
+  userId: string | null;
+  canVoid: boolean;
+}) {
   const t = useTranslations();
   const errorMessage = useErrorMessage();
   const view = useQuery(orpc.packing.view.queryOptions({ input: { orderId } }));
@@ -76,7 +85,7 @@ export function PackScreen({ orderId, userId }: { orderId: string; userId: strin
       </p>
     );
   }
-  return <PackLayout view={view.data} userId={userId} />;
+  return <PackLayout view={view.data} userId={userId} canVoid={canVoid} />;
 }
 
 type Dialogs =
@@ -88,7 +97,15 @@ type Dialogs =
 
 type Weigh = { pkg: PackPackage; weightOz: number; overrideReason?: string };
 
-function PackLayout({ view, userId }: { view: PackView; userId: string | null }) {
+function PackLayout({
+  view,
+  userId,
+  canVoid,
+}: {
+  view: PackView;
+  userId: string | null;
+  canVoid: boolean;
+}) {
   const t = useTranslations();
   const errorMessage = useErrorMessage();
   const queryClient = useQueryClient();
@@ -104,6 +121,26 @@ function PackLayout({ view, userId }: { view: PackView; userId: string | null })
   const selected =
     view.packages.find((p) => p.id === selectedId) ?? view.packages[view.packages.length - 1];
   const [dialog, setDialog] = useState<Dialogs | null>(null);
+  const [voidingId, setVoidingId] = useState<string | null>(null);
+  const voiding = view.lines.find((l) => l.id === voidingId);
+  // Any stage can void and it needs no claim; the server also refuses an order with a live label.
+  const mayVoid = canVoid && order.status !== "COMPLETED" && order.status !== "CANCELLED";
+  const voidMutation = useMutation({
+    mutationFn: (input: { orderItemId: string; quantity: number; reason: string }) =>
+      client.voids.void({ orderId: order.id, ...input }),
+    onSuccess: (_result, input) => {
+      const name = view.lines.find((l) => l.id === input.orderItemId)?.name ?? "";
+      toast.success(t("voids.done", { count: input.quantity, name }));
+    },
+    onError: (error) => toast.error(errorMessage(error)),
+    // The void also changed the boxes, so the whole view is read again.
+    onSettled: () =>
+      Promise.all(
+        [orpc.packing.key(), orpc.orders.key()].map((queryKey) =>
+          queryClient.invalidateQueries({ queryKey }),
+        ),
+      ),
+  });
 
   const accept = async (result: PackResult) => {
     // A refetch started before this write committed can land after it and undo the card, so it is
@@ -279,6 +316,16 @@ function PackLayout({ view, userId }: { view: PackView; userId: string | null })
 
   return (
     <section className="mx-auto max-w-6xl space-y-4 pb-28">
+      {voiding && (
+        <VoidDialog
+          key={voiding.id}
+          line={{ id: voiding.id, name: voiding.name, activeQuantity: voiding.quantity }}
+          isOpen
+          onOpenChange={(open) => !open && setVoidingId(null)}
+          isPending={voidMutation.isPending}
+          onConfirm={(input) => voidMutation.mutateAsync({ orderItemId: voiding.id, ...input })}
+        />
+      )}
       <PackHeader view={view} />
       <PackBanner view={view} userId={userId} />
       {canPack && <ScanBanner outcome={scanned} linkTo={[]} linking={false} onLink={() => {}} />}
@@ -311,6 +358,7 @@ function PackLayout({ view, userId }: { view: PackView; userId: string | null })
                     line={line}
                     disabled={!canPack || !selected}
                     onPut={(count) => putIn(line, count)}
+                    onVoid={mayVoid && line.quantity > 0 ? () => setVoidingId(line.id) : undefined}
                   />
                 ))}
               </ul>
@@ -531,10 +579,12 @@ function ItemCard({
   line,
   disabled,
   onPut,
+  onVoid,
 }: {
   line: PackLine;
   disabled: boolean;
   onPut: (count: number) => void;
+  onVoid?: () => void;
 }) {
   const t = useTranslations();
   const [count, setCount] = useState(1);
@@ -590,6 +640,13 @@ function ItemCard({
           {t("pack.left", { count: line.unassigned })}
         </span>
       </Button>
+      {onVoid && (
+        <div className="flex justify-end border-t border-base-300 p-2">
+          <Button className="btn-outline btn-error btn-sm" onPress={onVoid}>
+            {t("voids.button")}
+          </Button>
+        </div>
+      )}
       {line.unassigned > 1 && !disabled && (
         <div className="flex items-center justify-end gap-2 border-t border-base-300 p-2">
           <Button
