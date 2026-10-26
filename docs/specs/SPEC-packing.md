@@ -4,7 +4,7 @@
 `picking` (code matching, the finish options it hands over to packing), `notes` (package notes in the drawer) ·
 **Used by:** `carriers` (reads package box, dimensions and weight; adds the rate fetch on Packing → QA), `qa`
 (verifies `PackageItem`s), `exceptions` (packaging issues on a package), `lumexia` (lot per `PackageItem`) ·
-**State:** spec approved
+**State:** planned
 
 Project-wide commands, structure, code style, testing levels and boundaries are in [`../../SPEC.md`](../../SPEC.md);
 this spec only adds what is specific to `packing`.

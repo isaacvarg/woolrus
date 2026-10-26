@@ -64,7 +64,7 @@ States: `not started` → `spec draft` → `spec approved` → `planned` → `in
 | `identity` | M2 | [SPEC-identity](docs/specs/SPEC-identity.md) | [#21](https://github.com/isaacvarg/woolrus/issues/21) | done |
 | `notes` | M2 | [SPEC-notes](docs/specs/SPEC-notes.md) | [#22](https://github.com/isaacvarg/woolrus/issues/22) | done |
 | `picking` | M2 | [SPEC-picking](docs/specs/SPEC-picking.md) | [#23](https://github.com/isaacvarg/woolrus/issues/23) | done |
-| `packing` | M2 | [SPEC-packing](docs/specs/SPEC-packing.md) | [#24](https://github.com/isaacvarg/woolrus/issues/24) | spec approved |
+| `packing` | M2 | [SPEC-packing](docs/specs/SPEC-packing.md) | [#24](https://github.com/isaacvarg/woolrus/issues/24) | planned |
 | `exceptions` | M3 | — | [#25](https://github.com/isaacvarg/woolrus/issues/25) | not started |
 | `carriers` | M4 | — | [#26](https://github.com/isaacvarg/woolrus/issues/26) | not started |
 | `qa` | M4 | — | [#27](https://github.com/isaacvarg/woolrus/issues/27) | not started |
