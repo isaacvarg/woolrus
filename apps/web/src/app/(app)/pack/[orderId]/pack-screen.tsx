@@ -19,6 +19,8 @@ import { Menu, MenuItem } from "@/components/ui/menu";
 import { toast } from "@/components/ui/toast";
 import { useErrorMessage } from "@/lib/errors";
 import { client, orpc } from "@/lib/orpc";
+import { playScanSound, useScanner } from "@/lib/scanner";
+import { ScanBanner, type ScanOutcome } from "../../pick/[orderId]/pick-screen";
 import { BoxDialog } from "./box-dialog";
 import { OverweightDialog, overweightMax, WeightField } from "./weight-field";
 
@@ -109,6 +111,48 @@ function PackLayout({ view, userId }: { view: PackView; userId: string | null })
     toast.error(errorMessage(error));
     void queryClient.invalidateQueries({ queryKey: viewKey });
   };
+
+  const [scanned, setScanned] = useState<ScanOutcome | null>(null);
+  const scan = useMutation({
+    // Same lane as taps: a scan and a tap on the same line land in the order they were made.
+    scope: { id: writeScope },
+    // The key is made with the scan, not per request, so a retried request replays it.
+    mutationFn: ({ pkg, code, scanId }: { pkg: PackPackage; code: string; scanId: string }) =>
+      client.packing.scan({ packageId: pkg.id, code, scanId }),
+    onSuccess: (result, { pkg }) => {
+      accept(result);
+      playScanSound(true);
+      // The line the unit went on is the one whose share in this package grew.
+      const before = view.lines.map(
+        (l) => l.packedIn.find((p) => p.packageId === pkg.id)?.quantity,
+      );
+      const line = result.lines.find(
+        (l, i) =>
+          (l.packedIn.find((p) => p.packageId === pkg.id)?.quantity ?? 0) > (before[i] ?? 0),
+      );
+      setScanned({
+        ok: true,
+        at: Date.now(),
+        message: t("pack.scanned", {
+          name: line?.name ?? "",
+          number: pkg.number,
+          left: line?.unassigned ?? 0,
+        }),
+      });
+    },
+    onError: (error) => {
+      playScanSound(false);
+      setScanned({ ok: false, at: Date.now(), message: errorMessage(error) });
+    },
+  });
+  useScanner((code) => {
+    if (!selected) {
+      playScanSound(false);
+      setScanned({ ok: false, at: Date.now(), message: t("pack.noPackageSelected") });
+      return;
+    }
+    scan.mutate({ pkg: selected, code, scanId: crypto.randomUUID() });
+  }, canPack);
 
   const move = useMutation({
     mutationKey: writeKey,
@@ -217,6 +261,7 @@ function PackLayout({ view, userId }: { view: PackView; userId: string | null })
     <section className="mx-auto max-w-6xl space-y-4 pb-28">
       <PackHeader view={view} />
       <PackBanner view={view} userId={userId} />
+      {canPack && <ScanBanner outcome={scanned} linkTo={[]} linking={false} onLink={() => {}} />}
 
       {view.customerNote && (
         <div className="alert alert-info">
