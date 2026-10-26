@@ -441,6 +441,8 @@
     "doneNext": "Done, next order",
     "donePack": "Done, open in Packing",
     "noneLeft": "No more Pending orders to pick.",
+    "outOfStockBanner": "{name} is out of stock. Void the missing units to finish this order.",
+    "voidLine": "Void {name}",
     "voidedLines": "{count, plural, one {# line was voided and isn't shown.} other {# lines were voided and aren't shown.}}",
     "notPicking": "This order is in {status}, so it can't be picked here.",
     "unclaimed": "Your claim on this order expired. Claim it again from the order details to keep picking.",
