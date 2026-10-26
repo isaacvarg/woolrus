@@ -1,13 +1,15 @@
-import type {
-  AddPackageInput,
-  PackageBoxInput,
-  PackageIdInput,
-  PackLine,
-  PackPackage,
-  PackResult,
-  PackUnitsInput,
-  PackView,
-  SetPackageBoxInput,
+import {
+  type AddPackageInput,
+  MAX_PACKAGE_WEIGHT_OZ,
+  type PackageBoxInput,
+  type PackageIdInput,
+  type PackLine,
+  type PackPackage,
+  type PackResult,
+  type PackUnitsInput,
+  type PackView,
+  type SetPackageBoxInput,
+  type SetWeightInput,
 } from "@woolrus/contracts";
 import type { Db, DbTx, Prisma } from "@woolrus/db";
 import { recordAudit } from "../audit";
@@ -88,6 +90,8 @@ function toPackPackage(
           }
         : null,
     weightOz: toNumber(pkg.weightOz),
+    overrideReason: pkg.weightOverrideReason,
+    weightStale: pkg.weightStale,
     items: pkg.items.map((it) => ({
       orderItemId: it.orderItemId,
       name: names.get(it.orderItemId) ?? "",
@@ -199,9 +203,17 @@ async function lockPackage(tx: DbTx, actor: Actor, packageId: string, now: Date)
   return { order, pkg };
 }
 
-/** Rates were fetched for the old package; QA verified its old contents. Labels are never touched. */
+/**
+ * The package's contents or box changed: rates were fetched for the old one, and a weight read
+ * before the change is kept but flagged to re-weigh or confirm (SPEC-packing decision 5). QA
+ * verified the old contents, so a contents change clears it. Labels are never touched.
+ */
 async function invalidate(tx: DbTx, packageId: string, contentsChanged: boolean) {
   await tx.shippingRate.deleteMany({ where: { packageId } });
+  await tx.package.updateMany({
+    where: { id: packageId, weightOz: { not: null } },
+    data: { weightStale: true },
+  });
   if (contentsChanged) {
     await tx.packageItem.updateMany({
       where: { packageId },
@@ -232,6 +244,9 @@ async function finish(
   await notifyOrderChanged(tx, { id: order.id, status: order.status });
   return packResult(tx, order.id);
 }
+
+const invalid = (field: string, key: "errors.field.tooBig" | "errors.field.tooSmall") =>
+  new AppError("BAD_REQUEST", "errors.validation", { [field]: key });
 
 const reload = (tx: DbTx, packageId: string) =>
   tx.package.findUniqueOrThrow({ where: { id: packageId }, include: packageInclude });
@@ -454,6 +469,55 @@ export async function packRemaining(
       "packRemaining",
       packageId,
       { before: snapshot(pkg), after: snapshot(after) },
+      now,
+    );
+  });
+}
+
+/**
+ * Sets the package's gross weight and clears its re-weigh flag, so saving the same value confirms
+ * it. Above the box's max it needs a reason and keeps it (FR-PACK-09); within it any reason is
+ * dropped. Only the rates go: the contents are the same, so QA's verification stands.
+ */
+export async function setWeight(
+  db: Db,
+  actor: Actor,
+  { packageId, weightOz, overrideReason }: SetWeightInput,
+  { now = new Date() }: PackOptions = {},
+): Promise<PackResult> {
+  assertCan(actor, "order.pack");
+  if (weightOz > MAX_PACKAGE_WEIGHT_OZ) throw invalid("weightOz", "errors.field.tooBig");
+  if (!(weightOz > 0)) throw invalid("weightOz", "errors.field.tooSmall");
+  const reason = overrideReason?.trim() || null;
+  if (reason && reason.length > 200) throw invalid("overrideReason", "errors.field.tooBig");
+  return db.$transaction(async (tx) => {
+    const { order, pkg } = await lockPackage(tx, actor, packageId, now);
+    const max = toNumber(pkg.box?.maxWeightOz ?? null);
+    const over = max !== null && weightOz > max;
+    if (over && !reason) {
+      throw new AppError("CONFLICT", "errors.packing.overweight", undefined, {
+        params: { maxOz: max },
+      });
+    }
+    await tx.package.update({
+      where: { id: packageId },
+      data: { weightOz, weightOverrideReason: over ? reason : null, weightStale: false },
+    });
+    await tx.shippingRate.deleteMany({ where: { packageId } });
+    const after = await reload(tx, packageId);
+    const record = (p: PackageRow) => ({
+      ...snapshot(p),
+      weightOz: toNumber(p.weightOz),
+      overrideReason: p.weightOverrideReason,
+      weightStale: p.weightStale,
+    });
+    return finish(
+      tx,
+      actor,
+      order,
+      "setWeight",
+      packageId,
+      { before: record(pkg), after: record(after) },
       now,
     );
   });

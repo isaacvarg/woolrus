@@ -372,7 +372,22 @@
     "unassigned": "{count, plural, one {# artículo sin asignar} other {# artículos sin asignar}}",
     "notPacking": "Este pedido está en {status}, no en Empaque, así que no se puede cambiar aquí.",
     "unclaimed": "Empieza a empacar desde la cola de Empaque para trabajar en este pedido.",
-    "claimedByOther": "{name} está trabajando en este pedido."
+    "claimedByOther": "{name} está trabajando en este pedido.",
+    "weight": "Peso",
+    "weightLb": "lb",
+    "weightOz": "oz",
+    "weightSave": "Guardar peso",
+    "weightMax": "Máx. {max}",
+    "weightNone": "Sin peso todavía",
+    "weightSaved": "Peso guardado.",
+    "stale": "El contenido cambió después de pesar: vuelve a pesar o confirma.",
+    "staleConfirm": "El peso sigue bien",
+    "overTitle": "Supera el límite de la caja",
+    "overHint": "{weight} supera el límite de {max}. Indica por qué es correcto enviarlo.",
+    "overReason": "Motivo",
+    "overSave": "Guardar con motivo",
+    "noWeight": "{count, plural, one {# paquete sin peso} other {# paquetes sin peso}}",
+    "overweightBadge": "Supera el límite"
   },
   "pick": {
     "title": "Surtir #{number}",
@@ -649,7 +664,8 @@
       "lineNotPackable": "Esa línea no puede ir en un paquete.",
       "boxArchived": "Esa caja ya no está en uso. Elige otra.",
       "packageHasLabels": "Este paquete tiene una etiqueta de envío y no se puede eliminar. Saca sus artículos en su lugar.",
-      "nothingToPack": "No hay más de eso que mover."
+      "nothingToPack": "No hay más de eso que mover.",
+      "overweight": "Ese peso supera el límite de la caja de {maxOz} oz. Indica un motivo para conservarlo."
     },
     "workflow": {
       "illegalTransition": "Ese cambio no está permitido desde el estado actual del pedido.",
@@ -674,7 +690,8 @@
         "packageNoLabel": "El paquete {package} necesita una etiqueta activa.",
         "packageLiveLabel": "El paquete {package} tiene una etiqueta que primero debe anularse.",
         "notReady": "El pedido no está Listo.",
-        "noPackages": "El pedido no tiene paquetes."
+        "noPackages": "El pedido no tiene paquetes.",
+        "packageOverweight": "El paquete {package} supera el límite de su caja de {maxOz} oz y necesita un motivo."
       }
     },
     "sync": {

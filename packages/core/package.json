@@ -5,7 +5,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./format": "./src/settings/format.ts"
+    "./format": "./src/settings/format.ts",
+    "./units": "./src/units.ts"
   },
   "scripts": {
     "typecheck": "tsc",

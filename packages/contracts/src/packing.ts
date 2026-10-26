@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { base, Id, IdempotencyKey, Inches } from "./base";
+import { base, Id, IdempotencyKey, Inches, Ounces } from "./base";
 import { Box } from "./boxes";
 import { LineAttribute, OrderDetail } from "./orders";
 
@@ -58,6 +58,10 @@ export const PackPackage = z.object({
   /** Custom outer dimensions; null when the package has a box. */
   dimensions: Dimensions.nullable(),
   weightOz: z.number().nullable(),
+  /** Why a weight above the box's max was kept; null within the max. */
+  overrideReason: z.string().nullable(),
+  /** The contents or box changed after weighing: re-weigh or confirm. Never blocks the gate. */
+  weightStale: z.boolean(),
   items: z.array(PackageItemView),
   units: z.number().int(),
   noteCount: z.number().int(),
@@ -104,6 +108,18 @@ export type SetPackageBoxInput = z.infer<typeof SetPackageBoxInput>;
 export const PackageIdInput = z.object({ packageId: Id });
 export type PackageIdInput = z.infer<typeof PackageIdInput>;
 
+/** The heaviest parcel the carriers take (SPEC-packing assumption 6). */
+export const MAX_PACKAGE_WEIGHT_OZ = 2400;
+
+export const SetWeightInput = z.object({
+  packageId: Id,
+  /** The gross weight of the packed box. */
+  weightOz: Ounces.max(MAX_PACKAGE_WEIGHT_OZ),
+  /** Required when the weight is above the box's max; dropped otherwise. */
+  overrideReason: z.string().trim().min(1).max(200).optional(),
+});
+export type SetWeightInput = z.infer<typeof SetWeightInput>;
+
 export const PackUnitsInput = z.object({
   packageId: Id,
   orderItemId: Id,
@@ -149,6 +165,15 @@ export const packing = {
       summary: "Delete a package; its units return to unassigned",
     })
     .input(PackageIdInput)
+    .output(PackResult),
+  setWeight: base
+    .route({
+      method: "POST",
+      path: "/packages/{packageId}/weight",
+      tags,
+      summary: "Set a package's weight; above its box's max it needs a reason",
+    })
+    .input(SetWeightInput)
     .output(PackResult),
   packUnits: base
     .route({

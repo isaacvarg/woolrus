@@ -7,6 +7,7 @@ import type {
   PackPackage,
   PackResult,
   PackView,
+  WeightDisplay,
 } from "@woolrus/contracts";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
@@ -18,6 +19,7 @@ import { toast } from "@/components/ui/toast";
 import { useErrorMessage } from "@/lib/errors";
 import { client, orpc } from "@/lib/orpc";
 import { BoxDialog } from "./box-dialog";
+import { OverweightDialog, overweightMax, WeightField } from "./weight-field";
 
 // The pack screen (SPEC-packing "UI", FR-PACK-01…03). Taps apply at once and the server confirms
 // them (NFR-PERF-02); writes run one at a time per order so they land in the order they were made.
@@ -75,7 +77,10 @@ export function PackScreen({ orderId, userId }: { orderId: string; userId: strin
 type Dialogs =
   | { kind: "add" }
   | { kind: "change"; pkg: PackPackage }
-  | { kind: "delete"; pkg: PackPackage };
+  | { kind: "delete"; pkg: PackPackage }
+  | { kind: "overweight"; pkg: PackPackage; weightOz: number; maxOz: number };
+
+type Weigh = { pkg: PackPackage; weightOz: number; overrideReason?: string };
 
 function PackLayout({ view, userId }: { view: PackView; userId: string | null }) {
   const t = useTranslations();
@@ -172,6 +177,28 @@ function PackLayout({ view, userId }: { view: PackView; userId: string | null })
     },
     onError: refuse,
   });
+  // A weight above the box's max asks for a reason first; the same mutation saves it with one.
+  const weigh = useMutation({
+    mutationKey: writeKey,
+    scope: { id: writeScope },
+    mutationFn: ({ pkg, weightOz, overrideReason }: Weigh) =>
+      client.packing.setWeight({ packageId: pkg.id, weightOz, overrideReason }),
+    onSuccess: (result) => {
+      accept(result);
+      toast.success(t("pack.weightSaved"));
+      closeDialog();
+    },
+    onError: (error, { pkg, weightOz }) => {
+      const maxOz = overweightMax(error);
+      if (maxOz === null) return refuse(error);
+      setDialog({ kind: "overweight", pkg, weightOz, maxOz });
+    },
+  });
+  const settings = useQuery(orpc.settings.public.queryOptions());
+  // Until settings load, use the schema default so the screen isn't held back.
+  const weightDisplay = settings.data?.weightDisplay ?? "LB_OZ";
+  const unweighed = view.packages.filter((p) => p.weightOz === null).length;
+
   const putAll = useMutation({
     mutationKey: writeKey,
     scope: { id: writeScope },
@@ -250,6 +277,11 @@ function PackLayout({ view, userId }: { view: PackView; userId: string | null })
                   onPutAll={() => putAll.mutate(pkg)}
                   putAllDisabled={unassignedUnits === 0}
                   onDelete={() => setDialog({ kind: "delete", pkg })}
+                  weightDisplay={weightDisplay}
+                  weighing={weigh.isPending && weigh.variables?.pkg.id === pkg.id}
+                  onWeigh={(weightOz, overrideReason) =>
+                    weigh.mutate({ pkg, weightOz, overrideReason })
+                  }
                 />
               ))}
             </ul>
@@ -264,6 +296,9 @@ function PackLayout({ view, userId }: { view: PackView; userId: string | null })
         >
           <p className="font-semibold" data-testid="pack-unassigned">
             {t("pack.unassigned", { count: unassignedUnits })}
+          </p>
+          <p className="text-sm" data-testid="pack-unweighed">
+            {t("pack.noWeight", { count: unweighed })}
           </p>
           {view.unmet.length > 0 && (
             <ul className="list-disc ps-6 text-sm" data-testid="pack-unmet">
@@ -294,6 +329,18 @@ function PackLayout({ view, userId }: { view: PackView; userId: string | null })
           boxes={view.boxes}
           isPending={change.isPending}
           onChoose={(box) => change.mutate({ pkg: dialog.pkg, box })}
+          onClose={closeDialog}
+        />
+      )}
+      {dialog?.kind === "overweight" && (
+        <OverweightDialog
+          weightOz={dialog.weightOz}
+          maxOz={dialog.maxOz}
+          weightDisplay={weightDisplay}
+          isPending={weigh.isPending}
+          onSave={(overrideReason) =>
+            weigh.mutate({ pkg: dialog.pkg, weightOz: dialog.weightOz, overrideReason })
+          }
           onClose={closeDialog}
         />
       )}
@@ -484,7 +531,13 @@ function PackageCard({
   onPutAll,
   putAllDisabled,
   onDelete,
+  weightDisplay,
+  weighing,
+  onWeigh,
 }: {
+  weightDisplay: WeightDisplay;
+  weighing: boolean;
+  onWeigh: (weightOz: number, overrideReason?: string) => void;
   pkg: PackPackage;
   lines: PackLine[];
   isSelected: boolean;
@@ -549,6 +602,41 @@ function PackageCard({
             </Menu>
           </div>
         )}
+      </div>
+      <div className="space-y-2 border-t border-base-300 p-4">
+        {pkg.weightStale && pkg.weightOz !== null && (
+          <div role="status" className="alert alert-warning" data-testid="pack-stale">
+            <span className="grow">{t("pack.stale")}</span>
+            {!disabled && (
+              <Button
+                className="btn-sm"
+                isPending={weighing}
+                // Same value again confirms it; a kept reason travels with it.
+                onPress={() =>
+                  pkg.weightOz !== null && onWeigh(pkg.weightOz, pkg.overrideReason ?? undefined)
+                }
+              >
+                {t("pack.staleConfirm")}
+              </Button>
+            )}
+          </div>
+        )}
+        {pkg.overrideReason && (
+          <p className="text-sm" data-testid="pack-override">
+            <span className="badge badge-warning me-2">{t("pack.overweightBadge")}</span>
+            {pkg.overrideReason}
+          </p>
+        )}
+        <WeightField
+          // Remount when the saved weight changes, so the fields show what the server kept.
+          key={pkg.weightOz ?? "none"}
+          weightOz={pkg.weightOz}
+          maxWeightOz={pkg.box?.maxWeightOz ?? null}
+          weightDisplay={weightDisplay}
+          disabled={disabled}
+          isPending={weighing}
+          onSave={(oz) => onWeigh(oz)}
+        />
       </div>
       {pkg.items.length === 0 ? (
         <p className="border-t border-base-300 p-4 text-sm">{t("pack.empty")}</p>

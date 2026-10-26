@@ -1,8 +1,15 @@
 import { expect, type Page, test } from "@playwright/test";
+import { createDb } from "@woolrus/db";
 import { signInAs } from "./support/auth";
 import { createOrder, deleteCreatedOrders } from "./support/orders";
 
-test.afterAll(deleteCreatedOrders);
+const db = createDb();
+const boxIds: string[] = [];
+
+test.afterAll(async () => {
+  await deleteCreatedOrders();
+  await db.box.deleteMany({ where: { id: { in: boxIds.splice(0) } } });
+});
 
 /** Opens a fresh Packing order from its queue row, as a packer would. */
 async function startPacking(page: Page, quantity: number) {
@@ -122,4 +129,59 @@ test("a takeover elsewhere disables the pack screen without a reload", async ({
   await expect(
     page.getByRole("button", { name: "Put one E2E item in the selected package" }),
   ).toBeDisabled();
+});
+
+test("a weight over the box's max needs a reason; changing a weighed package asks to re-weigh", async ({
+  page,
+}) => {
+  const box = await db.box.create({
+    data: {
+      name: `E2E Box ${crypto.randomUUID()}`,
+      lengthIn: 12,
+      widthIn: 9,
+      heightIn: 4,
+      maxWeightOz: 40,
+    },
+  });
+  boxIds.push(box.id);
+  await startPacking(page, 3);
+  await page.getByRole("button", { name: "Add package" }).click();
+  await page
+    .getByRole("dialog", { name: "Choose a box" })
+    .getByRole("button", { name: box.name })
+    .click();
+  const pkg = page.getByTestId("pack-package");
+  await expect(pkg).toHaveCount(1);
+  await expect(pkg.getByTestId("pack-max")).toHaveText("Max 2 lb 8 oz");
+  await expect(page.getByTestId("pack-unweighed")).toHaveText("1 package without a weight");
+
+  await page.getByRole("button", { name: "Put one E2E item in the selected package" }).click();
+  await expect(pkg).toContainText("×1");
+
+  // 3 lb is over the 2 lb 8 oz max: nothing saves without a reason.
+  await pkg.getByLabel("lb", { exact: true }).fill("3");
+  await pkg.getByRole("button", { name: "Save weight" }).click();
+  const dialog = page.getByRole("dialog", { name: "Over the box's limit" });
+  await dialog.getByRole("button", { name: "Save with reason" }).click();
+  await expect(dialog).toBeVisible();
+  await expect(page.getByTestId("pack-unweighed")).toHaveText("1 package without a weight");
+
+  await dialog.getByLabel("Reason").fill("Dense kit, carrier agreed");
+  await dialog.getByRole("button", { name: "Save with reason" }).click();
+  await expect(dialog).toBeHidden();
+  await expect(page.getByTestId("pack-unweighed")).toHaveText("0 packages without a weight");
+  await expect(pkg.getByTestId("pack-override")).toContainText("Dense kit, carrier agreed");
+  await expect(pkg.getByTestId("pack-stale")).toHaveCount(0);
+
+  // A unit added after weighing keeps the weight but asks to re-weigh or confirm it.
+  await page.getByRole("button", { name: "Put one E2E item in the selected package" }).click();
+  await expect(pkg.getByTestId("pack-stale")).toContainText("Contents changed since weighed");
+  await pkg.getByRole("button", { name: "Weight still right" }).click();
+  await expect(pkg.getByTestId("pack-stale")).toHaveCount(0);
+  await expect(pkg.getByTestId("pack-override")).toContainText("Dense kit, carrier agreed");
+
+  // What's shown is what the server kept.
+  await page.reload();
+  await expect(page.getByTestId("pack-unweighed")).toHaveText("0 packages without a weight");
+  await expect(page.getByTestId("pack-package").getByLabel("lb", { exact: true })).toHaveValue("3");
 });

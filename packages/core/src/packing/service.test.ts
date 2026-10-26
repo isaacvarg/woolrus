@@ -9,6 +9,7 @@ import {
   packRemaining,
   packUnits,
   setPackageBox,
+  setWeight,
   unpackUnits,
 } from "./service";
 
@@ -622,5 +623,161 @@ describe("getPackView", () => {
     const view = await getPackView(db, packer, { orderId: order.id });
 
     expect(view.lines[0]).toMatchObject({ quantity: 2, unassigned: 0, tooMany: 1 });
+  });
+});
+
+describe("setWeight", () => {
+  async function boxed(maxWeightOz: number | null = 400) {
+    const built = await packing([{ quantity: 3 }]);
+    const box = await db.box.create({
+      data: { name: "Capped", lengthIn: 12, widthIn: 10, heightIn: 8, maxWeightOz },
+    });
+    const { packages } = await addPackage(db, built.packer, {
+      orderId: built.order.id,
+      box: { boxId: box.id },
+      idempotencyKey: key(),
+    });
+    return { ...built, box, pkg: id(packages[0]) };
+  }
+  const stored = (pkg: string) => db.package.findUniqueOrThrow({ where: { id: pkg } });
+
+  it("saves a weight within the max and drops any reason", async () => {
+    const { packer, pkg } = await boxed();
+
+    const result = await setWeight(db, packer, {
+      packageId: pkg,
+      weightOz: 39.5,
+      overrideReason: "not needed",
+    });
+
+    expect(result.packages[0]).toMatchObject({ weightOz: 39.5, overrideReason: null });
+    expect(await stored(pkg)).toMatchObject({ weightOverrideReason: null });
+  });
+
+  it("refuses a weight over the max without a reason, then saves it with one", async () => {
+    const { packer, pkg } = await boxed(40);
+
+    await expect(setWeight(db, packer, { packageId: pkg, weightOz: 41 })).rejects.toMatchObject({
+      kind: "CONFLICT",
+      messageKey: "errors.packing.overweight",
+      params: { maxOz: 40 },
+    });
+    expect((await stored(pkg)).weightOz).toBeNull();
+
+    const result = await setWeight(db, packer, {
+      packageId: pkg,
+      weightOz: 41,
+      overrideReason: "Heavy kit, carrier agreed",
+    });
+    expect(result.packages[0]).toMatchObject({
+      weightOz: 41,
+      overrideReason: "Heavy kit, carrier agreed",
+    });
+  });
+
+  it("takes any weight up to 2400 oz for a box without a max or a custom size", async () => {
+    const { packer, order, pkg } = await boxed(null);
+    await setWeight(db, packer, { packageId: pkg, weightOz: 2400 });
+    const custom = await addPackage(db, packer, {
+      orderId: order.id,
+      box: { lengthIn: 5, widthIn: 5, heightIn: 5 },
+      idempotencyKey: key(),
+    });
+
+    const result = await setWeight(db, packer, {
+      packageId: id(custom.packages[1]),
+      weightOz: 1000,
+    });
+
+    expect(result.packages.map((p) => p.weightOz)).toEqual([2400, 1000]);
+  });
+
+  it("deletes the package's rates and keeps QA verification", async () => {
+    const { packer, items, pkg } = await boxed();
+    await packUnits(db, packer, { packageId: pkg, orderItemId: id(items[0]) });
+    await db.packageItem.updateMany({
+      where: { packageId: pkg },
+      data: { qaVerifiedAt: new Date(), qaVerifiedById: packer.userId },
+    });
+    await db.shippingRate.create({
+      data: {
+        packageId: pkg,
+        shipstationRateId: "r1",
+        carrierCode: "usps",
+        serviceCode: "ground",
+        serviceName: "Ground",
+        amountCents: 500,
+        currency: "USD",
+      },
+    });
+
+    await setWeight(db, packer, { packageId: pkg, weightOz: 10 });
+
+    expect(await db.shippingRate.count({ where: { packageId: pkg } })).toBe(0);
+    expect((await rows(pkg))[0]?.qaVerifiedAt).not.toBeNull();
+  });
+
+  it("is refused for a Picker, without the claim, and over the 2400 oz limit", async () => {
+    const { packer, pkg } = await boxed();
+    const picker = await createActor(db, ["PICKER"]);
+    const other = await createActor(db, ["PACKER"]);
+
+    await expect(setWeight(db, picker, { packageId: pkg, weightOz: 5 })).rejects.toMatchObject({
+      kind: "FORBIDDEN",
+    });
+    await expect(setWeight(db, other, { packageId: pkg, weightOz: 5 })).rejects.toMatchObject({
+      messageKey: "errors.workflow.claimRequired",
+    });
+    await expect(setWeight(db, packer, { packageId: pkg, weightOz: 2401 })).rejects.toMatchObject({
+      kind: "BAD_REQUEST",
+    });
+    expect((await stored(pkg)).weightOz).toBeNull();
+  });
+
+  it("flags a weighed package when its contents or box change, and not an unweighed one", async () => {
+    const { packer, order, items, box, pkg } = await boxed();
+    await packUnits(db, packer, { packageId: pkg, orderItemId: id(items[0]) });
+    expect((await stored(pkg)).weightStale).toBe(false);
+    await setWeight(db, packer, { packageId: pkg, weightOz: 20 });
+
+    for (const change of [
+      () => packUnits(db, packer, { packageId: pkg, orderItemId: id(items[0]) }),
+      () => unpackUnits(db, packer, { packageId: pkg, orderItemId: id(items[0]) }),
+      () => packRemaining(db, packer, { packageId: pkg }),
+      () => setPackageBox(db, packer, { packageId: pkg, box: { boxId: box.id } }),
+    ]) {
+      await setWeight(db, packer, { packageId: pkg, weightOz: 20 });
+      expect((await stored(pkg)).weightStale).toBe(false);
+      await change();
+      expect(await stored(pkg), "flagged").toMatchObject({
+        weightStale: true,
+        weightOz: expect.anything(),
+      });
+    }
+
+    // Saving the same weight confirms it; a package never weighed isn't flagged.
+    const result = await setWeight(db, packer, { packageId: pkg, weightOz: 20 });
+    expect(result.packages[0]?.weightStale).toBe(false);
+    const fresh = await addPackage(db, packer, {
+      orderId: order.id,
+      box: { boxId: box.id },
+      idempotencyKey: key(),
+    });
+    await setPackageBox(db, packer, { packageId: id(fresh.packages[1]), box: { boxId: box.id } });
+    expect((await stored(id(fresh.packages[1]))).weightStale).toBe(false);
+  });
+
+  it("does not block the packed gate when the weight is stale", async () => {
+    const { packer, items, pkg } = await boxed();
+    await packRemaining(db, packer, { packageId: pkg });
+    const result = await setWeight(db, packer, { packageId: pkg, weightOz: 20 });
+    expect(result.unmet).toEqual([]);
+
+    const flagged = await unpackUnits(db, packer, { packageId: pkg, orderItemId: id(items[0]) });
+    await packUnits(db, packer, { packageId: pkg, orderItemId: id(items[0]) });
+    expect(flagged.packages[0]?.weightStale).toBe(true);
+    expect((await getPackView(db, packer, { orderId: (await stored(pkg)).orderId })).unmet).toEqual(
+      [],
+    );
   });
 });

@@ -372,7 +372,22 @@
     "unassigned": "{count, plural, one {# item unassigned} other {# items unassigned}}",
     "notPacking": "This order is {status}, not Packing, so it can't be changed here.",
     "unclaimed": "Start packing from the Packing queue to work on this order.",
-    "claimedByOther": "{name} is working on this order."
+    "claimedByOther": "{name} is working on this order.",
+    "weight": "Weight",
+    "weightLb": "lb",
+    "weightOz": "oz",
+    "weightSave": "Save weight",
+    "weightMax": "Max {max}",
+    "weightNone": "No weight yet",
+    "weightSaved": "Weight saved.",
+    "stale": "Contents changed since weighed: re-weigh or confirm.",
+    "staleConfirm": "Weight still right",
+    "overTitle": "Over the box's limit",
+    "overHint": "{weight} is over the limit of {max}. Say why it is right to ship it.",
+    "overReason": "Reason",
+    "overSave": "Save with reason",
+    "noWeight": "{count, plural, one {# package without a weight} other {# packages without a weight}}",
+    "overweightBadge": "Over the limit"
   },
   "pick": {
     "title": "Pick #{number}",
@@ -649,7 +664,8 @@
       "lineNotPackable": "That line can't go in a package.",
       "boxArchived": "That box is no longer in use. Choose another.",
       "packageHasLabels": "This package has a shipping label and can't be deleted. Take its items out instead.",
-      "nothingToPack": "There's nothing more of that to move."
+      "nothingToPack": "There's nothing more of that to move.",
+      "overweight": "That weight is over the box's limit of {maxOz} oz. Give a reason to keep it."
     },
     "workflow": {
       "illegalTransition": "That move isn't allowed from the order's current status.",
@@ -674,7 +690,8 @@
         "packageNoLabel": "Package {package} needs an active label.",
         "packageLiveLabel": "Package {package} has a label that must be voided first.",
         "notReady": "The order isn't Ready.",
-        "noPackages": "The order has no packages."
+        "noPackages": "The order has no packages.",
+        "packageOverweight": "Package {package} is over its box's limit of {maxOz} oz and needs a reason."
       }
     },
     "sync": {

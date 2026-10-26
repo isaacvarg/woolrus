@@ -27,6 +27,8 @@ const pkg = (overrides: Partial<GatePackage> = {}): GatePackage => ({
   hasBox: true,
   hasDimensions: false,
   weightOz: 16,
+  maxWeightOz: null,
+  hasOverrideReason: false,
   items: [{ orderItemId: "line-1", quantity: 2, qaVerified: true }],
   selectedRates: 1,
   activeLabels: 1,
@@ -93,6 +95,23 @@ describe("picked gate", () => {
       }),
     ];
     expect(evaluateGate("picked", snapshot({ lines }))).toEqual([]);
+  });
+});
+
+describe("packed gate: weight", () => {
+  const over = (overrides: Partial<GatePackage> = {}) =>
+    snapshot({ packages: [pkg({ weightOz: 50, maxWeightOz: 40, ...overrides })] });
+
+  it("reports a package over its box's max with no reason", () => {
+    expect(evaluateGate("packed", over())).toEqual([
+      { messageKey: "errors.workflow.gate.packageOverweight", params: { package: 1, maxOz: 40 } },
+    ]);
+  });
+
+  it("accepts it with a reason, at the max, or without a max", () => {
+    expect(evaluateGate("packed", over({ hasOverrideReason: true }))).toEqual([]);
+    expect(evaluateGate("packed", over({ weightOz: 40 }))).toEqual([]);
+    expect(evaluateGate("packed", over({ maxWeightOz: null }))).toEqual([]);
   });
 });
 
@@ -321,6 +340,8 @@ describe("loadGateSnapshot", () => {
         hasBox: true,
         hasDimensions: false,
         weightOz: 16,
+        maxWeightOz: null,
+        hasOverrideReason: false,
         items: [{ orderItemId: items[0]?.id, quantity: 2, qaVerified: true }],
         selectedRates: 1,
         activeLabels: 0,

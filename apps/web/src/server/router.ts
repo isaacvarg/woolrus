@@ -61,6 +61,7 @@ import {
   setPackageBox,
   setPin,
   setSecret,
+  setWeight,
   stationStatus,
   substitute,
   testStoreConnection,
@@ -245,6 +246,9 @@ export const router = implementer.router({
     ),
     deletePackage: api.packing.deletePackage.handler(({ input, context }) =>
       deletePackage(db, context.actor, input),
+    ),
+    setWeight: api.packing.setWeight.handler(({ input, context }) =>
+      setWeight(db, context.actor, input),
     ),
     packUnits: api.packing.packUnits.handler(({ input, context }) =>
       packUnits(db, context.actor, input),
