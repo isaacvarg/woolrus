@@ -9,8 +9,9 @@ import type {
   PackView,
   WeightDisplay,
 } from "@woolrus/contracts";
+import { formatWeight } from "@woolrus/core/format";
 import Link from "next/link";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { useState } from "react";
 import { Dialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/fields";
@@ -318,6 +319,8 @@ function PackLayout({ view, userId }: { view: PackView; userId: string | null })
         <BoxDialog
           title={t("pack.chooseBox")}
           boxes={view.boxes}
+          suggestion={view.suggestion}
+          weightDisplay={weightDisplay}
           isPending={add.isPending}
           onChoose={(box) => add.mutate({ box, idempotencyKey: crypto.randomUUID() })}
           onClose={closeDialog}
@@ -327,6 +330,11 @@ function PackLayout({ view, userId }: { view: PackView; userId: string | null })
         <BoxDialog
           title={t("pack.changeBoxTitle", { number: dialog.pkg.number })}
           boxes={view.boxes}
+          // The live package, so the suggestion follows its contents.
+          suggestion={
+            view.packages.find((p) => p.id === dialog.pkg.id)?.suggestion ?? dialog.pkg.suggestion
+          }
+          weightDisplay={weightDisplay}
           isPending={change.isPending}
           onChoose={(box) => change.mutate({ pkg: dialog.pkg, box })}
           onClose={closeDialog}
@@ -550,6 +558,7 @@ function PackageCard({
   onDelete: () => void;
 }) {
   const t = useTranslations();
+  const locale = useLocale();
   const size = pkg.box ?? pkg.dimensions;
   const sizeText =
     size &&
@@ -625,6 +634,20 @@ function PackageCard({
           <p className="text-sm" data-testid="pack-override">
             <span className="badge badge-warning me-2">{t("pack.overweightBadge")}</span>
             {pkg.overrideReason}
+          </p>
+        )}
+        {pkg.estimatedWeightOz !== null && (
+          <p className="text-sm" data-testid="pack-estimate">
+            {t("pack.estimate", {
+              weight: formatWeight(pkg.estimatedWeightOz, weightDisplay, locale),
+            })}
+          </p>
+        )}
+        {pkg.weightWarning && (
+          <p role="status" className="alert alert-warning" data-testid="pack-weight-warning">
+            {t(pkg.weightWarning.percent > 0 ? "pack.warnHeavier" : "pack.warnLighter", {
+              percent: Math.abs(pkg.weightWarning.percent),
+            })}
           </p>
         )}
         <WeightField

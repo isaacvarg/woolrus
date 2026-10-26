@@ -1,5 +1,7 @@
 import {
   type AddPackageInput,
+  type Box as BoxDto,
+  type BoxSuggestion,
   MAX_PACKAGE_WEIGHT_OZ,
   type PackageBoxInput,
   type PackageIdInput,
@@ -27,6 +29,14 @@ import { evaluateGate, loadGateSnapshot } from "../workflow/gates";
 import { type LockedOrder, lockOrder } from "../workflow/lock";
 import { notifyOrderChanged } from "../workflow/notify";
 import { toAttributes } from "../workflow/queries";
+import {
+  estimateWeightOz,
+  type SuggestBox,
+  type Suggestion,
+  type SuggestUnit,
+  suggestBox,
+  weightOffPercent,
+} from "./suggest";
 
 // Package operations (SPEC-packing "Package rules"). Only the claim holder writes an order's
 // packages, and the order row lock orders those writes against transitions. So, like pick writes,
@@ -71,11 +81,29 @@ const snapshot = (pkg: PackageRow) => ({
   items: pkg.items.map((it) => ({ orderItemId: it.orderItemId, quantity: it.quantity })),
 });
 
+/** A line's size and weight for the suggestion: the variation's, else the product's. */
+function unitOf(row: LineRow, quantity: number): SuggestUnit {
+  const pick = (key: "weightOz" | "lengthIn" | "widthIn" | "heightIn") =>
+    toNumber(row.variation?.[key] ?? row.product?.[key] ?? null);
+  return {
+    name: row.name,
+    lengthIn: pick("lengthIn"),
+    widthIn: pick("widthIn"),
+    heightIn: pick("heightIn"),
+    weightOz: pick("weightOz"),
+    quantity,
+  };
+}
+
 function toPackPackage(
   pkg: PackageRow,
   names: Map<string, string>,
   noteCount: number,
+  units: SuggestUnit[],
+  boxes: SuggestBox[],
 ): PackPackage {
+  const estimatedWeightOz = estimateWeightOz(units, pkg.box ? toBoxDto(pkg.box) : null);
+  const percent = weightOffPercent(toNumber(pkg.weightOz), estimatedWeightOz);
   const { lengthIn, widthIn, heightIn } = pkg;
   return {
     id: pkg.id,
@@ -91,6 +119,9 @@ function toPackPackage(
         : null,
     weightOz: toNumber(pkg.weightOz),
     overrideReason: pkg.weightOverrideReason,
+    estimatedWeightOz,
+    weightWarning: percent === null ? null : { percent },
+    suggestion: toSuggestion(suggestBox(units, boxes)),
     weightStale: pkg.weightStale,
     items: pkg.items.map((it) => ({
       orderItemId: it.orderItemId,
@@ -102,9 +133,11 @@ function toPackPackage(
   };
 }
 
+const toSuggestion = (s: Suggestion<BoxDto>): BoxSuggestion => s;
+
 /** The lines and packages as the pack screen shows them, with what the packed gate still needs. */
 export async function packResult(tx: DbTx, orderId: string): Promise<PackResult> {
-  const [rows, packages, notes, gate] = await Promise.all([
+  const [rows, packages, notes, gate, boxRows] = await Promise.all([
     tx.orderItem.findMany({ where: { orderId }, include: lineInclude }),
     tx.package.findMany({
       where: { orderId },
@@ -113,7 +146,10 @@ export async function packResult(tx: DbTx, orderId: string): Promise<PackResult>
     }),
     lineAndPackageNoteCounts(tx, orderId),
     loadGateSnapshot(tx, orderId),
+    tx.box.findMany({ where: { archivedAt: null } }),
   ]);
+  const boxes = boxRows.map(toBoxDto);
+  const rowById = new Map(rows.map((row) => [row.id, row]));
 
   const packedIn = new Map<string, PackLine["packedIn"]>();
   for (const pkg of packages) {
@@ -149,9 +185,25 @@ export async function packResult(tx: DbTx, orderId: string): Promise<PackResult>
   ).map(({ binLocation: _bin, ...line }) => line);
 
   const names = new Map(rows.map((row) => [row.id, row.name]));
+  const unassigned = lines.flatMap((line) => {
+    const row = rowById.get(line.id);
+    return row && line.unassigned > 0 ? [unitOf(row, line.unassigned)] : [];
+  });
   return {
     lines,
-    packages: packages.map((pkg) => toPackPackage(pkg, names, notes.packages.get(pkg.id) ?? 0)),
+    suggestion: toSuggestion(suggestBox(unassigned, boxes)),
+    packages: packages.map((pkg) =>
+      toPackPackage(
+        pkg,
+        names,
+        notes.packages.get(pkg.id) ?? 0,
+        pkg.items.flatMap((it) => {
+          const row = rowById.get(it.orderItemId);
+          return row ? [unitOf(row, it.quantity)] : [];
+        }),
+        boxes,
+      ),
+    ),
     unmet: evaluateGate("packed", gate),
   };
 }

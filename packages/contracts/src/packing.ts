@@ -43,6 +43,18 @@ export const PackLine = z.object({
 });
 export type PackLine = z.infer<typeof PackLine>;
 
+/** What the box suggestion says (SPEC-packing "Box suggestion"); it is never applied by itself. */
+export const BoxSuggestion = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("box"), box: Box, estimatedWeightOz: z.number() }),
+  /** No single box fits: "Needs more than one box". */
+  z.object({ kind: z.literal("split") }),
+  /** Products without dimensions or weight, by name. */
+  z.object({ kind: z.literal("unknown"), missing: z.array(z.string()) }),
+  /** Nothing to pack. */
+  z.object({ kind: z.literal("none") }),
+]);
+export type BoxSuggestion = z.infer<typeof BoxSuggestion>;
+
 export const PackageItemView = z.object({
   orderItemId: Id,
   name: z.string(),
@@ -62,6 +74,12 @@ export const PackPackage = z.object({
   overrideReason: z.string().nullable(),
   /** The contents or box changed after weighing: re-weigh or confirm. Never blocks the gate. */
   weightStale: z.boolean(),
+  /** Σ unit weight + the box's tare; null when any product has no weight. Never fills the field. */
+  estimatedWeightOz: z.number().nullable(),
+  /** Set when the weight is more than 25% off the estimate (signed percent); computed, not stored. */
+  weightWarning: z.object({ percent: z.number() }).nullable(),
+  /** A box for this package's contents, for changing its box. */
+  suggestion: BoxSuggestion,
   items: z.array(PackageItemView),
   units: z.number().int(),
   noteCount: z.number().int(),
@@ -79,6 +97,8 @@ export const PackView = z.object({
   /** Physical lines with something to pack, in pick order. */
   lines: z.array(PackLine),
   packages: z.array(PackPackage),
+  /** A box for the units not in any package, for adding one. */
+  suggestion: BoxSuggestion,
   /** The active boxes a packer can choose from. */
   boxes: z.array(Box),
   /** What the packed gate still needs; empty when the order can complete. */
@@ -90,6 +110,8 @@ export type PackView = z.infer<typeof PackView>;
 export const PackResult = z.object({
   lines: z.array(PackLine),
   packages: z.array(PackPackage),
+  /** A box for the units not in any package, for adding one. */
+  suggestion: BoxSuggestion,
   unmet: z.array(Unmet),
 });
 export type PackResult = z.infer<typeof PackResult>;

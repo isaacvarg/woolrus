@@ -1,7 +1,7 @@
 import { expect, type Page, test } from "@playwright/test";
 import { createDb } from "@woolrus/db";
 import { signInAs } from "./support/auth";
-import { createOrder, deleteCreatedOrders } from "./support/orders";
+import { createOrder, deleteCreatedOrders, type ProductSize } from "./support/orders";
 
 const db = createDb();
 const boxIds: string[] = [];
@@ -12,13 +12,14 @@ test.afterAll(async () => {
 });
 
 /** Opens a fresh Packing order from its queue row, as a packer would. */
-async function startPacking(page: Page, quantity: number) {
+async function startPacking(page: Page, quantity: number, productSize?: ProductSize) {
   const customerName = `E2E ${crypto.randomUUID()}`;
   const order = await createOrder({
     customerName,
     quantity,
     status: "PACKING",
     rushOrderLine: true,
+    productSize,
   });
   await signInAs(page, ["PACKER"]);
   await page.goto("/queue/packing");
@@ -184,4 +185,51 @@ test("a weight over the box's max needs a reason; changing a weighed package ask
   await page.reload();
   await expect(page.getByTestId("pack-unweighed")).toHaveText("0 packages without a weight");
   await expect(page.getByTestId("pack-package").getByLabel("lb", { exact: true })).toHaveValue("3");
+});
+
+test("the suggested box is listed first and adding it works; a weight far off the estimate warns", async ({
+  page,
+}) => {
+  // Smaller than any other box, so it is the smallest fit for a 1 in cube.
+  const tiny = await db.box.create({
+    data: {
+      name: `E2E Tiny ${crypto.randomUUID()}`,
+      lengthIn: 1.5,
+      widthIn: 1.5,
+      heightIn: 1.5,
+      maxWeightOz: 100,
+      tareWeightOz: 2,
+    },
+  });
+  const huge = await db.box.create({
+    data: { name: `E2E Zlarge ${crypto.randomUUID()}`, lengthIn: 20, widthIn: 20, heightIn: 20 },
+  });
+  boxIds.push(tiny.id, huge.id);
+  await startPacking(page, 1, { weightOz: 8, lengthIn: 1, widthIn: 1, heightIn: 1 });
+
+  await page.getByRole("button", { name: "Add package" }).click();
+  const dialog = page.getByRole("dialog", { name: "Choose a box" });
+  const first = dialog.getByRole("listitem").first();
+  await expect(first).toContainText(tiny.name);
+  await expect(first.getByTestId("box-suggestion")).toContainText("Fits everything · est. 10 oz");
+  await first.getByRole("button").click();
+  await expect(dialog).toBeHidden();
+
+  const pkg = page.getByTestId("pack-package");
+  await expect(pkg).toHaveCount(1);
+  await page.getByRole("button", { name: "Put one E2E item in the selected package" }).click();
+  await expect(pkg.getByTestId("pack-estimate")).toHaveText("Est. 10 oz");
+
+  // Within 25% of 10 oz: no warning. 3 lb is far off.
+  await pkg.getByLabel("oz", { exact: true }).fill("11");
+  await pkg.getByRole("button", { name: "Save weight" }).click();
+  await expect(page.getByTestId("pack-unweighed")).toHaveText("0 packages without a weight");
+  await expect(pkg.getByTestId("pack-weight-warning")).toHaveCount(0);
+
+  await pkg.getByLabel("lb", { exact: true }).fill("1");
+  await pkg.getByLabel("oz", { exact: true }).fill("0");
+  await pkg.getByRole("button", { name: "Save weight" }).click();
+  await expect(pkg.getByTestId("pack-weight-warning")).toContainText(
+    "60% heavier than the estimate",
+  );
 });

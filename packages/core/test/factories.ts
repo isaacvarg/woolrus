@@ -14,6 +14,8 @@ import type {
  * Defaults describe a plain pending order; each option only overrides what a test cares about.
  */
 
+export type LineSize = { weightOz: number; lengthIn: number; widthIn: number; heightIn: number };
+
 export type LineSpec = {
   sku?: string;
   name?: string;
@@ -31,7 +33,9 @@ export type LineSpec = {
   /** The product's barcode. */
   barcode?: string;
   /** Gives the line a variation of its product, with these codes. */
-  variation?: { sku?: string; barcode?: string };
+  variation?: { sku?: string; barcode?: string } & Partial<LineSize>;
+  /** The product's weight and dimensions (oz, in); unset fields stay null. */
+  size?: Partial<LineSize>;
   imageUrl?: string;
   /** Variation attributes and product options, as sync stores them (raw JSON). */
   attributes?: unknown;
@@ -153,6 +157,7 @@ async function createLine(db: Db, orderId: string, line: LineSpec): Promise<Orde
             physical: line.physical ?? true,
             binLocation: line.bin ?? null,
             barcode: line.barcode ?? null,
+            ...line.size,
             rawPayload: {},
             syncedAt: new Date(),
           },
@@ -166,6 +171,10 @@ async function createLine(db: Db, orderId: string, line: LineSpec): Promise<Orde
             name,
             sku: line.variation.sku ?? null,
             barcode: line.variation.barcode ?? null,
+            weightOz: line.variation.weightOz,
+            lengthIn: line.variation.lengthIn,
+            widthIn: line.variation.widthIn,
+            heightIn: line.variation.heightIn,
             attributes: [],
             rawPayload: {},
             syncedAt: new Date(),

@@ -29,8 +29,29 @@ import { pickOrder } from "./sort";
 export type PickOptions = { now?: Date };
 
 export const lineInclude = {
-  product: { select: { physical: true, binLocation: true, barcode: true, sku: true } },
-  variation: { select: { binLocation: true, barcode: true, sku: true } },
+  product: {
+    select: {
+      physical: true,
+      binLocation: true,
+      barcode: true,
+      sku: true,
+      weightOz: true,
+      lengthIn: true,
+      widthIn: true,
+      heightIn: true,
+    },
+  },
+  variation: {
+    select: {
+      binLocation: true,
+      barcode: true,
+      sku: true,
+      weightOz: true,
+      lengthIn: true,
+      widthIn: true,
+      heightIn: true,
+    },
+  },
   voids: { where: { undoneAt: null }, select: { quantity: true } },
   pickedBy: { select: nameFields },
 } as const satisfies Prisma.OrderItemInclude;
