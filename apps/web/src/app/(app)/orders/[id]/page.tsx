@@ -15,6 +15,7 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
       userId={actor?.userId ?? null}
       // Only for showing the visibility switch; the API checks it again.
       canWriteCustomer={actor ? can(actor, "note.customer") : false}
+      canVoid={actor ? can(actor, "void.create") : false}
     />
   );
 }

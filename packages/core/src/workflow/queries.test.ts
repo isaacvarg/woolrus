@@ -2,6 +2,7 @@ import type { Db } from "@woolrus/db";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { createActor, resetDb, testDb } from "../../test/db";
 import { createOrder } from "../../test/factories";
+import { undoVoid, voidItem } from "../exceptions/voids";
 import { systemActor, type UserActor } from "../permissions";
 import { claim, takeOver } from "./claims";
 import { getOrder, getOrderHistory, listOrders, listQueue, queueCounts } from "./queries";
@@ -243,6 +244,41 @@ describe("getOrder", () => {
       ["Wool", { name: "Test User" }, pickedAt],
       ["Clay", null, null],
     ]);
+  });
+
+  it("lists every void on the order, newest first, with its undone state", async () => {
+    const { order, items } = await createOrder(db, {
+      status: "PICKING",
+      lines: [{ name: "Wool", quantity: 3 }],
+    });
+    const orderItemId = items[0]?.id as string;
+    const first = await voidItem(db, picker, {
+      orderId: order.id,
+      orderItemId,
+      quantity: 1,
+      reason: "Damaged",
+    });
+    await voidItem(db, picker, {
+      orderId: order.id,
+      orderItemId,
+      quantity: 1,
+      reason: "Out of stock",
+    });
+    await undoVoid(db, picker, { voidId: first.void.id });
+
+    const view = await getOrder(db, picker, { id: order.id });
+
+    expect(view.lines[0]?.activeQuantity).toBe(2);
+    expect(view.voids.map((v) => [v.reason, v.stage, v.undoneAt !== null])).toEqual([
+      ["Out of stock", "PICKING", false],
+      ["Damaged", "PICKING", true],
+    ]);
+    expect(view.voids[0]).toMatchObject({
+      lineName: "Wool",
+      quantity: 1,
+      voidedBy: { name: "Test User" },
+      resolvedAt: null,
+    });
   });
 
   it("returns the header, addresses, lines with active quantity and packages", async () => {

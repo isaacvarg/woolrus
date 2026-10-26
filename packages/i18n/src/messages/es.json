@@ -536,6 +536,38 @@
     "pageOf": "Página {page} de {pages}",
     "total": "{count, plural, one {# pedido} other {# pedidos}}"
   },
+  "voids": {
+    "button": "Anular",
+    "title": "Anular {name}",
+    "quantity": "Cuántas anular",
+    "ofActive": "de {active}",
+    "reason": "Motivo",
+    "reasonChips": "Motivos frecuentes",
+    "reasons": {
+      "outOfStock": "Sin existencias",
+      "damaged": "Dañado",
+      "customerRequest": "Solicitud del cliente",
+      "other": "Otro"
+    },
+    "confirm": "Anular",
+    "done": "Se anularon {count} × {name}.",
+    "undone": "Anulación deshecha.",
+    "summary": "{count} de {total} anuladas: {reason}",
+    "undo": "Deshacer",
+    "panel": "Anulaciones",
+    "stage": {
+      "INTAKE": "Recepción",
+      "PICKING": "Recolección",
+      "PACKING": "Empaque",
+      "QA": "Control de calidad",
+      "SHIPPING": "Envío",
+      "CUSTOMER": "Cliente"
+    },
+    "by": "{count} × {name} · {stage} · {who}",
+    "resolved": "Resuelta",
+    "undoneLabel": "Deshecha",
+    "none": "Este pedido no tiene anulaciones."
+  },
   "notes": {
     "title": "Notas",
     "empty": "Este pedido aún no tiene notas.",
@@ -711,6 +743,13 @@
       "overweight": "Ese peso supera el límite de la caja de {maxOz} oz. Indica un motivo para conservarlo.",
       "tooManyPackages": "Un pedido puede tener como máximo {max} paquetes.",
       "notInPackage": "Ese paquete no tiene tantas unidades."
+    },
+    "voids": {
+      "liveLabels": "Este pedido tiene una etiqueta de envío. Reempaquétalo primero y luego anula.",
+      "orderClosed": "Este pedido ya terminó, así que sus líneas no se pueden anular ni restaurar.",
+      "quantity": "Elige entre 1 y {active}.",
+      "alreadyResolved": "Un administrador ya resolvió esta anulación, así que no se puede deshacer.",
+      "alreadyUndone": "Esta anulación ya se deshizo."
     },
     "workflow": {
       "illegalTransition": "Ese cambio no está permitido desde el estado actual del pedido.",

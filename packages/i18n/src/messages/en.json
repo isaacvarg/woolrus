@@ -536,6 +536,38 @@
     "pageOf": "Page {page} of {pages}",
     "total": "{count, plural, one {# order} other {# orders}}"
   },
+  "voids": {
+    "button": "Void",
+    "title": "Void {name}",
+    "quantity": "How many to void",
+    "ofActive": "of {active}",
+    "reason": "Reason",
+    "reasonChips": "Common reasons",
+    "reasons": {
+      "outOfStock": "Out of stock",
+      "damaged": "Damaged",
+      "customerRequest": "Customer request",
+      "other": "Other"
+    },
+    "confirm": "Void",
+    "done": "Voided {count} × {name}.",
+    "undone": "Void undone.",
+    "summary": "{count} of {total} voided: {reason}",
+    "undo": "Undo",
+    "panel": "Voids",
+    "stage": {
+      "INTAKE": "Intake",
+      "PICKING": "Picking",
+      "PACKING": "Packing",
+      "QA": "QA",
+      "SHIPPING": "Shipping",
+      "CUSTOMER": "Customer"
+    },
+    "by": "{count} × {name} · {stage} · {who}",
+    "resolved": "Resolved",
+    "undoneLabel": "Undone",
+    "none": "No voids on this order."
+  },
   "notes": {
     "title": "Notes",
     "empty": "No notes on this order yet.",
@@ -711,6 +743,13 @@
       "overweight": "That weight is over the box's limit of {maxOz} oz. Give a reason to keep it.",
       "tooManyPackages": "An order can have at most {max} packages.",
       "notInPackage": "That package doesn't hold that many."
+    },
+    "voids": {
+      "liveLabels": "This order has a shipping label. Repack it first, then void.",
+      "orderClosed": "This order is finished, so its lines can't be voided or restored.",
+      "quantity": "Choose between 1 and {active}.",
+      "alreadyResolved": "An admin already dealt with this void, so it can't be undone.",
+      "alreadyUndone": "This void was already undone."
     },
     "workflow": {
       "illegalTransition": "That move isn't allowed from the order's current status.",

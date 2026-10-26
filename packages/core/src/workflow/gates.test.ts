@@ -386,3 +386,15 @@ describe("loadGateSnapshot", () => {
     }
   });
 });
+
+describe("voided quantity beyond the line", () => {
+  it("reads as an active quantity of 0, never negative", () => {
+    // A store-sync cut left more voided than the line holds (SPEC-exceptions "Vocabulary").
+    const lines = [
+      line({ quantity: 1, voidedQuantity: 3, pickStatus: "PENDING", pickedQuantity: 0 }),
+    ];
+
+    expect(evaluateGate("picked", snapshot({ lines }))).toEqual([]);
+    expect(evaluateGate("packed", snapshot({ lines, packages: [] }))).toEqual([]);
+  });
+});

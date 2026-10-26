@@ -70,6 +70,7 @@ import {
   substitute,
   testStoreConnection,
   touchStation,
+  undoVoid,
   unlockWithBadge,
   unlockWithPin,
   unpackUnits,
@@ -80,6 +81,7 @@ import {
   updatePriorityRule,
   updateSettings,
   updateUserRoles,
+  voidItem,
 } from "@woolrus/core";
 import { db } from "@woolrus/db";
 import { createLogger } from "@woolrus/logger";
@@ -371,6 +373,10 @@ export const router = implementer.router({
     revoke: api.stations.revoke.handler(({ input, context }) =>
       revokeStation(db, context.actor, input),
     ),
+  },
+  voids: {
+    void: api.voids.void.handler(({ input, context }) => voidItem(db, context.actor, input)),
+    undo: api.voids.undo.handler(({ input, context }) => undoVoid(db, context.actor, input)),
   },
   station: {
     status: stationApi.station.status.handler(({ context }) => stationStatus(db, context.station)),

@@ -194,6 +194,41 @@ export const OrderLine = z.object({
 });
 export type OrderLine = z.infer<typeof OrderLine>;
 
+/** Where in the process something happened; stored on voids and quality issues, never typed by the actor. */
+export const FulfillmentStage = z.enum([
+  "INTAKE",
+  "PICKING",
+  "PACKING",
+  "QA",
+  "SHIPPING",
+  "CUSTOMER",
+]);
+export type FulfillmentStage = z.infer<typeof FulfillmentStage>;
+
+export const VoidResolution = z.enum(["HANDLED_MANUALLY", "REFUNDED", "LINE_EDITED"]);
+export type VoidResolution = z.infer<typeof VoidResolution>;
+
+/** A void as the order detail and the voids page show it, with its undone and resolved state. */
+export const ItemVoidView = z.object({
+  id: Id,
+  orderId: Id,
+  orderItemId: Id,
+  lineName: z.string(),
+  sku: z.string().nullable(),
+  quantity: z.number().int(),
+  reason: z.string(),
+  stage: FulfillmentStage,
+  voidedBy: z.object({ name: z.string() }).nullable(),
+  voidedAt: z.date(),
+  undoneAt: z.date().nullable(),
+  undoneBy: z.object({ name: z.string() }).nullable(),
+  resolvedAt: z.date().nullable(),
+  resolution: VoidResolution.nullable(),
+  resolutionNotes: z.string().nullable(),
+  resolvedBy: z.object({ name: z.string() }).nullable(),
+});
+export type ItemVoidView = z.infer<typeof ItemVoidView>;
+
 export const OrderPackageSummary = z.object({
   id: Id,
   number: z.number().int(),
@@ -262,6 +297,8 @@ export const OrderView = OrderDetail.extend({
   billingAddress: OrderAddress,
   lines: z.array(OrderLine),
   packages: z.array(OrderPackageSummary),
+  /** Every void on the order, newest first, including undone and resolved ones. */
+  voids: z.array(ItemVoidView),
   allowedActions: z.array(OrderAction),
 });
 export type OrderView = z.infer<typeof OrderView>;

@@ -11,6 +11,8 @@ export * from "./audit";
 export * from "./boxes/service";
 export * from "./enqueue";
 export * from "./errors";
+export * from "./exceptions/stage";
+export * from "./exceptions/voids";
 export * from "./idempotency";
 export * from "./identity/credentials";
 export * from "./identity/email";

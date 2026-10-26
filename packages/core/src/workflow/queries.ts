@@ -13,6 +13,7 @@ import {
 import { type DbTx, Prisma, type WorkflowStatus } from "@woolrus/db";
 import { z } from "zod";
 import { AppError, notFound } from "../errors";
+import { toVoidView, voidInclude } from "../exceptions/voids";
 import { lineAndPackageNoteCounts, noteCounts } from "../notes/targets";
 import { type Actor, assertCan } from "../permissions";
 import { loadSettings } from "../settings/service";
@@ -250,6 +251,11 @@ export async function getOrder(
 
   const [detail] = await toOrderDetails(db, [order], { now });
   const notes = await lineAndPackageNoteCounts(db, id);
+  const voids = await db.itemVoid.findMany({
+    where: { orderId: id },
+    include: voidInclude,
+    orderBy: [{ voidedAt: "desc" }, { id: "desc" }],
+  });
   if (!detail) throw notFound();
   const externalChange = externalChangeOf(order);
   const names = new Map(order.items.map((i) => [i.id, i.name]));
@@ -299,6 +305,7 @@ export async function getOrder(
       liveLabel: p.labels.length > 0,
       noteCount: notes.packages.get(p.id) ?? 0,
     })),
+    voids: voids.map(toVoidView),
     allowedActions: allowedActions(actor, {
       status: order.status,
       heldFromStatus: order.heldFromStatus,

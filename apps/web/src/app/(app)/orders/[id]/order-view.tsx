@@ -1,14 +1,19 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
-import type { OrderView as Order } from "@woolrus/contracts";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { ItemVoidView, OrderView as Order } from "@woolrus/contracts";
 import Link from "next/link";
 import { useFormatter, useTranslations } from "next-intl";
+import { useState } from "react";
+import { VoidDialog } from "@/components/exceptions/void-dialog";
+import { VoidRow } from "@/components/exceptions/void-row";
 import type { TargetOption } from "@/components/notes/note-composer";
 import { useTargetName } from "@/components/notes/note-list";
 import { NoteOnTarget, NotesPanel } from "@/components/notes/notes-panel";
+import { Button } from "@/components/ui/fields";
+import { toast } from "@/components/ui/toast";
 import { useErrorMessage } from "@/lib/errors";
-import { orpc } from "@/lib/orpc";
+import { client, orpc } from "@/lib/orpc";
 import { formatAddress } from "./address";
 import { ExternalChangeBanner } from "./external-change-banner";
 import { HistoryPanel } from "./history-panel";
@@ -50,10 +55,12 @@ export function OrderView({
   id,
   userId,
   canWriteCustomer,
+  canVoid,
 }: {
   id: string;
   userId: string | null;
   canWriteCustomer: boolean;
+  canVoid: boolean;
 }) {
   const t = useTranslations();
   const errorMessage = useErrorMessage();
@@ -67,17 +74,26 @@ export function OrderView({
       </p>
     );
   }
-  return <OrderLayout order={order.data} userId={userId} canWriteCustomer={canWriteCustomer} />;
+  return (
+    <OrderLayout
+      order={order.data}
+      userId={userId}
+      canWriteCustomer={canWriteCustomer}
+      canVoid={canVoid}
+    />
+  );
 }
 
 function OrderLayout({
   order,
   userId,
   canWriteCustomer,
+  canVoid,
 }: {
   order: Order;
   userId: string | null;
   canWriteCustomer: boolean;
+  canVoid: boolean;
 }) {
   const t = useTranslations();
   const targets = useNoteTargets(order);
@@ -99,7 +115,7 @@ function OrderLayout({
       <OrderActions order={order} userId={userId} />
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
-          <OrderLines order={order} notes={notes} />
+          <OrderLines order={order} notes={notes} canVoid={canVoid} />
           <OrderPackages order={order} notes={notes} />
           <NotesPanel
             orderId={order.id}
@@ -180,11 +196,69 @@ function OrderHeader({ order }: { order: Order }) {
 
 type NotesProps = { orderId: string; canWriteCustomer: boolean; targets: NoteTargets };
 
-function OrderLines({ order, notes }: { order: Order; notes: NotesProps }) {
+/** Whether a void or an undo can still change this order; the server checks it again. */
+function isVoidable(order: Order): boolean {
+  return (
+    order.status !== "COMPLETED" &&
+    order.status !== "CANCELLED" &&
+    !order.packages.some((p) => p.liveLabel)
+  );
+}
+
+function OrderLines({
+  order,
+  notes,
+  canVoid,
+}: {
+  order: Order;
+  notes: NotesProps;
+  canVoid: boolean;
+}) {
   const t = useTranslations();
   const format = useFormatter();
+  const errorMessage = useErrorMessage();
+  const queryClient = useQueryClient();
+  const [voidingId, setVoidingId] = useState<string | null>(null);
+  const voiding = order.lines.find((l) => l.id === voidingId);
+  const mayVoid = canVoid && isVoidable(order);
+
+  // The pick and pack screens show the same lines, so they refetch too.
+  const refresh = () =>
+    Promise.all(
+      [orpc.orders.key(), orpc.picking.key(), orpc.packing.key()].map((queryKey) =>
+        queryClient.invalidateQueries({ queryKey }),
+      ),
+    );
+  const voidMutation = useMutation({
+    mutationFn: (input: { orderItemId: string; quantity: number; reason: string }) =>
+      client.voids.void({ orderId: order.id, ...input }),
+    onSuccess: (result, input) => {
+      const name = order.lines.find((l) => l.id === input.orderItemId)?.name ?? "";
+      toast.success(t("voids.done", { count: input.quantity, name }));
+      return result;
+    },
+    onError: (error) => toast.error(errorMessage(error)),
+    onSettled: refresh,
+  });
+  const undoMutation = useMutation({
+    mutationFn: (voided: ItemVoidView) => client.voids.undo({ voidId: voided.id }),
+    onSuccess: () => toast.success(t("voids.undone")),
+    onError: (error) => toast.error(errorMessage(error)),
+    onSettled: refresh,
+  });
+
   return (
     <div className="overflow-x-auto rounded-box bg-base-100 shadow-sm">
+      {voiding && (
+        <VoidDialog
+          key={voiding.id}
+          line={voiding}
+          isOpen
+          onOpenChange={(open) => !open && setVoidingId(null)}
+          isPending={voidMutation.isPending}
+          onConfirm={(input) => voidMutation.mutateAsync({ orderItemId: voiding.id, ...input })}
+        />
+      )}
       <table className="table text-base" aria-label={t("order.lines")}>
         <thead>
           <tr>
@@ -217,6 +291,26 @@ function OrderLines({ order, notes }: { order: Order; notes: NotesProps }) {
                   <span className="badge badge-ghost badge-sm">{t("order.notPhysical")}</span>
                 )}
                 {line.substitutionNote && <div className="text-sm">{line.substitutionNote}</div>}
+                {/* An undone void is history, not state: the line is whole again. */}
+                {order.voids
+                  .filter((v) => v.orderItemId === line.id && v.undoneAt === null)
+                  .map((voided) => (
+                    <VoidRow
+                      key={voided.id}
+                      voided={voided}
+                      lineQuantity={line.quantity}
+                      onUndo={mayVoid ? (v) => undoMutation.mutate(v) : undefined}
+                      isPending={undoMutation.isPending && undoMutation.variables?.id === voided.id}
+                    />
+                  ))}
+                {mayVoid && line.activeQuantity > 0 && (
+                  <Button
+                    className="btn-outline btn-error btn-sm mt-1"
+                    onPress={() => setVoidingId(line.id)}
+                  >
+                    {t("voids.button")}
+                  </Button>
+                )}
               </td>
               <td className="hidden md:table-cell">{line.sku}</td>
               <td className="text-end tabular-nums">{line.quantity}</td>

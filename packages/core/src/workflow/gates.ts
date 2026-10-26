@@ -44,7 +44,8 @@ export type GatePackage = {
 
 export type GateSnapshot = { status: WorkflowStatus; lines: GateLine[]; packages: GatePackage[] };
 
-const activeQuantity = (line: GateLine) => line.quantity - line.voidedQuantity;
+// Clamped: a store-sync quantity cut below the voided total mustn't read as a negative.
+const activeQuantity = (line: GateLine) => Math.max(line.quantity - line.voidedQuantity, 0);
 
 /** Lines the floor handles: physical, with something left after voids. */
 const workLines = (snap: GateSnapshot) =>
