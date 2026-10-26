@@ -22,6 +22,7 @@ import { client, orpc } from "@/lib/orpc";
 import { playScanSound, useScanner } from "@/lib/scanner";
 import { ScanBanner, type ScanOutcome } from "../../pick/[orderId]/pick-screen";
 import { BoxDialog } from "./box-dialog";
+import { OrderDrawer, PackageNoteDialog } from "./order-drawer";
 import { OverweightDialog, overweightMax, WeightField } from "./weight-field";
 
 // The pack screen (SPEC-packing "UI", FR-PACK-01…03). Taps apply at once and the server confirms
@@ -81,6 +82,7 @@ type Dialogs =
   | { kind: "add" }
   | { kind: "change"; pkg: PackPackage }
   | { kind: "delete"; pkg: PackPackage }
+  | { kind: "note"; pkg: PackPackage }
   | { kind: "overweight"; pkg: PackPackage; weightOz: number; maxOz: number };
 
 type Weigh = { pkg: PackPackage; weightOz: number; overrideReason?: string };
@@ -323,6 +325,7 @@ function PackLayout({ view, userId }: { view: PackView; userId: string | null })
                   onPutAll={() => putAll.mutate(pkg)}
                   putAllDisabled={unassignedUnits === 0}
                   onDelete={() => setDialog({ kind: "delete", pkg })}
+                  onAddNote={() => setDialog({ kind: "note", pkg })}
                   weightDisplay={weightDisplay}
                   weighing={weigh.isPending && weigh.variables?.pkg.id === pkg.id}
                   onWeigh={(weightOz, overrideReason) =>
@@ -397,6 +400,9 @@ function PackLayout({ view, userId }: { view: PackView; userId: string | null })
           onClose={closeDialog}
         />
       )}
+      {dialog?.kind === "note" && (
+        <PackageNoteDialog orderId={order.id} pkg={dialog.pkg} onClose={closeDialog} />
+      )}
       {dialog?.kind === "delete" && (
         <Dialog
           title={t("pack.deleteTitle", { number: dialog.pkg.number })}
@@ -437,9 +443,12 @@ function PackHeader({ view }: { view: PackView }) {
         <span className={`badge badge-lg ${priorityBadge[level] ?? "badge-ghost"}`}>
           {t(`queue.priorityLevel.${level}`)}
         </span>
-        <Link href={`/orders/${order.id}`} className="btn btn-ghost btn-sm ms-auto">
-          {t("pack.orderDetails")}
-        </Link>
+        <span className="ms-auto flex items-center gap-2">
+          <OrderDrawer orderId={order.id} />
+          <Link href={`/orders/${order.id}`} className="btn btn-ghost btn-sm">
+            {t("pack.orderDetails")}
+          </Link>
+        </span>
       </div>
       <p className="text-lg">{order.customerName}</p>
     </header>
@@ -584,6 +593,7 @@ function PackageCard({
   onPutAll,
   putAllDisabled,
   onDelete,
+  onAddNote,
   weightDisplay,
   weighing,
   onWeigh,
@@ -601,6 +611,7 @@ function PackageCard({
   onPutAll: () => void;
   putAllDisabled: boolean;
   onDelete: () => void;
+  onAddNote: () => void;
 }) {
   const t = useTranslations();
   const locale = useLocale();
@@ -650,6 +661,7 @@ function PackageCard({
               <MenuItem isDisabled={putAllDisabled} onAction={onPutAll}>
                 {t("pack.putEverything")}
               </MenuItem>
+              <MenuItem onAction={onAddNote}>{t("pack.addNote")}</MenuItem>
               <MenuItem danger onAction={onDelete}>
                 {t("pack.delete")}
               </MenuItem>

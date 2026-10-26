@@ -269,4 +269,48 @@ test("scans go into the selected package; a wrong scan shows red and changes not
   await page.reload();
   await expect(page.getByTestId("pack-item").getByTestId("pack-left")).toHaveText("1 left");
   await expect(page.getByTestId("pack-package").first()).toContainText("×2");
+
+test("the order drawer shows the address, who picked, and a package note; Escape closes it", async ({
+  page,
+}) => {
+  const order = await startPacking(page, 2);
+  // The packer who opened the order also picked it, so the drawer has a picker to show.
+  const item = await db.orderItem.findFirstOrThrow({
+    where: { orderId: order.id, name: "E2E item" },
+  });
+  const claimed = await db.order.findUniqueOrThrow({
+    where: { id: order.id },
+    include: { claimedBy: true },
+  });
+  const packer = claimed.claimedBy;
+  if (!packer) throw new Error("the order should be claimed");
+  await db.orderItem.update({
+    where: { id: item.id },
+    data: { pickedById: packer.id, pickedAt: new Date() },
+  });
+
+  await addCustomPackage(page);
+  await page
+    .getByTestId("pack-package")
+    .first()
+    .getByRole("button", { name: "Actions for package 1" })
+    .click();
+  await page.getByRole("menuitem", { name: "Add note" }).click();
+  const noteDialog = page.getByRole("dialog", { name: "Add a note to package 1" });
+  await noteDialog.getByLabel("Note").fill("Fragile corner");
+  await noteDialog.getByRole("button", { name: "Add note" }).click();
+  await expect(noteDialog).toBeHidden();
+
+  await page.getByRole("button", { name: "Order info" }).click();
+  const drawer = page.getByRole("dialog", { name: `Order #${order.number}` });
+  await expect(drawer).toBeVisible();
+  await expect(drawer.getByTestId("drawer-address")).toContainText("1 Main St");
+  await expect(drawer.getByTestId("drawer-line").filter({ hasText: "E2E item" })).toContainText(
+    packer.name,
+  );
+  const group = drawer.getByTestId("note-group").filter({ hasText: "Package" });
+  await expect(group).toContainText("Fragile corner");
+
+  await page.keyboard.press("Escape");
+  await expect(drawer).toBeHidden();
 });
