@@ -409,7 +409,6 @@
     "warnHeavier": "{percent}% heavier than the estimate. Check the weight.",
     "warnLighter": "{percent}% lighter than the estimate. Check the weight.",
     "weightNone": "No weight yet",
-    "weightSaved": "Weight saved.",
     "stale": "Contents changed since weighed: re-weigh or confirm.",
     "staleConfirm": "Weight still right",
     "overTitle": "Over the box's limit",

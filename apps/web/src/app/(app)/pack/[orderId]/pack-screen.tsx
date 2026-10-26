@@ -250,7 +250,7 @@ function PackLayout({ view, userId }: { view: PackView; userId: string | null })
       client.packing.setWeight({ packageId: pkg.id, weightOz, overrideReason }),
     onSuccess: (result) => {
       accept(result);
-      toast.success(t("pack.weightSaved"));
+      // No toast: the card shows the saved weight, and a toast bottom right can cover the next tap.
       closeDialog();
     },
     onError: (error, { pkg, weightOz }) => {

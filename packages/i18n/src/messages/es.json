@@ -409,7 +409,6 @@
     "warnHeavier": "{percent} % más pesado que la estimación. Revisa el peso.",
     "warnLighter": "{percent} % más ligero que la estimación. Revisa el peso.",
     "weightNone": "Sin peso todavía",
-    "weightSaved": "Peso guardado.",
     "stale": "El contenido cambió después de pesar: vuelve a pesar o confirma.",
     "staleConfirm": "El peso sigue bien",
     "overTitle": "Supera el límite de la caja",
