@@ -537,6 +537,10 @@
     "total": "{count, plural, one {# order} other {# orders}}"
   },
   "voids": {
+    "allVoided": {
+      "title": "Every item is voided",
+      "hint": "Undo a void to continue, or cancel the order."
+    },
     "button": "Void",
     "title": "Void {name}",
     "quantity": "How many to void",

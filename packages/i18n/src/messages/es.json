@@ -537,6 +537,10 @@
     "total": "{count, plural, one {# pedido} other {# pedidos}}"
   },
   "voids": {
+    "allVoided": {
+      "title": "Todos los artículos están anulados",
+      "hint": "Deshaz una anulación para continuar o cancela el pedido."
+    },
     "button": "Anular",
     "title": "Anular {name}",
     "quantity": "Cuántas anular",

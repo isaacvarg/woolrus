@@ -10,8 +10,8 @@ import type {
 import type { Db, DbTx, Order } from "@woolrus/db";
 import type { Actor } from "../permissions";
 import { applyExternalChange, dismissExternalChange } from "../sync/review";
-import { isAllVoided } from "./gates";
 import { claim, claimExpiryMinutes, claimMany, isClaimLive, release, takeOver } from "./claims";
+import { isAllVoided } from "./gates";
 import { displayName, nameFields } from "./people";
 import {
   beginPicking,

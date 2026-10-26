@@ -14,6 +14,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { useState } from "react";
+import { AllVoidedBanner } from "@/components/exceptions/all-voided-banner";
 import { Dialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/fields";
 import { Menu, MenuItem } from "@/components/ui/menu";
@@ -367,7 +368,8 @@ function PackLayout({ view, userId }: { view: PackView; userId: string | null })
           <p className="text-sm" data-testid="pack-unweighed">
             {t("pack.noWeight", { count: unweighed })}
           </p>
-          {view.unmet.length > 0 && (
+          {view.order.allVoided && <AllVoidedBanner />}
+          {view.unmet.length > 0 && !view.order.allVoided && (
             <ul className="list-disc ps-6 text-sm" data-testid="pack-unmet">
               {view.unmet.map((condition) => (
                 <li key={`${condition.messageKey}:${JSON.stringify(condition.params)}`}>
@@ -378,7 +380,7 @@ function PackLayout({ view, userId }: { view: PackView; userId: string | null })
               ))}
             </ul>
           )}
-          {view.unmet.length === 0 && (
+          {view.unmet.length === 0 && !view.order.allVoided && (
             <div className="flex justify-end gap-2 pt-1">
               <Button
                 className="btn-outline btn-lg"

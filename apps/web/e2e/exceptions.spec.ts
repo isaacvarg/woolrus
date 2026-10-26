@@ -41,3 +41,28 @@ test("a completed order offers no void", async ({ page }) => {
   await expect(page.getByRole("row", { name: /E2E item/ })).toBeVisible();
   await expect(page.getByRole("button", { name: "Void" })).toHaveCount(0);
 });
+
+test("voiding every line shows the all-voided banner, hides Complete, and the order can be cancelled", async ({
+  page,
+}) => {
+  const order = await createOrder({ status: "PICKING", quantity: 1 });
+  await signInAs(page, ["ADMIN"]);
+  await page.goto(`/orders/${order.id}`);
+
+  await page
+    .getByRole("row", { name: /E2E item/ })
+    .getByRole("button", { name: "Void" })
+    .click();
+  const dialog = page.getByRole("dialog", { name: "Void E2E item" });
+  await dialog.getByRole("radio", { name: "Out of stock" }).click();
+  await dialog.getByRole("button", { name: "Void", exact: true }).click();
+
+  await expect(page.getByTestId("all-voided-banner")).toContainText("Every item is voided");
+  await expect(page.getByRole("button", { name: /^Complete/ })).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Cancel order" }).click();
+  const cancel = page.getByRole("dialog", { name: "Cancel this order" });
+  await cancel.getByRole("textbox", { name: "Reason" }).fill("Nothing left to ship");
+  await cancel.getByRole("button", { name: "Cancel order" }).click();
+  await expect(page.getByTestId("order-status")).toHaveText("Cancelled");
+});

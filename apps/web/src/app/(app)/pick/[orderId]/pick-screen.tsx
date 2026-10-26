@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { type ReactNode, useEffect, useState } from "react";
 import { ToggleButton } from "react-aria-components";
+import { AllVoidedBanner } from "@/components/exceptions/all-voided-banner";
 import { Button } from "@/components/ui/fields";
 import { toast } from "@/components/ui/toast";
 import { useErrorMessage } from "@/lib/errors";
@@ -250,9 +251,10 @@ function PickLayout({ view, userId, canPack }: { view: PickView } & Viewer) {
         <p className="text-sm opacity-70">{t("pick.voidedLines", { count: view.voidedLines })}</p>
       )}
 
-      {unmet && <UnmetList unmet={unmet} />}
+      {view.order.allVoided && <AllVoidedBanner />}
+      {unmet && !view.order.allVoided && <UnmetList unmet={unmet} />}
 
-      {canPick && (
+      {canPick && !view.order.allVoided && (
         <footer
           data-toast-clearance
           className="fixed inset-x-0 bottom-0 z-10 flex justify-end gap-2 border-t border-base-300 bg-base-100 p-4"
