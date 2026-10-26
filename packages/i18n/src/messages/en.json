@@ -25,7 +25,8 @@
     "users": "Users",
     "stations": "Stations",
     "openMenu": "Open menu",
-    "closeMenu": "Close menu"
+    "closeMenu": "Close menu",
+    "voids": "Voids"
   },
   "navFooter": {
     "preferences": "Preferences",
@@ -572,7 +573,37 @@
     "by": "{count} × {name} · {stage} · {who}",
     "resolved": "Resolved",
     "undoneLabel": "Undone",
-    "none": "No voids on this order."
+    "none": "No voids on this order.",
+    "page": {
+      "title": "Voids",
+      "intro": "Items taken out of orders. Fix each one in WooCommerce (refund or edit the line), then mark it resolved here. Nothing is sent to WooCommerce.",
+      "unresolved": "Unresolved",
+      "resolved": "Resolved",
+      "search": "Search by order number or customer",
+      "empty": "No voids to show.",
+      "line": "Line",
+      "quantity": "Qty",
+      "reason": "Reason",
+      "stage": "Stage",
+      "who": "By",
+      "when": "When",
+      "select": "Select void of {name}",
+      "resolveSelected": "Resolve selected ({count})",
+      "resolveOrder": "Resolve all",
+      "resolveTitle": "Resolve {count, plural, one {# void} other {# voids}}",
+      "outcome": "What you did in WooCommerce",
+      "note": "Note",
+      "noteHint": "For example: Refunded $14 in Woo.",
+      "confirm": "Mark resolved",
+      "resolvedToast": "{count, plural, one {# void} other {# voids}} resolved.",
+      "outcomes": {
+        "HANDLED_MANUALLY": "Handled manually",
+        "REFUNDED": "Refunded",
+        "LINE_EDITED": "Line edited"
+      },
+      "resolvedBy": "{outcome} by {name}",
+      "loadMore": "Load more"
+    }
   },
   "notes": {
     "title": "Notes",

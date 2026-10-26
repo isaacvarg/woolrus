@@ -1,6 +1,9 @@
 import {
   type ItemVoidView,
+  type ResolveVoidsInput,
+  type ResolveVoidsResult,
   type UndoVoidInput,
+  VOID_NOTES_MAX,
   VOID_REASON_MAX,
   type VoidItemInput,
   type VoidResult,
@@ -13,7 +16,7 @@ import { type Actor, assertCan } from "../permissions";
 import { reconcilePick } from "../picking/service";
 import { claimExpiryMinutes, touchClaim } from "../workflow/claims";
 import { liveLabelStatuses } from "../workflow/gates";
-import { type LockedOrder, lockOrder } from "../workflow/lock";
+import { type LockedOrder, lockOrder, lockOrders } from "../workflow/lock";
 import { notifyOrderChanged } from "../workflow/notify";
 import { displayName, nameFields } from "../workflow/people";
 import { recomputePriorities } from "../workflow/priority-rules";
@@ -260,5 +263,57 @@ export async function undoVoid(
       },
       now,
     );
+  });
+}
+
+/**
+ * Records that an admin dealt with voids in the store by hand (FR-VOID-04). Nothing is sent to
+ * WooCommerce, so `wooRefundId` stays null. Completed orders resolve too. All or nothing: every
+ * void must be open and unresolved, or none changes.
+ */
+export async function resolveVoids(
+  db: Db,
+  actor: Actor,
+  { voidIds, resolution, notes }: ResolveVoidsInput,
+  { now = new Date() }: VoidOptions = {},
+): Promise<ResolveVoidsResult> {
+  assertCan(actor, "void.resolve");
+  const text = notes.trim();
+  if (!text) throw invalid("notes", "errors.field.required");
+  if (text.length > VOID_NOTES_MAX) throw invalid("notes", "errors.field.tooBig");
+  const ids = [...new Set(voidIds)];
+
+  return db.$transaction(async (tx) => {
+    const refs = await tx.itemVoid.findMany({
+      where: { id: { in: ids } },
+      select: { orderId: true },
+    });
+    if (refs.length !== ids.length) throw notFound();
+    await claimExpiryMinutes(tx);
+    // Id order, so two resolves over the same orders can't deadlock; also serialises with undo.
+    const orders = await lockOrders(tx, [...new Set(refs.map((r) => r.orderId))]);
+    // Read after the locks: a racing undo or resolve has finished by now.
+    const voids = await tx.itemVoid.findMany({ where: { id: { in: ids } } });
+    for (const v of voids) {
+      if (v.resolvedAt) throw new AppError("CONFLICT", "errors.voids.alreadyResolved");
+      if (v.undoneAt) throw new AppError("CONFLICT", "errors.voids.alreadyUndone");
+    }
+    await tx.itemVoid.updateMany({
+      where: { id: { in: ids } },
+      data: { resolution, resolutionNotes: text, resolvedById: actor.userId, resolvedAt: now },
+    });
+    for (const v of voids) {
+      await recordAudit(tx, actor, {
+        entityType: "ItemVoid",
+        entityId: v.id,
+        action: "void.resolve",
+        before: { resolvedAt: null },
+        after: { resolution, resolutionNotes: text, resolvedAt: now.toISOString() },
+        at: now,
+      });
+    }
+    for (const order of orders)
+      await notifyOrderChanged(tx, { id: order.id, status: order.status });
+    return { resolved: voids.length };
   });
 }

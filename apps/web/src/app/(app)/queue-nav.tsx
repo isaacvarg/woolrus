@@ -12,6 +12,7 @@ export function QueueNav() {
   const t = useTranslations();
   const pathname = usePathname();
   const counts = useQuery(orpc.orders.counts.queryOptions());
+  const voidCounts = useQuery(orpc.voids.counts.queryOptions());
 
   return (
     <>
@@ -30,6 +31,14 @@ export function QueueNav() {
       <li>
         <Link href="/orders" className={pathname === "/orders" ? "menu-active" : undefined}>
           {t("nav.allOrders")}
+        </Link>
+      </li>
+      <li>
+        <Link href="/voids" className={pathname === "/voids" ? "menu-active" : undefined}>
+          <span className="grow">{t("nav.voids")}</span>
+          <span className="badge badge-sm" data-testid="voids-count">
+            {voidCounts.data?.unresolvedOrders ?? "…"}
+          </span>
         </Link>
       </li>
     </>
