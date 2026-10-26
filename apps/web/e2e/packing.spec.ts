@@ -1,0 +1,125 @@
+import { expect, type Page, test } from "@playwright/test";
+import { signInAs } from "./support/auth";
+import { createOrder, deleteCreatedOrders } from "./support/orders";
+
+test.afterAll(deleteCreatedOrders);
+
+/** Opens a fresh Packing order from its queue row, as a packer would. */
+async function startPacking(page: Page, quantity: number) {
+  const customerName = `E2E ${crypto.randomUUID()}`;
+  const order = await createOrder({
+    customerName,
+    quantity,
+    status: "PACKING",
+    rushOrderLine: true,
+  });
+  await signInAs(page, ["PACKER"]);
+  await page.goto("/queue/packing");
+  await page.getByRole("searchbox", { name: "Search orders" }).fill(customerName);
+  await page
+    .getByRole("row", { name: new RegExp(order.number) })
+    .getByRole("button", { name: "Start packing" })
+    .click();
+  // The first load of the pack screen compiles it in dev, and parallel workers share the server.
+  await expect(page).toHaveURL(`/pack/${order.id}`, { timeout: 20_000 });
+  await expect(page.getByRole("heading", { name: `Pack #${order.number}` })).toBeVisible();
+  return order;
+}
+
+/** Adds a package of a custom size, which needs no box set up in the dev stack. */
+async function addCustomPackage(page: Page) {
+  await page.getByRole("button", { name: "Add package" }).click();
+  const dialog = page.getByRole("dialog", { name: "Choose a box" });
+  await dialog.getByLabel("Length").fill("12");
+  await dialog.getByLabel("Width").fill("9");
+  await dialog.getByLabel("Height").fill("4");
+  await dialog.getByRole("button", { name: "Use this size" }).click();
+  await expect(dialog).toBeHidden();
+}
+
+test("Start packing opens the pack screen; add packages, split a line, unpack, delete", async ({
+  page,
+}) => {
+  const order = await startPacking(page, 6);
+  const item = page.getByTestId("pack-item");
+  // The Rush Order line isn't packed by anyone, so it isn't shown.
+  await expect(item).toHaveCount(1);
+  await expect(item.getByTestId("pack-left")).toHaveText("6 left");
+  await expect(page.getByText("Add a package first")).toBeVisible();
+
+  await addCustomPackage(page);
+  const packages = page.getByTestId("pack-package");
+  await expect(packages).toHaveCount(1);
+  await expect(packages.first()).toHaveAttribute("data-selected", "true");
+  await expect(packages.first()).toContainText("Selected");
+
+  // Tap: one unit. Stepper: several at once.
+  await item.getByRole("button", { name: "Put one E2E item in the selected package" }).click();
+  await expect(item.getByTestId("pack-left")).toHaveText("5 left");
+  await item.getByRole("button", { name: "One more E2E item" }).click();
+  await item.getByRole("button", { name: "One more E2E item" }).click();
+  await item.getByRole("button", { name: "Put 3 here" }).click();
+  await expect(item.getByTestId("pack-left")).toHaveText("2 left");
+  await expect(packages.first()).toContainText("×4");
+  await expect(page.getByTestId("pack-unassigned")).toHaveText("2 items unassigned");
+
+  // A second package takes the rest: the one line is split, never changed.
+  await addCustomPackage(page);
+  await expect(packages).toHaveCount(2);
+  await expect(packages.nth(1)).toHaveAttribute("data-selected", "true");
+  await item.getByRole("button", { name: "Put one E2E item in the selected package" }).click();
+  await expect(item.getByTestId("pack-where")).toHaveText("4 in #1 · 1 in #2");
+  await item.getByRole("button", { name: "Put one E2E item in the selected package" }).click();
+  await expect(page.getByTestId("pack-all-packed")).toBeVisible();
+  await expect(packages.nth(1)).toContainText("×2");
+
+  // Taking one back out returns it to the items.
+  await page.getByRole("button", { name: "Take one E2E item out of package 2" }).click();
+  await expect(item.getByTestId("pack-left")).toHaveText("1 left");
+  await expect(packages.nth(1)).toContainText("×1");
+
+  // Deleting package 2 returns its unit too.
+  await page.getByRole("button", { name: "Actions for package 2" }).click();
+  await page.getByRole("menuitem", { name: "Delete package" }).click();
+  await page
+    .getByRole("dialog", { name: "Delete package 2?" })
+    .getByRole("button", { name: "Delete" })
+    .click();
+  await expect(packages).toHaveCount(1);
+  await expect(item.getByTestId("pack-left")).toHaveText("2 left");
+
+  // What's shown is what the server kept, and the order page shows the package's contents.
+  await page.reload();
+  await expect(page.getByTestId("pack-item").getByTestId("pack-left")).toHaveText("2 left");
+  await page.goto(`/orders/${order.id}`);
+  await expect(page.getByTestId("order-package-items")).toContainText("E2E item ×4");
+});
+
+test("a takeover elsewhere disables the pack screen without a reload", async ({
+  page,
+  browser,
+}) => {
+  const order = await startPacking(page, 2);
+  await addCustomPackage(page);
+  await expect(page.getByRole("button", { name: "Add package" })).toBeVisible();
+
+  const other = await (await browser.newContext()).newPage();
+  try {
+    await signInAs(other, ["PACKER"]);
+    await other.goto(`/orders/${order.id}`);
+    await other.getByRole("button", { name: "Take over" }).click();
+    await other
+      .getByRole("dialog", { name: "Take over this order?" })
+      .getByRole("button", { name: "Take over" })
+      .click();
+    await expect(other.getByText("Claimed by E2E PACKER")).toBeVisible();
+  } finally {
+    await other.context().close();
+  }
+
+  await expect(page.getByTestId("pack-banner")).toContainText("is working on this order");
+  await expect(page.getByRole("button", { name: "Add package" })).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Put one E2E item in the selected package" }),
+  ).toBeDisabled();
+});

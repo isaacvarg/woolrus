@@ -44,6 +44,19 @@ describe("seedDemoOrders", () => {
     }).toEqual(before);
   });
 
+  it("gives products dimensions, all but one, and a Packing order whose line of 6 needs two boxes", async () => {
+    await seedDemoOrders(db);
+
+    const physical = await db.product.findMany({ where: { physical: true } });
+    expect(physical.filter((p) => p.lengthIn === null)).toHaveLength(1);
+    expect(physical.every((p) => p.weightOz !== null)).toBe(true);
+    const packing = await db.order.findMany({
+      where: { status: "PACKING", packages: { none: {} } },
+      include: { items: true },
+    });
+    expect(packing.some((o) => o.items.some((i) => i.quantity === 6))).toBe(true);
+  });
+
   it("gives some products barcodes to scan", async () => {
     await seedDemoOrders(db);
 

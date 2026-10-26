@@ -40,6 +40,7 @@ function invalidateLists(queryClient: QueryClient) {
 const followed = () => [
   orpc.orders.key(),
   orpc.picking.key(),
+  orpc.packing.key(),
   orpc.pickBatches.key(),
   orpc.notes.key(),
 ];
@@ -55,6 +56,9 @@ function invalidateOrders(queryClient: QueryClient, ids: Iterable<string>) {
     void queryClient.invalidateQueries({ queryKey: orpc.orders.history.key({ input: { id } }) });
     void queryClient.invalidateQueries({
       queryKey: orpc.picking.view.key({ input: { orderId: id } }),
+    });
+    void queryClient.invalidateQueries({
+      queryKey: orpc.packing.view.key({ input: { orderId: id } }),
     });
     // Notes change without touching the order, and say so with the same event.
     void queryClient.invalidateQueries({

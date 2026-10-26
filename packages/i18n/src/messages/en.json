@@ -225,7 +225,9 @@
     "batchRefusedOrder": "#{number}: {reason}",
     "begunPicking": "Order {number} is now in Picking.",
     "loadMore": "Load more",
-    "noOrders": "No orders in this queue."
+    "noOrders": "No orders in this queue.",
+    "startPacking": "Start packing",
+    "startedPacking": "Order {number} is yours to pack."
   },
   "order": {
     "title": "Order #{number}",
@@ -321,7 +323,56 @@
       }
     },
     "pickedBy": "{name}, {time}",
-    "openPickScreen": "Open pick screen"
+    "openPickScreen": "Open pick screen",
+    "openPackScreen": "Open pack screen"
+  },
+  "pack": {
+    "title": "Pack #{number}",
+    "orderDetails": "Order details",
+    "items": "Items to pack",
+    "packages": "Packages",
+    "allPacked": "Every item is in a package.",
+    "nothingToPack": "Nothing on this order needs packing.",
+    "sku": "SKU {sku}",
+    "left": "{count} left",
+    "leftLabel": "{count} left of {name}",
+    "putOne": "Put one {name} in the selected package",
+    "putCount": "Put {count} here",
+    "oneMore": "One more {name}",
+    "oneFewer": "One fewer {name}",
+    "noPackageSelected": "Add a package first, then tap items to put them in it.",
+    "packedIn": "{count} in #{number}",
+    "tooMany": "{count} too many in #{number}: take them out",
+    "addPackage": "Add package",
+    "package": "Package {number}",
+    "selected": "Selected",
+    "select": "Select package {number}",
+    "selectedHint": "Taps and scans go into the selected package.",
+    "empty": "Nothing in this package yet.",
+    "units": "{count, plural, one {# unit} other {# units}}",
+    "takeOut": "Take one {name} out of package {number}",
+    "custom": "Custom size",
+    "dimensions": "{length} × {width} × {height} in",
+    "menu": "Actions for package {number}",
+    "changeBox": "Change box",
+    "putEverything": "Put everything left here",
+    "delete": "Delete package",
+    "deleteTitle": "Delete package {number}?",
+    "deleteHint": "Its items go back to the items to pack.",
+    "deleteConfirm": "Delete",
+    "chooseBox": "Choose a box",
+    "changeBoxTitle": "Change the box of package {number}",
+    "noBoxes": "No boxes are set up. Use a custom size.",
+    "customHint": "Outer size of the box, in inches.",
+    "length": "Length",
+    "width": "Width",
+    "height": "Height",
+    "useCustom": "Use this size",
+    "added": "Package {number} added.",
+    "unassigned": "{count, plural, one {# item unassigned} other {# items unassigned}}",
+    "notPacking": "This order is {status}, not Packing, so it can't be changed here.",
+    "unclaimed": "Start packing from the Packing queue to work on this order.",
+    "claimedByOther": "{name} is working on this order."
   },
   "pick": {
     "title": "Pick #{number}",
@@ -592,6 +643,13 @@
       "batchOpen": "You already have an open batch. Finish it in My picks before starting another.",
       "batchFailed": "Some orders couldn't be taken, so none were.",
       "notInBatch": "This order isn't in the batch any more."
+    },
+    "packing": {
+      "notPacking": "This order isn't being packed, so its packages can't change.",
+      "lineNotPackable": "That line can't go in a package.",
+      "boxArchived": "That box is no longer in use. Choose another.",
+      "packageHasLabels": "This package has a shipping label and can't be deleted. Take its items out instead.",
+      "nothingToPack": "There's nothing more of that to move."
     },
     "workflow": {
       "illegalTransition": "That move isn't allowed from the order's current status.",

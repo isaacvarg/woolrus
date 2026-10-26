@@ -12,6 +12,8 @@ type DemoProduct = {
   name: string;
   bin: string;
   weightOz: number;
+  /** Length, width, height in inches; none on one product, so the box suggestion shows "unknown". */
+  dims?: [number, number, number];
   physical?: boolean;
   /** What a scanner reads off the label (FR-PICK-06); the rest match by SKU. */
   barcode?: string;
@@ -23,6 +25,7 @@ const products: DemoProduct[] = [
     name: "Merino yarn, Red",
     bin: "A-01-1",
     weightOz: 3.5,
+    dims: [4, 4, 3],
     barcode: "0700000000011",
   },
   {
@@ -30,18 +33,40 @@ const products: DemoProduct[] = [
     name: "Merino yarn, Navy",
     bin: "A-01-2",
     weightOz: 3.5,
+    dims: [4, 4, 3],
     barcode: "0700000000028",
   },
-  { sku: "WOOL-ALP-CRM", name: "Alpaca blend, Cream", bin: "A-02-1", weightOz: 3.5 },
+  {
+    sku: "WOOL-ALP-CRM",
+    name: "Alpaca blend, Cream",
+    bin: "A-02-1",
+    weightOz: 3.5,
+    dims: [5, 5, 3],
+  },
   {
     sku: "NDL-CIRC-5",
     name: "Circular needles 5 mm",
     bin: "B-01-1",
     weightOz: 1.2,
+    dims: [12, 1, 1],
     barcode: "0700000000035",
   },
-  { sku: "NDL-DPN-4", name: "Double-pointed needles 4 mm", bin: "B-01-2", weightOz: 0.8 },
-  { sku: "KIT-BEANIE", name: "Beanie kit", bin: "C-03-1", weightOz: 9, barcode: "0700000000042" },
+  {
+    sku: "NDL-DPN-4",
+    name: "Double-pointed needles 4 mm",
+    bin: "B-01-2",
+    weightOz: 0.8,
+    dims: [7, 1, 1],
+  },
+  {
+    sku: "KIT-BEANIE",
+    name: "Beanie kit",
+    bin: "C-03-1",
+    weightOz: 9,
+    dims: [8, 6, 3],
+    barcode: "0700000000042",
+  },
+  // No dimensions: a box can't be suggested for an order with it.
   { sku: "BOOK-WINTER", name: "Pattern book: Winter Knits", bin: "D-01-1", weightOz: 14 },
   // Sold in the store but never handled on the floor: it only raises priority.
   { sku: "RUSH-ORDER", name: "Rush Order", bin: "", weightOz: 0, physical: false },
@@ -84,11 +109,13 @@ const orders: DemoOrder[] = [
   { customer: "Karla Vega", status: "PICKING", lines: [["BOOK-WINTER", 1]], progress: "picked", ageHours: 9, inStageMinutes: 40 },
   { customer: "Luis Herrera", status: "PICKING", lines: [["WOOL-ALP-CRM", 3], ["NDL-DPN-4", 1]], progress: "none", ageHours: 7, inStageMinutes: 95 },
   { customer: "María Castro", status: "PICKING", lines: [["NDL-CIRC-5", 2]], progress: "none", ageHours: 10, inStageMinutes: 10 },
-  // Packing: two packed and ready for QA, two picked but not boxed (one with a voided unit).
+  // Packing: two packed and ready for QA, three picked but not boxed (one with a voided unit, one needing two boxes).
   { customer: "Nora Jiménez", status: "PACKING", lines: [["WOOL-MER-NAVY", 3]], progress: "packed", ageHours: 12, inStageMinutes: 20 },
   { customer: "Óscar Ramos", status: "PACKING", lines: [["KIT-BEANIE", 1], ["NDL-CIRC-5", 1]], progress: "packed", ageHours: 11, inStageMinutes: 35, method: "UPS 2nd Day Air Express" },
   { customer: "Paula Gil", status: "PACKING", lines: [["WOOL-MER-RED", 3], ["BOOK-WINTER", 1]], progress: "picked", ageHours: 14, inStageMinutes: 50, voidFirst: 1 },
   { customer: "Quentin Moore", status: "PACKING", lines: [["WOOL-ALP-CRM", 2]], progress: "picked", ageHours: 15, inStageMinutes: 70 },
+  // Picked, not boxed: a line of 6 that needs two boxes.
+  { customer: "Ricardo Núñez", status: "PACKING", lines: [["WOOL-ALP-CRM", 6], ["NDL-CIRC-5", 1]], progress: "picked", ageHours: 13, inStageMinutes: 60 },
   // QA: two verified and labeled, two waiting for verification.
   { customer: "Rosa Delgado", status: "QA", lines: [["NDL-DPN-4", 2]], progress: "labeled", ageHours: 18, inStageMinutes: 15 },
   { customer: "Samuel Torres", status: "QA", lines: [["WOOL-MER-NAVY", 1], ["WOOL-MER-RED", 1]], progress: "labeled", ageHours: 19, inStageMinutes: 30 },
@@ -153,6 +180,10 @@ const address = (name: string): Prisma.InputJsonValue => ({
   country: "US",
 });
 
+/** Stacks seeded before dimensions existed get them on the next seed. */
+const dimensionColumns = (p: DemoProduct) =>
+  p.dims ? { lengthIn: p.dims[0], widthIn: p.dims[1], heightIn: p.dims[2] } : {};
+
 async function upsertProducts(db: Db): Promise<Map<string, { id: string; physical: boolean }>> {
   const bySku = new Map<string, { id: string; physical: boolean }>();
   for (const [i, p] of products.entries()) {
@@ -166,6 +197,7 @@ async function upsertProducts(db: Db): Promise<Map<string, { id: string; physica
         sku: p.sku,
         priceCents: physical ? 1800 : 1500,
         weightOz: p.weightOz,
+        ...dimensionColumns(p),
         binLocation: p.bin || null,
         physical,
         barcode: p.barcode ?? null,
@@ -173,7 +205,7 @@ async function upsertProducts(db: Db): Promise<Map<string, { id: string; physica
         syncedAt: new Date(),
       },
       // Demo stacks seeded before barcodes existed get them on the next seed.
-      update: p.barcode ? { barcode: p.barcode } : {},
+      update: { ...(p.barcode ? { barcode: p.barcode } : {}), ...dimensionColumns(p) },
     });
     bySku.set(p.sku, { id: row.id, physical: row.physical });
   }

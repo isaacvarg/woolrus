@@ -1,4 +1,5 @@
 import {
+  addPackage,
   archiveBox,
   clearPin,
   clearSecret,
@@ -11,12 +12,14 @@ import {
   createPriorityRule,
   deactivateUser,
   deleteNote,
+  deletePackage,
   deletePriorityRule,
   finishBatch,
   getBatch,
   getEmailSender,
   getOrder,
   getOrderHistory,
+  getPackView,
   getPickView,
   getPublicSettings,
   getSettings,
@@ -37,6 +40,8 @@ import {
   markOutOfStock,
   myPicks,
   orderMutations,
+  packRemaining,
+  packUnits,
   permissionsFor,
   pickLine,
   queueCounts,
@@ -53,6 +58,7 @@ import {
   scan,
   scanBatch,
   sendTestEmail,
+  setPackageBox,
   setPin,
   setSecret,
   stationStatus,
@@ -61,6 +67,7 @@ import {
   touchStation,
   unlockWithBadge,
   unlockWithPin,
+  unpackUnits,
   unpickLine,
   updateNote,
   updatePreferences,
@@ -227,6 +234,27 @@ export const router = implementer.router({
       substitute(db, context.actor, input),
     ),
     myPicks: api.picking.myPicks.handler(({ context }) => myPicks(db, context.actor)),
+  },
+  packing: {
+    view: api.packing.view.handler(({ input, context }) => getPackView(db, context.actor, input)),
+    addPackage: api.packing.addPackage.handler(({ input, context }) =>
+      addPackage(db, context.actor, input),
+    ),
+    setBox: api.packing.setBox.handler(({ input, context }) =>
+      setPackageBox(db, context.actor, input),
+    ),
+    deletePackage: api.packing.deletePackage.handler(({ input, context }) =>
+      deletePackage(db, context.actor, input),
+    ),
+    packUnits: api.packing.packUnits.handler(({ input, context }) =>
+      packUnits(db, context.actor, input),
+    ),
+    unpackUnits: api.packing.unpackUnits.handler(({ input, context }) =>
+      unpackUnits(db, context.actor, input),
+    ),
+    packRemaining: api.packing.packRemaining.handler(({ input, context }) =>
+      packRemaining(db, context.actor, input),
+    ),
   },
   pickBatches: {
     create: api.pickBatches.create.handler(({ input, context }) =>

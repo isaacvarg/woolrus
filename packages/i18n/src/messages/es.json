@@ -225,7 +225,9 @@
     "batchRefusedOrder": "#{number}: {reason}",
     "begunPicking": "El pedido {number} está ahora en surtido.",
     "loadMore": "Cargar más",
-    "noOrders": "No hay pedidos en esta cola."
+    "noOrders": "No hay pedidos en esta cola.",
+    "startPacking": "Empezar a empacar",
+    "startedPacking": "Empacarás el pedido {number}."
   },
   "order": {
     "title": "Pedido #{number}",
@@ -321,7 +323,56 @@
       }
     },
     "pickedBy": "{name}, {time}",
-    "openPickScreen": "Abrir pantalla de surtido"
+    "openPickScreen": "Abrir pantalla de surtido",
+    "openPackScreen": "Abrir pantalla de empaque"
+  },
+  "pack": {
+    "title": "Empacar #{number}",
+    "orderDetails": "Detalles del pedido",
+    "items": "Artículos por empacar",
+    "packages": "Paquetes",
+    "allPacked": "Todos los artículos están en un paquete.",
+    "nothingToPack": "Nada en este pedido necesita empacarse.",
+    "sku": "SKU {sku}",
+    "left": "Faltan {count}",
+    "leftLabel": "Faltan {count} de {name}",
+    "putOne": "Poner un {name} en el paquete seleccionado",
+    "putCount": "Poner {count} aquí",
+    "oneMore": "Uno más de {name}",
+    "oneFewer": "Uno menos de {name}",
+    "noPackageSelected": "Primero agrega un paquete; luego toca los artículos para ponerlos en él.",
+    "packedIn": "{count} en #{number}",
+    "tooMany": "{count} de más en #{number}: sácalos",
+    "addPackage": "Agregar paquete",
+    "package": "Paquete {number}",
+    "selected": "Seleccionado",
+    "select": "Seleccionar paquete {number}",
+    "selectedHint": "Los toques y escaneos van al paquete seleccionado.",
+    "empty": "Todavía no hay nada en este paquete.",
+    "units": "{count, plural, one {# unidad} other {# unidades}}",
+    "takeOut": "Sacar un {name} del paquete {number}",
+    "custom": "Tamaño personalizado",
+    "dimensions": "{length} × {width} × {height} pulg.",
+    "menu": "Acciones del paquete {number}",
+    "changeBox": "Cambiar caja",
+    "putEverything": "Poner aquí todo lo que falta",
+    "delete": "Eliminar paquete",
+    "deleteTitle": "¿Eliminar el paquete {number}?",
+    "deleteHint": "Sus artículos vuelven a los artículos por empacar.",
+    "deleteConfirm": "Eliminar",
+    "chooseBox": "Elige una caja",
+    "changeBoxTitle": "Cambiar la caja del paquete {number}",
+    "noBoxes": "No hay cajas configuradas. Usa un tamaño personalizado.",
+    "customHint": "Tamaño exterior de la caja, en pulgadas.",
+    "length": "Largo",
+    "width": "Ancho",
+    "height": "Alto",
+    "useCustom": "Usar este tamaño",
+    "added": "Paquete {number} agregado.",
+    "unassigned": "{count, plural, one {# artículo sin asignar} other {# artículos sin asignar}}",
+    "notPacking": "Este pedido está en {status}, no en Empaque, así que no se puede cambiar aquí.",
+    "unclaimed": "Empieza a empacar desde la cola de Empaque para trabajar en este pedido.",
+    "claimedByOther": "{name} está trabajando en este pedido."
   },
   "pick": {
     "title": "Surtir #{number}",
@@ -592,6 +643,13 @@
       "batchOpen": "Ya tienes un lote abierto. Termínalo en Mis surtidos antes de empezar otro.",
       "batchFailed": "Algunos pedidos no se pudieron tomar, así que no se tomó ninguno.",
       "notInBatch": "Este pedido ya no está en el lote."
+    },
+    "packing": {
+      "notPacking": "Este pedido no se está empacando, así que sus paquetes no se pueden cambiar.",
+      "lineNotPackable": "Esa línea no puede ir en un paquete.",
+      "boxArchived": "Esa caja ya no está en uso. Elige otra.",
+      "packageHasLabels": "Este paquete tiene una etiqueta de envío y no se puede eliminar. Saca sus artículos en su lugar.",
+      "nothingToPack": "No hay más de eso que mover."
     },
     "workflow": {
       "illegalTransition": "Ese cambio no está permitido desde el estado actual del pedido.",

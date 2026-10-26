@@ -282,6 +282,10 @@ describe("getOrder", () => {
       expect.objectContaining({ number: 1, weightOz: 12.5, units: 2, liveLabel: true }),
     ]);
     expect(view.packages[0]?.boxName).toMatch(/^Box /);
+    expect(view.packages[0]).toMatchObject({
+      dimensions: null,
+      items: [{ orderItemId: items[0]?.id, name: "Wool", quantity: 2 }],
+    });
   });
 
   it("returns each line's size and options, and none for stored JSON that isn't a list of them", async () => {
