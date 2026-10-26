@@ -29,13 +29,25 @@ async function scanCode(page: Page, code: string) {
   await page.keyboard.press("Enter");
 }
 
+/**
+ * Closes any toast before a tap. A success toast sits bottom right, and React Aria keeps it open
+ * while the pointer rests on it, so one that lands over the next button would block the click.
+ */
+async function clearToasts(page: Page) {
+  for (const dismiss of await page.getByRole("button", { name: "Dismiss" }).all()) {
+    await dismiss.click({ timeout: 1_000 }).catch(() => {});
+  }
+}
+
 // SPEC-packing criterion 16: picking → pack screen → box → scans → split → weights → re-weigh →
 // Done, next order → the first order is in QA with its packages on the detail page.
 test("pick, pack into two boxes, weigh, confirm a re-weigh and finish to the next order", async ({
   page,
 }, testInfo) => {
-  // Pick, pack, weigh and finish in one go: about 14 s alone, longer when workers compete.
-  test.setTimeout(60_000);
+  // Pick, pack, weigh and finish in one go: about 14 s alone, several times that on a CI runner.
+  test.setTimeout(120_000);
+  // A timeout names no step, so progress goes to the log: the last line says where it stopped.
+  const progress = (step: string) => console.log(`[${testInfo.project.name}] journey: ${step}`);
   // Both projects run at once and see each other's boxes, so each sizes its units and box so that
   // its own box is the only smallest fit: the tablet's cubes (1.5 in) don't fit the desktop's box.
   const edge = testInfo.project.name === "tablet" ? 3 : 2;
@@ -73,6 +85,7 @@ test("pick, pack into two boxes, weigh, confirm a re-weigh and finish to the nex
     .getByRole("button", { name: "Begin Picking" })
     .click();
   await expect(page).toHaveURL(`/pick/${order.id}`, { timeout: 20_000 });
+  progress("picking");
   await page
     .getByTestId("pick-card")
     .getByRole("button", { name: /^E2E item/ })
@@ -80,6 +93,7 @@ test("pick, pack into two boxes, weigh, confirm a re-weigh and finish to the nex
   await expect(page.getByTestId("pick-progress")).toHaveText("1 of 1 lines picked");
   await page.getByRole("button", { name: "Done, open in Packing" }).click();
   await expect(page).toHaveURL(`/pack/${order.id}`, { timeout: 20_000 });
+  progress("pack screen");
 
   // The suggested box first; add it, scan two units into it.
   await page.getByRole("button", { name: "Add package" }).click();
@@ -93,6 +107,7 @@ test("pick, pack into two boxes, weigh, confirm a re-weigh and finish to the nex
   await scanCode(page, "E2E-SKU");
   const packages = page.getByTestId("pack-package");
   await expect(packages.first()).toContainText("×2");
+  progress("two units scanned into package 1");
 
   // A second package takes the rest, so the line is split. Nothing is finished yet: two warnings
   // show and Done is hidden.
@@ -110,6 +125,7 @@ test("pick, pack into two boxes, weigh, confirm a re-weigh and finish to the nex
   await expect(page.getByRole("button", { name: "Done, next order" })).toHaveCount(0);
   await page.getByRole("button", { name: "Put one E2E item in the selected package" }).click();
   await expect(page.getByTestId("pack-all-packed")).toBeVisible();
+  progress("line split across two packages");
   await expect(page.getByRole("button", { name: "Done, next order" })).toHaveCount(0);
 
   // Over package 1's 40 oz max: refused until a reason is given.
@@ -124,6 +140,7 @@ test("pick, pack into two boxes, weigh, confirm a re-weigh and finish to the nex
   await over.getByRole("button", { name: "Save with reason" }).click();
   await expect(over).toBeHidden();
   await expect(page.getByTestId("pack-unweighed")).toHaveText("1 package without a weight");
+  progress("overweight saved with a reason");
 
   // Weigh the other; the gate is met and the Done buttons appear.
   const two = packages.nth(1);
@@ -132,23 +149,30 @@ test("pick, pack into two boxes, weigh, confirm a re-weigh and finish to the nex
   await two.getByRole("button", { name: "Save weight" }).click();
   await expect(page.getByTestId("pack-unweighed")).toHaveText("0 packages without a weight");
   await expect(page.getByRole("button", { name: "Done, next order" })).toBeVisible();
+  progress("gate met, Done buttons shown");
 
   // Swap a unit in the weighed package: it asks to re-weigh; confirming clears it.
+  await clearToasts(page);
   await page.getByRole("button", { name: "Take one E2E item out of package 2" }).click();
   await page.getByRole("button", { name: "Put one E2E item in the selected package" }).click();
   await expect(two.getByTestId("pack-stale")).toBeVisible();
+  await clearToasts(page);
   await two.getByRole("button", { name: "Weight still right" }).click();
   await expect(two.getByTestId("pack-stale")).toHaveCount(0);
+  progress("re-weigh confirmed");
 
   // A flagged weight left unconfirmed gets a note for QA when the order finishes.
+  await clearToasts(page);
   await page.getByRole("button", { name: "Take one E2E item out of package 2" }).click();
   await page.getByRole("button", { name: "Put one E2E item in the selected package" }).click();
   await expect(two.getByTestId("pack-stale")).toBeVisible();
 
+  await clearToasts(page);
   await page.getByRole("button", { name: "Done, next order" }).click();
   await expect(page).toHaveURL(/\/pack\/[0-9a-f-]{36}$/, { timeout: 20_000 });
   await expect(page).not.toHaveURL(`/pack/${order.id}`);
   await expect(page.getByRole("heading", { name: /^Pack #/ })).toBeVisible();
+  progress("next order opened");
   // Claimed for this packer: the screen is live, no banner.
   await expect(page.getByRole("button", { name: "Add package" })).toBeVisible();
 
