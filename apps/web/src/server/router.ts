@@ -13,6 +13,7 @@ import {
   createPriorityRule,
   deactivateUser,
   deleteBox,
+  deleteIssue,
   deleteNote,
   deletePackage,
   deletePriorityRule,
@@ -410,6 +411,9 @@ export const router = implementer.router({
     ),
     reopen: api.issues.reopen.handler(({ input, context }) =>
       reopenIssue(db, context.actor, input),
+    ),
+    delete: api.issues.delete.handler(({ input, context }) =>
+      deleteIssue(db, context.actor, input),
     ),
     list: api.issues.list.handler(({ input, context }) => listIssues(db, context.actor, input)),
     assignees: api.issues.assignees.handler(({ context }) => issueAssignees(db, context.actor)),

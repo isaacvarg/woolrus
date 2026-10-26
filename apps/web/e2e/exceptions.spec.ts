@@ -296,6 +296,7 @@ test("a QA user sees Issues but no resolve controls", async ({ page }) => {
   await page
     .getByRole("searchbox", { name: "Search by order number or customer" })
     .fill(customerName);
+  await expect(page.getByTestId("issue-row")).toHaveCount(1);
   await page
     .getByTestId("issue-row")
     .filter({ hasText: "Odd smell" })
@@ -305,6 +306,35 @@ test("a QA user sees Issues but no resolve controls", async ({ page }) => {
   await expect(drawer).toContainText("Odd smell");
   await expect(drawer.getByRole("button", { name: "Resolve", exact: true })).toHaveCount(0);
   await expect(drawer.getByRole("button", { name: "Dismiss" })).toHaveCount(0);
+  await expect(drawer.getByRole("button", { name: "Delete" })).toHaveCount(0);
+});
+
+test("an admin deletes an issue from the drawer", async ({ page }) => {
+  const customerName = `E2E issues ${crypto.randomUUID()}`;
+  const order = await createOrder({ customerName, status: "QA" });
+  const issue = await db.qualityIssue.create({
+    data: {
+      orderId: order.id,
+      type: "OTHER",
+      severity: "MINOR",
+      description: "Delete me",
+      discoveredStage: "QA",
+    },
+  });
+  await signInAs(page, ["ADMIN"]);
+  await page.goto("/issues");
+  await page
+    .getByRole("searchbox", { name: "Search by order number or customer" })
+    .fill(customerName);
+  await expect(page.getByTestId("issue-row")).toHaveCount(1);
+  await page.getByTestId("issue-row").getByRole("button", { name: "Other" }).click();
+  const drawer = page.getByTestId("issue-drawer");
+  await drawer.getByRole("button", { name: "Delete", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Delete issue" });
+  await dialog.getByRole("button", { name: "Delete issue" }).click();
+  await expect(drawer).toHaveCount(0);
+  await expect(page.getByTestId("issue-row")).toHaveCount(0);
+  expect(await db.qualityIssue.count({ where: { id: issue.id } })).toBe(0);
 });
 
 test("a picker reports an issue from the pick screen and the queue row shows the badge", async ({

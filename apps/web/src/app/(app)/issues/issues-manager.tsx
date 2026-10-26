@@ -38,12 +38,14 @@ const severityBadge = {
 /** The tab and the open issue live in `?tab=` and `?issue=`, so a reload or a link keeps them. */
 export function IssuesManager({
   canResolve,
+  canDelete,
   canWriteCustomer,
   userId,
   initialTab,
   initialIssueId,
 }: {
   canResolve: boolean;
+  canDelete: boolean;
   canWriteCustomer: boolean;
   userId: string | null;
   initialTab: IssuesTab;
@@ -192,6 +194,7 @@ export function IssuesManager({
         <IssueDrawer
           issueId={openId}
           canResolve={canResolve}
+          canDelete={canDelete}
           canWriteCustomer={canWriteCustomer}
           userId={userId}
           onClose={() => {

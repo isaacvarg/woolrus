@@ -57,6 +57,9 @@ export type ResolveIssueInput = z.infer<typeof ResolveIssueInput>;
 export const ReopenIssueInput = z.object({ issueId: Id });
 export type ReopenIssueInput = z.infer<typeof ReopenIssueInput>;
 
+export const DeleteIssueInput = z.object({ issueId: Id });
+export type DeleteIssueInput = z.infer<typeof DeleteIssueInput>;
+
 export const IssueListStatus = z.enum(["all", "open", "resolved"]);
 export type IssueListStatus = z.infer<typeof IssueListStatus>;
 
@@ -133,6 +136,15 @@ export const issues = {
     .route({ method: "POST", path: "/issues/{issueId}/reopen", tags, summary: "Reopen an issue" })
     .input(ReopenIssueInput)
     .output(QualityIssueView),
+  delete: base
+    .route({
+      method: "DELETE",
+      path: "/issues/{issueId}",
+      tags,
+      summary: "Delete an issue with its notes and files (Admin)",
+    })
+    .input(DeleteIssueInput)
+    .output(z.object({ id: Id })),
   list: base
     .route({ method: "GET", path: "/issues", tags, summary: "Quality issues, open Critical first" })
     .input(IssueListInput)

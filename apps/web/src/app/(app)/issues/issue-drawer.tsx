@@ -51,12 +51,14 @@ function useRefresh() {
 export function IssueDrawer({
   issueId,
   canResolve,
+  canDelete,
   canWriteCustomer,
   userId,
   onClose,
 }: {
   issueId: string;
   canResolve: boolean;
+  canDelete: boolean;
   canWriteCustomer: boolean;
   userId: string | null;
   onClose: () => void;
@@ -66,6 +68,7 @@ export function IssueDrawer({
   const refresh = useRefresh();
   const issue = useQuery(orpc.issues.get.queryOptions({ input: { issueId } }));
   const [editing, setEditing] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [closing, setClosing] = useState<"RESOLVED" | "DISMISSED" | null>(null);
   const data = issue.data;
   const canEdit = !!data && data.status === "OPEN" && (canResolve || data.reporterId === userId);
@@ -132,6 +135,11 @@ export function IssueDrawer({
                     {t("issues.page.reopen")}
                   </Button>
                 )}
+                {canDelete && (
+                  <Button className="btn-error btn-outline" onPress={() => setDeleting(true)}>
+                    {t("issues.page.delete")}
+                  </Button>
+                )}
               </div>
 
               {editing && <EditForm issue={data} onDone={() => setEditing(false)} />}
@@ -148,6 +156,16 @@ export function IssueDrawer({
             </>
           )}
         </section>
+        {deleting && (
+          <DeleteDialog
+            issueId={issueId}
+            onClose={() => setDeleting(false)}
+            onDeleted={() => {
+              onClose();
+              void refresh();
+            }}
+          />
+        )}
         {closing && (
           <CloseDialog
             issueId={issueId}
@@ -345,6 +363,49 @@ function CloseDialog({
             </Button>
           </div>
         </Form>
+      )}
+    </Dialog>
+  );
+}
+
+function DeleteDialog({
+  issueId,
+  onClose,
+  onDeleted,
+}: {
+  issueId: string;
+  onClose: () => void;
+  onDeleted: () => void;
+}) {
+  const t = useTranslations();
+  const errorMessage = useErrorMessage();
+  const remove = useMutation({
+    mutationFn: () => client.issues.delete({ issueId }),
+    onSuccess: () => {
+      toast.success(t("issues.page.deleted"));
+      onDeleted();
+    },
+    onError: (error) => toast.error(errorMessage(error)),
+  });
+
+  return (
+    <Dialog title={t("issues.page.deleteTitle")} isOpen onOpenChange={(open) => !open && onClose()}>
+      {(close) => (
+        <div className="space-y-4">
+          <p>{t("issues.page.deleteConfirm")}</p>
+          <div className="modal-action">
+            <Button className="btn-ghost" onPress={close}>
+              {t("common.cancel")}
+            </Button>
+            <Button
+              className="btn-error"
+              isPending={remove.isPending}
+              onPress={() => remove.mutate()}
+            >
+              {t("issues.page.confirmDelete")}
+            </Button>
+          </div>
+        </div>
       )}
     </Dialog>
   );

@@ -2,7 +2,16 @@ import type { Db } from "@woolrus/db";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { createActor, resetDb, testDb } from "../../test/db";
 import { createOrder } from "../../test/factories";
-import { reopenIssue, reportIssue, resolveIssue, setResponsible, updateIssue } from "./issues";
+import { queues } from "../jobs";
+import {
+  deleteIssue,
+  linkIssueToRepack,
+  reopenIssue,
+  reportIssue,
+  resolveIssue,
+  setResponsible,
+  updateIssue,
+} from "./issues";
 import { getIssue, issueAssignees, issueCounts, listIssues } from "./queries";
 
 const db: Db = testDb();
@@ -207,5 +216,95 @@ describe("issueAssignees", () => {
     const ids = (await issueAssignees(db, qa)).map((u) => u.id);
     expect(ids).toContain(qa.userId);
     expect(ids).not.toContain(gone.userId);
+  });
+});
+
+describe("deleteIssue", () => {
+  const deleteJobs = () =>
+    db.$queryRaw<{ keys: string[] }[]>`
+      SELECT data->'keys' AS keys FROM pgboss.job WHERE name = ${queues.storageDelete}`;
+
+  beforeEach(async () => {
+    await db.$executeRaw`DELETE FROM pgboss.job WHERE name = ${queues.storageDelete}`;
+  });
+
+  it("removes the issue, its notes and attachments, enqueues the file job and audits a snapshot", async () => {
+    const { admin, order, issue } = await setup();
+    const note = await db.note.create({
+      data: {
+        orderId: order.id,
+        qualityIssueId: issue.id,
+        content: "Photo",
+        visibility: "INTERNAL",
+      },
+    });
+    await db.noteAttachment.create({
+      data: {
+        noteId: note.id,
+        kind: "IMAGE",
+        storageKey: "notes/a.jpg",
+        thumbnailKey: "notes/a.thumb.jpg",
+        contentType: "image/jpeg",
+        fileName: "a.jpg",
+        sizeBytes: 10,
+      },
+    });
+    await deleteIssue(db, admin, { issueId: issue.id });
+    expect(await db.qualityIssue.count()).toBe(0);
+    expect(await db.note.count({ where: { qualityIssueId: issue.id } })).toBe(0);
+    expect(await db.noteAttachment.count()).toBe(0);
+    const jobs = await deleteJobs();
+    expect(jobs).toHaveLength(1);
+    expect(jobs[0]?.keys.sort()).toEqual(["notes/a.jpg", "notes/a.thumb.jpg"]);
+    const audit = await db.auditEvent.findFirstOrThrow({ where: { action: "issue.delete" } });
+    expect(audit.before).toMatchObject({ orderId: order.id, type: "PACKAGING_DAMAGE" });
+  });
+
+  it("is Admin only, even for the reporter", async () => {
+    const { qa, issue } = await setup();
+    await expect(deleteIssue(db, qa, { issueId: issue.id })).rejects.toMatchObject({
+      kind: "FORBIDDEN",
+    });
+    expect(await db.qualityIssue.count()).toBe(1);
+    expect(await deleteJobs()).toEqual([]);
+  });
+
+  it("is not found for an unknown issue", async () => {
+    const { admin } = await setup();
+    await expect(deleteIssue(db, admin, { issueId: crypto.randomUUID() })).rejects.toMatchObject({
+      kind: "NOT_FOUND",
+    });
+  });
+});
+
+describe("linkIssueToRepack", () => {
+  const labelOf = (packageId: string) =>
+    db.shippingLabel.findFirstOrThrow({ where: { packageId } });
+
+  it("sets the label and triggeredRepack", async () => {
+    const qa = await createActor(db, ["QA"]);
+    const { order, packages } = await createOrder(db, {
+      status: "QA",
+      packages: [{ label: "ACTIVE" }],
+    });
+    const issue = await reportIssue(db, qa, { orderId: order.id, ...base });
+    const label = await labelOf(packages[0]?.id ?? "");
+    await db.$transaction((tx) =>
+      linkIssueToRepack(tx, qa, { issueId: issue.id, labelId: label.id }),
+    );
+    const row = await db.qualityIssue.findUniqueOrThrow({ where: { id: issue.id } });
+    expect(row).toMatchObject({ labelId: label.id, triggeredRepack: true });
+    expect(await db.auditEvent.count({ where: { action: "issue.linkRepack" } })).toBe(1);
+  });
+
+  it("refuses a label from another order", async () => {
+    const { qa, issue } = await setup();
+    const other = await createOrder(db, { status: "QA", packages: [{ label: "ACTIVE" }] });
+    const label = await labelOf(other.packages[0]?.id ?? "");
+    await expect(
+      db.$transaction((tx) => linkIssueToRepack(tx, qa, { issueId: issue.id, labelId: label.id })),
+    ).rejects.toMatchObject({ kind: "NOT_FOUND" });
+    const row = await db.qualityIssue.findUniqueOrThrow({ where: { id: issue.id } });
+    expect(row).toMatchObject({ labelId: null, triggeredRepack: false });
   });
 });

@@ -1,4 +1,5 @@
 import {
+  type DeleteIssueInput,
   ISSUE_DESCRIPTION_MAX,
   ISSUE_NOTES_MAX,
   type QualityIssueView,
@@ -11,6 +12,7 @@ import {
 import type { Db, DbTx, FulfillmentStage, Prisma, WorkflowStatus } from "@woolrus/db";
 import { recordAudit } from "../audit";
 import { AppError, notFound } from "../errors";
+import { enqueueFileDeletion } from "../notes/files";
 import { type Actor, assertCan } from "../permissions";
 import { lockOrder } from "../workflow/lock";
 import { notifyOrderChanged } from "../workflow/notify";
@@ -389,5 +391,79 @@ export async function reopenIssue(
     });
     await notifyOrderChanged(tx, { id: order.id, status: order.status });
     return view(tx, issueId);
+  });
+}
+
+/** Deletes an issue with its notes; their stored files go through the notes deletion job (FR-QI-08). Admin only. */
+export async function deleteIssue(
+  db: Db,
+  actor: Actor,
+  { issueId }: DeleteIssueInput,
+  { now = new Date() }: IssueOptions = {},
+): Promise<{ id: string }> {
+  assertCan(actor, "issue.delete");
+  return db.$transaction(async (tx) => {
+    const { order, issue } = await lockedIssue(tx, issueId);
+    const attachments = await tx.noteAttachment.findMany({
+      where: { note: { qualityIssueId: issueId } },
+      select: { storageKey: true, thumbnailKey: true },
+    });
+    await tx.qualityIssue.delete({ where: { id: issueId } });
+    await enqueueFileDeletion(tx, attachments);
+    await recordAudit(tx, actor, {
+      entityType: "QualityIssue",
+      entityId: issueId,
+      action: "issue.delete",
+      before: {
+        orderId: issue.orderId,
+        orderItemId: issue.orderItemId,
+        packageId: issue.packageId,
+        type: issue.type,
+        severity: issue.severity,
+        status: issue.status,
+        description: issue.description,
+        discoveredStage: issue.discoveredStage,
+        originStage: issue.originStage,
+        reporterId: issue.reporterId,
+        responsibleUserId: issue.responsibleUserId,
+        resolutionNotes: issue.resolutionNotes,
+        labelId: issue.labelId,
+        triggeredRepack: issue.triggeredRepack,
+      },
+      at: now,
+    });
+    await notifyOrderChanged(tx, { id: order.id, status: order.status });
+    return { id: issueId };
+  });
+}
+
+/**
+ * Records that a repack followed this issue (FR-QI-06). Not routed: `shipping` calls it inside its
+ * own transaction. The label must belong to the issue's order.
+ */
+export async function linkIssueToRepack(
+  tx: DbTx,
+  actor: Actor,
+  { issueId, labelId }: { issueId: string; labelId: string },
+  { now = new Date() }: IssueOptions = {},
+): Promise<void> {
+  const issue = await tx.qualityIssue.findUnique({ where: { id: issueId } });
+  if (!issue) throw notFound();
+  const label = await tx.shippingLabel.findFirst({
+    where: { id: labelId, package: { orderId: issue.orderId } },
+    select: { id: true },
+  });
+  if (!label) throw notFound();
+  await tx.qualityIssue.update({
+    where: { id: issueId },
+    data: { labelId, triggeredRepack: true },
+  });
+  await recordAudit(tx, actor, {
+    entityType: "QualityIssue",
+    entityId: issueId,
+    action: "issue.linkRepack",
+    before: { labelId: issue.labelId, triggeredRepack: issue.triggeredRepack },
+    after: { labelId, triggeredRepack: true },
+    at: now,
   });
 }

@@ -18,6 +18,7 @@ export default async function IssuesPage({ searchParams }: PageProps<"/issues">)
           <p className="text-base-content/70">{t("issues.page.intro")}</p>
           <IssuesManager
             canResolve={can(actor, "issue.resolve")}
+            canDelete={can(actor, "issue.delete")}
             canWriteCustomer={can(actor, "note.customer")}
             userId={actor.userId}
             initialTab={tabs.find((x) => x === tab) ?? "all"}
