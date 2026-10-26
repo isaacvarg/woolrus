@@ -232,6 +232,7 @@ test("the suggested box is listed first and adding it works; a weight far off th
   await expect(pkg.getByTestId("pack-weight-warning")).toContainText(
     "60% heavier than the estimate",
   );
+});
 
 /** Types `code` the way an HID scanner does: a fast burst of keys, then Enter. */
 async function scanCode(page: Page, code: string) {
@@ -269,6 +270,7 @@ test("scans go into the selected package; a wrong scan shows red and changes not
   await page.reload();
   await expect(page.getByTestId("pack-item").getByTestId("pack-left")).toHaveText("1 left");
   await expect(page.getByTestId("pack-package").first()).toContainText("×2");
+});
 
 test("the order drawer shows the address, who picked, and a package note; Escape closes it", async ({
   page,

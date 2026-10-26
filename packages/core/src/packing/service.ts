@@ -103,7 +103,7 @@ function toPackPackage(
   names: Map<string, string>,
   noteCount: number,
   units: SuggestUnit[],
-  boxes: SuggestBox[],
+  boxes: BoxDto[],
 ): PackPackage {
   const estimatedWeightOz = estimateWeightOz(units, pkg.box ? toBoxDto(pkg.box) : null);
   const percent = weightOffPercent(toNumber(pkg.weightOz), estimatedWeightOz);
@@ -151,7 +151,7 @@ export async function packResult(tx: DbTx, orderId: string): Promise<PackResult>
     loadGateSnapshot(tx, orderId),
     tx.box.findMany({ where: { archivedAt: null } }),
   ]);
-  const boxes = boxRows.map(toBoxDto);
+  const boxes = boxRows.map((box) => toBoxDto(box));
   const rowById = new Map(rows.map((row) => [row.id, row]));
 
   const packedIn = new Map<string, PackLine["packedIn"]>();

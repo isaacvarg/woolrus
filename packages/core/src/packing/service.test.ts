@@ -886,6 +886,8 @@ describe("box suggestion, estimate and weight warning", () => {
     const view = await getPackView(db, noEstimate.packer, { orderId: noEstimate.order.id });
     expect(view.packages[0]).toMatchObject({ estimatedWeightOz: null, weightWarning: null });
     expect(weighed === null || weighed.packages[0]?.weightWarning === null).toBe(true);
+  });
+});
 
 describe("scanIntoPackage", () => {
   async function scanning(lines: LineSpec[] = [{ sku: "AAA-1", quantity: 2 }]) {
