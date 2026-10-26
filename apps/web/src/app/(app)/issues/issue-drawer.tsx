@@ -136,7 +136,11 @@ export function IssueDrawer({
                   </Button>
                 )}
                 {canDelete && (
-                  <Button className="btn-error btn-outline" onPress={() => setDeleting(true)}>
+                  <Button
+                    className="btn-error btn-outline"
+                    data-testid="issue-delete"
+                    onPress={() => setDeleting(true)}
+                  >
                     {t("issues.page.delete")}
                   </Button>
                 )}
