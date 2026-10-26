@@ -180,8 +180,7 @@ function PickLayout({ view, userId, canPack }: { view: PickView } & Viewer) {
     onMutate: () => setUnmet(null),
     onSuccess: ({ nextOrderId }, after) => {
       toast.success(t("order.moved", { number: order.number, status: t("status.PACKING") }));
-      // The packing screen doesn't exist yet: the order detail page stands in for it.
-      if (after === "pack") router.push(`/orders/${order.id}`);
+      if (after === "pack") router.push(`/pack/${order.id}`);
       else if (nextOrderId) router.push(`/pick/${nextOrderId}`);
       else {
         if (after === "next") toast.success(t("pick.noneLeft"));

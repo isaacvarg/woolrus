@@ -121,7 +121,10 @@ test("Done, open in Packing claims the order for the picker in Packing", async (
   await pickAll(page);
   await page.getByRole("button", { name: "Done, open in Packing" }).click();
 
-  await expect(page).toHaveURL(`/orders/${order.id}`);
+  // The pack screen, claimed for the picker; the order page agrees.
+  await expect(page).toHaveURL(`/pack/${order.id}`);
+  await expect(page.getByRole("heading", { name: `Pack #${order.number}` })).toBeVisible();
+  await page.goto(`/orders/${order.id}`);
   await expect(page.getByTestId("order-status")).toHaveText("Packing");
   await expect(page.getByText(/Claimed by E2E PICKER\+PACKER/)).toBeVisible();
 });

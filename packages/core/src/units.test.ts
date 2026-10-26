@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  combinePoundsOunces,
   ouncesToPounds,
   poundsToOunces,
   splitPoundsOunces,
@@ -72,6 +73,17 @@ describe("toCents", () => {
   it("rejects text that isn't a decimal number", () => {
     for (const bad of ["", "abc", "1,000.00", "1e3", "1.2.3", "-"]) {
       expect(() => toCents(bad)).toThrow(/not a decimal/);
+    }
+  });
+});
+
+describe("combinePoundsOunces", () => {
+  it("is the inverse of splitPoundsOunces", () => {
+    expect(combinePoundsOunces(2, 5)).toBe(37);
+    expect(combinePoundsOunces(0, 10.5)).toBe(10.5);
+    for (const oz of [0, 1, 15.99, 16, 37, 2399.99]) {
+      const { lb, oz: rest } = splitPoundsOunces(oz);
+      expect(combinePoundsOunces(lb, rest)).toBe(oz);
     }
   });
 });

@@ -198,8 +198,14 @@ export const OrderPackageSummary = z.object({
   id: Id,
   number: z.number().int(),
   boxName: z.string().nullable(),
+  /** Custom outer dimensions; null when the package has a box. */
+  dimensions: z
+    .object({ lengthIn: z.number(), widthIn: z.number(), heightIn: z.number() })
+    .nullable(),
   weightOz: z.number().nullable(),
   units: z.number().int(),
+  /** What is in it, per order line: a line split across boxes appears in each. */
+  items: z.array(z.object({ orderItemId: Id, name: z.string(), quantity: z.number().int() })),
   /** A label exists or may exist at the carrier. */
   liveLabel: z.boolean(),
   /** Notes on this package. */

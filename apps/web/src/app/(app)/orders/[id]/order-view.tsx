@@ -91,6 +91,11 @@ function OrderLayout({
           {t("order.openPickScreen")}
         </Link>
       )}
+      {order.status === "PACKING" && (
+        <Link href={`/pack/${order.id}`} className="btn btn-secondary btn-lg">
+          {t("order.openPackScreen")}
+        </Link>
+      )}
       <OrderActions order={order} userId={userId} />
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
@@ -298,9 +303,19 @@ function OrderPackages({ order, notes }: { order: Order; notes: NotesProps }) {
               <NoteOn notes={notes} option={notes.targets.pkg(pkg.id)} count={pkg.noteCount} />
             </div>
             <div className="text-sm">
-              {/* Weights wait for `packing`, which owns display units. */}
-              {pkg.boxName ?? t("order.noBox")} · {t("order.units", { count: pkg.units })}
+              {/* Weights wait for the weighing ticket, which owns display units. */}
+              {pkg.boxName ?? (pkg.dimensions ? t("pack.custom") : t("order.noBox"))} ·{" "}
+              {t("order.units", { count: pkg.units })}
             </div>
+            {pkg.items.length > 0 && (
+              <ul className="mt-1 text-sm" data-testid="order-package-items">
+                {pkg.items.map((item) => (
+                  <li key={item.orderItemId}>
+                    {item.name} ×{item.quantity}
+                  </li>
+                ))}
+              </ul>
+            )}
           </li>
         ))}
       </ul>

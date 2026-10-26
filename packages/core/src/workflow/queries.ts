@@ -240,7 +240,7 @@ export async function getOrder(
         orderBy: { number: "asc" },
         include: {
           box: { select: { name: true } },
-          items: { select: { quantity: true } },
+          items: { select: { orderItemId: true, quantity: true }, orderBy: { packedAt: "asc" } },
           labels: { where: { status: { in: [...liveLabelStatuses] } }, select: { id: true } },
         },
       },
@@ -252,6 +252,7 @@ export async function getOrder(
   const notes = await lineAndPackageNoteCounts(db, id);
   if (!detail) throw notFound();
   const externalChange = externalChangeOf(order);
+  const names = new Map(order.items.map((i) => [i.id, i.name]));
   return {
     ...detail,
     externalChange,
@@ -280,8 +281,21 @@ export async function getOrder(
       id: p.id,
       number: p.number,
       boxName: p.box?.name ?? null,
+      dimensions:
+        p.lengthIn && p.widthIn && p.heightIn
+          ? {
+              lengthIn: p.lengthIn.toNumber(),
+              widthIn: p.widthIn.toNumber(),
+              heightIn: p.heightIn.toNumber(),
+            }
+          : null,
       weightOz: p.weightOz === null ? null : p.weightOz.toNumber(),
       units: p.items.reduce((sum, it) => sum + it.quantity, 0),
+      items: p.items.map((it) => ({
+        orderItemId: it.orderItemId,
+        name: names.get(it.orderItemId) ?? "",
+        quantity: it.quantity,
+      })),
       liveLabel: p.labels.length > 0,
       noteCount: notes.packages.get(p.id) ?? 0,
     })),

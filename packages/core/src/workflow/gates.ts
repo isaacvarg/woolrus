@@ -32,6 +32,10 @@ export type GatePackage = {
   /** All three override dimensions are set. */
   hasDimensions: boolean;
   weightOz: number | null;
+  /** The box's max weight; null for no box, no max, or custom dimensions. */
+  maxWeightOz: number | null;
+  /** The packer gave a reason for a weight above the max (FR-PACK-09). */
+  hasOverrideReason: boolean;
   items: { orderItemId: string; quantity: number; qaVerified: boolean }[];
   selectedRates: number;
   activeLabels: number;
@@ -85,6 +89,13 @@ function packed(snap: GateSnapshot): UnmetCondition[] {
     ...(p.items.length === 0 ? [unmet("packageEmpty", { package: p.number })] : []),
     ...(!p.hasBox && !p.hasDimensions ? [unmet("packageNoBox", { package: p.number })] : []),
     ...(p.weightOz === null ? [unmet("packageNoWeight", { package: p.number })] : []),
+    // Only reachable if the box's max was lowered, or the box changed, under an existing weight.
+    ...(p.weightOz !== null &&
+    p.maxWeightOz !== null &&
+    p.weightOz > p.maxWeightOz &&
+    !p.hasOverrideReason
+      ? [unmet("packageOverweight", { package: p.number, maxOz: p.maxWeightOz })]
+      : []),
   ]);
 
   return [...lines, ...packages];
@@ -161,6 +172,8 @@ export async function loadGateSnapshot(tx: DbTx, orderId: string): Promise<GateS
           widthIn: true,
           heightIn: true,
           weightOz: true,
+          weightOverrideReason: true,
+          box: { select: { maxWeightOz: true } },
           items: {
             orderBy: { packedAt: "asc" },
             select: { orderItemId: true, quantity: true, qaVerifiedAt: true },
@@ -191,6 +204,8 @@ export async function loadGateSnapshot(tx: DbTx, orderId: string): Promise<GateS
       hasBox: p.boxId !== null,
       hasDimensions: p.lengthIn !== null && p.widthIn !== null && p.heightIn !== null,
       weightOz: p.weightOz === null ? null : p.weightOz.toNumber(),
+      maxWeightOz: p.box?.maxWeightOz?.toNumber() ?? null,
+      hasOverrideReason: p.weightOverrideReason !== null,
       items: p.items.map((it) => ({
         orderItemId: it.orderItemId,
         quantity: it.quantity,

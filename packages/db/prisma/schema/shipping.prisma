@@ -30,6 +30,8 @@ model Package {
   boxId                 String?  @map("box_id") @db.Uuid
   weightOz              Decimal? @map("weight_oz") @db.Decimal(10, 2)
   weightOverrideReason  String?  @map("weight_override_reason")
+  /// The contents or box changed after the package was weighed: re-weigh or confirm. Never blocks a gate.
+  weightStale           Boolean  @default(false) @map("weight_stale")
   // Override for non-standard boxes; falls back to the box's outer dimensions.
   lengthIn              Decimal? @map("length_in") @db.Decimal(8, 2)
   widthIn               Decimal? @map("width_in") @db.Decimal(8, 2)
@@ -70,6 +72,8 @@ model PackageItem {
   packedBy     User?     @relation("PackedBy", fields: [packedById], references: [id], onDelete: SetNull)
   qaVerifiedBy User?     @relation("QaVerifiedBy", fields: [qaVerifiedById], references: [id], onDelete: SetNull)
 
+  // One row per line per package: moving units between packages merges instead of duplicating.
+  @@unique([packageId, orderItemId])
   @@index([packageId])
   @@index([orderItemId])
   @@index([lotCode])

@@ -85,6 +85,8 @@ export function OrderActions({ order, userId }: { order: OrderView; userId: stri
     onSuccess: (result, { action, done }) => {
       toast.success(done(result));
       if (action === "beginPicking") router.push(`/pick/${result.id}`);
+      // Claiming a Packing order is starting to pack it (SPEC-packing user story 1).
+      if (action === "claim" && result.status === "PACKING") router.push(`/pack/${result.id}`);
     },
     onError: (error) => {
       const missing = unmetOf(error);

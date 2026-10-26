@@ -31,10 +31,12 @@ export function QueueTable({
   stage,
   userId,
   canBeginPicking,
+  canPack,
 }: {
   stage: QueueStage;
   userId: string | null;
   canBeginPicking: boolean;
+  canPack: boolean;
 }) {
   const t = useTranslations();
   const reasonText = useReasonText();
@@ -60,7 +62,8 @@ export function QueueTable({
   const now = Date.now();
   const onHold = stage === "ON_HOLD";
   const showBeginPicking = stage === "PENDING" && canBeginPicking;
-  const columns = 7 + (onHold ? 1 : 0) + (showBeginPicking ? 2 : 0);
+  const showStartPacking = stage === "PACKING" && canPack;
+  const columns = 7 + (onHold ? 1 : 0) + (showBeginPicking ? 2 : 0) + (showStartPacking ? 1 : 0);
   // Ticked for Pick together, by id. Rows keep the version they were ticked at: if one changes
   // meanwhile the batch is refused as stale and the panel says so.
   const [selected, setSelected] = useState<Map<string, QueueRow>>(() => new Map());
@@ -80,6 +83,18 @@ export function QueueTable({
       },
       onError: (error) => toast.error(errorMessage(error)),
       // A stale version means another station moved it: refetch either way so the row is current.
+      onSettled: () => queryClient.invalidateQueries({ queryKey: orpc.orders.key() }),
+    }),
+  );
+
+  // Claiming and opening the pack screen are one tap (SPEC-packing user story 1).
+  const startPacking = useMutation(
+    orpc.orders.claim.mutationOptions({
+      onSuccess: (order) => {
+        toast.success(t("queue.startedPacking", { number: order.number }));
+        router.push(`/pack/${order.id}`);
+      },
+      onError: (error) => toast.error(errorMessage(error)),
       onSettled: () => queryClient.invalidateQueries({ queryKey: orpc.orders.key() }),
     }),
   );
@@ -129,6 +144,11 @@ export function QueueTable({
               {showBeginPicking && (
                 <th>
                   <span className="sr-only">{t("queue.beginPicking")}</span>
+                </th>
+              )}
+              {showStartPacking && (
+                <th>
+                  <span className="sr-only">{t("queue.startPacking")}</span>
                 </th>
               )}
             </tr>
@@ -233,6 +253,22 @@ export function QueueTable({
                           }
                         >
                           {t("queue.beginPicking")}
+                        </Button>
+                      )}
+                    </td>
+                  )}
+                  {showStartPacking && (
+                    <td className="text-end">
+                      {!claimedByOther(row) && (
+                        <Button
+                          isPending={
+                            startPacking.isPending && startPacking.variables?.id === row.id
+                          }
+                          onPress={() =>
+                            startPacking.mutate({ id: row.id, expectedVersion: row.version })
+                          }
+                        >
+                          {t("queue.startPacking")}
                         </Button>
                       )}
                     </td>

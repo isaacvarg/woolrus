@@ -75,6 +75,11 @@ export function splitPoundsOunces(totalOz: number): { lb: number; oz: number } {
   return oz === OZ_PER_LB ? { lb: lb + 1, oz: 0 } : { lb, oz };
 }
 
+/** The inverse of `splitPoundsOunces`: 2 lb 5 oz -> 37 oz, to the hundredth. */
+export function combinePoundsOunces(lb: number, oz: number): number {
+  return Math.round((lb * OZ_PER_LB + oz) * 100) / 100;
+}
+
 export function ouncesToPounds(oz: number): number {
   return Math.round((oz / OZ_PER_LB) * 1000) / 1000;
 }

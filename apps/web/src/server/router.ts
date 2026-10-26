@@ -1,8 +1,10 @@
 import {
+  addPackage,
   archiveBox,
   clearPin,
   clearSecret,
   completeBatchMembers,
+  completePack,
   completePick,
   createBatch,
   createBox,
@@ -10,13 +12,16 @@ import {
   createNote,
   createPriorityRule,
   deactivateUser,
+  deleteBox,
   deleteNote,
+  deletePackage,
   deletePriorityRule,
   finishBatch,
   getBatch,
   getEmailSender,
   getOrder,
   getOrderHistory,
+  getPackView,
   getPickView,
   getPublicSettings,
   getSettings,
@@ -37,6 +42,8 @@ import {
   markOutOfStock,
   myPicks,
   orderMutations,
+  packRemaining,
+  packUnits,
   permissionsFor,
   pickLine,
   queueCounts,
@@ -47,21 +54,27 @@ import {
   reorderPriorityRules,
   requestSync,
   resendInvitation,
+  restoreBox,
   revokeBadge,
   revokeInvitation,
   revokeStation,
   scan,
   scanBatch,
+  scanIntoPackage,
   sendTestEmail,
+  setPackageBox,
   setPin,
   setSecret,
+  setWeight,
   stationStatus,
   substitute,
   testStoreConnection,
   touchStation,
   unlockWithBadge,
   unlockWithPin,
+  unpackUnits,
   unpickLine,
+  updateBox,
   updateNote,
   updatePreferences,
   updatePriorityRule,
@@ -119,6 +132,11 @@ export const router = implementer.router({
     archive: api.boxes.archive.handler(({ input, context }) =>
       archiveBox(db, context.actor, input),
     ),
+    update: api.boxes.update.handler(({ input, context }) => updateBox(db, context.actor, input)),
+    restore: api.boxes.restore.handler(({ input, context }) =>
+      restoreBox(db, context.actor, input),
+    ),
+    delete: api.boxes.delete.handler(({ input, context }) => deleteBox(db, context.actor, input)),
   },
   settings: {
     get: api.settings.get.handler(({ context }) => getSettings(db, context.actor)),
@@ -227,6 +245,36 @@ export const router = implementer.router({
       substitute(db, context.actor, input),
     ),
     myPicks: api.picking.myPicks.handler(({ context }) => myPicks(db, context.actor)),
+  },
+  packing: {
+    view: api.packing.view.handler(({ input, context }) => getPackView(db, context.actor, input)),
+    complete: api.packing.complete.handler(({ input, context }) =>
+      completePack(db, context.actor, input),
+    ),
+    addPackage: api.packing.addPackage.handler(({ input, context }) =>
+      addPackage(db, context.actor, input),
+    ),
+    setBox: api.packing.setBox.handler(({ input, context }) =>
+      setPackageBox(db, context.actor, input),
+    ),
+    deletePackage: api.packing.deletePackage.handler(({ input, context }) =>
+      deletePackage(db, context.actor, input),
+    ),
+    setWeight: api.packing.setWeight.handler(({ input, context }) =>
+      setWeight(db, context.actor, input),
+    ),
+    packUnits: api.packing.packUnits.handler(({ input, context }) =>
+      packUnits(db, context.actor, input),
+    ),
+    unpackUnits: api.packing.unpackUnits.handler(({ input, context }) =>
+      unpackUnits(db, context.actor, input),
+    ),
+    packRemaining: api.packing.packRemaining.handler(({ input, context }) =>
+      packRemaining(db, context.actor, input),
+    ),
+    scan: api.packing.scan.handler(({ input, context }) =>
+      scanIntoPackage(db, context.actor, input),
+    ),
   },
   pickBatches: {
     create: api.pickBatches.create.handler(({ input, context }) =>

@@ -1,0 +1,271 @@
+import { z } from "zod";
+import { base, Id, IdempotencyKey, Inches, Ounces } from "./base";
+import { Box } from "./boxes";
+import { ExpectedVersion, LineAttribute, OrderDetail } from "./orders";
+
+// Packing (SPEC-packing "API"). Package writes need the order in Packing and the caller's live
+// claim. Units move by adding or subtracting, so the client sends them one at a time per line.
+
+const tags = ["Packing"];
+
+/** A package's box: one of the active boxes, or custom outer dimensions. */
+export const PackageBoxInput = z.union([
+  z.object({ boxId: Id }),
+  z.object({ lengthIn: Inches, widthIn: Inches, heightIn: Inches }),
+]);
+export type PackageBoxInput = z.infer<typeof PackageBoxInput>;
+
+const Dimensions = z.object({ lengthIn: z.number(), widthIn: z.number(), heightIn: z.number() });
+
+/** Where a line's units are: "4 in #1 · 2 in #2". */
+export const PackedIn = z.object({
+  packageId: Id,
+  number: z.number().int(),
+  quantity: z.number().int(),
+});
+export type PackedIn = z.infer<typeof PackedIn>;
+
+/** One card on the items side. `quantity` is what's left to pack after voids. */
+export const PackLine = z.object({
+  id: Id,
+  name: z.string(),
+  sku: z.string().nullable(),
+  imageUrl: z.string().nullable(),
+  attributes: z.array(LineAttribute),
+  substitutionNote: z.string().nullable(),
+  quantity: z.number().int(),
+  /** Units not in any package; never below 0. */
+  unassigned: z.number().int(),
+  /** Units packed beyond `quantity` (possible after a void); they must be unpacked. */
+  tooMany: z.number().int(),
+  packedIn: z.array(PackedIn),
+  noteCount: z.number().int(),
+});
+export type PackLine = z.infer<typeof PackLine>;
+
+/** What the box suggestion says (SPEC-packing "Box suggestion"); it is never applied by itself. */
+export const BoxSuggestion = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("box"), box: Box, estimatedWeightOz: z.number() }),
+  /** No single box fits: "Needs more than one box". */
+  z.object({ kind: z.literal("split") }),
+  /** Products without dimensions or weight, by name. */
+  z.object({ kind: z.literal("unknown"), missing: z.array(z.string()) }),
+  /** Nothing to pack. */
+  z.object({ kind: z.literal("none") }),
+]);
+export type BoxSuggestion = z.infer<typeof BoxSuggestion>;
+
+export const PackageItemView = z.object({
+  orderItemId: Id,
+  name: z.string(),
+  quantity: z.number().int(),
+});
+export type PackageItemView = z.infer<typeof PackageItemView>;
+
+export const PackPackage = z.object({
+  id: Id,
+  number: z.number().int(),
+  /** The box, or null for custom dimensions. */
+  box: Box.nullable(),
+  /** Custom outer dimensions; null when the package has a box. */
+  dimensions: Dimensions.nullable(),
+  weightOz: z.number().nullable(),
+  /** Why a weight above the box's max was kept; null within the max. */
+  overrideReason: z.string().nullable(),
+  /** The contents or box changed after weighing: re-weigh or confirm. Never blocks the gate. */
+  weightStale: z.boolean(),
+  /** Σ unit weight + the box's tare; null when any product has no weight. Never fills the field. */
+  estimatedWeightOz: z.number().nullable(),
+  /** Set when the weight is more than 25% off the estimate (signed percent); computed, not stored. */
+  weightWarning: z.object({ percent: z.number() }).nullable(),
+  /** A box for this package's contents, for changing its box. */
+  suggestion: BoxSuggestion,
+  items: z.array(PackageItemView),
+  units: z.number().int(),
+  noteCount: z.number().int(),
+});
+export type PackPackage = z.infer<typeof PackPackage>;
+
+const Unmet = z.object({
+  messageKey: z.string(),
+  params: z.record(z.string(), z.union([z.string(), z.number()])),
+});
+
+export const PackView = z.object({
+  order: OrderDetail,
+  customerNote: z.string().nullable(),
+  /** Physical lines with something to pack, in pick order. */
+  lines: z.array(PackLine),
+  packages: z.array(PackPackage),
+  /** A box for the units not in any package, for adding one. */
+  suggestion: BoxSuggestion,
+  /** The active boxes a packer can choose from. */
+  boxes: z.array(Box),
+  /** What the packed gate still needs; empty when the order can complete. */
+  unmet: z.array(Unmet),
+});
+export type PackView = z.infer<typeof PackView>;
+
+/** What every package write returns: both sides of the screen, in one round trip. */
+export const PackResult = z.object({
+  lines: z.array(PackLine),
+  packages: z.array(PackPackage),
+  /** A box for the units not in any package, for adding one. */
+  suggestion: BoxSuggestion,
+  unmet: z.array(Unmet),
+});
+export type PackResult = z.infer<typeof PackResult>;
+
+export const AddPackageInput = z.object({
+  orderId: Id,
+  box: PackageBoxInput,
+  /** A retried request must not add a second package. */
+  idempotencyKey: IdempotencyKey,
+});
+export type AddPackageInput = z.infer<typeof AddPackageInput>;
+
+export const SetPackageBoxInput = z.object({ packageId: Id, box: PackageBoxInput });
+export type SetPackageBoxInput = z.infer<typeof SetPackageBoxInput>;
+
+export const PackageIdInput = z.object({ packageId: Id });
+export type PackageIdInput = z.infer<typeof PackageIdInput>;
+
+/** Packages one order can hold: far above any real order, so a runaway client stops somewhere. */
+export const MAX_PACKAGES_PER_ORDER = 50;
+
+/** The heaviest parcel the carriers take (SPEC-packing assumption 6). */
+export const MAX_PACKAGE_WEIGHT_OZ = 2400;
+
+export const SetWeightInput = z.object({
+  packageId: Id,
+  /** The gross weight of the packed box. */
+  weightOz: Ounces.max(MAX_PACKAGE_WEIGHT_OZ),
+  /** Required when the weight is above the box's max; dropped otherwise. */
+  overrideReason: z.string().trim().min(1).max(200).optional(),
+});
+export type SetWeightInput = z.infer<typeof SetWeightInput>;
+
+export const PackUnitsInput = z.object({
+  packageId: Id,
+  orderItemId: Id,
+  /** Defaults to one unit. Core checks the upper bound against what's unassigned or packed. */
+  quantity: z.number().int().min(1).max(10_000).default(1),
+});
+// The input type: callers in core may leave `quantity` out, as the default applies on parse.
+export type PackUnitsInput = z.input<typeof PackUnitsInput>;
+
+export const ScanIntoPackageInput = z.object({
+  packageId: Id,
+  /** What the scanner typed: a barcode or SKU, matched like picking's. */
+  code: z.string().trim().min(1).max(200),
+  /** One per physical scan, so a retried request doesn't pack the unit twice. */
+  scanId: IdempotencyKey,
+});
+export type ScanIntoPackageInput = z.infer<typeof ScanIntoPackageInput>;
+
+export const CompletePackInput = z.object({
+  orderId: Id,
+  expectedVersion: ExpectedVersion,
+  /** Where the packer goes next: the Packing queue, or the next unclaimed Packing order. */
+  after: z.enum(["queue", "next"]),
+});
+export type CompletePackInput = z.infer<typeof CompletePackInput>;
+
+export const CompletePackResult = z.object({
+  /** The order `after: "next"` claimed; null otherwise, or when the Packing queue was empty. */
+  nextOrderId: Id.nullable(),
+});
+export type CompletePackResult = z.infer<typeof CompletePackResult>;
+
+export const packing = {
+  view: base
+    .route({
+      method: "GET",
+      path: "/orders/{orderId}/pack",
+      tags,
+      summary: "The pack screen: lines, packages, boxes and what's still missing",
+    })
+    .input(z.object({ orderId: Id }))
+    .output(PackView),
+  addPackage: base
+    .route({
+      method: "POST",
+      path: "/orders/{orderId}/packages",
+      tags,
+      summary: "Add a package with an active box or custom dimensions",
+    })
+    .input(AddPackageInput)
+    .output(PackResult),
+  setBox: base
+    .route({
+      method: "POST",
+      path: "/packages/{packageId}/box",
+      tags,
+      summary: "Change a package's box or custom dimensions",
+    })
+    .input(SetPackageBoxInput)
+    .output(PackResult),
+  deletePackage: base
+    .route({
+      method: "DELETE",
+      path: "/packages/{packageId}",
+      tags,
+      summary: "Delete a package; its units return to unassigned",
+    })
+    .input(PackageIdInput)
+    .output(PackResult),
+  setWeight: base
+    .route({
+      method: "POST",
+      path: "/packages/{packageId}/weight",
+      tags,
+      summary: "Set a package's weight; above its box's max it needs a reason",
+    })
+    .input(SetWeightInput)
+    .output(PackResult),
+  packUnits: base
+    .route({
+      method: "POST",
+      path: "/packages/{packageId}/pack",
+      tags,
+      summary: "Put units of a line into a package",
+    })
+    .input(PackUnitsInput)
+    .output(PackResult),
+  unpackUnits: base
+    .route({
+      method: "POST",
+      path: "/packages/{packageId}/unpack",
+      tags,
+      summary: "Take units of a line out of a package",
+    })
+    .input(PackUnitsInput)
+    .output(PackResult),
+  packRemaining: base
+    .route({
+      method: "POST",
+      path: "/packages/{packageId}/pack-remaining",
+      tags,
+      summary: "Put every unassigned unit into a package",
+    })
+    .input(PackageIdInput)
+    .output(PackResult),
+  scan: base
+    .route({
+      method: "POST",
+      path: "/packages/{packageId}/scan",
+      tags,
+      summary: "Scan a product into a package: one unit of the first matching line",
+    })
+    .input(ScanIntoPackageInput)
+    .output(PackResult),
+  complete: base
+    .route({
+      method: "POST",
+      path: "/orders/{orderId}/complete-pack",
+      tags,
+      summary: "Complete packing, then go back to the queue or claim the next Packing order",
+    })
+    .input(CompletePackInput)
+    .output(CompletePackResult),
+};
