@@ -13,6 +13,7 @@ import {
 import { type DbTx, Prisma, type WorkflowStatus } from "@woolrus/db";
 import { z } from "zod";
 import { AppError, notFound } from "../errors";
+import { issueInclude, toIssueView } from "../exceptions/issues";
 import { toVoidView, voidInclude } from "../exceptions/voids";
 import { lineAndPackageNoteCounts, noteCounts } from "../notes/targets";
 import { type Actor, assertCan } from "../permissions";
@@ -256,6 +257,11 @@ export async function getOrder(
     include: voidInclude,
     orderBy: [{ voidedAt: "desc" }, { id: "desc" }],
   });
+  const issues = await db.qualityIssue.findMany({
+    where: { orderId: id },
+    include: issueInclude,
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+  });
   if (!detail) throw notFound();
   const externalChange = externalChangeOf(order);
   const names = new Map(order.items.map((i) => [i.id, i.name]));
@@ -306,6 +312,10 @@ export async function getOrder(
       noteCount: notes.packages.get(p.id) ?? 0,
     })),
     voids: voids.map(toVoidView),
+    // Open issues first, then the closed ones, each newest first.
+    issues: issues
+      .map(toIssueView)
+      .sort((a, b) => Number(b.status === "OPEN") - Number(a.status === "OPEN")),
     allowedActions: allowedActions(actor, {
       status: order.status,
       heldFromStatus: order.heldFromStatus,

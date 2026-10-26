@@ -1,5 +1,6 @@
 import { boxes } from "./boxes";
 import { invitations } from "./invitations";
+import { issues } from "./issues";
 import { me } from "./me";
 import { notes } from "./notes";
 import { orders } from "./orders";
@@ -15,6 +16,7 @@ import { voids } from "./voids";
 export * from "./base";
 export * from "./boxes";
 export * from "./invitations";
+export * from "./issues";
 export * from "./me";
 export * from "./notes";
 export * from "./orders";
@@ -47,5 +49,6 @@ export const contract = {
   stations,
   station,
   voids,
+  issues,
 };
 export type Contract = typeof contract;

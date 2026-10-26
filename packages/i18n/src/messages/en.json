@@ -574,6 +574,59 @@
     "undoneLabel": "Undone",
     "none": "No voids on this order."
   },
+  "issues": {
+    "panel": "Exceptions",
+    "button": "Report issue",
+    "title": "Report an issue",
+    "titleOn": "Report an issue on {name}",
+    "on": "About",
+    "onOrder": "The whole order",
+    "type": "Type",
+    "severity": "Severity",
+    "description": "What went wrong",
+    "discovered": "Found in",
+    "origin": "Where it started",
+    "originNone": "Not sure",
+    "customerReported": "The customer reported this",
+    "customerReportedHint": "They told us after the order was ready or shipped.",
+    "submit": "Report issue",
+    "reported": "Issue reported.",
+    "evidenceTitle": "Add photos or a voice memo",
+    "evidenceHint": "Show what happened. You can skip this.",
+    "skip": "Skip",
+    "done": "Done",
+    "types": {
+      "WRONG_ITEM": "Wrong item",
+      "DAMAGED_ITEM": "Damaged item",
+      "MISSING_ITEM": "Missing item",
+      "WRONG_QUANTITY": "Wrong quantity",
+      "PACKAGING_DAMAGE": "Packaging damage",
+      "LABELING_ERROR": "Labeling error",
+      "WRONG_BOX_SIZE": "Wrong box size",
+      "OTHER": "Other"
+    },
+    "severities": {
+      "MINOR": "Minor",
+      "MAJOR": "Major",
+      "CRITICAL": "Critical"
+    },
+    "statuses": {
+      "OPEN": "Open",
+      "RESOLVED": "Resolved",
+      "DISMISSED": "Dismissed"
+    },
+    "summary": "{type} · {severity}",
+    "line": "Line: {name}",
+    "package": "Package {number}",
+    "foundIn": "Found in {stage}",
+    "startedIn": "Started in {stage}",
+    "customerLabel": "Customer-reported",
+    "responsible": "Responsible: {name}",
+    "responsibleNone": "Responsible: nobody yet",
+    "reportedBy": "Reported by {name}",
+    "notes": "{count, plural, one {# note} other {# notes}}",
+    "none": "No issues on this order."
+  },
   "notes": {
     "title": "Notes",
     "empty": "No notes on this order yet.",
@@ -756,6 +809,10 @@
       "quantity": "Choose between 1 and {active}.",
       "alreadyResolved": "An admin already dealt with this void, so it can't be undone.",
       "alreadyUndone": "This void was already undone."
+    },
+    "issues": {
+      "orderClosed": "This order is finished or cancelled, so a new issue can't be reported on it.",
+      "customerStage": "Only a Ready or Completed order can have a customer-reported issue."
     },
     "workflow": {
       "illegalTransition": "That move isn't allowed from the order's current status.",

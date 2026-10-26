@@ -231,6 +231,52 @@ export const ItemVoidView = z.object({
 });
 export type ItemVoidView = z.infer<typeof ItemVoidView>;
 
+export const QualityIssueType = z.enum([
+  "WRONG_ITEM",
+  "DAMAGED_ITEM",
+  "MISSING_ITEM",
+  "WRONG_QUANTITY",
+  "PACKAGING_DAMAGE",
+  "LABELING_ERROR",
+  "WRONG_BOX_SIZE",
+  "OTHER",
+]);
+export type QualityIssueType = z.infer<typeof QualityIssueType>;
+
+export const QualityIssueSeverity = z.enum(["MINOR", "MAJOR", "CRITICAL"]);
+export type QualityIssueSeverity = z.infer<typeof QualityIssueSeverity>;
+
+export const QualityIssueStatus = z.enum(["OPEN", "RESOLVED", "DISMISSED"]);
+export type QualityIssueStatus = z.infer<typeof QualityIssueStatus>;
+
+/** A quality issue as the order detail's Exceptions panel shows it. */
+export const QualityIssueView = z.object({
+  id: Id,
+  orderId: Id,
+  orderItemId: Id.nullable(),
+  /** Name of the line the issue is on, if any. */
+  lineName: z.string().nullable(),
+  packageId: Id.nullable(),
+  packageNumber: z.number().int().nullable(),
+  type: QualityIssueType,
+  severity: QualityIssueSeverity,
+  status: QualityIssueStatus,
+  description: z.string(),
+  discoveredStage: FulfillmentStage,
+  originStage: FulfillmentStage.nullable(),
+  customerReported: z.boolean(),
+  reporter: z.object({ name: z.string() }).nullable(),
+  /** Inferred from the origin stage, or chosen by a person (`responsibleManual`). */
+  responsible: z.object({ id: Id, name: z.string() }).nullable(),
+  responsibleManual: z.boolean(),
+  resolutionNotes: z.string().nullable(),
+  resolvedAt: z.date().nullable(),
+  createdAt: z.date(),
+  /** Notes (photos, voice memos) on the issue. */
+  noteCount: z.number().int(),
+});
+export type QualityIssueView = z.infer<typeof QualityIssueView>;
+
 export const OrderPackageSummary = z.object({
   id: Id,
   number: z.number().int(),
@@ -301,6 +347,8 @@ export const OrderView = OrderDetail.extend({
   packages: z.array(OrderPackageSummary),
   /** Every void on the order, newest first, including undone and resolved ones. */
   voids: z.array(ItemVoidView),
+  /** Every quality issue on the order, open first, then newest. */
+  issues: z.array(QualityIssueView),
   allowedActions: z.array(OrderAction),
 });
 export type OrderView = z.infer<typeof OrderView>;

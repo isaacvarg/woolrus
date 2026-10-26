@@ -52,6 +52,7 @@ import {
   removeFromBatch,
   renameStation,
   reorderPriorityRules,
+  reportIssue,
   requestSync,
   resendInvitation,
   restoreBox,
@@ -377,6 +378,11 @@ export const router = implementer.router({
   voids: {
     void: api.voids.void.handler(({ input, context }) => voidItem(db, context.actor, input)),
     undo: api.voids.undo.handler(({ input, context }) => undoVoid(db, context.actor, input)),
+  },
+  issues: {
+    report: api.issues.report.handler(({ input, context }) =>
+      reportIssue(db, context.actor, input),
+    ),
   },
   station: {
     status: stationApi.station.status.handler(({ context }) => stationStatus(db, context.station)),

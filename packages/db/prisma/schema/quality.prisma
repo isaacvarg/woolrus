@@ -109,6 +109,8 @@ model QualityIssue {
   customerReported  Boolean              @default(false) @map("customer_reported")
   reporterId        String?              @map("reporter_id") @db.Uuid
   responsibleUserId String?              @map("responsible_user_id") @db.Uuid
+  /// True once a person chose the responsible user, so editing the origin stage doesn't overwrite it.
+  responsibleManual Boolean              @default(false) @map("responsible_manual")
   triggeredRepack   Boolean              @default(false) @map("triggered_repack")
   resolutionNotes   String?              @map("resolution_notes")
   resolvedById      String?              @map("resolved_by_id") @db.Uuid
@@ -127,6 +129,7 @@ model QualityIssue {
   returns         ReturnRequest[]
 
   @@index([orderId])
+  @@index([orderId, status])
   @@index([status, severity])
   @@index([createdAt])
   @@map("quality_issues")

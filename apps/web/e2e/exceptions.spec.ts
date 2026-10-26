@@ -97,3 +97,58 @@ test("voiding every line shows the all-voided banner, hides Complete, and the or
   await cancel.getByRole("button", { name: "Cancel order" }).click();
   await expect(page.getByTestId("order-status")).toHaveText("Cancelled");
 });
+
+// A small real PNG (32×24), so the server's image checks run.
+const PHOTO = {
+  name: "dent.png",
+  mimeType: "image/png",
+  buffer: Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAACAAAAAYCAIAAAAUMWhjAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAAMElEQVRIiWM4Y2xMU8QwaoHxaBAZj6aiM6MZzXi0qDgzWpoaj1Y4Z0arTOPB3aoAANDIli6iRyQsAAAAAElFTkSuQmCC",
+    "base64",
+  ),
+};
+
+test("QA reports a Major packaging issue with a photo from the order detail", async ({ page }) => {
+  const order = await createOrder({ status: "QA" });
+  await signInAs(page, ["QA"]);
+  await page.goto(`/orders/${order.id}`);
+
+  await page.getByRole("button", { name: "Report issue" }).click();
+  const dialog = page.getByRole("dialog", { name: "Report an issue" });
+  await dialog.getByLabel("Type").selectOption("PACKAGING_DAMAGE");
+  await dialog.getByLabel("Severity").selectOption("MAJOR");
+  await dialog.getByRole("textbox", { name: "What went wrong" }).fill("Crushed corner");
+  await expect(dialog.getByTestId("issue-discovered")).toHaveText("QA");
+  await dialog.getByLabel("Where it started").selectOption("PACKING");
+  await dialog.getByRole("button", { name: "Report issue" }).click();
+
+  // Evidence goes on the new issue through the notes composer; the photo is optional.
+  const chooser = page.waitForEvent("filechooser");
+  await dialog.getByRole("button", { name: "Choose photos" }).click();
+  await (await chooser).setFiles([PHOTO]);
+  await dialog.getByRole("button", { name: "Add note" }).click();
+  await expect(dialog).toHaveCount(0);
+
+  const card = page.getByTestId("issue-card");
+  await expect(card).toContainText("Packaging damage");
+  await expect(card).toContainText("Major");
+  await expect(card).toContainText("Found in QA");
+  await expect(card).toContainText("Started in Packing");
+  await expect(card).toContainText("1 note");
+});
+
+test("an issue can be reported without evidence", async ({ page }) => {
+  const order = await createOrder({ status: "READY" });
+  await signInAs(page, ["SHIPPER"]);
+  await page.goto(`/orders/${order.id}`);
+
+  await page.getByRole("button", { name: "Report issue" }).click();
+  const dialog = page.getByRole("dialog", { name: "Report an issue" });
+  await dialog.getByRole("textbox", { name: "What went wrong" }).fill("Wrong scent");
+  await dialog.getByText("The customer reported this").click();
+  await expect(dialog.getByTestId("issue-discovered")).toHaveText("Customer");
+  await dialog.getByRole("button", { name: "Report issue" }).click();
+  await dialog.getByRole("button", { name: "Skip" }).click();
+
+  await expect(page.getByTestId("issue-card")).toContainText("Customer-reported");
+});

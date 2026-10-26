@@ -574,6 +574,59 @@
     "undoneLabel": "Deshecha",
     "none": "Este pedido no tiene anulaciones."
   },
+  "issues": {
+    "panel": "Excepciones",
+    "button": "Reportar problema",
+    "title": "Reportar un problema",
+    "titleOn": "Reportar un problema en {name}",
+    "on": "Sobre",
+    "onOrder": "Todo el pedido",
+    "type": "Tipo",
+    "severity": "Gravedad",
+    "description": "Qué salió mal",
+    "discovered": "Detectado en",
+    "origin": "Dónde empezó",
+    "originNone": "No estoy seguro",
+    "customerReported": "Lo reportó el cliente",
+    "customerReportedHint": "Nos avisó cuando el pedido ya estaba listo o enviado.",
+    "submit": "Reportar problema",
+    "reported": "Problema reportado.",
+    "evidenceTitle": "Agrega fotos o una nota de voz",
+    "evidenceHint": "Muestra lo que pasó. Puedes omitir este paso.",
+    "skip": "Omitir",
+    "done": "Listo",
+    "types": {
+      "WRONG_ITEM": "Artículo equivocado",
+      "DAMAGED_ITEM": "Artículo dañado",
+      "MISSING_ITEM": "Artículo faltante",
+      "WRONG_QUANTITY": "Cantidad incorrecta",
+      "PACKAGING_DAMAGE": "Empaque dañado",
+      "LABELING_ERROR": "Error de etiquetado",
+      "WRONG_BOX_SIZE": "Caja de tamaño incorrecto",
+      "OTHER": "Otro"
+    },
+    "severities": {
+      "MINOR": "Menor",
+      "MAJOR": "Mayor",
+      "CRITICAL": "Crítica"
+    },
+    "statuses": {
+      "OPEN": "Abierto",
+      "RESOLVED": "Resuelto",
+      "DISMISSED": "Descartado"
+    },
+    "summary": "{type} · {severity}",
+    "line": "Línea: {name}",
+    "package": "Paquete {number}",
+    "foundIn": "Detectado en {stage}",
+    "startedIn": "Empezó en {stage}",
+    "customerLabel": "Reportado por el cliente",
+    "responsible": "Responsable: {name}",
+    "responsibleNone": "Responsable: nadie aún",
+    "reportedBy": "Reportado por {name}",
+    "notes": "{count, plural, one {# nota} other {# notas}}",
+    "none": "No hay problemas en este pedido."
+  },
   "notes": {
     "title": "Notas",
     "empty": "Este pedido aún no tiene notas.",
@@ -756,6 +809,10 @@
       "quantity": "Elige entre 1 y {active}.",
       "alreadyResolved": "Un administrador ya resolvió esta anulación, así que no se puede deshacer.",
       "alreadyUndone": "Esta anulación ya se deshizo."
+    },
+    "issues": {
+      "orderClosed": "Este pedido está terminado o cancelado, así que no se puede reportar un problema nuevo.",
+      "customerStage": "Solo un pedido Listo o Completado puede tener un problema reportado por el cliente."
     },
     "workflow": {
       "illegalTransition": "Ese cambio no está permitido desde el estado actual del pedido.",
