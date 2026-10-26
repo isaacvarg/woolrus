@@ -4,9 +4,26 @@ import { seedDemoOrders } from "./seed-orders";
 const db = createDb();
 
 const boxes = [
-  { name: "Small mailer", lengthIn: 6, widthIn: 4, heightIn: 2, maxWeightOz: 64 },
-  { name: "Medium box", lengthIn: 10, widthIn: 8, heightIn: 4, maxWeightOz: 320 },
-  { name: "Large box", lengthIn: 14, widthIn: 12, heightIn: 8, maxWeightOz: 800 },
+  {
+    name: "Small mailer",
+    lengthIn: 6,
+    widthIn: 4,
+    heightIn: 2,
+    maxWeightOz: 64,
+    tareWeightOz: 1.5,
+  },
+  {
+    name: "Medium box",
+    lengthIn: 10,
+    widthIn: 8,
+    heightIn: 4,
+    maxWeightOz: 320,
+    tareWeightOz: 5,
+    outerLengthIn: 10.25,
+    outerWidthIn: 8.25,
+    outerHeightIn: 4.25,
+  },
+  { name: "Large box", lengthIn: 14, widthIn: 12, heightIn: 8, maxWeightOz: 800, tareWeightOz: 9 },
 ];
 
 async function main() {

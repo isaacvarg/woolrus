@@ -53,7 +53,29 @@
     "add": "Add box",
     "length": "Length",
     "width": "Width",
-    "height": "Height"
+    "height": "Height",
+    "edit": "Edit",
+    "save": "Save",
+    "cancel": "Cancel",
+    "archive": "Archive",
+    "restore": "Restore",
+    "delete": "Delete",
+    "archived": "Archived",
+    "inUse": "In use",
+    "status": "Status",
+    "actions": "Actions",
+    "outerDimensions": "Outer (in)",
+    "tare": "Tare",
+    "inner": "Inner dimensions (in)",
+    "outer": "Outer dimensions (in, optional)",
+    "lb": "lb",
+    "oz": "oz",
+    "showArchived": "Show archived",
+    "lockedReason": "This box is in use by a package, so its dimensions are locked. Archive it and add a new box to change its size.",
+    "deleteTitle": "Delete {name}?",
+    "deleteHint": "This box isn't used by any package. Deleting it can't be undone.",
+    "loading": "Loading…",
+    "empty": "No boxes yet."
   },
   "settings": {
     "title": "Settings",
@@ -626,7 +648,9 @@
     "internal": "Something went wrong. Try again.",
     "box": {
       "nameTaken": "A box with this name already exists.",
-      "inUse": "This box is used by a package and can only be archived."
+      "inUse": "This box is used by a package and can only be archived.",
+      "outerSmaller": "A box's outer size can't be smaller than its inner size.",
+      "dimensionsLocked": "Resizing a box in use would change packages that already use it. Archive it and add a new box instead."
     },
     "field": {
       "invalid": "This value isn't valid.",

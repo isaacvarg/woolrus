@@ -53,7 +53,29 @@
     "add": "Agregar caja",
     "length": "Largo",
     "width": "Ancho",
-    "height": "Alto"
+    "height": "Alto",
+    "edit": "Editar",
+    "save": "Guardar",
+    "cancel": "Cancelar",
+    "archive": "Archivar",
+    "restore": "Restaurar",
+    "delete": "Eliminar",
+    "archived": "Archivada",
+    "inUse": "En uso",
+    "status": "Estado",
+    "actions": "Acciones",
+    "outerDimensions": "Exterior (pulg)",
+    "tare": "Tara",
+    "inner": "Dimensiones interiores (pulg)",
+    "outer": "Dimensiones exteriores (pulg, opcional)",
+    "lb": "lb",
+    "oz": "oz",
+    "showArchived": "Mostrar archivadas",
+    "lockedReason": "Esta caja está en uso por un paquete, así que sus dimensiones están bloqueadas. Archívala y agrega una caja nueva para cambiar su tamaño.",
+    "deleteTitle": "¿Eliminar {name}?",
+    "deleteHint": "Ningún paquete usa esta caja. Eliminarla no se puede deshacer.",
+    "loading": "Cargando…",
+    "empty": "Aún no hay cajas."
   },
   "settings": {
     "title": "Configuración",
@@ -626,7 +648,9 @@
     "internal": "Algo salió mal. Inténtalo de nuevo.",
     "box": {
       "nameTaken": "Ya existe una caja con este nombre.",
-      "inUse": "Esta caja está en uso por un paquete y solo se puede archivar."
+      "inUse": "Esta caja está en uso por un paquete y solo se puede archivar.",
+      "outerSmaller": "El tamaño exterior de una caja no puede ser menor que el interior.",
+      "dimensionsLocked": "Cambiar el tamaño de una caja en uso afectaría los paquetes que ya la usan. Archívala y agrega una caja nueva."
     },
     "field": {
       "invalid": "Este valor no es válido.",

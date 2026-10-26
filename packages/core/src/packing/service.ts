@@ -177,7 +177,7 @@ export async function getPackView(
     order: detail,
     customerNote: order.customerNote,
     ...result,
-    boxes: boxes.map(toBoxDto),
+    boxes: boxes.map((box) => toBoxDto(box)),
   };
 }
 
