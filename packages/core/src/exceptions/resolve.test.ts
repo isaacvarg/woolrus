@@ -3,8 +3,8 @@ import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { createActor, resetDb, testDb } from "../../test/db";
 import { createOrder } from "../../test/factories";
 import type { Actor } from "../permissions";
-import { listVoids, voidCounts } from "./queries";
 import { resolveVoids, undoVoid, voidItem } from "./voids";
+import { listVoids, voidCounts } from "./voids-queries";
 
 const db: Db = testDb();
 afterAll(() => db.$disconnect());

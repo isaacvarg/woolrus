@@ -277,7 +277,13 @@ export async function getOrder(
   });
   if (!order) throw notFound();
 
-  const [detail] = await toOrderDetails(db, [order], { now });
+  const [detail] = await toOrderDetails(db, [order], {
+    now,
+    lines: order.items.map((i) => ({
+      quantity: i.quantity,
+      voidedQuantity: i.voids.reduce((sum, v) => sum + v.quantity, 0),
+    })),
+  });
   const notes = await lineAndPackageNoteCounts(db, id);
   const voids = await db.itemVoid.findMany({
     where: { orderId: id },

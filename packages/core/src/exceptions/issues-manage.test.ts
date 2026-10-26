@@ -12,7 +12,7 @@ import {
   setResponsible,
   updateIssue,
 } from "./issues";
-import { getIssue, issueAssignees, issueCounts, listIssues } from "./queries";
+import { getIssue, issueAssignees, issueCounts, listIssues } from "./issues-queries";
 
 const db: Db = testDb();
 afterAll(() => db.$disconnect());
@@ -216,6 +216,17 @@ describe("issueAssignees", () => {
     const ids = (await issueAssignees(db, qa)).map((u) => u.id);
     expect(ids).toContain(qa.userId);
     expect(ids).not.toContain(gone.userId);
+  });
+
+  it("never returns an email address, even for a user with no name", async () => {
+    const { qa } = await setup();
+    const unnamed = await createActor(db, ["PICKER"]);
+    await db.user.update({ where: { id: unnamed.userId }, data: { name: "" } });
+
+    const people = await issueAssignees(db, qa);
+
+    expect(JSON.stringify(people)).not.toContain("@");
+    expect(people.find((u) => u.id === unnamed.userId)?.name).toBe("—");
   });
 });
 

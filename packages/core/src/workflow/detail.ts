@@ -24,11 +24,16 @@ import {
   resume,
 } from "./service";
 
-/** Orders as the API returns them. The claim shows only while it's live, with the holder's name. */
+type VoidableLine = { quantity: number; voidedQuantity: number };
+
+/**
+ * Orders as the API returns them. The claim shows only while it's live, with the holder's name.
+ * `lines` is for a caller that has the single order's lines already, so they aren't read twice.
+ */
 export async function toOrderDetails(
   db: DbTx,
   orders: readonly Order[],
-  { now = new Date() }: { now?: Date } = {},
+  { now = new Date(), lines: known }: { now?: Date; lines?: readonly VoidableLine[] } = {},
 ): Promise<OrderDetail[]> {
   const expiry = await claimExpiryMinutes(db);
   const holderIds = orders.flatMap((o) =>
@@ -43,22 +48,27 @@ export async function toOrderDetails(
     ).map((u) => [u.id, displayName(u)]),
   );
 
-  const items = await db.orderItem.findMany({
-    where: { orderId: { in: orders.map((o) => o.id) } },
-    select: {
-      orderId: true,
-      quantity: true,
-      voids: { where: { undoneAt: null }, select: { quantity: true } },
-    },
-  });
-  const linesByOrder = new Map<string, { quantity: number; voidedQuantity: number }[]>();
-  for (const it of items) {
-    const lines = linesByOrder.get(it.orderId) ?? [];
-    lines.push({
-      quantity: it.quantity,
-      voidedQuantity: it.voids.reduce((sum, v) => sum + v.quantity, 0),
+  const linesByOrder = new Map<string, VoidableLine[]>();
+  const [only] = orders;
+  if (known && orders.length === 1 && only) {
+    linesByOrder.set(only.id, [...known]);
+  } else {
+    const items = await db.orderItem.findMany({
+      where: { orderId: { in: orders.map((o) => o.id) } },
+      select: {
+        orderId: true,
+        quantity: true,
+        voids: { where: { undoneAt: null }, select: { quantity: true } },
+      },
     });
-    linesByOrder.set(it.orderId, lines);
+    for (const it of items) {
+      const lines = linesByOrder.get(it.orderId) ?? [];
+      lines.push({
+        quantity: it.quantity,
+        voidedQuantity: it.voids.reduce((sum, v) => sum + v.quantity, 0),
+      });
+      linesByOrder.set(it.orderId, lines);
+    }
   }
 
   return orders.map((o) => {

@@ -373,7 +373,8 @@ export async function reopenIssue(
           qualityIssueId: issueId,
           authorId: actor.userId,
           visibility: "INTERNAL",
-          content: `${issue.status === "DISMISSED" ? "Dismissed" : "Resolved"}: ${issue.resolutionNotes}`,
+          // Stored as written: the audit event below keeps whether it was resolved or dismissed.
+          content: issue.resolutionNotes,
         },
       });
     }
@@ -404,6 +405,7 @@ export async function deleteIssue(
   assertCan(actor, "issue.delete");
   return db.$transaction(async (tx) => {
     const { order, issue } = await lockedIssue(tx, issueId);
+    // Read under the order lock, so no note (and file) can be added between this and the delete.
     const attachments = await tx.noteAttachment.findMany({
       where: { note: { qualityIssueId: issueId } },
       select: { storageKey: true, thumbnailKey: true },
@@ -439,7 +441,8 @@ export async function deleteIssue(
 
 /**
  * Records that a repack followed this issue (FR-QI-06). Not routed: `shipping` calls it inside its
- * own transaction. The label must belong to the issue's order.
+ * own transaction, after its own permission check, so there is none here. The label must belong to
+ * the issue's order.
  */
 export async function linkIssueToRepack(
   tx: DbTx,

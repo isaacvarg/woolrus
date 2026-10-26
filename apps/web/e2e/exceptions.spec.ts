@@ -276,7 +276,7 @@ test("an admin filters Issues to Open, resolves one with a note, then reopens it
     status: "OPEN",
     resolutionNotes: null,
   });
-  await expect(drawer).toContainText("Resolved: Relabelled", { timeout: 15_000 });
+  await expect(drawer).toContainText("Relabelled", { timeout: 15_000 });
 });
 
 test("a QA user sees Issues but no resolve controls", async ({ page }) => {
@@ -395,4 +395,29 @@ test("a packer reports a packaging issue on a package, linked to it", async ({ p
   const saved = await db.qualityIssue.findFirstOrThrow({ where: { orderId: order.id } });
   expect(saved.packageId).toBe(pkg.id);
   expect(saved.type).toBe("PACKAGING_DAMAGE");
+});
+
+test("the issue count and assignee routes are not read as an issue id, and leak no emails", async ({
+  page,
+}) => {
+  await signInAs(page, ["PICKER"]);
+
+  const counts = await page.request.get("/api/v1/issues/counts");
+  expect(counts.status()).toBe(200);
+  expect(await counts.json()).toEqual({
+    open: expect.any(Number),
+    openCritical: expect.any(Number),
+  });
+
+  const assignees = await page.request.get("/api/v1/issues/assignees");
+  expect(assignees.status()).toBe(200);
+  const people = (await assignees.json()) as { id: string; name: string }[];
+  expect(people.length).toBeGreaterThan(0);
+  expect(JSON.stringify(people)).not.toContain("@");
+});
+
+test("the issue routes refuse a caller who isn't signed in", async ({ request }) => {
+  for (const path of ["/api/v1/issues/counts", "/api/v1/issues/assignees", "/api/v1/issues"]) {
+    expect((await request.get(path)).status(), path).toBe(401);
+  }
 });
