@@ -10,6 +10,7 @@ import type {
 import type { Db, DbTx, Order } from "@woolrus/db";
 import type { Actor } from "../permissions";
 import { applyExternalChange, dismissExternalChange } from "../sync/review";
+import { isAllVoided } from "./gates";
 import { claim, claimExpiryMinutes, claimMany, isClaimLive, release, takeOver } from "./claims";
 import { displayName, nameFields } from "./people";
 import {
@@ -42,6 +43,24 @@ export async function toOrderDetails(
     ).map((u) => [u.id, displayName(u)]),
   );
 
+  const items = await db.orderItem.findMany({
+    where: { orderId: { in: orders.map((o) => o.id) } },
+    select: {
+      orderId: true,
+      quantity: true,
+      voids: { where: { undoneAt: null }, select: { quantity: true } },
+    },
+  });
+  const linesByOrder = new Map<string, { quantity: number; voidedQuantity: number }[]>();
+  for (const it of items) {
+    const lines = linesByOrder.get(it.orderId) ?? [];
+    lines.push({
+      quantity: it.quantity,
+      voidedQuantity: it.voids.reduce((sum, v) => sum + v.quantity, 0),
+    });
+    linesByOrder.set(it.orderId, lines);
+  }
+
   return orders.map((o) => {
     const holder = o.claimedById ? holders.get(o.claimedById) : undefined;
     return {
@@ -61,6 +80,7 @@ export async function toOrderDetails(
           : null,
       completedAt: o.completedAt,
       externalChange: o.externalChangeDetectedAt !== null,
+      allVoided: isAllVoided(linesByOrder.get(o.id) ?? []),
       version: o.version,
     };
   });

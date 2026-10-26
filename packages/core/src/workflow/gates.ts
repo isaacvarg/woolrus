@@ -47,6 +47,15 @@ export type GateSnapshot = { status: WorkflowStatus; lines: GateLine[]; packages
 // Clamped: a store-sync quantity cut below the voided total mustn't read as a negative.
 const activeQuantity = (line: GateLine) => Math.max(line.quantity - line.voidedQuantity, 0);
 
+/** At least one line, and every line voided down to nothing (FR-VOID-05). Non-physical lines count. */
+export const isAllVoided = (lines: readonly Pick<GateLine, "quantity" | "voidedQuantity">[]) =>
+  lines.length > 0 && lines.every((l) => Math.max(l.quantity - l.voidedQuantity, 0) === 0);
+
+const allVoidedCondition = (snap: GateSnapshot): UnmetCondition[] =>
+  isAllVoided(snap.lines)
+    ? [{ messageKey: "errors.workflow.allVoided" as ErrorCode, params: {} }]
+    : [];
+
 /** Lines the floor handles: physical, with something left after voids. */
 const workLines = (snap: GateSnapshot) =>
   snap.lines.filter((l) => l.physical && activeQuantity(l) > 0);
@@ -57,7 +66,7 @@ const unmet = (key: string, params: UnmetCondition["params"] = {}): UnmetConditi
 });
 
 function picked(snap: GateSnapshot): UnmetCondition[] {
-  return workLines(snap).flatMap((l) => {
+  const lines = workLines(snap).flatMap((l) => {
     if (l.pickStatus === "PENDING") return [unmet("lineNotPicked", { line: l.name })];
     if (l.pickStatus === "OUT_OF_STOCK") return [unmet("lineOutOfStock", { line: l.name })];
     const expected = activeQuantity(l);
@@ -65,6 +74,7 @@ function picked(snap: GateSnapshot): UnmetCondition[] {
       ? []
       : [unmet("linePickedQuantity", { line: l.name, picked: l.pickedQuantity, expected })];
   });
+  return [...allVoidedCondition(snap), ...lines];
 }
 
 function packed(snap: GateSnapshot): UnmetCondition[] {
@@ -99,12 +109,12 @@ function packed(snap: GateSnapshot): UnmetCondition[] {
       : []),
   ]);
 
-  return [...lines, ...packages];
+  return [...allVoidedCondition(snap), ...lines, ...packages];
 }
 
 function verified(snap: GateSnapshot): UnmetCondition[] {
-  if (snap.packages.length === 0) return [unmet("noPackages")];
-  return snap.packages.flatMap((p) => {
+  if (snap.packages.length === 0) return [...allVoidedCondition(snap), unmet("noPackages")];
+  const conditions = snap.packages.flatMap((p) => {
     const unverified = p.items.filter((it) => !it.qaVerified).length;
     return [
       ...(unverified > 0
@@ -114,6 +124,7 @@ function verified(snap: GateSnapshot): UnmetCondition[] {
       ...(p.activeLabels !== 1 ? [unmet("packageNoLabel", { package: p.number })] : []),
     ];
   });
+  return [...allVoidedCondition(snap), ...conditions];
 }
 
 function shippable(snap: GateSnapshot): UnmetCondition[] {

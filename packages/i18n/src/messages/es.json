@@ -755,6 +755,7 @@
       "illegalTransition": "Ese cambio no está permitido desde el estado actual del pedido.",
       "stale": "Este pedido cambió desde que lo abriste. Se actualizó; revísalo e inténtalo de nuevo.",
       "claimRequired": "Reclama este pedido antes de completar la etapa.",
+      "allVoided": "Todos los artículos están anulados. Deshaz una anulación o cancela el pedido.",
       "gateFailed": "Esta etapa aún no está terminada.",
       "claimedByOther": "{name} está trabajando en este pedido.",
       "notClaimable": "Este pedido no se puede reclamar en su estado actual.",

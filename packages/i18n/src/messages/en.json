@@ -755,6 +755,7 @@
       "illegalTransition": "That move isn't allowed from the order's current status.",
       "stale": "This order changed since you loaded it. It has been refreshed; check it and try again.",
       "claimRequired": "Claim this order before completing the stage.",
+      "allVoided": "Every item is voided. Undo a void, or cancel the order.",
       "gateFailed": "This stage isn't finished yet.",
       "claimedByOther": "{name} is working on this order.",
       "notClaimable": "This order can't be claimed in its current status.",

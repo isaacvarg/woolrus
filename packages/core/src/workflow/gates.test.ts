@@ -392,9 +392,59 @@ describe("voided quantity beyond the line", () => {
     // A store-sync cut left more voided than the line holds (SPEC-exceptions "Vocabulary").
     const lines = [
       line({ quantity: 1, voidedQuantity: 3, pickStatus: "PENDING", pickedQuantity: 0 }),
+      line({ id: "line-2", quantity: 1, pickedQuantity: 1 }),
     ];
+    const packages = [pkg({ items: [{ orderItemId: "line-2", quantity: 1, qaVerified: true }] })];
 
     expect(evaluateGate("picked", snapshot({ lines }))).toEqual([]);
-    expect(evaluateGate("packed", snapshot({ lines, packages: [] }))).toEqual([]);
+    expect(evaluateGate("packed", snapshot({ lines, packages }))).toEqual([]);
+  });
+});
+
+describe("all-voided rule", () => {
+  const allVoided = (extra: Partial<GateSnapshot> = {}) =>
+    snapshot({
+      lines: [
+        line({ id: "a", quantity: 2, voidedQuantity: 2, pickStatus: "PENDING", pickedQuantity: 0 }),
+        line({ id: "b", quantity: 1, voidedQuantity: 1, pickStatus: "PENDING", pickedQuantity: 0 }),
+      ],
+      packages: [],
+      ...extra,
+    });
+  const unmetKey = { messageKey: "errors.workflow.allVoided", params: {} };
+
+  it("blocks the picked, packed and verified gates", () => {
+    for (const gate of ["picked", "packed", "verified"] as const) {
+      expect(evaluateGate(gate, allVoided())).toContainEqual(unmetKey);
+    }
+  });
+
+  it("clears when one void is undone", () => {
+    const lines = [
+      line({ id: "a", quantity: 2, voidedQuantity: 1, pickStatus: "PENDING", pickedQuantity: 0 }),
+      line({ id: "b", quantity: 1, voidedQuantity: 1, pickStatus: "PENDING", pickedQuantity: 0 }),
+    ];
+    for (const gate of ["picked", "packed", "verified"] as const) {
+      expect(evaluateGate(gate, snapshot({ lines, packages: [] }))).not.toContainEqual(unmetKey);
+    }
+  });
+
+  it("doesn't apply to an order with no lines", () => {
+    expect(evaluateGate("picked", snapshot({ lines: [], packages: [] }))).toEqual([]);
+  });
+
+  it("doesn't apply when only a non-physical line is left", () => {
+    const lines = [
+      line({ id: "a", quantity: 1, voidedQuantity: 1, pickStatus: "PENDING", pickedQuantity: 0 }),
+      line({ id: "rush", physical: false, quantity: 1, pickStatus: "PENDING", pickedQuantity: 0 }),
+    ];
+    for (const gate of ["picked", "packed"] as const) {
+      expect(evaluateGate(gate, snapshot({ lines, packages: [] }))).not.toContainEqual(unmetKey);
+    }
+  });
+
+  it("leaves hold, cancel and force gates alone", () => {
+    expect(evaluateGate("noLiveLabels", allVoided())).toEqual([]);
+    expect(evaluateGate("shippable", allVoided({ status: "READY" }))).not.toContainEqual(unmetKey);
   });
 });
