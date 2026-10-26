@@ -387,7 +387,15 @@
     "overReason": "Reason",
     "overSave": "Save with reason",
     "noWeight": "{count, plural, one {# package without a weight} other {# packages without a weight}}",
-    "overweightBadge": "Over the limit"
+    "overweightBadge": "Over the limit",
+    "drawerOpen": "Order info",
+    "drawerTitle": "Order #{number}",
+    "drawerClose": "Close order info",
+    "drawerAddress": "Shipping address",
+    "drawerLines": "Lines",
+    "drawerNoPicker": "Not picked yet",
+    "addNote": "Add note",
+    "addNoteTitle": "Add a note to package {number}"
   },
   "pick": {
     "title": "Pick #{number}",

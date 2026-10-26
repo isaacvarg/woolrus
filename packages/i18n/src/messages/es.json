@@ -387,7 +387,15 @@
     "overReason": "Motivo",
     "overSave": "Guardar con motivo",
     "noWeight": "{count, plural, one {# paquete sin peso} other {# paquetes sin peso}}",
-    "overweightBadge": "Supera el límite"
+    "overweightBadge": "Supera el límite",
+    "drawerOpen": "Info del pedido",
+    "drawerTitle": "Pedido #{number}",
+    "drawerClose": "Cerrar info del pedido",
+    "drawerAddress": "Dirección de envío",
+    "drawerLines": "Líneas",
+    "drawerNoPicker": "Aún sin recoger",
+    "addNote": "Añadir nota",
+    "addNoteTitle": "Añadir una nota al paquete {number}"
   },
   "pick": {
     "title": "Surtir #{number}",
