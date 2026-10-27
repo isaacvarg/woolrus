@@ -18,7 +18,6 @@ const integrations: { id: string; field?: SettingField; secrets: SecretName[] }[
     field: "wooStoreUrl",
     secrets: ["wooConsumerKey", "wooConsumerSecret", "wooWebhookSecret"],
   },
-  { id: "shipstation", secrets: ["shipstationApiKey"] },
   { id: "lumexia", field: "lumexiaBaseUrl", secrets: ["lumexiaApiKey"] },
   { id: "email", field: "emailFrom", secrets: ["resendApiKey"] },
 ];

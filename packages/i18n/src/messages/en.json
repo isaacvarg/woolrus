@@ -21,6 +21,7 @@
     "queues": "Queues",
     "myPicks": "My picks",
     "priorityRules": "Priority rules",
+    "shippingSettings": "Shipping",
     "sync": "Sync",
     "users": "Users",
     "stations": "Stations",
@@ -127,7 +128,6 @@
       "lumexiaBaseUrl": "API base URL",
       "names": {
         "woocommerce": "WooCommerce",
-        "shipstation": "ShipStation",
         "lumexia": "Lumexia",
         "email": "Email"
       },
@@ -135,7 +135,6 @@
         "wooConsumerKey": "Consumer key",
         "wooConsumerSecret": "Consumer secret",
         "wooWebhookSecret": "Webhook secret",
-        "shipstationApiKey": "API key",
         "lumexiaApiKey": "API key",
         "resendApiKey": "Resend API key"
       },
@@ -171,6 +170,32 @@
       "sendTestEmailHint": "Sends to your own address with the saved sender and key.",
       "testEmailSent": "Sent to {to}. Check your inbox.",
       "testEmailLogged": "Resend isn't set up, so the email to {to} was written to the server log instead of sent."
+    },
+    "shipping": {
+      "title": "Shipping",
+      "intro": "Woolrus asks each shipping provider for rates only while it's on. Add its credentials and test the connection, then turn it on.",
+      "names": {
+        "SHIPSTATION": "ShipStation",
+        "BRIDGE_SOURCE": "Bridge Source"
+      },
+      "fields": {
+        "apiKey": "API key",
+        "customerId": "Customer ID",
+        "baseUrl": "API base URL"
+      },
+      "credentials": "Credentials",
+      "enable": "Use {name}",
+      "enabledToast": "{name} is on.",
+      "disabledToast": "{name} is off. New rate requests skip it.",
+      "comingSoon": "Coming soon",
+      "comingSoonHint": "This version of Woolrus can't connect to {name} yet.",
+      "clearConfirm": "Clear {name}'s credentials? It's turned off until new ones are added.",
+      "testConnection": "Test connection",
+      "testOk": "Connected.",
+      "lastChecked": "Checked {at}.",
+      "carrierCount": "{count, plural, =0 {No carriers synced yet.} one {# carrier synced.} other {# carriers synced.}}",
+      "urlMoveBody": "The new address is on a different server. Saving it removes the saved credentials and turns the provider off, so they're never sent there. Add them again for the new address.",
+      "savedCredentialsCleared": "Saved. The credentials for the old address were removed: add them for the new one."
     }
   },
   "priorityRules": {
@@ -955,6 +980,11 @@
       "rejected": "The shipping provider refused the request. Check the address, package and service.",
       "unavailable": "The shipping provider couldn't be reached. Try again in a minute.",
       "timeout": "The shipping provider took too long to answer. Try again in a minute."
+    },
+    "carriers": {
+      "credentialsMissing": "Add the provider's credentials first.",
+      "providerNotAvailable": "This provider isn't available in this version of Woolrus yet.",
+      "providerUnreachable": "The provider didn't accept the connection test, so it wasn't turned on. Check its credentials and try again."
     },
     "email": {
       "unauthorized": "Resend refused the API key. Check it in Settings → Integrations.",

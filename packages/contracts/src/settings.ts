@@ -94,7 +94,6 @@ export const SecretName = z.enum([
   "wooConsumerKey",
   "wooConsumerSecret",
   "wooWebhookSecret",
-  "shipstationApiKey",
   "lumexiaApiKey",
   "resendApiKey",
 ]);

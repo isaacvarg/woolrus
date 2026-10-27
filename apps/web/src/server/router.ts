@@ -2,6 +2,7 @@ import {
   addPackage,
   archiveBox,
   clearPin,
+  clearProviderCredentials,
   clearSecret,
   completeBatchMembers,
   completePack,
@@ -38,6 +39,7 @@ import {
   listNotes,
   listOrders,
   listPriorityRules,
+  listProviders,
   listQueue,
   listStations,
   listSyncRunErrors,
@@ -74,11 +76,14 @@ import {
   sendTestEmail,
   setPackageBox,
   setPin,
+  setProviderCredentials,
+  setProviderEnabled,
   setResponsible,
   setSecret,
   setWeight,
   stationStatus,
   substitute,
+  testProvider,
   testStoreConnection,
   touchStation,
   undoVoid,
@@ -91,6 +96,7 @@ import {
   updateNote,
   updatePreferences,
   updatePriorityRule,
+  updateProviderConfig,
   updateSettings,
   updateUserRoles,
   voidCounts,
@@ -439,6 +445,22 @@ export const router = implementer.router({
       return { ok: true as const };
     }),
     touch: api.station.touch.handler(({ context }) => touchStation(db, context.actor)),
+  },
+  carriers: {
+    providers: api.carriers.providers.handler(({ context }) => listProviders(db, context.actor)),
+    setCredentials: api.carriers.setCredentials.handler(({ input, context }) =>
+      setProviderCredentials(db, context.actor, input),
+    ),
+    clearCredentials: api.carriers.clearCredentials.handler(({ input, context }) =>
+      clearProviderCredentials(db, context.actor, input),
+    ),
+    updateConfig: api.carriers.updateConfig.handler(({ input, context }) =>
+      updateProviderConfig(db, context.actor, input),
+    ),
+    test: api.carriers.test.handler(({ input, context }) => testProvider(db, context.actor, input)),
+    setProviderEnabled: api.carriers.setProviderEnabled.handler(({ input, context }) =>
+      setProviderEnabled(db, context.actor, input),
+    ),
   },
 });
 

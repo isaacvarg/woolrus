@@ -14,6 +14,7 @@ export type IntegrationEnv = {
   wooConsumerKey: string | null;
   wooConsumerSecret: string | null;
   wooWebhookSecret: string | null;
+  /** Fills an unset ShipStation provider account (adapters/shipping/credentials.ts). */
   shipstationApiKey: string | null;
   lumexiaBaseUrl: string | null;
   lumexiaApiKey: string | null;

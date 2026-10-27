@@ -148,10 +148,10 @@ describe("provider-neutral shipping tables", () => {
     ).rejects.toThrow();
   });
 
-  it("keeps no ShipStation column except the Settings key", async () => {
+  it("keeps no ShipStation column: the key moved to its provider account", async () => {
     const rows = await db.$queryRaw<{ table_name: string; column_name: string }[]>`
       SELECT table_name, column_name FROM information_schema.columns
       WHERE table_schema = 'public' AND column_name ILIKE '%shipstation%'`;
-    expect(rows).toEqual([{ table_name: "settings", column_name: "shipstation_api_key_enc" }]);
+    expect(rows).toEqual([]);
   });
 });

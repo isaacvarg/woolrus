@@ -21,6 +21,7 @@
     "queues": "Colas",
     "myPicks": "Mis surtidos",
     "priorityRules": "Reglas de prioridad",
+    "shippingSettings": "Envíos",
     "sync": "Sincronización",
     "users": "Usuarios",
     "stations": "Estaciones",
@@ -127,7 +128,6 @@
       "lumexiaBaseUrl": "URL base de la API",
       "names": {
         "woocommerce": "WooCommerce",
-        "shipstation": "ShipStation",
         "lumexia": "Lumexia",
         "email": "Correo"
       },
@@ -135,7 +135,6 @@
         "wooConsumerKey": "Clave de consumidor",
         "wooConsumerSecret": "Secreto de consumidor",
         "wooWebhookSecret": "Secreto del webhook",
-        "shipstationApiKey": "Clave de API",
         "lumexiaApiKey": "Clave de API",
         "resendApiKey": "Clave API de Resend"
       },
@@ -171,6 +170,32 @@
       "sendTestEmailHint": "Se envía a tu propia dirección con el remitente y la clave guardados.",
       "testEmailSent": "Enviado a {to}. Revisa tu bandeja de entrada.",
       "testEmailLogged": "Resend no está configurado, así que el correo para {to} se escribió en el registro del servidor en lugar de enviarse."
+    },
+    "shipping": {
+      "title": "Envíos",
+      "intro": "Woolrus pide tarifas a cada proveedor de envíos solo mientras está activado. Agrega sus credenciales, prueba la conexión y luego actívalo.",
+      "names": {
+        "SHIPSTATION": "ShipStation",
+        "BRIDGE_SOURCE": "Bridge Source"
+      },
+      "fields": {
+        "apiKey": "Clave de API",
+        "customerId": "ID de cliente",
+        "baseUrl": "URL base de la API"
+      },
+      "credentials": "Credenciales",
+      "enable": "Usar {name}",
+      "enabledToast": "{name} está activado.",
+      "disabledToast": "{name} está desactivado. Las nuevas solicitudes de tarifas lo omiten.",
+      "comingSoon": "Próximamente",
+      "comingSoonHint": "Esta versión de Woolrus aún no puede conectarse a {name}.",
+      "clearConfirm": "¿Borrar las credenciales de {name}? Queda desactivado hasta que se agreguen otras.",
+      "testConnection": "Probar conexión",
+      "testOk": "Conectado.",
+      "lastChecked": "Comprobado {at}.",
+      "carrierCount": "{count, plural, =0 {Aún no hay transportistas sincronizados.} one {# transportista sincronizado.} other {# transportistas sincronizados.}}",
+      "urlMoveBody": "La nueva dirección está en otro servidor. Al guardarla se borran las credenciales guardadas y se desactiva el proveedor, para que nunca se envíen allí. Agrégalas de nuevo para la nueva dirección.",
+      "savedCredentialsCleared": "Guardado. Se borraron las credenciales de la dirección anterior: agrégalas para la nueva."
     }
   },
   "priorityRules": {
@@ -955,6 +980,11 @@
       "rejected": "El proveedor de envíos rechazó la solicitud. Revisa la dirección, el paquete y el servicio.",
       "unavailable": "No se pudo conectar con el proveedor de envíos. Inténtalo de nuevo en un minuto.",
       "timeout": "El proveedor de envíos tardó demasiado en responder. Inténtalo de nuevo en un minuto."
+    },
+    "carriers": {
+      "credentialsMissing": "Primero agrega las credenciales del proveedor.",
+      "providerNotAvailable": "Este proveedor aún no está disponible en esta versión de Woolrus.",
+      "providerUnreachable": "El proveedor no aceptó la prueba de conexión, así que no se activó. Revisa sus credenciales e inténtalo de nuevo."
     },
     "email": {
       "unauthorized": "Resend rechazó la clave API. Revísala en Configuración → Integraciones.",

@@ -1,22 +1,15 @@
+import { providerCredentialSchemas } from "@woolrus/contracts";
 import type { Db } from "@woolrus/db";
 import { z } from "zod";
-import { AppError } from "../../errors";
-import { decryptSecret } from "../../settings/crypto";
-import { encryptionKey } from "../../settings/env";
+import { readProviderCredentials } from "./credentials";
 import { createFakeShippingProvider, type FakeLabel } from "./fake";
 import { type ProviderId, providerIds, type ShippingProvider } from "./provider";
 
 // Builds the adapters core calls (SPEC-carriers "Registry"). Services take the list as an
 // argument, so tests pass fakes directly; this is where the app gets the real ones.
 
-/** Each provider's credential fields, stored encrypted as one JSON blob. */
-export const providerCredentialSchemas = {
-  SHIPSTATION: z.object({ apiKey: z.string().trim().min(1) }),
-  BRIDGE_SOURCE: z.object({
-    apiKey: z.string().trim().min(1),
-    customerId: z.string().trim().min(1),
-  }),
-} satisfies Record<ProviderId, z.ZodType>;
+/** Each provider's credential fields (defined with the API contract), stored as one JSON blob. */
+export { providerCredentialSchemas };
 
 export type ProviderCredentials = {
   [Id in ProviderId]: z.output<(typeof providerCredentialSchemas)[Id]>;
@@ -85,33 +78,23 @@ export function buildShippingProvider(
 }
 
 /**
- * One adapter per enabled provider account with credentials, ShipStation first. Throws rather
- * than skipping when credentials can't be decrypted, so a wrong key is noticed.
+ * One adapter per enabled provider account with credentials (`readProviderCredentials`, so the
+ * dev env fallback counts), ShipStation first. Throws rather than skipping when credentials can't
+ * be decrypted, so a wrong key is noticed.
  */
 export async function createShippingProviders(
   db: Db,
   adapters: AdapterFactories = shippingAdapters,
 ): Promise<ShippingProvider[]> {
-  const accounts = await db.shippingProviderAccount.findMany({
-    where: { enabled: true, credentialsEnc: { not: null } },
-  });
+  const accounts = await db.shippingProviderAccount.findMany({ where: { enabled: true } });
   const providers: ShippingProvider[] = [];
   for (const id of providerIds) {
     const account = accounts.find((a) => a.provider === id);
-    if (!account?.credentialsEnc) continue;
-    const key = encryptionKey();
-    if (!key) throw new AppError("BAD_REQUEST", "errors.settings.encryptionKeyMissing");
-    const credentials = parseJson(decryptSecret(account.credentialsEnc, key));
+    if (!account) continue;
+    const credentials = readProviderCredentials(id, account.credentialsEnc);
+    if (credentials === null) continue;
     const provider = buildShippingProvider(id, credentials, account.config, adapters);
     if (provider) providers.push(provider);
   }
   return providers;
-}
-
-function parseJson(text: string): unknown {
-  try {
-    return JSON.parse(text);
-  } catch {
-    return null;
-  }
 }

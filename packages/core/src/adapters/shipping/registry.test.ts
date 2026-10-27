@@ -119,6 +119,39 @@ describe("createShippingProviders", () => {
     );
   });
 
+  it("reads the bare ShipStation key the migration copied from Settings as its apiKey", async () => {
+    await db.shippingProviderAccount.create({
+      data: {
+        provider: "SHIPSTATION",
+        enabled: true,
+        credentialsEnc: encryptSecret("ss-old", key),
+      },
+    });
+    const { built, factories } = recordingFactories();
+    await createShippingProviders(db, factories);
+    expect(built).toEqual([{ id: "SHIPSTATION", credentials: { apiKey: "ss-old" }, config: {} }]);
+  });
+
+  it("fills an unset ShipStation key from SHIPSTATION_API_KEY in development and test", async () => {
+    vi.stubEnv("SHIPSTATION_API_KEY", "ss-env");
+    await account("SHIPSTATION", { credentials: null });
+    await account("BRIDGE_SOURCE", { credentials: null });
+    const { built, factories } = recordingFactories();
+    await createShippingProviders(db, factories);
+    expect(built).toEqual([{ id: "SHIPSTATION", credentials: { apiKey: "ss-env" }, config: {} }]);
+
+    vi.stubEnv("NODE_ENV", "production");
+    expect(await createShippingProviders(db, factories)).toEqual([]);
+  });
+
+  it("prefers the saved ShipStation key over SHIPSTATION_API_KEY", async () => {
+    vi.stubEnv("SHIPSTATION_API_KEY", "ss-env");
+    await account("SHIPSTATION");
+    const { built, factories } = recordingFactories();
+    await createShippingProviders(db, factories);
+    expect(built[0]?.credentials).toEqual(shipStationCredentials);
+  });
+
   it("returns the fakes in place of the adapters under SHIPPING_PROVIDERS=fake", async () => {
     vi.stubEnv("SHIPPING_PROVIDERS", "fake");
     await account("SHIPSTATION");

@@ -1,10 +1,10 @@
-import { emailStatus, encryptionKey } from "@woolrus/core";
+import { emailStatus, encryptionKey, shippingProviderHealth } from "@woolrus/core";
 import { db } from "@woolrus/db";
 import { storage } from "@/server/storage";
 
 export const dynamic = "force-dynamic";
 
-/** Dependency checks (NFR-OPS-02). WooCommerce, ShipStation and Lumexia join as their adapters land. */
+/** Dependency checks (NFR-OPS-02). WooCommerce and Lumexia join as their adapters land. */
 export async function GET() {
   const checks: Record<string, "ok" | "fail"> = {};
   try {
@@ -31,5 +31,18 @@ export async function GET() {
   } catch {
     email = "fail";
   }
-  return Response.json({ ok, checks: { ...checks, email } }, { status: ok ? 200 : 503 });
+  // One entry per shipping provider; an enabled one failing degrades health, it doesn't take it
+  // down (SPEC-carriers "Health"). Pings are cached for 5 minutes.
+  let shipping: Record<string, "disabled" | "unconfigured" | "ok" | "fail"> = {};
+  let degraded = false;
+  try {
+    if (checks.database === "ok")
+      ({ providers: shipping, degraded } = await shippingProviderHealth(db));
+  } catch {
+    degraded = true;
+  }
+  return Response.json(
+    { ok, degraded, checks: { ...checks, email, shipping } },
+    { status: ok ? 200 : 503 },
+  );
 }
