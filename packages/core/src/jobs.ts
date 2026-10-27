@@ -21,6 +21,8 @@ export const queues = {
   storageDelete: "storage.delete",
   /** Daily: delete `notes/` files no attachment points to, e.g. after a cascade (SPEC-notes). */
   storageSweep: "storage.sweep",
+  /** Ask every enabled shipping provider for each package's rates (FR-PACK-07, SPEC-carriers "Rate fetch"). */
+  ratesFetch: "rates.fetch",
 } as const;
 export type QueueName = (typeof queues)[keyof typeof queues];
 
@@ -40,6 +42,8 @@ export type JobPayloads = {
   /** Object keys (files and thumbnails); missing ones count as deleted. */
   [queues.storageDelete]: { keys: string[] };
   [queues.storageSweep]: Record<string, never>;
+  /** `generation` is the order's `rateGeneration` when enqueued; a job for an older one writes nothing. */
+  [queues.ratesFetch]: { orderId: string; generation: number };
 };
 
 /**
@@ -55,6 +59,8 @@ export const queueOptions: Partial<
   // Storage down for a while shouldn't lose a delete: 6 attempts over roughly half an hour. A job
   // that still fails leaves orphans, which the daily sweep collects.
   [queues.storageDelete]: { retryLimit: 5, retryDelay: 60, retryBackoff: true },
+  // Only a fetch where every provider failed transiently throws; a partial one is QA's to refresh.
+  [queues.ratesFetch]: { retryLimit: 2, retryDelay: 20, retryBackoff: true },
 };
 
 /** pg-boss keeps its tables in their own schema, separate from Prisma's. */

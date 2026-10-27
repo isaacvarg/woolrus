@@ -24,6 +24,7 @@ import {
   getIssue,
   getOrder,
   getOrderHistory,
+  getOrderShipping,
   getPackView,
   getPickView,
   getPublicSettings,
@@ -57,6 +58,7 @@ import {
   pickLine,
   queueCounts,
   reactivateUser,
+  refreshRates,
   registerStation,
   removeFromBatch,
   renameStation,
@@ -472,6 +474,12 @@ export const router = implementer.router({
     ),
     setServiceEnabled: api.carriers.setServiceEnabled.handler(({ input, context }) =>
       setServiceEnabled(db, context.actor, input),
+    ),
+    orderShipping: api.carriers.orderShipping.handler(({ input, context }) =>
+      getOrderShipping(db, context.actor, input),
+    ),
+    refreshRates: api.carriers.refreshRates.handler(({ input, context }) =>
+      refreshRates(db, context.actor, input),
     ),
   },
 });

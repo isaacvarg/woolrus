@@ -390,6 +390,54 @@
     "openPickScreen": "Abrir pantalla de surtido",
     "openPackScreen": "Abrir pantalla de empaque"
   },
+  "orderShipping": {
+    "title": "Envío",
+    "shipTo": "Enviar a",
+    "shipToStatus": {
+      "UNCHECKED": "Sin verificar",
+      "VERIFIED": "Verificada",
+      "CORRECTED": "Corregida",
+      "WARNING": "Revisa la dirección",
+      "ERROR": "No entregable",
+      "INCOMPLETE": "Incompleta"
+    },
+    "notResolved": "Todavía no se han obtenido tarifas para este pedido.",
+    "incomplete": "A la dirección le falta {fields}, así que no se obtuvieron tarifas.",
+    "fields": {
+      "name": "el nombre",
+      "address1": "la calle",
+      "city": "la ciudad",
+      "postalCode": "el código postal",
+      "country": "el país"
+    },
+    "package": "Paquete {number}",
+    "ratesStatus": {
+      "NONE": "Sin tarifas aún",
+      "FETCHING": "Obteniendo tarifas…",
+      "READY": "Tarifas",
+      "FAILED": "Sin tarifas",
+      "STALE": "Cambió después de obtener sus tarifas"
+    },
+    "stale": "El paquete cambió después de obtener sus tarifas. Actualiza las tarifas.",
+    "providerError": "{provider}: sin tarifas. {reason}",
+    "noRates": "No hay tarifas para este paquete.",
+    "fetchedAt": "Obtenidas {time}",
+    "rates": "Tarifas del paquete {number}",
+    "columns": {
+      "provider": "Proveedor",
+      "carrier": "Transportista",
+      "service": "Servicio",
+      "price": "Precio",
+      "delivery": "Entrega",
+      "expires": "Vence"
+    },
+    "deliveryDays": "{count, plural, one {# día} other {# días}}",
+    "guaranteed": "Garantizada",
+    "selected": "Seleccionada",
+    "expired": "Vencida",
+    "refresh": "Actualizar tarifas",
+    "refreshing": "Obteniendo las tarifas de nuevo."
+  },
   "pack": {
     "title": "Empacar #{number}",
     "orderDetails": "Detalles del pedido",
@@ -998,7 +1046,13 @@
       "credentialsMissing": "Primero agrega las credenciales del proveedor.",
       "providerNotAvailable": "Este proveedor aún no está disponible en esta versión de Woolrus.",
       "providerUnreachable": "El proveedor no aceptó la prueba de conexión, así que no se activó. Revisa sus credenciales e inténtalo de nuevo.",
-      "providerOff": "Activa el proveedor antes de sincronizar sus transportistas."
+      "providerOff": "Activa el proveedor antes de sincronizar sus transportistas.",
+      "noCarriers": "Ningún transportista o servicio de este proveedor está activado para este destino.",
+      "noShipFrom": "Configura la dirección de origen en Configuración antes de obtener tarifas.",
+      "noProviders": "No hay ningún proveedor de envío activado. Un administrador lo activa en Configuración → Envíos.",
+      "packageIncomplete": "El paquete necesita un peso y una caja o medidas antes de cotizarlo.",
+      "notInQa": "Las tarifas solo se pueden actualizar mientras el pedido está en QA.",
+      "liveLabel": "Un paquete ya tiene etiqueta. Anúlala antes de actualizar las tarifas."
     },
     "email": {
       "unauthorized": "Resend rechazó la clave API. Revísala en Configuración → Integraciones.",

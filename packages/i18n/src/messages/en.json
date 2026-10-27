@@ -390,6 +390,54 @@
     "openPickScreen": "Open pick screen",
     "openPackScreen": "Open pack screen"
   },
+  "orderShipping": {
+    "title": "Shipping",
+    "shipTo": "Ship to",
+    "shipToStatus": {
+      "UNCHECKED": "Not checked",
+      "VERIFIED": "Verified",
+      "CORRECTED": "Corrected",
+      "WARNING": "Check the address",
+      "ERROR": "Undeliverable",
+      "INCOMPLETE": "Incomplete"
+    },
+    "notResolved": "Rates haven't been fetched for this order yet.",
+    "incomplete": "The address is missing {fields}, so no rates were fetched.",
+    "fields": {
+      "name": "the name",
+      "address1": "the street",
+      "city": "the city",
+      "postalCode": "the postal code",
+      "country": "the country"
+    },
+    "package": "Package {number}",
+    "ratesStatus": {
+      "NONE": "No rates yet",
+      "FETCHING": "Fetching rates…",
+      "READY": "Rates",
+      "FAILED": "No rates",
+      "STALE": "Changed since its rates were fetched"
+    },
+    "stale": "The package changed after its rates were fetched. Refresh the rates.",
+    "providerError": "{provider}: no rates. {reason}",
+    "noRates": "No rates for this package.",
+    "fetchedAt": "Fetched {time}",
+    "rates": "Rates for package {number}",
+    "columns": {
+      "provider": "Provider",
+      "carrier": "Carrier",
+      "service": "Service",
+      "price": "Price",
+      "delivery": "Delivery",
+      "expires": "Expires"
+    },
+    "deliveryDays": "{count, plural, one {# day} other {# days}}",
+    "guaranteed": "Guaranteed",
+    "selected": "Selected",
+    "expired": "Expired",
+    "refresh": "Refresh rates",
+    "refreshing": "Fetching the rates again."
+  },
   "pack": {
     "title": "Pack #{number}",
     "orderDetails": "Order details",
@@ -998,7 +1046,13 @@
       "credentialsMissing": "Add the provider's credentials first.",
       "providerNotAvailable": "This provider isn't available in this version of Woolrus yet.",
       "providerUnreachable": "The provider didn't accept the connection test, so it wasn't turned on. Check its credentials and try again.",
-      "providerOff": "Turn the provider on before syncing its carriers."
+      "providerOff": "Turn the provider on before syncing its carriers.",
+      "noCarriers": "No carrier or service of this provider is turned on for this destination.",
+      "noShipFrom": "Set the ship-from address in Settings before fetching rates.",
+      "noProviders": "No shipping provider is turned on. An admin turns one on in Settings → Shipping.",
+      "packageIncomplete": "The package needs a weight and a box or dimensions before it can be rated.",
+      "notInQa": "Rates can only be refreshed while the order is in QA.",
+      "liveLabel": "A package already has a label. Void it before refreshing the rates."
     },
     "email": {
       "unauthorized": "Resend refused the API key. Check it in Settings → Integrations.",

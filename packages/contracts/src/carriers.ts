@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { base, Id } from "./base";
+import { OrderAddress } from "./orders";
 import { IntegrationUrl, SecretStatus } from "./settings";
 
 // Shipping provider accounts (SPEC-carriers "Provider accounts and settings", "API"). Credentials are
@@ -132,6 +133,83 @@ export const ProviderShippingConfig = z.object({
 });
 export type ProviderShippingConfig = z.infer<typeof ProviderShippingConfig>;
 
+/** Mirrors the database enum `ShipToStatus` (SPEC-carriers "Ship-to and address validation"). */
+export const ShipToStatus = z.enum([
+  "UNCHECKED",
+  "VERIFIED",
+  "CORRECTED",
+  "WARNING",
+  "ERROR",
+  "INCOMPLETE",
+]);
+export type ShipToStatus = z.infer<typeof ShipToStatus>;
+
+/** Mirrors the database enum `RatesStatus`. `STALE`: the package changed after its rates were fetched. */
+export const RatesStatus = z.enum(["NONE", "FETCHING", "READY", "FAILED", "STALE"]);
+export type RatesStatus = z.infer<typeof RatesStatus>;
+
+/** Why a package has no rates from a provider; `provider` is null when no provider was asked. */
+export const RateError = z.object({
+  provider: ShippingProviderId.nullable(),
+  messageKey: z.string(),
+});
+export type RateError = z.infer<typeof RateError>;
+
+export const ShippingRateView = z.object({
+  id: z.string(),
+  provider: ShippingProviderId,
+  carrierName: z.string(),
+  serviceName: z.string(),
+  amountCents: z.number().int(),
+  currency: z.string(),
+  deliveryDays: z.number().int().nullable(),
+  estimatedDeliveryAt: z.date().nullable(),
+  guaranteed: z.boolean(),
+  expiresAt: z.date().nullable(),
+  expired: z.boolean(),
+  selected: z.boolean(),
+});
+export type ShippingRateView = z.infer<typeof ShippingRateView>;
+
+/** A package's rates, cheapest first, and the providers that returned none. */
+export const PackageShipping = z.object({
+  id: z.string(),
+  number: z.number().int(),
+  ratesStatus: RatesStatus,
+  ratesFetchedAt: z.date().nullable(),
+  rateErrors: z.array(RateError),
+  rates: z.array(ShippingRateView),
+});
+export type PackageShipping = z.infer<typeof PackageShipping>;
+
+/**
+ * The address rates use (`address`), the one resolved from the order before any check
+ * (`original`), and the check's result. `INCOMPLETE`: `messages` are the missing field names.
+ */
+export const ShipToView = z.object({
+  status: ShipToStatus,
+  address: OrderAddress.nullable(),
+  original: OrderAddress.nullable(),
+  messages: z.array(z.string()),
+  checkedAt: z.date().nullable(),
+});
+export type ShipToView = z.infer<typeof ShipToView>;
+
+/** `refreshable`: in QA with no live label, so `refreshRates` would be accepted (for an `order.qa` user). */
+export const OrderShipping = z.object({
+  orderId: z.string(),
+  refreshable: z.boolean(),
+  shipTo: ShipToView,
+  packages: z.array(PackageShipping),
+});
+export type OrderShipping = z.infer<typeof OrderShipping>;
+
+export const OrderShippingInput = z.object({ orderId: Id });
+export type OrderShippingInput = z.infer<typeof OrderShippingInput>;
+
+export const RefreshRatesInput = OrderShippingInput;
+export type RefreshRatesInput = z.infer<typeof RefreshRatesInput>;
+
 export const carriers = {
   providers: base
     .route({
@@ -230,4 +308,24 @@ export const carriers = {
     })
     .input(SetShippingEnabledInput)
     .output(ShippingServiceConfig),
+
+  orderShipping: base
+    .route({
+      method: "GET",
+      path: "/orders/{orderId}/shipping",
+      tags: ["Shipping"],
+      summary: "An order's ship-to and each package's rates",
+    })
+    .input(OrderShippingInput)
+    .output(OrderShipping),
+
+  refreshRates: base
+    .route({
+      method: "POST",
+      path: "/orders/{orderId}/rates/refresh",
+      tags: ["Shipping"],
+      summary: "Fetch an order's rates again (QA)",
+    })
+    .input(RefreshRatesInput)
+    .output(OrderShipping),
 };
