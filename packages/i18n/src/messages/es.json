@@ -950,6 +950,12 @@
         "pastPacking": "{line}: el pedido ya pasó Empaque, así que una línea nueva o mayor se enviaría sin surtir ni empacar. Regrésalo a Empaque primero, o descarta el cambio."
       }
     },
+    "shipping": {
+      "unauthorized": "El proveedor de envíos rechazó sus credenciales. Revísalas en Configuración → Envíos.",
+      "rejected": "El proveedor de envíos rechazó la solicitud. Revisa la dirección, el paquete y el servicio.",
+      "unavailable": "No se pudo conectar con el proveedor de envíos. Inténtalo de nuevo en un minuto.",
+      "timeout": "El proveedor de envíos tardó demasiado en responder. Inténtalo de nuevo en un minuto."
+    },
     "email": {
       "unauthorized": "Resend rechazó la clave API. Revísala en Configuración → Integraciones.",
       "rejected": "Resend rechazó el correo. Revisa la dirección del remitente y que su dominio esté verificado en Resend.",

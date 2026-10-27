@@ -43,6 +43,8 @@ jobs:
       S3_BUCKET: woolrus-attachments
       # RustFS runs here, so the shared storage suite also runs against the real S3 adapter.
       STORAGE_LIVE: "1"
+      # In-memory shipping providers for tests and Playwright (honoured outside production only).
+      SHIPPING_PROVIDERS: fake
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4

@@ -950,6 +950,12 @@
         "pastPacking": "{line}: the order is already past Packing, so an added or larger line would ship without being picked and packed. Force it back to Packing first, or dismiss."
       }
     },
+    "shipping": {
+      "unauthorized": "The shipping provider refused its credentials. Check them in Settings → Shipping.",
+      "rejected": "The shipping provider refused the request. Check the address, package and service.",
+      "unavailable": "The shipping provider couldn't be reached. Try again in a minute.",
+      "timeout": "The shipping provider took too long to answer. Try again in a minute."
+    },
     "email": {
       "unauthorized": "Resend refused the API key. Check it in Settings → Integrations.",
       "rejected": "Resend refused the email. Check the sender address and that its domain is verified in Resend.",
