@@ -26,6 +26,7 @@ import {
   type RateRequest,
   type ShipAddress,
   type ShippingProvider,
+  withTimeout,
 } from "../adapters/shipping/provider";
 import { type AdapterFactories, createShippingProviders } from "../adapters/shipping/registry";
 import { recordAudit } from "../audit";
@@ -123,20 +124,6 @@ function compareRates(
     providerIds.indexOf(a.provider) - providerIds.indexOf(b.provider) ||
     a.serviceName.localeCompare(b.serviceName)
   );
-}
-
-/** The provider's whole `getRates` for one package gets `ms`; a late answer is dropped. */
-async function withTimeout<T>(work: Promise<T>, ms: number): Promise<T> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const timeout = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => reject(new DOMException("rate fetch timed out", "TimeoutError")), ms);
-  });
-  work.catch(() => {}); // a late failure after the timeout isn't anyone's to handle
-  try {
-    return await Promise.race([work, timeout]);
-  } finally {
-    clearTimeout(timer);
-  }
 }
 
 async function askProvider(

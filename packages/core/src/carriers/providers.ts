@@ -16,8 +16,13 @@ import {
   encryptProviderCredentials,
   readProviderCredentials,
 } from "../adapters/shipping/credentials";
-import { ShippingError } from "../adapters/shipping/errors";
-import { type ProviderId, providerIds, type ShippingProvider } from "../adapters/shipping/provider";
+import { shippingErrorFromCause } from "../adapters/shipping/errors";
+import {
+  type ProviderId,
+  providerIds,
+  type ShippingProvider,
+  withTimeout,
+} from "../adapters/shipping/provider";
 import {
   type AdapterFactories,
   buildShippingProvider,
@@ -33,6 +38,12 @@ import { type Actor, assertCan } from "../permissions";
 
 /** A health check reuses a ping (or Test connection) this recent instead of calling again. */
 const HEALTH_CACHE_MS = 5 * 60_000;
+
+/**
+ * How long a health ping may take. The image's HEALTHCHECK gives `/api/health` 5 s, and a slow
+ * provider must degrade health, not get the container marked unhealthy.
+ */
+const HEALTH_PING_MS = 3_000;
 
 const ENTITY = "ShippingProviderAccount";
 
@@ -218,12 +229,12 @@ export function providerFor(
 }
 
 /** Null when the provider accepts the credentials, else the error key to show. */
-async function ping(provider: ShippingProvider): Promise<ErrorCode | null> {
+async function ping(provider: ShippingProvider, timeoutMs?: number): Promise<ErrorCode | null> {
   try {
-    await provider.ping();
+    await (timeoutMs === undefined ? provider.ping() : withTimeout(provider.ping(), timeoutMs));
     return null;
   } catch (error) {
-    return error instanceof ShippingError ? error.messageKey : "errors.shipping.unavailable";
+    return shippingErrorFromCause("ping", error).messageKey;
   }
 }
 
@@ -291,6 +302,7 @@ export async function shippingProviderHealth(
   db: Db,
   adapters: AdapterFactories = shippingAdapters,
   now = new Date(),
+  pingTimeoutMs = HEALTH_PING_MS,
 ): Promise<{ providers: Record<ProviderId, ProviderHealth>; degraded: boolean }> {
   const rows = await db.shippingProviderAccount.findMany();
   const entries = await Promise.all(
@@ -314,7 +326,7 @@ export async function shippingProviderHealth(
       } catch {
         return [id, "fail"];
       }
-      const messageKey = await ping(provider);
+      const messageKey = await ping(provider, pingTimeoutMs);
       await db.shippingProviderAccount.update({
         where: { provider: id },
         data: { lastCheckedAt: now, lastErrorKey: messageKey },

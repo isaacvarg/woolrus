@@ -101,7 +101,8 @@ export class ShipStationAdapter implements ShippingProvider {
 
   /** Any 2xx from the carrier list means the key is accepted. */
   async ping(): Promise<void> {
-    await this.send("ping", "GET", "/v2/carriers");
+    const response = await this.send("ping", "GET", "/v2/carriers");
+    await response.body?.cancel(); // unread, it would hold the connection until collected
   }
 
   /** Carriers with no services (not set up, or off on our plan) can't be rated, so they're left out. */

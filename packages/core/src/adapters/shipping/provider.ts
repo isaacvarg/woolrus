@@ -8,6 +8,26 @@ export type ProviderId = (typeof providerIds)[number];
 /** A provider's whole `getRates` for one package, however many calls it makes inside. */
 export const PROVIDER_TIMEOUT_MS = 20_000;
 
+/**
+ * `work`, or a `TimeoutError` after `ms` (which `shippingErrorFromCause` reads as `timeout`). The
+ * call itself isn't cancelled: its late answer is dropped.
+ */
+export async function withTimeout<T>(work: Promise<T>, ms: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () => reject(new DOMException("provider call timed out", "TimeoutError")),
+      ms,
+    );
+  });
+  work.catch(() => {}); // a late failure after the timeout isn't anyone's to handle
+  try {
+    return await Promise.race([work, timeout]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /** What a provider can do. Missing capabilities are skipped for that provider, never an error. */
 export type ProviderCapabilities = {
   addressValidation: boolean;

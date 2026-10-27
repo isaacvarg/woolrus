@@ -412,6 +412,31 @@ describe("setProviderEnabled", () => {
     ]);
   });
 
+  it("refuses to enable when the credentials change while it pings, and changes nothing", async () => {
+    const actor = await admin();
+    await setProviderCredentials(db, actor, shipStation);
+    // Another admin saves a different key while this ping is out: it accepted the old one.
+    const adapters: AdapterFactories = {
+      SHIPSTATION: (credentials) => {
+        const provider = createFakeShippingProvider("SHIPSTATION", { credentials });
+        const ping = provider.ping.bind(provider);
+        provider.ping = async () => {
+          await setProviderCredentials(db, actor, {
+            provider: "SHIPSTATION",
+            credentials: { apiKey: "replaced-meanwhile" },
+          });
+          return ping();
+        };
+        return provider;
+      },
+    };
+
+    await expect(
+      setProviderEnabled(db, actor, { provider: "SHIPSTATION", enabled: true }, adapters),
+    ).rejects.toMatchObject({ kind: "CONFLICT", messageKey: "errors.conflict" });
+    await expectUnchanged("SHIPSTATION");
+  });
+
   it("does not audit a switch to the state it is already in", async () => {
     const actor = await admin();
     await setProviderEnabled(db, actor, { provider: "SHIPSTATION", enabled: false }, {});
@@ -508,6 +533,28 @@ describe("shippingProviderHealth", () => {
     await shippingProviderHealth(db, adapters, minutesLater(6));
     expect(pings).toEqual(["SHIPSTATION"]);
     expect((await accountRow("SHIPSTATION")).lastCheckedAt).toEqual(minutesLater(6));
+  });
+
+  it("reports a ping slower than its bound as a timeout fail, so the health check never hangs", async () => {
+    const actor = await admin();
+    const { adapters } = fakeAdapters();
+    await setProviderCredentials(db, actor, shipStation);
+    await setProviderEnabled(db, actor, { provider: "SHIPSTATION", enabled: true }, adapters);
+    const hanging: AdapterFactories = {
+      SHIPSTATION: (credentials) => {
+        const provider = createFakeShippingProvider("SHIPSTATION", { credentials });
+        provider.ping = () => new Promise(() => {});
+        return provider;
+      },
+    };
+
+    const started = Date.now();
+    expect(await shippingProviderHealth(db, hanging, minutesLater(10), 50)).toMatchObject({
+      providers: { SHIPSTATION: "fail" },
+      degraded: true,
+    });
+    expect(Date.now() - started).toBeLessThan(2_000);
+    expect((await accountRow("SHIPSTATION")).lastErrorKey).toBe("errors.shipping.timeout");
   });
 
   it("reports fail for an enabled provider whose adapter isn't in this build", async () => {
