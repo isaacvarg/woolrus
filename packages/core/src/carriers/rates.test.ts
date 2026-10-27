@@ -358,8 +358,14 @@ describe("fetchRates ship-to (SC 6)", () => {
     await db.order.update({
       where: { id: payload.orderId },
       data: {
-        shippingAddress: { name: "Ana", address1: "5 Elm St", city: "Austin", country: "US" },
-        billingAddress: { postalCode: "78701", state: "TX" },
+        shippingAddress: {
+          address1: "5 Elm St",
+          city: "Austin",
+          state: "TX",
+          postalCode: "78701",
+          country: "US",
+        },
+        billingAddress: { name: "Ana", phone: "512-555-0100", address1: "9 Other Rd" },
       },
     });
 
@@ -367,6 +373,7 @@ describe("fetchRates ship-to (SC 6)", () => {
 
     const shipTo = {
       name: "Ana",
+      phone: "512-555-0100",
       address1: "5 Elm St",
       city: "Austin",
       state: "TX",

@@ -202,9 +202,10 @@ The dev env fallback stays: `SHIPSTATION_API_KEY` fills an unset key in developm
 
 ### Ship-to and address validation (`packages/core/src/carriers/address.ts`)
 
-- **Resolution (FR-SHIP-03, pure):** `resolveShipTo(order)` takes each field from `shippingAddress`, falling back
-  field by field to `billingAddress`; phone and email too. Missing name, line 1, city, postal code or country →
-  `{ kind: "incomplete", missing }`, and no provider is called.
+- **Resolution (FR-SHIP-03, pure):** `resolveShipTo(order)` takes the location (line 1, line 2, city, state, postal
+  code, country) from `shippingAddress` as a block, or from `billingAddress` as a block when shipping has none of it,
+  so the two are never mixed (decisions 2026-10-27). Name, company, phone and email fall back field by field.
+  Missing name, line 1, city, postal code or country → `{ kind: "incomplete", missing }`, and no provider is called.
 - **Validation (FR-SHIP-12):** before rating, the first enabled provider with `addressValidation` checks the
   resolved address. Stored on the order: `shipTo` (what rates use), `shipToOriginal` (resolved, unvalidated),
   `shipToStatus` (`UNCHECKED | VERIFIED | CORRECTED | WARNING | ERROR | INCOMPLETE`), `shipToMessages`,
@@ -351,7 +352,8 @@ orders get rates from both fakes.
    changes nothing; with a passing ping it's enabled and audited.
 5. **Sync:** new carriers and services arrive disabled; a re-sync keeps toggles; a carrier the provider drops gets
    `missingSince` and is never sent, and its old rates and labels still load.
-6. **Ship-to:** field-by-field fallback is tested as a pure function; an incomplete address calls no provider and
+6. **Ship-to:** the fallback (location as a block, contact fields one by one) is tested as a pure function, including
+   that a partial shipping location never borrows from billing; an incomplete address calls no provider and
    leaves `INCOMPLETE` with the missing fields.
 7. **Validation:** verified, corrected, warning, error and validation-failure each store the right `shipTo` and
    status; rates are requested for `shipTo`; **Use original address** re-rates with the original.

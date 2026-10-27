@@ -98,6 +98,11 @@ positive quantities and dimensions, single-row settings. **Keep them when editin
   providers are queried and their rates are merged, cheapest pre-selected. **ShipStation** API v2 is the first
   (UPS is reached through it, no UPS adapter); **Bridge Source** follows as module `bridge-source`. The ShipStation
   key moves from `Settings` to its provider account.
+- **Ship-to fallback never mixes locations** (2026-10-27, carriers review; changes FR-SHIP-03): the street, line 2,
+  city, state, postal code and country come from the shipping address as a block, or from billing as a block when
+  shipping has none of them. A partial shipping location is `INCOMPLETE`, not filled from billing. Name, company,
+  phone and email still fall back field by field. v1 fell back field by field for everything, which could put
+  billing's apartment on the shipping street.
 - **Lumexia:** its REST API with a scoped API key. **Storage:** S3-compatible (RustFS).
   Each sits behind an adapter interface in core so it can be swapped. Storage is reached with `aws4fetch`-signed
   `fetch` (path-style, `S3_*` env); its bucket is created private if missing when the worker starts and on first use

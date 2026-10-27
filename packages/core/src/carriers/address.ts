@@ -36,12 +36,39 @@ function textFields(value: unknown): Partial<Record<keyof ShipAddress, string>> 
   return out;
 }
 
-/** Each field from the shipping address, else from the billing address, phone and email too. */
+/** Who the parcel is for: each falls back to billing on its own. */
+const contactFields = ["name", "company", "phone", "email"] as const;
+
+/** Where the parcel goes. Taken from one address only, never mixed (decisions 2026-10-27). */
+const locationFields = [
+  "address1",
+  "address2",
+  "city",
+  "state",
+  "postalCode",
+  "country",
+] as const satisfies readonly (keyof ShipAddress)[];
+
+const pick = (from: Partial<Record<keyof ShipAddress, string>>, keys: readonly string[]) =>
+  Object.fromEntries(Object.entries(from).filter(([key]) => keys.includes(key)));
+
+/**
+ * The location as a whole from the shipping address, or from billing when shipping has none of it;
+ * name, company, phone and email from shipping, else billing, field by field. Mixing locations
+ * could put billing's apartment on the shipping street.
+ */
 export function resolveShipTo(order: {
   shippingAddress: unknown;
   billingAddress: unknown;
 }): ResolvedShipTo {
-  const merged = { ...textFields(order.billingAddress), ...textFields(order.shippingAddress) };
+  const shipping = textFields(order.shippingAddress);
+  const billing = textFields(order.billingAddress);
+  const hasLocation = locationFields.some((field) => shipping[field]);
+  const merged: Partial<Record<keyof ShipAddress, string>> = {
+    ...pick(billing, contactFields),
+    ...pick(shipping, contactFields),
+    ...pick(hasLocation ? shipping : billing, locationFields),
+  };
   const missing = requiredShipToFields.filter((field) => !merged[field]);
   if (missing.length > 0) return { kind: "incomplete", missing };
   const address: ShipAddress = {
