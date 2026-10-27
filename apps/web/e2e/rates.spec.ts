@@ -32,7 +32,7 @@ async function ok(response: Promise<{ ok(): boolean; status(): number; url(): st
 /**
  * Turns a provider on and syncs it, with exactly one service on: `service` of `carrier`.
  */
-async function useOnly(
+async function enableOnly(
   admin: Page,
   provider: keyof typeof credentials,
   carrier: string,
@@ -114,8 +114,8 @@ test("packing → QA fetches merged rates from both providers; a refresh skips a
     await withSettingsLock(async () => {
       try {
         await ensureShipFrom();
-        await useOnly(admin, "SHIPSTATION", "Demo Ground", "demo_ground");
-        await useOnly(admin, "BRIDGE_SOURCE", "Demo Ground", "GND");
+        await enableOnly(admin, "SHIPSTATION", "Demo Ground", "demo_ground");
+        await enableOnly(admin, "BRIDGE_SOURCE", "Demo Ground", "GND");
 
         const name = `E2E ${crypto.randomUUID()}`;
         const order = await createOrder({ customerName: name, quantity: 1, status: "PACKING" });
