@@ -18,6 +18,7 @@ export * from "./carriers/address";
 export * from "./carriers/carriers";
 export * from "./carriers/providers";
 export * from "./carriers/rates";
+export * from "./carriers/ship-to";
 export * from "./enqueue";
 export * from "./errors";
 export * from "./exceptions/issues";

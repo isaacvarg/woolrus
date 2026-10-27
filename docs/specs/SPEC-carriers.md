@@ -214,7 +214,7 @@ The dev env fallback stays: `SHIPSTATION_API_KEY` fills an unset key in developm
     blocks the purchase (decision 7).
   - No provider can validate, or validation itself fails → `UNCHECKED`, original used, warning shown. It never
     blocks the rate fetch.
-- `useOriginalAddress({ orderId })` (`order.qa`, order in QA): `shipTo` = original, status `UNCHECKED` with a
+- `keepOriginalAddress({ orderId })` (**Use original address**; not `use…`, which Biome takes for a hook) (`order.qa`, order in QA): `shipTo` = original, status `UNCHECKED` with a
   "kept by <user>" note in the audit, then re-rates. `recheckAddress({ orderId })` (`order.qa`) runs validation
   and re-rates.
 - A change to the order's addresses from a Woo sync clears `shipTo*` and re-rates if the order is in QA.
@@ -268,7 +268,7 @@ and QA sees **Refresh rates**.
 | `carriers.setServiceEnabled` | `POST /shipping/services/{id}/enabled` |
 | `carriers.orderShipping` | `GET /orders/{orderId}/shipping` |
 | `carriers.refreshRates` | `POST /orders/{orderId}/rates/refresh` |
-| `carriers.recheckAddress` / `useOriginalAddress` | `POST /orders/{orderId}/ship-to/recheck`, `…/use-original` |
+| `carriers.recheckAddress` / `keepOriginalAddress` | `POST /orders/{orderId}/ship-to/recheck`, `…/use-original` |
 
 No output schema can carry a credential value.
 

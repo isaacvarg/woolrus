@@ -5,6 +5,7 @@ import { createActor, resetDb, testDb } from "../../test/db";
 import { createOrder, type OrderSpec } from "../../test/factories";
 import { createFakeShippingProvider } from "../adapters/shipping/fake";
 import type {
+  AddressCheck,
   ProviderId,
   ProviderRate,
   RateRequest,
@@ -25,6 +26,7 @@ import {
   refreshRates,
   runRatesFetchJob,
 } from "./rates";
+import { keepOriginalAddress, recheckAddress } from "./ship-to";
 
 const db: Db = testDb();
 afterAll(() => db.$disconnect());
@@ -349,9 +351,9 @@ describe("fetchRates fan-out (SC 8)", () => {
 });
 
 describe("fetchRates ship-to (SC 6)", () => {
-  it("stores the resolved ship-to as unchecked and rates it", async () => {
-    await catalog("SHIPSTATION", ["demo_ground"]);
-    const provider = stub("SHIPSTATION", []);
+  it("stores the resolved ship-to and rates it", async () => {
+    await catalog("BRIDGE_SOURCE", ["GND"]);
+    const provider = stub("BRIDGE_SOURCE", []);
     const { payload } = await inQa();
     await db.order.update({
       where: { id: payload.orderId },
@@ -468,7 +470,8 @@ describe("fetchRates failures (SC 9)", () => {
     await catalog("SHIPSTATION", ["demo_ground"]);
     await catalog("BRIDGE_SOURCE", ["GND"]);
     const { shipStation, bridge } = fakes();
-    shipStation.failNext(500);
+    // The first failure goes to the address check, the second to the rates.
+    shipStation.failNext(500, 2);
     bridge.failNext("network");
     const { packages, payload } = await inQa();
 
@@ -492,7 +495,7 @@ describe("fetchRates failures (SC 9)", () => {
   it("doesn't retry permanent failures", async () => {
     await catalog("SHIPSTATION", ["demo_ground"]);
     const { shipStation } = fakes();
-    shipStation.failNext(401);
+    shipStation.failNext(401, 2);
     const { packages, payload } = await inQa();
 
     await fetchRates(db, [shipStation], payload, { finalAttempt: false });
@@ -741,7 +744,7 @@ describe("getOrderShipping", () => {
       orderId: payload.orderId,
       refreshable: true,
       shipTo: {
-        status: "UNCHECKED",
+        status: "VERIFIED",
         address: { name: "Test Customer", city: "Austin" },
         original: { name: "Test Customer" },
         messages: [],
@@ -811,5 +814,256 @@ describe("packing marks changed rates stale", () => {
     expect(await pkgRow(packages[0]?.id as string)).toMatchObject({ ratesStatus: "STALE" });
     expect(await pkgRow(packages[1]?.id as string)).toMatchObject({ ratesStatus: "NONE" });
     expect(await ratesOf(packages[0]?.id as string)).toEqual([]);
+  });
+});
+
+describe("address validation (SC 7)", () => {
+  const original = {
+    name: "Test Customer",
+    address1: "1 Main St",
+    city: "Austin",
+    state: "TX",
+    postalCode: "78701",
+    country: "US",
+  };
+  const fixed = { ...original, address1: "1 MAIN ST", postalCode: "78701-1234" };
+  const order = (orderId: string) => db.order.findUniqueOrThrow({ where: { id: orderId } });
+
+  /** Rates one service, and answers the address check with `check` (or throws it). */
+  function checking(check: AddressCheck | Error, gate?: Promise<void>) {
+    const provider = stub(
+      "SHIPSTATION",
+      [{ carrierExternalId: "se-demo-ground", serviceCode: "demo_ground", amountCents: 500 }],
+      gate,
+    );
+    const checked: unknown[] = [];
+    provider.validateAddress = async (address) => {
+      checked.push(address);
+      if (check instanceof Error) throw check;
+      return check;
+    };
+    return Object.assign(provider, { checked });
+  }
+
+  beforeEach(() => catalog("SHIPSTATION", ["demo_ground"]));
+
+  it.each([
+    ["verified", { status: "verified", address: fixed, messages: [] }, "VERIFIED", original],
+    [
+      "corrected",
+      { status: "corrected", address: fixed, messages: ["Street normalised."] },
+      "CORRECTED",
+      fixed,
+    ],
+    ["warning", { status: "warning", messages: ["Apartment missing."] }, "WARNING", original],
+    ["error", { status: "error", messages: ["Address not found."] }, "ERROR", original],
+  ] as [string, AddressCheck, string, typeof original][])(
+    "%s: stores the right ship-to and rates it",
+    async (_, check, status, shipTo) => {
+      const provider = checking(check);
+      const { packages, payload } = await inQa();
+      const now = new Date("2026-10-27T12:00:00Z");
+
+      await fetchRates(db, [provider], payload, { now });
+
+      expect(provider.checked).toEqual([original]);
+      expect(provider.calls[0]?.shipTo).toEqual(shipTo);
+      expect(await order(payload.orderId)).toMatchObject({
+        shipTo,
+        shipToOriginal: original,
+        shipToStatus: status,
+        shipToMessages: check.messages,
+        shipToCheckedAt: now,
+      });
+      // An undeliverable address is a warning, never a block.
+      expect(await pkgRow(packages[0]?.id as string)).toMatchObject({ ratesStatus: "READY" });
+    },
+  );
+
+  it("uses the provider's residential flag", async () => {
+    const provider = checking({ status: "verified", residential: false, messages: [] });
+    const { payload } = await inQa();
+
+    await fetchRates(db, [provider], payload);
+
+    expect(provider.calls[0]?.residential).toBe(false);
+  });
+
+  it("a failing check leaves the original unchecked and still rates", async () => {
+    const provider = checking(new Error("boom"));
+    const { packages, payload } = await inQa();
+
+    await fetchRates(db, [provider], payload);
+
+    expect(provider.calls[0]?.shipTo).toEqual(original);
+    expect(await order(payload.orderId)).toMatchObject({
+      shipTo: original,
+      shipToOriginal: original,
+      shipToStatus: "UNCHECKED",
+      shipToCheckedAt: null,
+    });
+    expect(await pkgRow(packages[0]?.id as string)).toMatchObject({ ratesStatus: "READY" });
+  });
+
+  it("a check slower than timeoutMs counts as failed", async () => {
+    const provider = checking({ status: "verified", messages: [] });
+    provider.validateAddress = () => new Promise(() => {});
+    const { payload } = await inQa();
+
+    await fetchRates(db, [provider], payload, { timeoutMs: 20 });
+
+    expect(await order(payload.orderId)).toMatchObject({ shipToStatus: "UNCHECKED" });
+  });
+
+  it("asks the first enabled provider that can validate", async () => {
+    await catalog("BRIDGE_SOURCE", ["GND"]);
+    const { shipStation, bridge } = fakes();
+    const { payload } = await inQa();
+    await db.order.update({
+      where: { id: payload.orderId },
+      data: { shippingAddress: { ...original, address1: "1 Main Street" } },
+    });
+
+    await fetchRates(db, [bridge, shipStation], payload);
+
+    expect(await order(payload.orderId)).toMatchObject({
+      shipTo: { address1: "1 Main St" },
+      shipToOriginal: { address1: "1 Main Street" },
+      shipToStatus: "CORRECTED",
+    });
+  });
+
+  it("with only the Bridge Source fake, stays unchecked and rates still come back", async () => {
+    await catalog("BRIDGE_SOURCE", ["GND"]);
+    const { bridge } = fakes();
+    const { packages, payload } = await inQa();
+
+    await fetchRates(db, [bridge], payload);
+
+    expect(await order(payload.orderId)).toMatchObject({
+      shipTo: original,
+      shipToStatus: "UNCHECKED",
+      shipToCheckedAt: null,
+    });
+    expect(await pkgRow(packages[0]?.id as string)).toMatchObject({ ratesStatus: "READY" });
+    expect(await ratesOf(packages[0]?.id as string)).toHaveLength(1);
+  });
+
+  describe("keepOriginalAddress", () => {
+    async function corrected() {
+      const provider = checking({ status: "corrected", address: fixed, messages: ["Fixed."] });
+      const built = await inQa();
+      await fetchRates(db, [provider], built.payload);
+      return { ...built, provider };
+    }
+
+    it("allowed for QA: ships to the original, unchecked, and re-rates with it", async () => {
+      const qa = await createActor(db, ["QA"]);
+      const { packages, payload, provider } = await corrected();
+
+      const shipping = await keepOriginalAddress(db, qa, { orderId: payload.orderId });
+
+      expect(shipping.shipTo).toMatchObject({
+        status: "UNCHECKED",
+        address: original,
+        original,
+        messages: [],
+        checkedAt: null,
+      });
+      expect(shipping.packages[0]).toMatchObject({ ratesStatus: "FETCHING", rates: [] });
+      expect(await jobs(payload.orderId)).toEqual([
+        { data: { orderId: payload.orderId, generation: 2 } },
+      ]);
+      expect(
+        await db.auditEvent.findFirst({
+          where: { entityId: payload.orderId, action: "shipTo.useOriginal" },
+        }),
+      ).toMatchObject({ actorId: qa.userId, after: { shipTo: original } });
+
+      await fetchRates(db, [provider], { ...payload, generation: 2 });
+      // Kept as the user chose: not checked again.
+      expect(provider.checked).toHaveLength(1);
+      expect(provider.calls.at(-1)?.shipTo).toEqual(original);
+      expect(await order(payload.orderId)).toMatchObject({ shipTo: original });
+      expect(await pkgRow(packages[0]?.id as string)).toMatchObject({ ratesStatus: "READY" });
+    });
+
+    it("forbidden for a Packer", async () => {
+      const packer = await createActor(db, ["PACKER"]);
+      const { payload } = await corrected();
+      await expect(
+        keepOriginalAddress(db, packer, { orderId: payload.orderId }),
+      ).rejects.toMatchObject({ kind: "FORBIDDEN" });
+      expect(await order(payload.orderId)).toMatchObject({ shipTo: fixed });
+    });
+
+    it("refused outside QA, with a live label, or without an original", async () => {
+      const qa = await createActor(db, ["QA"]);
+      const packing = await inQa({ status: "PACKING" });
+      await expect(
+        keepOriginalAddress(db, qa, { orderId: packing.payload.orderId }),
+      ).rejects.toMatchObject({ kind: "CONFLICT", messageKey: "errors.carriers.notInQa" });
+
+      const labelled = await inQa({
+        lines: [{ quantity: 1, pickStatus: "PICKED" }],
+        packages: [{ items: [{ line: 0, quantity: 1 }], label: "ACTIVE" }],
+      });
+      await expect(
+        keepOriginalAddress(db, qa, { orderId: labelled.payload.orderId }),
+      ).rejects.toMatchObject({ kind: "CONFLICT", messageKey: "errors.carriers.liveLabel" });
+
+      const unresolved = await inQa();
+      await expect(
+        keepOriginalAddress(db, qa, { orderId: unresolved.payload.orderId }),
+      ).rejects.toMatchObject({ kind: "CONFLICT", messageKey: "errors.carriers.noShipTo" });
+    });
+  });
+
+  describe("recheckAddress", () => {
+    it("allowed for QA: checks the address again and re-rates", async () => {
+      const qa = await createActor(db, ["QA"]);
+      const provider = checking(new Error("down"));
+      const { payload } = await inQa();
+      await fetchRates(db, [provider], payload);
+      expect(await order(payload.orderId)).toMatchObject({ shipToStatus: "UNCHECKED" });
+
+      const shipping = await recheckAddress(db, qa, { orderId: payload.orderId });
+
+      expect(shipping.packages[0]).toMatchObject({ ratesStatus: "FETCHING", rates: [] });
+      expect(await jobs(payload.orderId)).toEqual([
+        { data: { orderId: payload.orderId, generation: 2 } },
+      ]);
+      expect(
+        await db.auditEvent.findFirst({
+          where: { entityId: payload.orderId, action: "shipTo.recheck" },
+        }),
+      ).toMatchObject({ actorId: qa.userId });
+
+      const working = checking({ status: "corrected", address: fixed, messages: [] });
+      await fetchRates(db, [working], { ...payload, generation: 2 });
+      expect(working.calls[0]?.shipTo).toEqual(fixed);
+      expect(await order(payload.orderId)).toMatchObject({
+        shipTo: fixed,
+        shipToStatus: "CORRECTED",
+      });
+    });
+
+    it("forbidden for a Picker", async () => {
+      const picker = await createActor(db, ["PICKER"]);
+      const { payload } = await inQa();
+      await expect(recheckAddress(db, picker, { orderId: payload.orderId })).rejects.toMatchObject({
+        kind: "FORBIDDEN",
+      });
+      expect(await jobs(payload.orderId)).toEqual([]);
+    });
+
+    it("refused outside QA", async () => {
+      const qa = await createActor(db, ["QA"]);
+      const { payload } = await inQa({ status: "READY" });
+      await expect(recheckAddress(db, qa, { orderId: payload.orderId })).rejects.toMatchObject({
+        kind: "CONFLICT",
+        messageKey: "errors.carriers.notInQa",
+      });
+    });
   });
 });

@@ -1,5 +1,6 @@
 import { type DbTx, Prisma } from "@woolrus/db";
 import { recordAudit } from "../audit";
+import { forgetShipTo } from "../carriers/ship-to";
 import { systemActor } from "../permissions";
 import { toCents } from "../units";
 import { claimExpiryMinutes } from "../workflow/claims";
@@ -200,6 +201,11 @@ export async function reconcileKnownOrder(
   return hold ? "held" : "flagged";
 }
 
+/** The ship-to is resolved from these, so it no longer holds when either changes. */
+export function addressChanged(diff: ChangeSummary): boolean {
+  return diff.shippingAddress !== undefined || diff.billingAddress !== undefined;
+}
+
 /** An untouched order takes the store's edit as it is: header fields, then lines. */
 async function applyInPlace(
   tx: DbTx,
@@ -215,6 +221,7 @@ async function applyInPlace(
   });
   // Untouched means nothing hangs off these lines (no picks, packages, voids, notes, issues).
   await writeLineChanges(tx, orderId, incoming, diff.lines);
+  if (addressChanged(diff)) await forgetShipTo(tx, updated);
 
   await audit(tx, orderId, "order.externalChange.applied", diff, now);
   await recomputePriorities(tx, { orderIds: [orderId], now });

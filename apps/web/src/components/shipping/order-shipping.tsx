@@ -1,8 +1,9 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { OrderShipping, PackageShipping, RateError, ShipToView } from "@woolrus/contracts";
+import type { OrderAddress, PackageShipping, RateError, ShipToView } from "@woolrus/contracts";
 import { useFormatter, useTranslations } from "next-intl";
+import type { ReactNode } from "react";
 import { formatAddress } from "@/app/(app)/orders/[id]/address";
 import { Button } from "@/components/ui/fields";
 import { toast } from "@/components/ui/toast";
@@ -33,12 +34,26 @@ export function OrderShippingPanel({
   const errorMessage = useErrorMessage();
   const queryClient = useQueryClient();
   const shipping = useQuery(orpc.carriers.orderShipping.queryOptions({ input: { orderId } }));
+  const settle = {
+    onError: (error: Error) => toast.error(errorMessage(error)),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: orpc.carriers.orderShipping.key() }),
+  };
   const refresh = useMutation({
     mutationFn: () => client.carriers.refreshRates({ orderId }),
     onSuccess: () => toast.success(t("orderShipping.refreshing")),
-    onError: (error) => toast.error(errorMessage(error)),
-    onSettled: () => queryClient.invalidateQueries({ queryKey: orpc.carriers.orderShipping.key() }),
+    ...settle,
   });
+  const keepOriginal = useMutation({
+    mutationFn: () => client.carriers.keepOriginalAddress({ orderId }),
+    onSuccess: () => toast.success(t("orderShipping.usingOriginal")),
+    ...settle,
+  });
+  const recheck = useMutation({
+    mutationFn: () => client.carriers.recheckAddress({ orderId }),
+    onSuccess: () => toast.success(t("orderShipping.rechecking")),
+    ...settle,
+  });
+  const busy = refresh.isPending || keepOriginal.isPending || recheck.isPending;
 
   return (
     <section aria-labelledby="shipping-heading" className="space-y-2">
@@ -63,29 +78,77 @@ export function OrderShippingPanel({
           {errorMessage(shipping.error)}
         </p>
       ) : (
-        <ShippingBody shipping={shipping.data} />
+        <div className="space-y-3">
+          <ShipTo
+            shipTo={shipping.data.shipTo}
+            actions={
+              canRefresh &&
+              shipping.data.refreshable &&
+              shipping.data.shipTo.address && (
+                <>
+                  {shipping.data.shipTo.status === "CORRECTED" && (
+                    <Button
+                      className="btn-sm btn-outline"
+                      isPending={keepOriginal.isPending}
+                      isDisabled={busy}
+                      onPress={() => keepOriginal.mutate()}
+                    >
+                      {t("orderShipping.useOriginal")}
+                    </Button>
+                  )}
+                  <Button
+                    className="btn-sm btn-ghost"
+                    isPending={recheck.isPending}
+                    isDisabled={busy}
+                    onPress={() => recheck.mutate()}
+                  >
+                    {t("orderShipping.recheck")}
+                  </Button>
+                </>
+              )
+            }
+          />
+          {shipping.data.packages.map((pkg) => (
+            <PackageRates key={pkg.id} pkg={pkg} />
+          ))}
+        </div>
       )}
     </section>
   );
 }
 
-function ShippingBody({ shipping }: { shipping: OrderShipping }) {
-  return (
-    <div className="space-y-3">
-      <ShipTo shipTo={shipping.shipTo} />
-      {shipping.packages.map((pkg) => (
-        <PackageRates key={pkg.id} pkg={pkg} />
-      ))}
-    </div>
-  );
+const addressFields = [
+  "name",
+  "company",
+  "address1",
+  "address2",
+  "city",
+  "state",
+  "postalCode",
+  "country",
+] as const satisfies readonly (keyof OrderAddress)[];
+
+/** The fields a correction changed, in address order. */
+function changedFields(from: OrderAddress, to: OrderAddress) {
+  return addressFields.filter((field) => (from[field] ?? "") !== (to[field] ?? ""));
 }
 
-export function ShipTo({ shipTo }: { shipTo: ShipToView }) {
+/**
+ * The address rates use and its check. A correction shows the original beside it, naming what
+ * changed. `actions`: QA's address buttons, when the viewer may use them.
+ */
+export function ShipTo({ shipTo, actions }: { shipTo: ShipToView; actions?: ReactNode }) {
   const t = useTranslations();
   const list = useFormatter();
+  const fieldName = (field: string) =>
+    t.has(`orderShipping.fields.${field}` as never)
+      ? t(`orderShipping.fields.${field}` as never)
+      : field;
   const fetched = shipTo.address !== null || shipTo.status === "INCOMPLETE";
+  const corrected =
+    shipTo.status === "CORRECTED" && shipTo.address && shipTo.original ? shipTo.original : null;
   return (
-    <div className="rounded-box bg-base-100 p-4 shadow-sm" data-testid="ship-to">
+    <div className="space-y-2 rounded-box bg-base-100 p-4 shadow-sm" data-testid="ship-to">
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-sm opacity-70">{t("orderShipping.shipTo")}</span>
         {fetched && (
@@ -93,23 +156,56 @@ export function ShipTo({ shipTo }: { shipTo: ShipToView }) {
             {t(`orderShipping.shipToStatus.${shipTo.status}`)}
           </span>
         )}
+        {actions && <span className="ms-auto flex flex-wrap gap-2">{actions}</span>}
       </div>
       {shipTo.status === "INCOMPLETE" ? (
         <p className="text-error">
           {t("orderShipping.incomplete", {
-            fields: list.list(
-              shipTo.messages.map((field) =>
-                t.has(`orderShipping.fields.${field}` as never)
-                  ? t(`orderShipping.fields.${field}` as never)
-                  : field,
-              ),
-            ),
+            fields: list.list(shipTo.messages.map(fieldName)),
           })}
         </p>
+      ) : shipTo.address && corrected ? (
+        <>
+          <dl className="grid gap-2 md:grid-cols-2">
+            <div data-testid="ship-to-original">
+              <dt className="text-sm opacity-70">{t("orderShipping.original")}</dt>
+              <dd>{formatAddress(corrected)}</dd>
+            </div>
+            <div data-testid="ship-to-corrected">
+              <dt className="text-sm opacity-70">{t("orderShipping.correctedTo")}</dt>
+              <dd>{formatAddress(shipTo.address)}</dd>
+            </div>
+          </dl>
+          <p className="text-sm">
+            {t("orderShipping.changed", {
+              fields: list.list(changedFields(corrected, shipTo.address).map(fieldName)),
+            })}
+          </p>
+        </>
       ) : shipTo.address ? (
         <p>{formatAddress(shipTo.address)}</p>
+      ) : shipTo.original ? (
+        <>
+          <p>{formatAddress(shipTo.original)}</p>
+          <p className="text-sm opacity-70" aria-live="polite">
+            {t("orderShipping.checking")}
+          </p>
+        </>
       ) : (
         <p className="text-sm opacity-70">{t("orderShipping.notResolved")}</p>
+      )}
+      {shipTo.address && shipTo.status === "UNCHECKED" && (
+        <p className="text-sm opacity-70">{t("orderShipping.unchecked")}</p>
+      )}
+      {shipTo.status === "ERROR" && (
+        <p className="alert alert-warning">{t("orderShipping.undeliverable")}</p>
+      )}
+      {shipTo.status !== "INCOMPLETE" && shipTo.messages.length > 0 && (
+        <ul className="list-inside list-disc text-sm" data-testid="ship-to-messages">
+          {shipTo.messages.map((message) => (
+            <li key={message}>{message}</li>
+          ))}
+        </ul>
       )}
     </div>
   );
