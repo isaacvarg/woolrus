@@ -1,5 +1,5 @@
 import { readdirSync, readFileSync } from "node:fs";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   contractShipFrom,
   contractShipTo,
@@ -142,7 +142,15 @@ describeShippingProvider("ShipStationAdapter", () => {
 
 describe("ShipStation adapter", () => {
   it("is built by the registry for ShipStation credentials", () => {
-    expect(buildShippingProvider("SHIPSTATION", { apiKey }, {})).toBeInstanceOf(ShipStationAdapter);
+    // CI runs the tests with SHIPPING_PROVIDERS=fake, which would build the fake instead.
+    vi.stubEnv("SHIPPING_PROVIDERS", "");
+    try {
+      expect(buildShippingProvider("SHIPSTATION", { apiKey }, {})).toBeInstanceOf(
+        ShipStationAdapter,
+      );
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 
   it("sends the key in the API-Key header to api.shipstation.com", async () => {

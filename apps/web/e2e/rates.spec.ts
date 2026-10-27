@@ -1,7 +1,7 @@
 import { expect, type Page, test } from "@playwright/test";
 import { signInAs } from "./support/auth";
 import { createOrder, deleteCreatedOrders } from "./support/orders";
-import { ensureShipFrom, runRateFetch } from "./support/rates";
+import { ensureShipFrom, packAndFinish, rateRows, runRateFetch } from "./support/rates";
 import { withSettingsLock } from "./support/settings-lock";
 
 // Rates on Packing → QA against both fakes (SHIPPING_PROVIDERS=fake). Provider accounts are
@@ -68,37 +68,6 @@ async function resetProviders(admin: Page) {
   for (const provider of Object.keys(credentials)) {
     await admin.request.delete(`${api}/providers/${provider}/credentials`);
   }
-}
-
-/** A packer packs the order's one unit into a custom box, weighs it and finishes. */
-async function packAndFinish(page: Page, order: { id: string; number: string }, name: string) {
-  await signInAs(page, ["PACKER"]);
-  await page.goto("/queue/packing");
-  await page.getByRole("searchbox", { name: "Search orders" }).fill(name);
-  await page
-    .getByRole("row", { name: new RegExp(order.number) })
-    .getByRole("button", { name: "Start packing" })
-    .click();
-  await expect(page).toHaveURL(`/pack/${order.id}`, { timeout: 20_000 });
-  await page.getByRole("button", { name: "Add package" }).click();
-  const dialog = page.getByRole("dialog", { name: "Choose a box" });
-  await dialog.getByLabel("Length").fill("5");
-  await dialog.getByLabel("Width").fill("5");
-  await dialog.getByLabel("Height").fill("5");
-  await dialog.getByRole("button", { name: "Use this size" }).click();
-  await page.getByRole("button", { name: "Put one E2E item in the selected package" }).click();
-  const pkg = page.getByTestId("pack-package");
-  await pkg.getByLabel("oz", { exact: true }).fill("9");
-  await pkg.getByRole("button", { name: "Save weight" }).click();
-  await page.getByRole("button", { name: "Done", exact: true }).click();
-  await expect(page).toHaveURL("/queue/packing", { timeout: 20_000 });
-}
-
-function rateRows(page: Page) {
-  return page
-    .getByRole("table", { name: "Rates for package 1" })
-    .getByRole("row")
-    .filter({ has: page.getByRole("cell") });
 }
 
 test("packing → QA fetches merged rates from both providers; a refresh skips a disabled one", async ({
