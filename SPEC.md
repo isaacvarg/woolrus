@@ -14,8 +14,9 @@ paid orders in, pick, pack, QA, buy labels and ship from one app, with every rul
 
 - **Users:** Admin, Picker, Packer, QA, Shipper (a person can hold several roles). Floor staff work on shared
   rugged Android tablets with Bluetooth scanners (PWA); admins on desktops.
-- **Success:** v1 is switched off after milestone M4. At that point every SRS requirement tagged *Existing* works,
-  the defects in SRS §7.1 are fixed, and the go-live checklist below passes.
+- **Success:** after milestone M4 the warehouse ships every order through Woolrus instead of by hand (v1 was
+  never live). At that point every SRS requirement tagged *Existing* works, the defects in SRS §7.1 are fixed, and
+  the go-live checklist below passes.
 
 ## Capability map
 
@@ -29,7 +30,8 @@ paid orders in, pick, pack, QA, buy labels and ship from one app, with every rul
 | `picking` | Pick cards, scan to confirm, out-of-stock/substituted, bin sort, batch pick list | FR-PICK-\* | workflow |
 | `packing` | Box admin, packages, PackageItem split/merge, weights and overrides, box suggestion, scale | FR-PACK-\*, FR-SET-01 | workflow |
 | `exceptions` | Item voids (including partial) and quality issues | FR-VOID-\*, FR-QI-01…06/08 | workflow, notes, picking |
-| `carriers` | ShipStation adapter, carrier and service settings, rates with expiry, address validation | FR-SHIP-01…03/12, FR-SET-02 | settings, packing |
+| `carriers` | `ShippingProvider` seam, provider toggles and credentials, carrier and service settings, rates merged across enabled providers with expiry, address validation, ShipStation adapter (UPS through it) | FR-SHIP-01…03/12, FR-SET-02 | settings, packing |
+| `bridge-source` | Bridge Source adapter implementing `ShippingProvider` | decisions.md | carriers |
 | `qa` | Per-item verification, rate choice, idempotent label purchase, blocking on open critical issues | FR-QA-\* | carriers, exceptions |
 | `shipping` | Ready queue, print separate from ship, merged PDF, repack/void, Woo push with retries, customs, manifests | FR-SHIP-04…14 | qa, store-sync |
 | `lumexia` | Lot capture and validation, SKU↔item link | decisions.md | packing, settings |
@@ -47,7 +49,7 @@ The contract between two modules belongs in the **provider's** spec.
 | **M1 Orders in** | `settings` → `store-sync` ∥ `workflow` | Real orders flow in from WooCommerce and move through server-enforced states |
 | **M2 People & floor** | `identity` ∥ `notes` → `picking` ∥ `packing` | Invited staff sign in on stations and pick and pack orders |
 | **M3 Problems** | `exceptions` | Voids and quality issues are recorded and resolved |
-| **M4 Ship — go-live** | `carriers` → `qa` → `shipping`; `operations` done | Labels bought safely, orders shipped and pushed to Woo. **Cut over from v1.** |
+| **M4 Ship — go-live** | `carriers` → `qa` ∥ `bridge-source` → `shipping`; `operations` done | Labels bought safely from every enabled provider, orders shipped and pushed to Woo. **First real labels bought in Woolrus** (v1 was never live; shipping is manual today). |
 | **M5 Beyond v1** | `lumexia` ∥ `returns` ∥ `reporting` | Traceability, returns, insight |
 
 ### Status
@@ -66,7 +68,8 @@ States: `not started` → `spec draft` → `spec approved` → `planned` → `in
 | `picking` | M2 | [SPEC-picking](docs/specs/SPEC-picking.md) | [#23](https://github.com/isaacvarg/woolrus/issues/23) | done |
 | `packing` | M2 | [SPEC-packing](docs/specs/SPEC-packing.md) | [#24](https://github.com/isaacvarg/woolrus/issues/24) | done |
 | `exceptions` | M3 | [SPEC-exceptions](docs/specs/SPEC-exceptions.md) | [#25](https://github.com/isaacvarg/woolrus/issues/25) | done |
-| `carriers` | M4 | — | [#26](https://github.com/isaacvarg/woolrus/issues/26) | not started |
+| `carriers` | M4 | [SPEC-carriers](docs/specs/SPEC-carriers.md) | [#26](https://github.com/isaacvarg/woolrus/issues/26) | spec approved |
+| `bridge-source` | M4 | — | [#83](https://github.com/isaacvarg/woolrus/issues/83) | not started |
 | `qa` | M4 | — | [#27](https://github.com/isaacvarg/woolrus/issues/27) | not started |
 | `shipping` | M4 | — | [#28](https://github.com/isaacvarg/woolrus/issues/28) | not started |
 | `operations` | M4 | — | [#29](https://github.com/isaacvarg/woolrus/issues/29) | not started |
@@ -82,7 +85,8 @@ States: `not started` → `spec draft` → `spec approved` → `planned` → `in
       against the dev stack.
 - [ ] Every SRS §7.1 defect has a test proving it can't happen.
 - [ ] Every API procedure is covered by a "forbidden for the wrong role" test.
-- [ ] Health checks green for database, storage, WooCommerce, ShipStation; GlitchTip receiving errors.
+- [ ] Health checks green for database, storage, WooCommerce and every enabled shipping provider; GlitchTip
+      receiving errors.
 - [ ] Production stack deployed from GHCR images on the host; backup and restore of Postgres rehearsed.
 
 ## Tech stack
@@ -121,7 +125,7 @@ apps/web/e2e/                Playwright specs
 apps/worker/src/             pg-boss worker; job handlers call core
 packages/contracts/src/      one file per area: Zod schemas + oRPC procedures
 packages/core/src/<area>/    domain services + co-located *.test.ts
-packages/core/src/adapters/  interfaces + implementations for WooCommerce, ShipStation, storage, Lumexia
+packages/core/src/adapters/  interfaces + implementations for WooCommerce, shipping providers, storage, Lumexia
 packages/core/test/          test helpers (testDb, resetDb, createActor)
 packages/db/prisma/schema/   Prisma schema, one file per area; migrations alongside
 packages/i18n/src/messages/  en.json, es.json (identical key sets, enforced by a test)

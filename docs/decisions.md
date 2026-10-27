@@ -93,7 +93,12 @@ positive quantities and dimensions, single-row settings. **Keep them when editin
   (scheme, host or port) or is removed, that integration's saved secrets are cleared in the same update (audited
   `secret.clear`, reason `urlChanged`), so keys never follow a URL to another server. A path-only change, or a
   first URL where there was none, keeps them.
-- **ShipStation:** API v2. **Lumexia:** its REST API with a scoped API key. **Storage:** S3-compatible (RustFS).
+- **Shipping providers** (2026-10-27, SPEC-carriers): labels go through a `ShippingProvider` seam, one adapter per
+  provider, each enabled separately with its own encrypted credentials (`ShippingProviderAccount`); only enabled
+  providers are queried and their rates are merged, cheapest pre-selected. **ShipStation** API v2 is the first
+  (UPS is reached through it, no UPS adapter); **Bridge Source** follows as module `bridge-source`. The ShipStation
+  key moves from `Settings` to its provider account.
+- **Lumexia:** its REST API with a scoped API key. **Storage:** S3-compatible (RustFS).
   Each sits behind an adapter interface in core so it can be swapped. Storage is reached with `aws4fetch`-signed
   `fetch` (path-style, `S3_*` env); its bucket is created private if missing when the worker starts and on first use
   in web, and health reports `storage`.
