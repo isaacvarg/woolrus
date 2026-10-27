@@ -41,7 +41,10 @@ const StoredConfig = z.object({ baseUrl: z.string().nullable().catch(null) }).ca
 });
 
 /** The account row, created (disabled, no credentials) on first use. */
-async function loadAccount(tx: DbTx, provider: ProviderId): Promise<ShippingProviderAccount> {
+export async function loadAccount(
+  tx: DbTx,
+  provider: ProviderId,
+): Promise<ShippingProviderAccount> {
   const row = await tx.shippingProviderAccount.findUnique({ where: { provider } });
   if (row) return row;
   // ON CONFLICT DO NOTHING, so two first reads at once don't fail on the unique provider.
@@ -197,7 +200,10 @@ export async function updateProviderConfig(
 }
 
 /** The adapter for an account, or why there's none. */
-function providerFor(row: ShippingProviderAccount, adapters: AdapterFactories): ShippingProvider {
+export function providerFor(
+  row: ShippingProviderAccount,
+  adapters: AdapterFactories,
+): ShippingProvider {
   const credentials = readProviderCredentials(row.provider, row.credentialsEnc);
   if (credentials === null) {
     throw new AppError("BAD_REQUEST", "errors.carriers.credentialsMissing");

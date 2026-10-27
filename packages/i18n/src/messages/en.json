@@ -195,7 +195,20 @@
       "lastChecked": "Checked {at}.",
       "carrierCount": "{count, plural, =0 {No carriers synced yet.} one {# carrier synced.} other {# carriers synced.}}",
       "urlMoveBody": "The new address is on a different server. Saving it removes the saved credentials and turns the provider off, so they're never sent there. Add them again for the new address.",
-      "savedCredentialsCleared": "Saved. The credentials for the old address were removed: add them for the new one."
+      "savedCredentialsCleared": "Saved. The credentials for the old address were removed: add them for the new one.",
+      "sync": "Sync carriers",
+      "lastSynced": "Last synced {at}.",
+      "syncHint": "Turn {name} on to sync its carriers.",
+      "syncedToast": "{name} synced: {added, plural, =0 {nothing new} one {# new carrier or service} other {# new carriers and services}}{missing, plural, =0 {} other {, # no longer offered}}.",
+      "carriersHint": "New carriers and services arrive off. A service is used only when it and its carrier are both on.",
+      "carriersCaption": "{name} carriers and services",
+      "carrierColumn": "Carrier and services",
+      "shipsColumn": "Ships",
+      "carrierSwitch": "Use carrier {name}",
+      "serviceSwitch": "Use {carrier} {name}",
+      "domestic": "Domestic",
+      "international": "International",
+      "noLongerOffered": "No longer offered"
     }
   },
   "priorityRules": {
@@ -984,7 +997,8 @@
     "carriers": {
       "credentialsMissing": "Add the provider's credentials first.",
       "providerNotAvailable": "This provider isn't available in this version of Woolrus yet.",
-      "providerUnreachable": "The provider didn't accept the connection test, so it wasn't turned on. Check its credentials and try again."
+      "providerUnreachable": "The provider didn't accept the connection test, so it wasn't turned on. Check its credentials and try again.",
+      "providerOff": "Turn the provider on before syncing its carriers."
     },
     "email": {
       "unauthorized": "Resend refused the API key. Check it in Settings → Integrations.",

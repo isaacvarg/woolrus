@@ -3,9 +3,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   type ProviderAccount,
+  type ProviderShippingConfig,
   providerConfigFields,
   providerCredentialFields,
   type SetProviderCredentialsInput,
+  type ShippingCarrierConfig,
 } from "@woolrus/contracts";
 import { useFormatter, useTranslations } from "next-intl";
 import { useId, useState } from "react";
@@ -76,9 +78,7 @@ function ProviderCard({ account }: { account: ProviderAccount }) {
         )}
         <Credentials account={account} name={name} configured={configured} />
         <TestConnection account={account} />
-        <p className="text-sm text-base-content/70">
-          {t("settings.shipping.carrierCount", { count: account.carrierCount })}
-        </p>
+        <Carriers account={account} name={name} />
       </div>
     </section>
   );
@@ -407,5 +407,158 @@ function BaseUrlForm({ account, configured }: { account: ProviderAccount; config
         )}
       </Dialog>
     </Form>
+  );
+}
+
+/** Sync carriers, then the synced carriers and their services with a switch each. */
+function Carriers({ account, name }: { account: ProviderAccount; name: string }) {
+  const t = useTranslations();
+  const format = useFormatter();
+  const errorMessage = useErrorMessage();
+  const queryClient = useQueryClient();
+  const config = useQuery({
+    ...orpc.carriers.config.queryOptions(),
+    select: (list: ProviderShippingConfig[]) => list.find((p) => p.provider === account.provider),
+  });
+  const sync = useMutation(
+    orpc.carriers.sync.mutationOptions({
+      onSuccess: async (result) => {
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: orpc.carriers.config.key() }),
+          queryClient.invalidateQueries({ queryKey: orpc.carriers.providers.key() }),
+        ]);
+        toast.success(
+          t("settings.shipping.syncedToast", {
+            name,
+            added: result.carriersAdded + result.servicesAdded,
+            missing: result.carriersMissing + result.servicesMissing,
+          }),
+        );
+      },
+      onError: (error) => toast.error(errorMessage(error)),
+    }),
+  );
+  const lastSyncedAt = config.data?.lastSyncedAt;
+  const carriers = config.data?.carriers ?? [];
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-3">
+        {account.enabled && (
+          <Button
+            className="btn-outline"
+            isPending={sync.isPending}
+            onPress={() => sync.mutate({ provider: account.provider })}
+          >
+            {t("settings.shipping.sync")}
+          </Button>
+        )}
+        <p className="text-sm text-base-content/70">
+          {t("settings.shipping.carrierCount", { count: account.carrierCount })}{" "}
+          {lastSyncedAt &&
+            t("settings.shipping.lastSynced", {
+              at: format.dateTime(lastSyncedAt, { dateStyle: "medium", timeStyle: "short" }),
+            })}
+          {!account.enabled &&
+            account.adapterAvailable &&
+            ` ${t("settings.shipping.syncHint", { name })}`}
+        </p>
+      </div>
+      {config.isError && (
+        <p role="alert" className="text-error">
+          {errorMessage(config.error)}
+        </p>
+      )}
+      {carriers.length > 0 && (
+        <>
+          <p className="text-sm text-base-content/70">{t("settings.shipping.carriersHint")}</p>
+          <div className="overflow-x-auto">
+            <table className="table">
+              <caption className="sr-only">
+                {t("settings.shipping.carriersCaption", { name })}
+              </caption>
+              <thead>
+                <tr>
+                  <th>{t("settings.shipping.carrierColumn")}</th>
+                  <th>{t("settings.shipping.shipsColumn")}</th>
+                </tr>
+              </thead>
+              {carriers.map((carrier) => (
+                <CarrierRows key={carrier.id} carrier={carrier} />
+              ))}
+            </table>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function MissingBadge() {
+  const t = useTranslations();
+  return <span className="badge badge-warning">{t("settings.shipping.noLongerOffered")}</span>;
+}
+
+/** A carrier's row and its services' rows. Each switch applies at once. */
+function CarrierRows({ carrier }: { carrier: ShippingCarrierConfig }) {
+  const t = useTranslations();
+  const errorMessage = useErrorMessage();
+  const queryClient = useQueryClient();
+  const options = {
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: orpc.carriers.config.key() }),
+    onError: (error: Error) => toast.error(errorMessage(error)),
+  };
+  const toggleCarrier = useMutation(orpc.carriers.setCarrierEnabled.mutationOptions(options));
+  const toggleService = useMutation(orpc.carriers.setServiceEnabled.mutationOptions(options));
+
+  return (
+    <tbody>
+      <tr>
+        <th scope="rowgroup" className="font-semibold">
+          <div className="flex flex-wrap items-center gap-2">
+            <Switch
+              aria-label={t("settings.shipping.carrierSwitch", { name: carrier.name })}
+              isSelected={carrier.enabled}
+              isDisabled={toggleCarrier.isPending}
+              onChange={(enabled) => toggleCarrier.mutate({ id: carrier.id, enabled })}
+            >
+              {carrier.name}
+            </Switch>
+            {carrier.missing && <MissingBadge />}
+          </div>
+        </th>
+        <td />
+      </tr>
+      {carrier.services.map((service) => (
+        <tr key={service.id}>
+          <td className="pl-10">
+            <div className="flex flex-wrap items-center gap-2">
+              <Switch
+                aria-label={t("settings.shipping.serviceSwitch", {
+                  carrier: carrier.name,
+                  name: service.name,
+                })}
+                isSelected={service.enabled}
+                isDisabled={toggleService.isPending && toggleService.variables?.id === service.id}
+                onChange={(enabled) => toggleService.mutate({ id: service.id, enabled })}
+              >
+                {service.name}
+              </Switch>
+              {service.missing && <MissingBadge />}
+            </div>
+          </td>
+          <td>
+            <div className="flex flex-wrap gap-1">
+              {service.domestic && (
+                <span className="badge badge-ghost">{t("settings.shipping.domestic")}</span>
+              )}
+              {service.international && (
+                <span className="badge badge-ghost">{t("settings.shipping.international")}</span>
+              )}
+            </div>
+          </td>
+        </tr>
+      ))}
+    </tbody>
   );
 }
