@@ -210,6 +210,9 @@ export type OrderShippingInput = z.infer<typeof OrderShippingInput>;
 export const RefreshRatesInput = OrderShippingInput;
 export type RefreshRatesInput = z.infer<typeof RefreshRatesInput>;
 
+export const ShipToActionInput = OrderShippingInput;
+export type ShipToActionInput = z.infer<typeof ShipToActionInput>;
+
 export const carriers = {
   providers: base
     .route({
@@ -327,5 +330,25 @@ export const carriers = {
       summary: "Fetch an order's rates again (QA)",
     })
     .input(RefreshRatesInput)
+    .output(OrderShipping),
+
+  recheckAddress: base
+    .route({
+      method: "POST",
+      path: "/orders/{orderId}/ship-to/recheck",
+      tags: ["Shipping"],
+      summary: "Check an order's ship-to again and re-rate (QA)",
+    })
+    .input(ShipToActionInput)
+    .output(OrderShipping),
+
+  keepOriginalAddress: base
+    .route({
+      method: "POST",
+      path: "/orders/{orderId}/ship-to/use-original",
+      tags: ["Shipping"],
+      summary: "Ship to the address as given, unchecked, and re-rate (QA)",
+    })
+    .input(ShipToActionInput)
     .output(OrderShipping),
 };

@@ -33,6 +33,7 @@ import {
   issueAssignees,
   issueBadge,
   issueCounts,
+  keepOriginalAddress,
   linkBarcode,
   listBoxes,
   listInvitations,
@@ -58,6 +59,7 @@ import {
   pickLine,
   queueCounts,
   reactivateUser,
+  recheckAddress,
   refreshRates,
   registerStation,
   removeFromBatch,
@@ -480,6 +482,12 @@ export const router = implementer.router({
     ),
     refreshRates: api.carriers.refreshRates.handler(({ input, context }) =>
       refreshRates(db, context.actor, input),
+    ),
+    recheckAddress: api.carriers.recheckAddress.handler(({ input, context }) =>
+      recheckAddress(db, context.actor, input),
+    ),
+    keepOriginalAddress: api.carriers.keepOriginalAddress.handler(({ input, context }) =>
+      keepOriginalAddress(db, context.actor, input),
     ),
   },
 });

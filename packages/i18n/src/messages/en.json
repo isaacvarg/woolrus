@@ -408,7 +408,10 @@
       "address1": "the street",
       "city": "the city",
       "postalCode": "the postal code",
-      "country": "the country"
+      "country": "the country",
+      "company": "the company",
+      "address2": "the second line",
+      "state": "the state"
     },
     "package": "Package {number}",
     "ratesStatus": {
@@ -436,7 +439,17 @@
     "selected": "Selected",
     "expired": "Expired",
     "refresh": "Refresh rates",
-    "refreshing": "Fetching the rates again."
+    "refreshing": "Fetching the rates again.",
+    "original": "Original",
+    "correctedTo": "Corrected to",
+    "changed": "Changed {fields}.",
+    "unchecked": "No shipping provider checked this address.",
+    "undeliverable": "The provider couldn't confirm this address. You can still buy a label.",
+    "checking": "Checking the address…",
+    "useOriginal": "Use original address",
+    "usingOriginal": "Using the original address. Fetching rates again.",
+    "recheck": "Check address again",
+    "rechecking": "Checking the address again."
   },
   "pack": {
     "title": "Pack #{number}",
@@ -1052,7 +1065,8 @@
       "noProviders": "No shipping provider is turned on. An admin turns one on in Settings → Shipping.",
       "packageIncomplete": "The package needs a weight and a box or dimensions before it can be rated.",
       "notInQa": "Rates can only be refreshed while the order is in QA.",
-      "liveLabel": "A package already has a label. Void it before refreshing the rates."
+      "liveLabel": "A package already has a label. Void it before refreshing the rates.",
+      "noShipTo": "This order has no ship-to address yet. Fetch its rates first."
     },
     "email": {
       "unauthorized": "Resend refused the API key. Check it in Settings → Integrations.",

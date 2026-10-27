@@ -6,11 +6,19 @@ import {
   type RefreshRatesInput,
   ShipFromAddress,
 } from "@woolrus/contracts";
-import { type Db, type DbTx, Prisma, type RatesStatus, type WorkflowStatus } from "@woolrus/db";
+import {
+  type Db,
+  type DbTx,
+  Prisma,
+  type RatesStatus,
+  type ShipToStatus,
+  type WorkflowStatus,
+} from "@woolrus/db";
 import type { ErrorCode } from "@woolrus/i18n";
 import { z } from "zod";
 import { ShippingError, shippingErrorFromCause } from "../adapters/shipping/errors";
 import {
+  type AddressCheck,
   PROVIDER_TIMEOUT_MS,
   type ProviderId,
   type ProviderRate,
@@ -204,6 +212,55 @@ async function markPackages(
   });
 }
 
+/** What the address check decided: the address rates use, and what's stored about it. */
+type CheckedShipTo = {
+  shipTo: ShipAddress;
+  status: ShipToStatus;
+  messages: string[];
+  checkedAt: Date | null;
+  residential?: boolean;
+};
+
+/** What's stored for each answer when rates use the original (a correction does when it has no address). */
+const checkStatus: Record<AddressCheck["status"], ShipToStatus> = {
+  verified: "VERIFIED",
+  corrected: "WARNING",
+  warning: "WARNING",
+  error: "ERROR",
+};
+
+/**
+ * FR-SHIP-12: the first provider that can validate checks the resolved address. No such provider,
+ * or a check that fails, leaves it `UNCHECKED`; neither ever stops the rate fetch.
+ */
+async function checkShipTo(
+  providers: ShippingProvider[],
+  original: ShipAddress,
+  now: Date,
+  timeoutMs: number,
+): Promise<CheckedShipTo> {
+  const unchecked: CheckedShipTo = {
+    shipTo: original,
+    status: "UNCHECKED",
+    messages: [],
+    checkedAt: null,
+  };
+  const validator = providers.find((p) => p.capabilities.addressValidation && p.validateAddress);
+  if (!validator?.validateAddress) return unchecked;
+  let check: AddressCheck;
+  try {
+    check = await withTimeout(validator.validateAddress(original), timeoutMs);
+  } catch {
+    return unchecked;
+  }
+  const checked = { messages: check.messages, checkedAt: now, residential: check.residential };
+  // A correction without an address to use is only a warning.
+  if (check.status === "corrected" && check.address) {
+    return { ...checked, shipTo: check.address, status: "CORRECTED" };
+  }
+  return { ...checked, shipTo: original, status: checkStatus[check.status] };
+}
+
 /**
  * One `rates.fetch` run. Providers are passed in (the job builds the enabled ones), so tests use
  * fakes. Returns `stale` without writing when a newer fetch was requested meanwhile.
@@ -230,28 +287,35 @@ export async function fetchRates(
       ? null
       : resolveShipTo({ shippingAddress: order.shipTo, billingAddress: null });
   const resolved = stored?.kind === "complete" ? null : resolveShipTo(order);
-  const shipTo =
-    stored?.kind === "complete"
-      ? stored.address
-      : resolved?.kind === "complete"
-        ? resolved.address
-        : null;
+  const checked =
+    resolved?.kind === "complete"
+      ? await checkShipTo(providers, resolved.address, now, timeoutMs)
+      : null;
+  const shipTo = stored?.kind === "complete" ? stored.address : (checked?.shipTo ?? null);
   const shipFrom = ShipFromAddress.safeParse((await loadSettings(db)).shipFromAddress);
 
   const started = await db.$transaction(async (tx) => {
     const status = await isCurrent(tx, orderId, generation);
     if (!status) return "stale";
     if (resolved) {
-      const address = resolved.kind === "complete" ? toJson(resolved.address) : Prisma.DbNull;
       await tx.order.update({
         where: { id: orderId },
-        data: {
-          shipTo: address,
-          shipToOriginal: address,
-          shipToStatus: resolved.kind === "complete" ? "UNCHECKED" : "INCOMPLETE",
-          shipToMessages: resolved.kind === "complete" ? [] : resolved.missing,
-          shipToCheckedAt: null,
-        },
+        data:
+          resolved.kind === "complete" && checked
+            ? {
+                shipTo: toJson(checked.shipTo),
+                shipToOriginal: toJson(resolved.address),
+                shipToStatus: checked.status,
+                shipToMessages: checked.messages,
+                shipToCheckedAt: checked.checkedAt,
+              }
+            : {
+                shipTo: Prisma.DbNull,
+                shipToOriginal: Prisma.DbNull,
+                shipToStatus: "INCOMPLETE",
+                shipToMessages: resolved.kind === "incomplete" ? resolved.missing : [],
+                shipToCheckedAt: null,
+              },
       });
     }
     // Nothing a provider could answer: fail every package now, saying why (an incomplete ship-to
@@ -282,8 +346,8 @@ export async function fetchRates(
     orderNumber: order.number,
     shipFrom: shipFrom.data,
     shipTo,
-    // Assumption 7 until an address check says otherwise.
-    residential: !shipTo.company,
+    // Assumption 7 unless the address check says.
+    residential: checked?.residential ?? !shipTo.company,
   };
 
   const asked = await Promise.all(
@@ -403,6 +467,32 @@ export async function runRatesFetchJob(
   return fetchRates(db, providers, payload, { finalAttempt });
 }
 
+/** Locks an order QA may re-rate: in QA, with no live label. */
+export async function lockRerate(tx: DbTx, orderId: string) {
+  const order = await lockOrder(tx, orderId);
+  if (order.status !== "QA") throw new AppError("CONFLICT", "errors.carriers.notInQa");
+  const live = await tx.shippingLabel.count({
+    where: { package: { orderId }, status: { in: [...liveLabelStatuses] } },
+  });
+  if (live > 0) throw new AppError("CONFLICT", "errors.carriers.liveLabel");
+  return order;
+}
+
+/**
+ * A new generation with every package fetching. `dropRates` when the ship-to changed: rates for
+ * the old address can't be bought.
+ */
+export async function refetch(
+  tx: DbTx,
+  orderId: string,
+  { dropRates = false }: { dropRates?: boolean } = {},
+): Promise<number> {
+  const generation = await requestRateFetch(tx, orderId);
+  if (dropRates) await tx.shippingRate.deleteMany({ where: { package: { orderId } } });
+  await tx.package.updateMany({ where: { orderId }, data: { ratesStatus: "FETCHING" } });
+  return generation;
+}
+
 /** QA asks again: a new generation, every package fetching until the job answers. Audited. */
 export async function refreshRates(
   db: Db,
@@ -411,14 +501,8 @@ export async function refreshRates(
 ): Promise<OrderShipping> {
   assertCan(actor, "order.qa");
   await db.$transaction(async (tx) => {
-    const order = await lockOrder(tx, orderId);
-    if (order.status !== "QA") throw new AppError("CONFLICT", "errors.carriers.notInQa");
-    const live = await tx.shippingLabel.count({
-      where: { package: { orderId }, status: { in: [...liveLabelStatuses] } },
-    });
-    if (live > 0) throw new AppError("CONFLICT", "errors.carriers.liveLabel");
-    const generation = await requestRateFetch(tx, orderId);
-    await tx.package.updateMany({ where: { orderId }, data: { ratesStatus: "FETCHING" } });
+    const order = await lockRerate(tx, orderId);
+    const generation = await refetch(tx, orderId);
     await recordAudit(tx, actor, {
       entityType: "Order",
       entityId: orderId,

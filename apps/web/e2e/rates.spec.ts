@@ -158,15 +158,77 @@ test("packing → QA fetches merged rates from both providers; a refresh skips a
   }
 });
 
-test("a Picker sees an order's rates but can't refresh them", async ({ page }) => {
+test("a corrected address shows beside the original, and Use original address re-rates", async ({
+  page,
+  browser,
+}) => {
+  test.setTimeout(120_000);
+  const admin = await (await browser.newContext()).newPage();
+  const qa = await (await browser.newContext()).newPage();
+  try {
+    await signInAs(admin, ["ADMIN"]);
+    await signInAs(qa, ["QA"]);
+    await withSettingsLock(async () => {
+      try {
+        await ensureShipFrom();
+        await enableOnly(admin, "SHIPSTATION", "Demo Ground", "demo_ground");
+
+        const name = `E2E ${crypto.randomUUID()}`;
+        // The fake ShipStation abbreviates "Street".
+        const order = await createOrder({
+          customerName: name,
+          quantity: 1,
+          status: "PACKING",
+          street: "1 Main Street",
+        });
+        await packAndFinish(page, order, name);
+        expect(await runRateFetch(order.id)).toEqual({ status: "done" });
+
+        await qa.goto(`/orders/${order.id}`);
+        const shipTo = qa.getByRole("region", { name: "Shipping" }).getByTestId("ship-to");
+        await expect(shipTo).toContainText("Corrected");
+        await expect(shipTo.getByTestId("ship-to-original")).toContainText("1 Main Street");
+        await expect(shipTo.getByTestId("ship-to-corrected")).toContainText("1 Main St ·");
+        await expect(shipTo).toContainText("Changed the street.");
+        await expect(rateRows(qa)).toHaveCount(1);
+
+        await shipTo.getByRole("button", { name: "Use original address" }).click();
+        await expect(
+          qa.getByText("Using the original address. Fetching rates again."),
+        ).toBeVisible();
+        await expect(rateRows(qa)).toHaveCount(0);
+        expect(await runRateFetch(order.id)).toEqual({ status: "done" });
+        await qa.reload();
+
+        await expect(shipTo).toContainText("Not checked");
+        await expect(shipTo).toContainText("1 Main Street");
+        await expect(shipTo.getByTestId("ship-to-original")).toHaveCount(0);
+        await expect(shipTo.getByRole("button", { name: "Use original address" })).toHaveCount(0);
+        await expect(rateRows(qa)).toHaveCount(1);
+        await expect(rateRows(qa).nth(0)).toContainText("Selected");
+      } finally {
+        await resetProviders(admin);
+      }
+    });
+  } finally {
+    await admin.context().close();
+    await qa.context().close();
+  }
+});
+
+test("a Picker sees an order's rates but can't refresh them or change the ship-to", async ({
+  page,
+}) => {
   const order = await createOrder({ status: "QA" });
   await signInAs(page, ["PICKER"]);
   await page.goto(`/orders/${order.id}`);
   // Created straight in QA with no package: nothing to show yet.
   await expect(page.getByRole("region", { name: "Shipping" })).toHaveCount(0);
 
-  const refused = await page.request.post(`/api/v1/orders/${order.id}/rates/refresh`);
-  expect(refused.status()).toBe(403);
+  for (const action of ["rates/refresh", "ship-to/recheck", "ship-to/use-original"]) {
+    const refused = await page.request.post(`/api/v1/orders/${order.id}/${action}`);
+    expect(refused.status(), action).toBe(403);
+  }
   const read = await page.request.get(`/api/v1/orders/${order.id}/shipping`);
   expect(read.ok()).toBe(true);
 });

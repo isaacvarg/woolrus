@@ -39,6 +39,7 @@ export async function createOrder({
   attributes = [],
   ownProduct = false,
   productSize,
+  street = address.address1,
 }: {
   customerName?: string;
   status?: WorkflowStatus;
@@ -56,6 +57,8 @@ export async function createOrder({
   ownProduct?: boolean;
   /** The own product's weight (oz) and dimensions (in), e.g. for a box suggestion. Implies ownProduct. */
   productSize?: ProductSize;
+  /** The shipping address's first line, e.g. one the fake ShipStation corrects ("… Street"). */
+  street?: string;
 } = {}) {
   const wooOrderId = nextWooId();
   const now = new Date();
@@ -82,7 +85,7 @@ export async function createOrder({
       wooStatus: "processing",
       currency: "USD",
       customerName,
-      shippingAddress: address,
+      shippingAddress: { ...address, address1: street },
       billingAddress: address,
       totalCents: 1000,
       orderedAt,

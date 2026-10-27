@@ -408,7 +408,10 @@
       "address1": "la calle",
       "city": "la ciudad",
       "postalCode": "el código postal",
-      "country": "el país"
+      "country": "el país",
+      "company": "la empresa",
+      "address2": "la segunda línea",
+      "state": "el estado"
     },
     "package": "Paquete {number}",
     "ratesStatus": {
@@ -436,7 +439,17 @@
     "selected": "Seleccionada",
     "expired": "Vencida",
     "refresh": "Actualizar tarifas",
-    "refreshing": "Obteniendo las tarifas de nuevo."
+    "refreshing": "Obteniendo las tarifas de nuevo.",
+    "original": "Original",
+    "correctedTo": "Corregida a",
+    "changed": "Cambió {fields}.",
+    "unchecked": "Ningún proveedor de envío verificó esta dirección.",
+    "undeliverable": "El proveedor no pudo confirmar esta dirección. Aun así puedes comprar una etiqueta.",
+    "checking": "Verificando la dirección…",
+    "useOriginal": "Usar la dirección original",
+    "usingOriginal": "Se usa la dirección original. Obteniendo las tarifas de nuevo.",
+    "recheck": "Verificar la dirección de nuevo",
+    "rechecking": "Verificando la dirección de nuevo."
   },
   "pack": {
     "title": "Empacar #{number}",
@@ -1052,7 +1065,8 @@
       "noProviders": "No hay ningún proveedor de envío activado. Un administrador lo activa en Configuración → Envíos.",
       "packageIncomplete": "El paquete necesita un peso y una caja o medidas antes de cotizarlo.",
       "notInQa": "Las tarifas solo se pueden actualizar mientras el pedido está en QA.",
-      "liveLabel": "Un paquete ya tiene etiqueta. Anúlala antes de actualizar las tarifas."
+      "liveLabel": "Un paquete ya tiene etiqueta. Anúlala antes de actualizar las tarifas.",
+      "noShipTo": "Este pedido aún no tiene dirección de envío. Obtén sus tarifas primero."
     },
     "email": {
       "unauthorized": "Resend rechazó la clave API. Revísala en Configuración → Integraciones.",

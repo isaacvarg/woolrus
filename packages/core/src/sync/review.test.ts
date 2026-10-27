@@ -2,6 +2,7 @@ import type { Db } from "@woolrus/db";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { createActor, resetDb, testDb } from "../../test/db";
 import { FakeStoreAdapter } from "../adapters/woocommerce/fake";
+import { queues } from "../jobs";
 import type { UserActor } from "../permissions";
 import { getOrder } from "../workflow/queries";
 import { syncOrders } from "./orders";
@@ -75,6 +76,10 @@ const reload = (id: string) =>
     where: { id },
     include: { items: { orderBy: { wooLineItemId: "asc" } } },
   });
+
+const rateJobs = (orderId: string) =>
+  db.$queryRaw<unknown[]>`
+    SELECT id FROM pgboss.job WHERE name = ${queues.ratesFetch} AND data->>'orderId' = ${orderId}`;
 
 const pick = (itemId: string | undefined, pickedQuantity: number) =>
   db.orderItem.update({
@@ -273,6 +278,52 @@ describe("applyExternalChange", () => {
     const after = await reload(order.id);
     expect(after.shippingAddress).toMatchObject({ address1: "9 New Rd" });
     expect(after.items[0]?.quantity).toBe(2);
+  });
+
+  it("clears the checked ship-to and re-rates an order in QA when an address changes", async () => {
+    const order = await flagged({ shipping: newStreet }, (_l, id) =>
+      db.order.update({
+        where: { id },
+        data: {
+          status: "QA",
+          shipTo: { name: "Old" },
+          shipToOriginal: { name: "Old" },
+          shipToStatus: "CORRECTED",
+          shipToMessages: ["Fixed."],
+          shipToCheckedAt: new Date(),
+        },
+      }),
+    );
+
+    await applyExternalChange(db, admin, { orderId: order.id, expectedVersion: order.version });
+
+    expect(await reload(order.id)).toMatchObject({
+      shipTo: null,
+      shipToOriginal: null,
+      shipToStatus: "UNCHECKED",
+      shipToMessages: [],
+      shipToCheckedAt: null,
+      rateGeneration: 1,
+    });
+    expect(await rateJobs(order.id)).toHaveLength(1);
+  });
+
+  it("clears the ship-to without re-rating outside QA", async () => {
+    const moved = await flagged({ shipping: newStreet }, (_l, id) =>
+      db.order.update({ where: { id }, data: { shipTo: { name: "Old" } } }),
+    );
+    await applyExternalChange(db, admin, { orderId: moved.id, expectedVersion: moved.version });
+    expect(await reload(moved.id)).toMatchObject({ shipTo: null, rateGeneration: 0 });
+    expect(await rateJobs(moved.id)).toEqual([]);
+  });
+
+  it("keeps the ship-to when no address changed", async () => {
+    const renamed = await flagged({ lines: [{ id: 1, quantity: 2 }, { id: 2 }] }, (_l, id) =>
+      db.order.update({ where: { id }, data: { status: "QA", shipTo: { name: "Old" } } }),
+    );
+    await applyExternalChange(db, admin, { orderId: renamed.id, expectedVersion: renamed.version });
+    expect(await reload(renamed.id)).toMatchObject({ shipTo: { name: "Old" } });
+    expect(await rateJobs(renamed.id)).toEqual([]);
   });
 
   it("adds a line while the order is still in Packing", async () => {
