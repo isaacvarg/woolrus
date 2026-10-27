@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { base } from "./base";
+import { base, Id } from "./base";
 import { IntegrationUrl, SecretStatus } from "./settings";
 
 // Shipping provider accounts (SPEC-carriers "Provider accounts and settings", "API"). Credentials are
@@ -88,6 +88,50 @@ export type TestProviderResult = z.infer<typeof TestProviderResult>;
 export const SetProviderEnabledInput = ProviderInput.extend({ enabled: z.boolean() });
 export type SetProviderEnabledInput = z.infer<typeof SetProviderEnabledInput>;
 
+export const SyncCarriersInput = ProviderInput;
+export type SyncCarriersInput = z.infer<typeof SyncCarriersInput>;
+
+/** What a sync changed. Missing ones were listed before and aren't now; they're kept, not deleted. */
+export const SyncCarriersResult = z.object({
+  carriersAdded: z.number(),
+  servicesAdded: z.number(),
+  carriersMissing: z.number(),
+  servicesMissing: z.number(),
+});
+export type SyncCarriersResult = z.infer<typeof SyncCarriersResult>;
+
+export const SetShippingEnabledInput = z.object({ id: Id, enabled: z.boolean() });
+export type SetShippingEnabledInput = z.infer<typeof SetShippingEnabledInput>;
+
+/** `missing`: the provider stopped listing it at the last sync, so it's never sent. */
+export const ShippingServiceConfig = z.object({
+  id: z.string(),
+  code: z.string(),
+  name: z.string(),
+  domestic: z.boolean(),
+  international: z.boolean(),
+  enabled: z.boolean(),
+  missing: z.boolean(),
+});
+export type ShippingServiceConfig = z.infer<typeof ShippingServiceConfig>;
+
+export const ShippingCarrierConfig = z.object({
+  id: z.string(),
+  name: z.string(),
+  enabled: z.boolean(),
+  missing: z.boolean(),
+  services: z.array(ShippingServiceConfig),
+});
+export type ShippingCarrierConfig = z.infer<typeof ShippingCarrierConfig>;
+
+/** A provider's synced carriers and services, for Settings → Shipping. */
+export const ProviderShippingConfig = z.object({
+  provider: ShippingProviderId,
+  lastSyncedAt: z.date().nullable(),
+  carriers: z.array(ShippingCarrierConfig),
+});
+export type ProviderShippingConfig = z.infer<typeof ProviderShippingConfig>;
+
 export const carriers = {
   providers: base
     .route({
@@ -147,4 +191,43 @@ export const carriers = {
     })
     .input(SetProviderEnabledInput)
     .output(ProviderAccount),
+
+  config: base
+    .route({
+      method: "GET",
+      path: "/shipping/config",
+      tags: ["Shipping"],
+      summary: "Each provider's synced carriers and services (admin)",
+    })
+    .output(z.array(ProviderShippingConfig)),
+
+  sync: base
+    .route({
+      method: "POST",
+      path: "/shipping/providers/{provider}/sync",
+      tags: ["Shipping"],
+      summary: "Sync a provider's carriers and services",
+    })
+    .input(SyncCarriersInput)
+    .output(SyncCarriersResult),
+
+  setCarrierEnabled: base
+    .route({
+      method: "POST",
+      path: "/shipping/carriers/{id}/enabled",
+      tags: ["Shipping"],
+      summary: "Turn a carrier on or off",
+    })
+    .input(SetShippingEnabledInput)
+    .output(ShippingCarrierConfig),
+
+  setServiceEnabled: base
+    .route({
+      method: "POST",
+      path: "/shipping/services/{id}/enabled",
+      tags: ["Shipping"],
+      summary: "Turn a carrier service on or off",
+    })
+    .input(SetShippingEnabledInput)
+    .output(ShippingServiceConfig),
 };

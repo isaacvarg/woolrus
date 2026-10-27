@@ -12,6 +12,7 @@ export * from "./adapters/woocommerce/errors";
 export * from "./adapters/woocommerce/http";
 export * from "./audit";
 export * from "./boxes/service";
+export * from "./carriers/carriers";
 export * from "./carriers/providers";
 export * from "./enqueue";
 export * from "./errors";

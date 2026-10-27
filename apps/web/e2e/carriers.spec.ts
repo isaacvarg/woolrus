@@ -48,10 +48,16 @@ test("an admin sets credentials, tests, enables and disables a provider", async 
       await toggle.click({ force: true });
       await expect(toggle).toBeChecked();
       await page.reload();
-      await expect(card(page, "ShipStation").getByRole("switch")).toBeChecked();
+      await expect(
+        card(page, "ShipStation").getByRole("switch", { name: "Use ShipStation" }),
+      ).toBeChecked();
 
-      await card(page, "ShipStation").getByRole("switch").click({ force: true });
-      await expect(card(page, "ShipStation").getByRole("switch")).not.toBeChecked();
+      await card(page, "ShipStation")
+        .getByRole("switch", { name: "Use ShipStation" })
+        .click({ force: true });
+      await expect(
+        card(page, "ShipStation").getByRole("switch", { name: "Use ShipStation" }),
+      ).not.toBeChecked();
 
       const received = (await Promise.all(bodies)).join("\n");
       expect(received).toContain('"configured"');
@@ -76,13 +82,90 @@ test("a provider whose credentials fail its test can't be enabled", async ({ pag
 
       await shipStation.getByRole("switch", { name: "Use ShipStation" }).click({ force: true });
       await expect(page.getByText(en.errors.carriers.providerUnreachable)).toBeVisible();
-      await expect(shipStation.getByRole("switch")).not.toBeChecked();
+      await expect(shipStation.getByRole("switch", { name: "Use ShipStation" })).not.toBeChecked();
 
       // Clearing takes the credentials away again.
       await shipStation.getByRole("button", { name: "Clear" }).click();
       await shipStation.getByRole("button", { name: "Yes, clear" }).click();
       await expect(shipStation.getByText("Not set", { exact: true })).toBeVisible();
     } finally {
+      await resetShipStation(page);
+    }
+  });
+});
+
+type CarrierConfig = { id: string; name: string; services: { id: string; name: string }[] };
+
+/** Turns ShipStation on through the API (the fakes accept any key) and every synced switch off. */
+async function enableShipStationWithCarriersOff(page: Page) {
+  const api = "/api/v1/shipping";
+  expect(
+    (
+      await page.request.put(`${api}/providers/SHIPSTATION/credentials`, {
+        data: { credentials: { apiKey: `e2e-${crypto.randomUUID()}` } },
+      })
+    ).ok(),
+  ).toBe(true);
+  expect(
+    (
+      await page.request.post(`${api}/providers/SHIPSTATION/enabled`, { data: { enabled: true } })
+    ).ok(),
+  ).toBe(true);
+  const config: { provider: string; carriers: CarrierConfig[] }[] = await (
+    await page.request.get(`${api}/config`)
+  ).json();
+  for (const carrier of config.find((p) => p.provider === "SHIPSTATION")?.carriers ?? []) {
+    await page.request.post(`${api}/carriers/${carrier.id}/enabled`, { data: { enabled: false } });
+    for (const service of carrier.services) {
+      await page.request.post(`${api}/services/${service.id}/enabled`, {
+        data: { enabled: false },
+      });
+    }
+  }
+}
+
+test("an admin syncs a provider's carriers and turns one carrier and one service on", async ({
+  page,
+}) => {
+  await signInAs(page, ["ADMIN"]);
+  await withSettingsLock(async () => {
+    try {
+      await enableShipStationWithCarriersOff(page);
+      await page.goto("/settings/shipping");
+      const shipStation = card(page, "ShipStation");
+
+      await shipStation.getByRole("button", { name: "Sync carriers" }).click();
+      await expect(page.getByText(/ShipStation synced/)).toBeVisible();
+      await expect(shipStation.getByText(/Last synced/)).toBeVisible();
+      const carrier = shipStation.getByRole("switch", { name: "Use carrier Demo Ground" });
+      const service = shipStation.getByRole("switch", {
+        name: "Use Demo Ground Demo Ground Saver",
+      });
+      await expect(carrier).not.toBeChecked();
+      await expect(service).not.toBeChecked();
+      await expect(shipStation.getByText("Domestic").first()).toBeVisible();
+
+      await carrier.click({ force: true });
+      await expect(carrier).toBeChecked();
+      await service.click({ force: true });
+      await expect(service).toBeChecked();
+
+      await page.reload();
+      const reloaded = card(page, "ShipStation");
+      await expect(reloaded.getByRole("switch", { name: "Use carrier Demo Ground" })).toBeChecked();
+      await expect(
+        reloaded.getByRole("switch", { name: "Use Demo Ground Demo Ground Saver" }),
+      ).toBeChecked();
+      await expect(
+        reloaded.getByRole("switch", { name: "Use Demo Ground Demo Ground", exact: true }),
+      ).not.toBeChecked();
+
+      // A re-sync keeps the switches.
+      await reloaded.getByRole("button", { name: "Sync carriers" }).click();
+      await expect(page.getByText(/ShipStation synced: nothing new/)).toBeVisible();
+      await expect(reloaded.getByRole("switch", { name: "Use carrier Demo Ground" })).toBeChecked();
+    } finally {
+      await enableShipStationWithCarriersOff(page);
       await resetShipStation(page);
     }
   });

@@ -195,7 +195,20 @@
       "lastChecked": "Comprobado {at}.",
       "carrierCount": "{count, plural, =0 {Aún no hay transportistas sincronizados.} one {# transportista sincronizado.} other {# transportistas sincronizados.}}",
       "urlMoveBody": "La nueva dirección está en otro servidor. Al guardarla se borran las credenciales guardadas y se desactiva el proveedor, para que nunca se envíen allí. Agrégalas de nuevo para la nueva dirección.",
-      "savedCredentialsCleared": "Guardado. Se borraron las credenciales de la dirección anterior: agrégalas para la nueva."
+      "savedCredentialsCleared": "Guardado. Se borraron las credenciales de la dirección anterior: agrégalas para la nueva.",
+      "sync": "Sincronizar transportistas",
+      "lastSynced": "Última sincronización: {at}.",
+      "syncHint": "Activa {name} para sincronizar sus transportistas.",
+      "syncedToast": "{name} sincronizado: {added, plural, =0 {nada nuevo} one {# transportista o servicio nuevo} other {# transportistas y servicios nuevos}}{missing, plural, =0 {} other {, # ya no se ofrecen}}.",
+      "carriersHint": "Los transportistas y servicios nuevos llegan desactivados. Un servicio solo se usa cuando él y su transportista están activados.",
+      "carriersCaption": "Transportistas y servicios de {name}",
+      "carrierColumn": "Transportista y servicios",
+      "shipsColumn": "Envía",
+      "carrierSwitch": "Usar el transportista {name}",
+      "serviceSwitch": "Usar {carrier} {name}",
+      "domestic": "Nacional",
+      "international": "Internacional",
+      "noLongerOffered": "Ya no se ofrece"
     }
   },
   "priorityRules": {
@@ -984,7 +997,8 @@
     "carriers": {
       "credentialsMissing": "Primero agrega las credenciales del proveedor.",
       "providerNotAvailable": "Este proveedor aún no está disponible en esta versión de Woolrus.",
-      "providerUnreachable": "El proveedor no aceptó la prueba de conexión, así que no se activó. Revisa sus credenciales e inténtalo de nuevo."
+      "providerUnreachable": "El proveedor no aceptó la prueba de conexión, así que no se activó. Revisa sus credenciales e inténtalo de nuevo.",
+      "providerOff": "Activa el proveedor antes de sincronizar sus transportistas."
     },
     "email": {
       "unauthorized": "Resend rechazó la clave API. Revísala en Configuración → Integraciones.",
