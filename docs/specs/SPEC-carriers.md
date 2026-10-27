@@ -4,7 +4,7 @@
 box, dimensions and weight; deletes a package's rates when it changes), `workflow` (Packing → QA, the **verified**
 gate's `packageNoRate`) · **Used by:** `qa` (rate choice, label purchase through the rate's provider),
 `bridge-source` (implements `ShippingProvider`), `shipping` (void, manifests, carrier for the Woo push),
-`returns` (return labels), `reporting` (spend by provider, carrier and service) · **State:** planned
+`returns` (return labels), `reporting` (spend by provider, carrier and service) · **State:** done
 
 Project-wide commands, structure, code style, testing levels and boundaries are in [`../../SPEC.md`](../../SPEC.md);
 this spec only adds what is specific to `carriers`.
