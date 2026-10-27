@@ -24,6 +24,8 @@ beforeEach(async () => {
   vi.stubEnv("SETTINGS_ENCRYPTION_KEY", encoded);
   vi.stubEnv("NODE_ENV", "test");
   vi.stubEnv("SHIPPING_PROVIDERS", undefined);
+  // GitHub Actions sets CI, which would turn the fakes on in the NODE_ENV cases below.
+  vi.stubEnv("CI", undefined);
   key = parseEncryptionKey(encoded) as Buffer;
 });
 afterEach(() => vi.unstubAllEnvs());
@@ -217,16 +219,22 @@ describe("createShippingProviders", () => {
 });
 
 describe("fakeShippingProviders", () => {
-  it("is on only for SHIPPING_PROVIDERS=fake in development or test", () => {
-    for (const [nodeEnv, value, expected] of [
-      ["development", "fake", true],
-      ["test", "fake", true],
-      ["production", "fake", false],
-      [undefined, "fake", false],
-      ["development", undefined, false],
-      ["development", "real", false],
+  it("is on only for SHIPPING_PROVIDERS=fake in development, test or CI", () => {
+    for (const [nodeEnv, ci, value, expected] of [
+      ["development", undefined, "fake", true],
+      ["test", undefined, "fake", true],
+      // CI's Playwright runs `next start`, which is always production.
+      ["production", "true", "fake", true],
+      ["production", undefined, "fake", false],
+      ["production", "1", "fake", false],
+      ["production", "false", "fake", false],
+      [undefined, undefined, "fake", false],
+      ["development", undefined, undefined, false],
+      ["development", undefined, "real", false],
+      ["production", "true", undefined, false],
     ] as const) {
       vi.stubEnv("NODE_ENV", nodeEnv);
+      vi.stubEnv("CI", ci);
       vi.stubEnv("SHIPPING_PROVIDERS", value);
       expect(fakeShippingProviders()).toBe(expected);
     }

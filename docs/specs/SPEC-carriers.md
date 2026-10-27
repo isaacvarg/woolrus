@@ -138,9 +138,10 @@ So a rate never has to have an id, and a purchase always carries the shipment:
   credentials, addresses or the provider's free text.
 - **Registry** (`registry.ts`): `createShippingProviders(db): Promise<ShippingProvider[]>` returns one adapter per
   **enabled** provider account with credentials, in fixed order (ShipStation, Bridge Source). Services take the list
-  as an argument, so tests pass fakes. When `SHIPPING_PROVIDERS=fake` and `NODE_ENV` is `development` or `test`
-  (fails closed otherwise), it returns the two fakes instead (dev stack and Playwright; there is no ShipStation sandbox
-  in the dev stack).
+  as an argument, so tests pass fakes. When `SHIPPING_PROVIDERS=fake` and `NODE_ENV` is `development` or `test`,
+  or `CI=true` (CI's Playwright runs `next start`, where `NODE_ENV` is always `production`), it returns the two fakes
+  instead (dev stack and Playwright; there is no ShipStation sandbox in the dev stack). Fails closed otherwise: a
+  deploy sets neither.
 
 Each provider gets `PROVIDER_TIMEOUT_MS` (20 s, a constant) for a package's whole `getRates`, however many calls
 it makes inside. The adapter doesn't retry by itself; the job does.

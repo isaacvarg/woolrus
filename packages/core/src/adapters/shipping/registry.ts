@@ -31,11 +31,14 @@ export const shippingAdapters: AdapterFactories = {
 /**
  * `SHIPPING_PROVIDERS=fake` swaps every adapter for its fake, for the dev stack and Playwright
  * (there is no ShipStation sandbox there). Fails closed: only an explicit development or test
- * environment honours it, like the integration env fallback.
+ * environment honours it, like the integration env fallback, or CI (`CI=true`, which GitHub
+ * Actions sets), whose Playwright runs the production build where `NODE_ENV` is always production.
+ * A deploy sets neither.
  */
 export function fakeShippingProviders(): boolean {
   const env = process.env.NODE_ENV;
-  return process.env.SHIPPING_PROVIDERS === "fake" && (env === "development" || env === "test");
+  const allowed = env === "development" || env === "test" || process.env.CI === "true";
+  return process.env.SHIPPING_PROVIDERS === "fake" && allowed;
 }
 
 /** Labels the fakes bought in this process, so one request can find another's. */
