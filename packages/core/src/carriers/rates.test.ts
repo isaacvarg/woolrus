@@ -288,6 +288,83 @@ describe("fetchRates fan-out (SC 8)", () => {
         [],
       ),
     ).toBe("Ground");
+    // A rate that names its delivery days beats one that doesn't, at the same price.
+    expect(
+      await select(
+        [
+          { ...ground, serviceCode: "demo_ground", serviceName: "Unknown days" },
+          { ...ground, serviceCode: "demo_ground_saver", serviceName: "Known", deliveryDays: 6 },
+        ],
+        [],
+      ),
+    ).toBe("Known");
+  });
+
+  it("sends a box's outer size, not its inner one", async () => {
+    // Carriers price the outside of the parcel; inner dimensions would quote low.
+    await catalog("BRIDGE_SOURCE", ["GND"]);
+    const provider = stub("BRIDGE_SOURCE", []);
+    const { packages, payload } = await inQa();
+    const pkg = await pkgRow(packages[0]?.id as string);
+    await db.box.update({
+      where: { id: pkg.boxId as string },
+      data: { outerLengthIn: 10.5, outerWidthIn: 8.5, outerHeightIn: 4.5 },
+    });
+
+    await fetchRates(db, [provider], payload);
+
+    expect(provider.calls[0]?.package).toMatchObject({
+      lengthIn: 10.5,
+      widthIn: 8.5,
+      heightIn: 4.5,
+    });
+  });
+
+  it("fails an unweighed package and still rates the others", async () => {
+    await catalog("BRIDGE_SOURCE", ["GND"]);
+    const { bridge } = fakes();
+    const { packages, payload } = await inQa(
+      {
+        packages: [
+          { items: [{ line: 0, quantity: 1 }], weightOz: 20 },
+          { items: [{ line: 0, quantity: 1 }], weightOz: null },
+        ],
+      },
+      2,
+    );
+
+    await fetchRates(db, [bridge], payload);
+
+    expect(await pkgRow(packages[0]?.id as string)).toMatchObject({ ratesStatus: "READY" });
+    expect(await pkgRow(packages[1]?.id as string)).toMatchObject({
+      ratesStatus: "FAILED",
+      rateErrors: [{ provider: null, messageKey: "errors.carriers.packageIncomplete" }],
+    });
+    expect(await ratesOf(packages[1]?.id as string)).toEqual([]);
+  });
+
+  it("treats a ship-to with a company name as commercial when nobody checked it", async () => {
+    await catalog("BRIDGE_SOURCE", ["GND"]);
+    const provider = stub("BRIDGE_SOURCE", []);
+    const { payload } = await inQa();
+    await db.order.update({
+      where: { id: payload.orderId },
+      data: {
+        shippingAddress: {
+          name: "Ana",
+          company: "Ruiz Co",
+          address1: "1 Main St",
+          city: "Austin",
+          state: "TX",
+          postalCode: "78701",
+          country: "US",
+        },
+      },
+    });
+
+    await fetchRates(db, [provider], payload);
+
+    expect(provider.calls[0]?.residential).toBe(false);
   });
 
   it("asks each provider once per package, and in parallel", async () => {
@@ -569,6 +646,20 @@ describe("fetchRates failures (SC 9)", () => {
         { provider: "BRIDGE_SOURCE", messageKey: "errors.shipping.unavailable" },
       ],
     });
+  });
+
+  it("retries when one provider refused and the other failed transiently", async () => {
+    // Nothing came back, and the transient one may answer next time.
+    await catalog("SHIPSTATION", ["demo_ground"]);
+    await catalog("BRIDGE_SOURCE", ["GND"]);
+    const { shipStation, bridge } = fakes();
+    shipStation.failNext(401, 2);
+    bridge.failNext("network");
+    const { payload } = await inQa();
+
+    await expect(
+      fetchRates(db, [shipStation, bridge], payload, { finalAttempt: false }),
+    ).rejects.toBeInstanceOf(RatesRetryError);
   });
 
   it("doesn't retry permanent failures", async () => {
@@ -853,6 +944,20 @@ describe("getOrderShipping", () => {
     });
   });
 
+  it("counts a rate as expired from the moment it expires", async () => {
+    await catalog("BRIDGE_SOURCE", ["GND"]);
+    const { bridge } = fakes();
+    const { payload } = await inQa();
+    const now = new Date();
+    await fetchRates(db, [bridge], payload, { now });
+    await db.shippingRate.updateMany({ data: { expiresAt: now } });
+    const qa = await createActor(db, ["QA"]);
+
+    const shipping = await getOrderShipping(db, qa, { orderId: payload.orderId }, { now });
+
+    expect(shipping.packages[0]?.rates[0]?.expired).toBe(true);
+  });
+
   it("forbidden without order.read", async () => {
     const nobody = await createActor(db, []);
     const { payload } = await inQa();
@@ -1131,11 +1236,16 @@ describe("address validation (SC 7)", () => {
       expect(await jobs(payload.orderId)).toEqual([
         { data: { orderId: payload.orderId, generation: 2 } },
       ]);
-      expect(
-        await db.auditEvent.findFirst({
-          where: { entityId: payload.orderId, action: "shipTo.useOriginal" },
-        }),
-      ).toMatchObject({ actorId: qa.userId, after: { shipTo: original } });
+      const audit = await db.auditEvent.findFirstOrThrow({
+        where: { entityId: payload.orderId, action: "shipTo.useOriginal" },
+      });
+      expect(audit).toMatchObject({
+        actorId: qa.userId,
+        before: { shipToStatus: "CORRECTED" },
+        after: { shipToStatus: "UNCHECKED", generation: 2 },
+      });
+      // The audit log outlives the PII purge of orders, so it holds no address.
+      expect(JSON.stringify([audit.before, audit.after])).not.toContain(original.address1);
 
       await fetchRates(db, [provider], { ...payload, generation: 2 });
       // Kept as the user chose: not checked again.

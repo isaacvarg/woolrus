@@ -208,8 +208,11 @@ type CheckedShipTo = {
   residential?: boolean;
 };
 
-/** What's stored for each answer when rates use the original (a correction does when it has no address). */
-const checkStatus: Record<AddressCheck["status"], ShipToStatus> = {
+/**
+ * What's stored when rates use the original address: every answer but a correction with an
+ * address, which a correction without one falls back to as a warning.
+ */
+const fallbackStatus: Record<AddressCheck["status"], ShipToStatus> = {
   verified: "VERIFIED",
   corrected: "WARNING",
   warning: "WARNING",
@@ -245,7 +248,7 @@ async function checkShipTo(
   if (check.status === "corrected" && check.address) {
     return { ...checked, shipTo: check.address, status: "CORRECTED" };
   }
-  return { ...checked, shipTo: original, status: checkStatus[check.status] };
+  return { ...checked, shipTo: original, status: fallbackStatus[check.status] };
 }
 
 /**

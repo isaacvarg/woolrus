@@ -28,9 +28,9 @@ export async function keepOriginalAddress(
   assertCan(actor, "order.qa");
   await db.$transaction(async (tx) => {
     const order = await lockRerate(tx, orderId);
-    const { shipTo, shipToOriginal, shipToStatus } = await tx.order.findUniqueOrThrow({
+    const { shipToOriginal, shipToStatus } = await tx.order.findUniqueOrThrow({
       where: { id: orderId },
-      select: { shipTo: true, shipToOriginal: true, shipToStatus: true },
+      select: { shipToOriginal: true, shipToStatus: true },
     });
     if (shipToOriginal === null) throw new AppError("CONFLICT", "errors.carriers.noShipTo");
     await tx.order.update({
@@ -48,8 +48,9 @@ export async function keepOriginalAddress(
       entityType: "Order",
       entityId: orderId,
       action: "shipTo.useOriginal",
-      before: { shipTo, shipToStatus } as Prisma.InputJsonObject,
-      after: { shipTo: shipToOriginal, generation } as Prisma.InputJsonObject,
+      // Statuses only: audit events outlive the PII purge of the order's addresses.
+      before: { shipToStatus },
+      after: { shipToStatus: "UNCHECKED", generation },
     });
     await notifyOrderChanged(tx, { id: orderId, status: order.status });
   });
