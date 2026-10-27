@@ -1,0 +1,26 @@
+[
+  {
+    "status": "error",
+    "original_address": {
+      "name": "Contract Customer",
+      "company_name": null,
+      "address_line1": "1 Nowhere Road",
+      "address_line2": null,
+      "address_line3": null,
+      "city_locality": "Springfield",
+      "state_province": "OR",
+      "postal_code": "00000",
+      "country_code": "US",
+      "address_residential_indicator": "unknown"
+    },
+    "matched_address": null,
+    "messages": [
+      {
+        "code": "a1002",
+        "message": "Invalid Postal Code",
+        "type": "error",
+        "detail_code": "invalid_postal_code"
+      }
+    ]
+  }
+]

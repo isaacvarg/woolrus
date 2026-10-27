@@ -1,0 +1,11 @@
+{
+  "request_id": "00000000-0000-4000-8000-000000000500",
+  "errors": [
+    {
+      "error_source": "shipengine",
+      "error_type": "system",
+      "error_code": "unspecified",
+      "message": "An unexpected error occurred."
+    }
+  ]
+}

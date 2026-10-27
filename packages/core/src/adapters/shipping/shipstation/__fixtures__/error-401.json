@@ -1,0 +1,11 @@
+{
+  "request_id": "00000000-0000-4000-8000-000000000401",
+  "errors": [
+    {
+      "error_source": "shipengine",
+      "error_type": "security",
+      "error_code": "unauthorized",
+      "message": "The API key is invalid. Please see https://www.shipengine.com/docs/auth"
+    }
+  ]
+}

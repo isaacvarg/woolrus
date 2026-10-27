@@ -1,0 +1,37 @@
+[
+  {
+    "status": "verified",
+    "original_address": {
+      "name": "Contract Customer",
+      "company_name": "Example Co",
+      "address_line1": "100 Example Street",
+      "address_line2": "Suite 5",
+      "address_line3": null,
+      "city_locality": "Springfield",
+      "state_province": "OR",
+      "postal_code": "97477",
+      "country_code": "US",
+      "address_residential_indicator": "unknown"
+    },
+    "matched_address": {
+      "name": "CONTRACT CUSTOMER",
+      "company_name": "EXAMPLE CO",
+      "address_line1": "100 EXAMPLE ST STE 5",
+      "address_line2": null,
+      "address_line3": null,
+      "city_locality": "SPRINGFIELD",
+      "state_province": "OR",
+      "postal_code": "97477-1234",
+      "country_code": "US",
+      "address_residential_indicator": "no"
+    },
+    "messages": [
+      {
+        "code": "a1004",
+        "message": "Street suffix was standardized.",
+        "type": "info",
+        "detail_code": "street_standardized"
+      }
+    ]
+  }
+]

@@ -27,7 +27,8 @@
         "S3_SECRET_KEY",
         "S3_BUCKET",
         "STORAGE_LIVE",
-        "SHIPPING_PROVIDERS"
+        "SHIPPING_PROVIDERS",
+        "SHIPSTATION_LIVE_API_KEY"
       ]
     },
     "dev": {
