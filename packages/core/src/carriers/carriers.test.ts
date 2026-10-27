@@ -171,6 +171,17 @@ describe.each(["SHIPSTATION", "BRIDGE_SOURCE"] as const)("syncCarriers (%s fake)
     });
     expect(loaded.carrier.id).toBe(dropped.id);
 
+    // Still gone on the next sync: counted once, and the date it went missing stays.
+    const since = (await db.shippingCarrier.findUniqueOrThrow({ where: { id: dropped.id } }))
+      .missingSince;
+    expect(await syncCarriers(db, actor, { provider: id }, adapters)).toMatchObject({
+      carriersMissing: 0,
+      servicesMissing: 0,
+    });
+    expect(
+      (await db.shippingCarrier.findUniqueOrThrow({ where: { id: dropped.id } })).missingSince,
+    ).toEqual(since);
+
     // Listed again, it comes back with its switches as they were.
     drop.clear();
     await syncCarriers(db, actor, { provider: id }, adapters);

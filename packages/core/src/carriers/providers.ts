@@ -18,6 +18,7 @@ import {
 } from "../adapters/shipping/credentials";
 import { shippingErrorFromCause } from "../adapters/shipping/errors";
 import {
+  PROVIDER_TIMEOUT_MS,
   type ProviderId,
   providerIds,
   type ShippingProvider,
@@ -160,7 +161,9 @@ const origin = (url: string | null) => (url === null ? null : new URL(url).origi
 /**
  * Non-secret config. A base URL moving to another origin (or removed) clears the credentials and
  * disables the provider in the same transaction, so they're never sent to a server they weren't
- * meant for (decisions 2026-10-15, as `updateSettings` does for Woo and Lumexia).
+ * meant for (decisions 2026-10-15, as `updateSettings` does for Woo and Lumexia). Unlike those, a
+ * first URL counts as a move: Bridge Source has no default host, so credentials saved before it
+ * were meant for no server yet (decisions 2026-10-27).
  */
 export async function updateProviderConfig(
   db: Db,
@@ -177,7 +180,7 @@ export async function updateProviderConfig(
         credentialsCleared: false,
       };
     }
-    const moved = config.baseUrl !== null && origin(config.baseUrl) !== origin(baseUrl);
+    const moved = origin(config.baseUrl) !== origin(baseUrl);
     const cleared = moved && current.credentialsEnc !== null;
     const row = await tx.shippingProviderAccount.update({
       where: { provider },
@@ -229,9 +232,10 @@ export function providerFor(
 }
 
 /** Null when the provider accepts the credentials, else the error key to show. */
-async function ping(provider: ShippingProvider, timeoutMs?: number): Promise<ErrorCode | null> {
+async function ping(provider: ShippingProvider, timeoutMs: number): Promise<ErrorCode | null> {
   try {
-    await (timeoutMs === undefined ? provider.ping() : withTimeout(provider.ping(), timeoutMs));
+    // Bounded here too, so an adapter without its own fetch timeout can't hang the caller.
+    await withTimeout(provider.ping(), timeoutMs);
     return null;
   } catch (error) {
     return shippingErrorFromCause("ping", error).messageKey;
@@ -247,15 +251,16 @@ export async function testProvider(
 ): Promise<TestProviderResult> {
   assertCan(actor, "settings.manage");
   const current = await loadAccount(db, provider);
-  const messageKey = await ping(providerFor(current, adapters));
-  const row = await db.shippingProviderAccount.update({
-    where: { provider },
+  const messageKey = await ping(providerFor(current, adapters), PROVIDER_TIMEOUT_MS);
+  // Stored only for the credentials it tried: new ones saved meanwhile stay untested.
+  await db.shippingProviderAccount.updateMany({
+    where: { provider, credentialsEnc: current.credentialsEnc },
     data: { lastCheckedAt: new Date(), lastErrorKey: messageKey },
   });
   return {
     ok: messageKey === null,
     messageKey,
-    account: await toProviderAccount(db, row, adapters),
+    account: await toProviderAccount(db, await loadAccount(db, provider), adapters),
   };
 }
 
@@ -272,7 +277,7 @@ export async function setProviderEnabled(
   assertCan(actor, "settings.manage");
   const current = await loadAccount(db, provider);
   if (current.enabled === enabled) return toProviderAccount(db, current, adapters);
-  if (enabled && (await ping(providerFor(current, adapters))) !== null) {
+  if (enabled && (await ping(providerFor(current, adapters), PROVIDER_TIMEOUT_MS)) !== null) {
     throw new AppError("BAD_REQUEST", "errors.carriers.providerUnreachable");
   }
   return db.$transaction(async (tx) => {

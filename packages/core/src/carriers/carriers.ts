@@ -104,8 +104,11 @@ export async function syncCarriers(
       after: { provider, ...result },
     });
     return result;
-  });
+  }, SYNC_TRANSACTION);
 }
+
+/** One upsert per carrier and service: a large account outlasts Prisma's 5 s default. */
+const SYNC_TRANSACTION = { maxWait: 5_000, timeout: 30_000 };
 
 function toServiceConfig(row: CarrierService): ShippingServiceConfig {
   return {

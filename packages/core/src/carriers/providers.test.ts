@@ -256,13 +256,26 @@ describe("updateProviderConfig", () => {
     });
   });
 
-  it("keeps credentials saved before the first base URL", async () => {
+  it("clears credentials saved before the first base URL", async () => {
+    // Bridge Source has no default host: whoever sets the first URL would choose where they go.
     const actor = await withCredentials(null);
     const result = await updateProviderConfig(db, actor, {
       provider: "BRIDGE_SOURCE",
       baseUrl: "https://bs.example.com",
     });
+    expect(result).toMatchObject({ credentialsCleared: true, enabled: false });
+    expect((await accountRow("BRIDGE_SOURCE")).credentialsEnc).toBeNull();
+  });
+
+  it("changes and audits nothing when the base URL is the same", async () => {
+    const actor = await withCredentials("https://bs.example.com");
+    const before = await db.auditEvent.count();
+    const result = await updateProviderConfig(db, actor, {
+      provider: "BRIDGE_SOURCE",
+      baseUrl: "https://bs.example.com",
+    });
     expect(result.credentialsCleared).toBe(false);
+    expect(await db.auditEvent.count()).toBe(before);
   });
 
   it("clears the credentials when the base URL is removed, and audits the change", async () => {
@@ -428,6 +441,34 @@ describe("setProviderEnabled", () => {
       ["enable", "BRIDGE_SOURCE"],
       ["disable", "BRIDGE_SOURCE"],
     ]);
+  });
+
+  it("doesn't store a test result against credentials saved while it pinged", async () => {
+    // The ping tried the old key; health would otherwise trust its "ok" for the new one.
+    const actor = await admin();
+    await setProviderCredentials(db, actor, shipStation);
+    const adapters: AdapterFactories = {
+      SHIPSTATION: (credentials) => {
+        const provider = createFakeShippingProvider("SHIPSTATION", { credentials });
+        const ping = provider.ping.bind(provider);
+        provider.ping = async () => {
+          await setProviderCredentials(db, actor, {
+            provider: "SHIPSTATION",
+            credentials: { apiKey: "replaced-meanwhile" },
+          });
+          return ping();
+        };
+        return provider;
+      },
+    };
+
+    const result = await testProvider(db, actor, { provider: "SHIPSTATION" }, adapters);
+
+    expect(result.ok).toBe(true);
+    expect(await accountRow("SHIPSTATION")).toMatchObject({
+      lastCheckedAt: null,
+      lastErrorKey: null,
+    });
   });
 
   it("refuses to enable when the credentials change while it pings, and changes nothing", async () => {

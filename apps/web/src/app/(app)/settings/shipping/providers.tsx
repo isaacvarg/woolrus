@@ -341,10 +341,9 @@ function BaseUrlForm({ account, configured }: { account: ProviderAccount; config
   );
   const errors = fieldErrors(save.error);
   const next = value.trim() === "" ? null : value.trim();
-  // Mirrors `updateProviderConfig`: an origin change or a removal; a first URL is not a move.
+  // Mirrors `updateProviderConfig`: an origin change, a removal, or a first URL (no default host).
   const moves =
-    saved !== null &&
-    (next === null || (originOf(next) !== null && originOf(next) !== originOf(saved)));
+    next === null ? saved !== null : originOf(next) !== null && originOf(next) !== originOf(saved);
   const submit = () => {
     if (account.provider === "BRIDGE_SOURCE")
       save.mutate({ provider: "BRIDGE_SOURCE", baseUrl: next });
