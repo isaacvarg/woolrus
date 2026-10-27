@@ -1,0 +1,37 @@
+[
+  {
+    "status": "warning",
+    "original_address": {
+      "name": "Contract Customer",
+      "company_name": null,
+      "address_line1": "742 Evergreen Terrace",
+      "address_line2": null,
+      "address_line3": null,
+      "city_locality": "Springfield",
+      "state_province": "OR",
+      "postal_code": "97477",
+      "country_code": "US",
+      "address_residential_indicator": "unknown"
+    },
+    "matched_address": {
+      "name": "CONTRACT CUSTOMER",
+      "company_name": null,
+      "address_line1": "742 EVERGREEN TER",
+      "address_line2": null,
+      "address_line3": null,
+      "city_locality": "SPRINGFIELD",
+      "state_province": "OR",
+      "postal_code": "97477",
+      "country_code": "US",
+      "address_residential_indicator": "unknown"
+    },
+    "messages": [
+      {
+        "code": "a1003",
+        "message": "There was a change or addition to the street name.",
+        "type": "warning",
+        "detail_code": "partially_verified_to_street_level"
+      }
+    ]
+  }
+]

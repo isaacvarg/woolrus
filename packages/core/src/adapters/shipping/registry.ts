@@ -5,6 +5,7 @@ import { decryptSecret } from "../../settings/crypto";
 import { encryptionKey } from "../../settings/env";
 import { createFakeShippingProvider, type FakeLabel } from "./fake";
 import { type ProviderId, providerIds, type ShippingProvider } from "./provider";
+import { ShipStationAdapter } from "./shipstation/adapter";
 
 // Builds the adapters core calls (SPEC-carriers "Registry"). Services take the list as an
 // argument, so tests pass fakes directly; this is where the app gets the real ones.
@@ -30,7 +31,9 @@ export type AdapterFactories = {
 };
 
 /** The real adapters in this build. A provider missing here can't be enabled. */
-export const shippingAdapters: AdapterFactories = {};
+export const shippingAdapters: AdapterFactories = {
+  SHIPSTATION: (credentials) => new ShipStationAdapter(credentials),
+};
 
 /**
  * `SHIPPING_PROVIDERS=fake` swaps every adapter for its fake, for the dev stack and Playwright

@@ -1,0 +1,110 @@
+{
+  "carriers": [
+    {
+      "carrier_id": "se-1000001",
+      "carrier_code": "ups",
+      "account_number": "XXXXXX",
+      "requires_funded_amount": false,
+      "balance": 0,
+      "nickname": "UPS by ShipStation",
+      "friendly_name": "UPS",
+      "primary": true,
+      "has_multi_package_supporting_services": true,
+      "supports_label_messages": true,
+      "disabled_by_billing_plan": false,
+      "services": [
+        {
+          "carrier_id": "se-1000001",
+          "carrier_code": "ups",
+          "service_code": "ups_ground",
+          "name": "UPS® Ground",
+          "domestic": true,
+          "international": false,
+          "is_multi_package_supported": true
+        },
+        {
+          "carrier_id": "se-1000001",
+          "carrier_code": "ups",
+          "service_code": "ups_next_day_air",
+          "name": "UPS Next Day Air®",
+          "domestic": true,
+          "international": false,
+          "is_multi_package_supported": true
+        },
+        {
+          "carrier_id": "se-1000001",
+          "carrier_code": "ups",
+          "service_code": "ups_worldwide_express",
+          "name": "UPS Worldwide Express®",
+          "domestic": false,
+          "international": true,
+          "is_multi_package_supported": true
+        }
+      ],
+      "packages": [],
+      "options": []
+    },
+    {
+      "carrier_id": "se-1000002",
+      "carrier_code": "stamps_com",
+      "account_number": "XXXXXX",
+      "requires_funded_amount": true,
+      "balance": 25.5,
+      "nickname": "USPS by ShipStation",
+      "friendly_name": "USPS",
+      "primary": false,
+      "has_multi_package_supporting_services": false,
+      "supports_label_messages": true,
+      "disabled_by_billing_plan": false,
+      "services": [
+        {
+          "carrier_id": "se-1000002",
+          "carrier_code": "stamps_com",
+          "service_code": "usps_ground_advantage",
+          "name": "USPS Ground Advantage",
+          "domestic": true,
+          "international": false,
+          "is_multi_package_supported": false
+        },
+        {
+          "carrier_id": "se-1000002",
+          "carrier_code": "stamps_com",
+          "service_code": "usps_priority_mail",
+          "name": "USPS Priority Mail",
+          "domestic": true,
+          "international": false,
+          "is_multi_package_supported": false
+        },
+        {
+          "carrier_id": "se-1000002",
+          "carrier_code": "stamps_com",
+          "service_code": "usps_priority_mail_international",
+          "name": "USPS Priority Mail Intl",
+          "domestic": false,
+          "international": true,
+          "is_multi_package_supported": false
+        }
+      ],
+      "packages": [],
+      "options": []
+    },
+    {
+      "carrier_id": "se-1000003",
+      "carrier_code": "fedex",
+      "account_number": "XXXXXX",
+      "requires_funded_amount": false,
+      "balance": 0,
+      "nickname": "FedEx (not set up)",
+      "friendly_name": "FedEx",
+      "primary": false,
+      "has_multi_package_supporting_services": true,
+      "supports_label_messages": false,
+      "disabled_by_billing_plan": true,
+      "services": [],
+      "packages": [],
+      "options": []
+    }
+  ],
+  "request_id": "00000000-0000-4000-8000-000000000001",
+  "errors": []
+}

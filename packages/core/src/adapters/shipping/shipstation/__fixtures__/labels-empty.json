@@ -1,0 +1,12 @@
+{
+  "labels": [],
+  "total": 0,
+  "page": 1,
+  "pages": 0,
+  "links": {
+    "first": { "href": "https://api.shipstation.com/v2/labels?page=1&page_size=25" },
+    "last": { "href": "https://api.shipstation.com/v2/labels?page=1&page_size=25" },
+    "prev": {},
+    "next": {}
+  }
+}

@@ -1,0 +1,5 @@
+{
+  "approved": false,
+  "message": "This label has already been used and cannot be voided.",
+  "reason_code": "label_already_used"
+}
