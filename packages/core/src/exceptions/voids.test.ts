@@ -552,6 +552,7 @@ describe("undoVoid", () => {
       data: {
         packageId: pkg.id,
         status: "ACTIVE",
+        provider: "SHIPSTATION",
         idempotencyKey: crypto.randomUUID(),
         carrierCode: "usps",
         serviceCode: "ground",

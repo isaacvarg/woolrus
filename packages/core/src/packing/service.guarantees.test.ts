@@ -3,7 +3,7 @@ import type { Db } from "@woolrus/db";
 import pg from "pg";
 import { afterAll, afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createActor, resetDb, testDb } from "../../test/db";
-import { createOrder, type LineSpec } from "../../test/factories";
+import { createOrder, createRate, type LineSpec } from "../../test/factories";
 import { archiveBox } from "../boxes/service";
 import type { UserActor } from "../permissions";
 import { ORDER_CHANGED_CHANNEL } from "../workflow/notify";
@@ -211,22 +211,13 @@ describe("a changed package loses what depended on it", () => {
       data: { qaVerifiedAt: new Date(), qaVerifiedById: c.packer.userId },
     });
     for (const target of [c.first, c.second]) {
-      await db.shippingRate.create({
-        data: {
-          packageId: target,
-          shipstationRateId: `r-${target}`,
-          carrierCode: "usps",
-          serviceCode: "ground",
-          serviceName: "Ground",
-          amountCents: 500,
-          currency: "USD",
-        },
-      });
+      await createRate(db, target);
     }
     await db.shippingLabel.create({
       data: {
         packageId,
         status: "VOIDED",
+        provider: "SHIPSTATION",
         idempotencyKey: key(),
         carrierCode: "usps",
         serviceCode: "ground",

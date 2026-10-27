@@ -243,12 +243,43 @@ async function upsertProducts(db: Db): Promise<Map<string, { id: string; physica
   return bySku;
 }
 
+type DemoService = { carrierId: string; serviceId: string };
+
+/** The carrier and service the demo rates point at, until the fake providers rate the demo orders. */
+async function upsertDemoService(db: Db): Promise<DemoService> {
+  const carrier = await db.shippingCarrier.upsert({
+    where: { provider_externalId: { provider: "SHIPSTATION", externalId: "demo-usps" } },
+    create: {
+      provider: "SHIPSTATION",
+      externalId: "demo-usps",
+      code: "usps",
+      name: "USPS",
+      enabled: true,
+    },
+    update: {},
+  });
+  const service = await db.carrierService.upsert({
+    where: { carrierId_code: { carrierId: carrier.id, code: "usps_ground_advantage" } },
+    create: {
+      carrierId: carrier.id,
+      code: "usps_ground_advantage",
+      name: "USPS Ground Advantage",
+      domestic: true,
+      international: false,
+      enabled: true,
+    },
+    update: {},
+  });
+  return { carrierId: carrier.id, serviceId: service.id };
+}
+
 async function createDemoOrder(
   tx: DbTx,
   index: number,
   spec: DemoOrder,
   catalog: Map<string, { id: string; physical: boolean }>,
   boxId: string | null,
+  service: DemoService,
   now: Date,
 ): Promise<void> {
   const hoursAgo = (h: number) => new Date(now.getTime() - h * 3_600_000);
@@ -394,7 +425,9 @@ async function createDemoOrder(
       await tx.shippingRate.create({
         data: {
           packageId: pkg.id,
-          shipstationRateId: `demo-rate-${index + 1}`,
+          provider: "SHIPSTATION",
+          ...service,
+          providerRateId: `demo-rate-${index + 1}`,
           carrierCode: "usps",
           serviceCode: "usps_ground_advantage",
           serviceName: "USPS Ground Advantage",
@@ -409,6 +442,7 @@ async function createDemoOrder(
         data: {
           packageId: pkg.id,
           status: "ACTIVE",
+          provider: "SHIPSTATION",
           idempotencyKey: `demo-label-${index + 1}`,
           trackingNumber: `9400100000000000${String(index + 1).padStart(6, "0")}`,
           carrierCode: "usps",
@@ -452,12 +486,15 @@ export async function seedDemoOrders(db: Db, { now = new Date() }: { now?: Date 
   await seedDemoRules(db);
   const catalog = await upsertProducts(db);
   const box = await db.box.findFirst({ where: { archivedAt: null }, orderBy: { name: "asc" } });
+  const service = await upsertDemoService(db);
 
   let created = 0;
   for (const [index, spec] of orders.entries()) {
     const exists = await db.order.findUnique({ where: { wooOrderId: ID_BASE + index + 1 } });
     if (exists) continue;
-    await db.$transaction((tx) => createDemoOrder(tx, index, spec, catalog, box?.id ?? null, now));
+    await db.$transaction((tx) =>
+      createDemoOrder(tx, index, spec, catalog, box?.id ?? null, service, now),
+    );
     created += 1;
   }
   return created;

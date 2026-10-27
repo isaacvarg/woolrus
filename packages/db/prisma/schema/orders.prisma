@@ -44,6 +44,17 @@ enum WooPushStatus {
   @@map("woo_push_status")
 }
 
+enum ShipToStatus {
+  UNCHECKED
+  VERIFIED
+  CORRECTED
+  WARNING
+  ERROR
+  INCOMPLETE
+
+  @@map("ship_to_status")
+}
+
 model Order {
   id                   String   @id @default(uuid(7)) @db.Uuid
   wooOrderId           Int      @unique @map("woo_order_id")
@@ -77,6 +88,16 @@ model Order {
   // Store changed the order after import (FR-SYNC-10): flagged for a person, not silently applied.
   externalChangeDetectedAt DateTime? @map("external_change_detected_at") @db.Timestamptz(3)
   externalChangeSummary    Json?     @map("external_change_summary")
+
+  // Ship-to used for rates and labels (SPEC-carriers "Ship-to and address validation"): resolved from
+  // the Woo addresses (FR-SHIP-03), then checked by a provider (FR-SHIP-12).
+  shipTo          Json?        @map("ship_to")
+  shipToOriginal  Json?        @map("ship_to_original")
+  shipToStatus    ShipToStatus @default(UNCHECKED) @map("ship_to_status")
+  shipToMessages  Json         @default("[]") @map("ship_to_messages")
+  shipToCheckedAt DateTime?    @map("ship_to_checked_at") @db.Timestamptz(3)
+  /// Bumped by each rate fetch enqueue; an older job's writes are discarded.
+  rateGeneration  Int          @default(0) @map("rate_generation")
 
   // Push of Completed + tracking back to WooCommerce (FR-SHIP-06/07/10)
   wooPushStatus   WooPushStatus @default(NOT_NEEDED) @map("woo_push_status")
