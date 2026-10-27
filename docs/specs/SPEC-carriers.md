@@ -117,8 +117,9 @@ So a rate never has to have an id, and a purchase always carries the shipment:
 - **`RateRequest`:** `{ orderNumber, shipFrom, shipTo, residential, package: { lengthIn, widthIn, heightIn,
   weightOz }, items: { sku, name, quantity }[], services: { carrierExternalId, code, providerData }[] }`. Only
   enabled carriers and services are sent (FR-SHIP-02). Order number and items let the provider link the shipment
-  to the sale (FR-SHIP-01). `residential` comes from the address check when the provider says, else "no company
-  name on the ship-to".
+  to the sale (FR-SHIP-01). `residential` comes from the address check when the provider says (stored as
+  `Order.shipToResidential`, so later fetches of the stored ship-to price it the same), else "no company name on the
+  ship-to".
 - **`ProviderRate`:** `{ providerRateId?, providerShipmentId?, carrierExternalId, serviceCode, serviceName,
   amountCents, currency, deliveryDays?, estimatedDeliveryAt?, guaranteed, trackable, expiresAt? }`.
 - **`PurchaseInput`:** `{ rate: { providerRateId?, providerShipmentId?, carrierExternalId, serviceCode,

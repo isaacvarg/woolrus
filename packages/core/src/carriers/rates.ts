@@ -295,6 +295,7 @@ export async function fetchRates(
                 shipToStatus: checked.status,
                 shipToMessages: checked.messages,
                 shipToCheckedAt: checked.checkedAt,
+                shipToResidential: checked.residential ?? null,
               }
             : {
                 shipTo: Prisma.DbNull,
@@ -302,6 +303,7 @@ export async function fetchRates(
                 shipToStatus: "INCOMPLETE",
                 shipToMessages: resolved.kind === "incomplete" ? resolved.missing : [],
                 shipToCheckedAt: null,
+                shipToResidential: null,
               },
       });
     }
@@ -314,6 +316,8 @@ export async function fetchRates(
         : providers.length === 0
           ? [{ provider: null, messageKey: "errors.carriers.noProviders" }]
           : null;
+    // A failed fetch replaces earlier rates with none, as a successful one replaces them.
+    if (failure) await tx.shippingRate.deleteMany({ where: { package: { orderId } } });
     await markPackages(tx, orderId, failure ? "FAILED" : "FETCHING", failure ?? undefined, now);
     await notifyOrderChanged(tx, { id: orderId, status });
     return failure ? "failed" : "fetching";
@@ -333,8 +337,8 @@ export async function fetchRates(
     orderNumber: order.number,
     shipFrom: shipFrom.data,
     shipTo,
-    // Assumption 7 unless the address check says.
-    residential: checked?.residential ?? !shipTo.company,
+    // Assumption 7 unless the address check says, now or when the stored ship-to was checked.
+    residential: checked?.residential ?? order.shipToResidential ?? !shipTo.company,
   };
 
   const asked = await Promise.all(
@@ -444,14 +448,40 @@ const toJson = (address: ShipAddress) => address as Prisma.InputJsonObject;
 
 export type RatesJobOptions = { finalAttempt?: boolean; adapters?: AdapterFactories };
 
-/** The worker's handler: the enabled providers, then `fetchRates`. */
+/**
+ * The worker's handler: the enabled providers, then `fetchRates`. An error on the last attempt
+ * (credentials that no longer decrypt, a database failure) fails the packages before it's rethrown,
+ * so QA sees why instead of a fetch that never ends.
+ */
 export async function runRatesFetchJob(
   db: Db,
   payload: RatesPayload,
-  { finalAttempt, adapters }: RatesJobOptions = {},
+  { finalAttempt = true, adapters }: RatesJobOptions = {},
 ): Promise<FetchRatesResult> {
-  const providers = await createShippingProviders(db, adapters);
-  return fetchRates(db, providers, payload, { finalAttempt });
+  try {
+    const providers = await createShippingProviders(db, adapters);
+    return await fetchRates(db, providers, payload, { finalAttempt });
+  } catch (error) {
+    if (finalAttempt && !(error instanceof RatesRetryError)) await failFetch(db, payload);
+    throw error;
+  }
+}
+
+async function failFetch(db: Db, { orderId, generation }: RatesPayload) {
+  const now = new Date();
+  await db.$transaction(async (tx) => {
+    const status = await isCurrent(tx, orderId, generation);
+    if (!status) return;
+    await tx.shippingRate.deleteMany({ where: { package: { orderId } } });
+    await markPackages(
+      tx,
+      orderId,
+      "FAILED",
+      [{ provider: null, messageKey: "errors.internal" }],
+      now,
+    );
+    await notifyOrderChanged(tx, { id: orderId, status });
+  });
 }
 
 /** Locks an order QA may re-rate: in QA, with no live label. */

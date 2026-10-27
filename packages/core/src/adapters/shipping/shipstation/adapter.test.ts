@@ -419,13 +419,16 @@ describe("ShipStation adapter", () => {
       expect(calls).toHaveLength(0);
     });
 
-    it("finds a label by our key, ignoring voided ones", async () => {
-      const voided = { ...label, status: "voided", voided: true, external_shipment_id: "k-voided" };
+    it("finds a label by our key, ignoring voided and failed ones", async () => {
+      // qa adopts what this returns after a lost response, so a dead label must never come back.
+      const voided = { ...label, status: "voided", voided: true, external_shipment_id: "k" };
+      const failed = { ...label, status: "error", external_shipment_id: "k" };
       const { provider, calls } = setup({
-        "GET /v2/labels": () => json({ ...labelsEmpty, labels: [voided], total: 1, pages: 1 }),
+        "GET /v2/labels": () =>
+          json({ ...labelsEmpty, labels: [voided, failed], total: 2, pages: 1 }),
       });
-      expect(await provider.findLabel("k-voided")).toBeNull();
-      expect(calls.at(-1)?.url.searchParams.get("external_shipment_id")).toBe("k-voided");
+      expect(await provider.findLabel("k")).toBeNull();
+      expect(calls.at(-1)?.url.searchParams.get("external_shipment_id")).toBe("k");
     });
 
     it("voids by label id and returns approval", async () => {

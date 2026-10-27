@@ -16,6 +16,7 @@ const cleared = {
   shipToStatus: "UNCHECKED",
   shipToMessages: [],
   shipToCheckedAt: null,
+  shipToResidential: null,
 } as const satisfies Prisma.OrderUpdateInput;
 
 /** Ships to the address as the customer gave it, unchecked, and re-rates. Audited. */
@@ -39,6 +40,7 @@ export async function keepOriginalAddress(
         shipToStatus: "UNCHECKED",
         shipToMessages: [],
         shipToCheckedAt: null,
+        shipToResidential: null,
       },
     });
     const generation = await refetch(tx, orderId, { dropRates: true });

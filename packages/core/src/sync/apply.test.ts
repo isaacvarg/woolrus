@@ -143,13 +143,23 @@ describe("store cancels an order", () => {
 
 describe("store edits an order", () => {
   it("untouched: applies the address in place and audits it as the system", async () => {
-    const { woo, order } = await imported();
+    // A ship-to resolved from the old address must not survive it (SPEC-carriers).
+    const { woo, order } = await imported({
+      shipTo: { name: "Old" },
+      shipToStatus: "CORRECTED",
+      shipToResidential: false,
+    });
     store.editOrder(woo.id, { shipping: newStreet });
 
     await poll();
 
     const after = await reload(order.id);
     expect(after.shippingAddress).toMatchObject({ address1: "9 New Rd", postalCode: "78702" });
+    expect(after).toMatchObject({
+      shipTo: null,
+      shipToStatus: "UNCHECKED",
+      shipToResidential: null,
+    });
     expect(after).toMatchObject({ externalChangeDetectedAt: null, status: "PENDING" });
     expect(after.version).toBe(order.version + 1);
     const audit = await db.auditEvent.findFirstOrThrow({

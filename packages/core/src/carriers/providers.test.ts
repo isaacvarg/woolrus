@@ -3,7 +3,7 @@ import type { Db } from "@woolrus/db";
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createActor, resetDb, testDb } from "../../test/db";
 import { createFakeShippingProvider } from "../adapters/shipping/fake";
-import type { ProviderId } from "../adapters/shipping/provider";
+import type { ProviderId, ShippingProvider } from "../adapters/shipping/provider";
 import type { AdapterFactories } from "../adapters/shipping/registry";
 import { decryptSecret } from "../settings/crypto";
 import {
@@ -156,6 +156,24 @@ describe("setProviderCredentials", () => {
         ["secret.clear", { provider: "SHIPSTATION", disabled: true }],
       ]),
     );
+  });
+
+  it("forgets the last test result, which was of the old credentials", async () => {
+    // Otherwise health reports a cached "ok" for a key nobody has tried.
+    const actor = await admin();
+    await setProviderCredentials(db, actor, shipStation);
+    await testProvider(db, actor, { provider: "SHIPSTATION" }, fakeAdapters().adapters);
+    expect((await accountRow("SHIPSTATION")).lastCheckedAt).not.toBeNull();
+
+    await setProviderCredentials(db, actor, {
+      provider: "SHIPSTATION",
+      credentials: { apiKey: "replacement" },
+    });
+
+    expect(await accountRow("SHIPSTATION")).toMatchObject({
+      lastCheckedAt: null,
+      lastErrorKey: null,
+    });
   });
 
   it("refuses without an encryption key and changes nothing", async () => {
@@ -555,6 +573,52 @@ describe("shippingProviderHealth", () => {
     });
     expect(Date.now() - started).toBeLessThan(2_000);
     expect((await accountRow("SHIPSTATION")).lastErrorKey).toBe("errors.shipping.timeout");
+  });
+
+  it("pings once for a burst of health checks after the cache expires", async () => {
+    // /api/health is public: a burst must not turn into a burst of calls with the store's key.
+    const actor = await admin();
+    const { adapters, pings } = fakeAdapters();
+    await setProviderCredentials(db, actor, shipStation);
+    await setProviderEnabled(db, actor, { provider: "SHIPSTATION", enabled: true }, adapters);
+    pings.length = 0;
+    // A real ping takes a while: every check in the burst reads the stale row before it ends.
+    const slow: AdapterFactories = {
+      SHIPSTATION: (credentials) => {
+        const provider = adapters.SHIPSTATION?.(credentials, {}) as ShippingProvider;
+        const ping = provider.ping.bind(provider);
+        provider.ping = async () => {
+          await new Promise((resolve) => setTimeout(resolve, 200));
+          return ping();
+        };
+        return provider;
+      },
+    };
+
+    const results = await Promise.all(
+      Array.from({ length: 5 }, () => shippingProviderHealth(db, slow, minutesLater(10))),
+    );
+
+    expect(pings).toEqual(["SHIPSTATION"]);
+    for (const result of results) expect(result.providers.SHIPSTATION).toBe("ok");
+  });
+
+  it("reports a cached failing check as fail without pinging again", async () => {
+    const actor = await admin();
+    const { adapters, pings } = fakeAdapters();
+    await setProviderCredentials(db, actor, shipStation);
+    await setProviderEnabled(db, actor, { provider: "SHIPSTATION", enabled: true }, adapters);
+    await db.shippingProviderAccount.update({
+      where: { provider: "SHIPSTATION" },
+      data: { lastCheckedAt: now, lastErrorKey: "errors.shipping.unauthorized" },
+    });
+    pings.length = 0;
+
+    expect(await shippingProviderHealth(db, adapters, minutesLater(1))).toMatchObject({
+      providers: { SHIPSTATION: "fail" },
+      degraded: true,
+    });
+    expect(pings).toEqual([]);
   });
 
   it("reports fail for an enabled provider whose adapter isn't in this build", async () => {

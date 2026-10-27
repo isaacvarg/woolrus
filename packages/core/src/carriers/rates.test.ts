@@ -26,7 +26,7 @@ import {
   refreshRates,
   runRatesFetchJob,
 } from "./rates";
-import { keepOriginalAddress, recheckAddress } from "./ship-to";
+import { forgetShipTo, keepOriginalAddress, recheckAddress } from "./ship-to";
 
 const db: Db = testDb();
 afterAll(() => db.$disconnect());
@@ -437,6 +437,78 @@ describe("fetchRates ship-to (SC 6)", () => {
       rateErrors: [{ provider: null, messageKey: "errors.carriers.noProviders" }],
     });
   });
+
+  it("drops earlier rates when a refresh fails before asking anyone", async () => {
+    // Otherwise the old selected rate stays buyable under a FAILED package.
+    await catalog("BRIDGE_SOURCE", ["GND"]);
+    const { bridge } = fakes();
+    const { packages, payload } = await inQa();
+    await fetchRates(db, [bridge], payload);
+    expect(await ratesOf(packages[0]?.id as string)).not.toHaveLength(0);
+
+    await db.order.update({ where: { id: payload.orderId }, data: { rateGeneration: 2 } });
+    await fetchRates(db, [], { ...payload, generation: 2 });
+
+    expect(await ratesOf(packages[0]?.id as string)).toEqual([]);
+    expect(await pkgRow(packages[0]?.id as string)).toMatchObject({ ratesStatus: "FAILED" });
+  });
+});
+
+describe("runRatesFetchJob errors", () => {
+  /** An enabled ShipStation whose stored credentials no longer decrypt (the key was rotated). */
+  async function unreadableProvider() {
+    vi.stubEnv("SETTINGS_ENCRYPTION_KEY", randomBytes(32).toString("base64"));
+    const admin = await createActor(db, ["ADMIN"]);
+    await setProviderCredentials(db, admin, {
+      provider: "SHIPSTATION",
+      credentials: { apiKey: "k" },
+    });
+    await db.shippingProviderAccount.update({
+      where: { provider: "SHIPSTATION" },
+      data: { enabled: true },
+    });
+    vi.stubEnv("SETTINGS_ENCRYPTION_KEY", randomBytes(32).toString("base64"));
+  }
+
+  it("leaves packages fetching while retries remain", async () => {
+    await unreadableProvider();
+    const { packages, payload } = await inQa();
+    await db.package.updateMany({
+      where: { orderId: payload.orderId },
+      data: { ratesStatus: "FETCHING" },
+    });
+
+    await expect(runRatesFetchJob(db, payload, { finalAttempt: false })).rejects.toThrow();
+    expect(await pkgRow(packages[0]?.id as string)).toMatchObject({ ratesStatus: "FETCHING" });
+  });
+
+  it("fails every package on the last attempt instead of leaving them fetching", async () => {
+    await unreadableProvider();
+    const { packages, payload } = await inQa();
+    await db.package.updateMany({
+      where: { orderId: payload.orderId },
+      data: { ratesStatus: "FETCHING" },
+    });
+
+    await expect(runRatesFetchJob(db, payload, { finalAttempt: true })).rejects.toThrow();
+    expect(await pkgRow(packages[0]?.id as string)).toMatchObject({
+      ratesStatus: "FAILED",
+      rateErrors: [{ provider: null, messageKey: "errors.internal" }],
+    });
+  });
+
+  it("writes nothing on the last attempt of a job a newer fetch replaced", async () => {
+    await unreadableProvider();
+    const { packages, payload } = await inQa();
+    await db.order.update({ where: { id: payload.orderId }, data: { rateGeneration: 2 } });
+    await db.package.updateMany({
+      where: { orderId: payload.orderId },
+      data: { ratesStatus: "FETCHING" },
+    });
+
+    await expect(runRatesFetchJob(db, payload, { finalAttempt: true })).rejects.toThrow();
+    expect(await pkgRow(packages[0]?.id as string)).toMatchObject({ ratesStatus: "FETCHING" });
+  });
 });
 
 describe("fetchRates failures (SC 9)", () => {
@@ -796,6 +868,18 @@ describe("getOrderShipping", () => {
       refreshable: false,
     });
   });
+
+  it("isn't refreshable in QA while a package has a live label", async () => {
+    // The UI offers Refresh rates only when the server would accept it.
+    const qa = await createActor(db, ["QA"]);
+    const { payload } = await inQa({
+      lines: [{ quantity: 1, pickStatus: "PICKED" }],
+      packages: [{ items: [{ line: 0, quantity: 1 }], label: "ACTIVE" }],
+    });
+    expect(await getOrderShipping(db, qa, { orderId: payload.orderId })).toMatchObject({
+      refreshable: false,
+    });
+  });
 });
 
 describe("packing marks changed rates stale", () => {
@@ -863,6 +947,12 @@ describe("address validation (SC 7)", () => {
       fixed,
     ],
     ["warning", { status: "warning", messages: ["Apartment missing."] }, "WARNING", original],
+    [
+      "corrected without an address",
+      { status: "corrected", messages: ["Check the street."] },
+      "WARNING",
+      original,
+    ],
     ["error", { status: "error", messages: ["Address not found."] }, "ERROR", original],
   ] as [string, AddressCheck, string, typeof original][])(
     "%s: stores the right ship-to and rates it",
@@ -894,6 +984,66 @@ describe("address validation (SC 7)", () => {
     await fetchRates(db, [provider], payload);
 
     expect(provider.calls[0]?.residential).toBe(false);
+  });
+
+  it("writes nothing when QA picks the original address while the check is out", async () => {
+    // The check's correction must not overwrite the choice QA made meanwhile.
+    const provider = checking({ status: "corrected", address: fixed, messages: [] });
+    const { payload } = await inQa();
+    provider.validateAddress = async () => {
+      await db.order.update({
+        where: { id: payload.orderId },
+        data: { rateGeneration: 2, shipTo: original, shipToStatus: "UNCHECKED" },
+      });
+      return { status: "corrected", address: fixed, messages: [] };
+    };
+
+    expect(await fetchRates(db, [provider], payload)).toEqual({ status: "stale" });
+    expect(provider.calls).toEqual([]);
+    expect(await order(payload.orderId)).toMatchObject({
+      shipTo: original,
+      shipToStatus: "UNCHECKED",
+    });
+  });
+
+  it("keeps the provider's residential flag for later fetches of the stored ship-to", async () => {
+    // Commercial per ShipStation, with no company name to say so: a refresh must price it the same.
+    const provider = checking({ status: "verified", residential: false, messages: [] });
+    const { payload } = await inQa();
+    await fetchRates(db, [provider], payload);
+
+    await db.order.update({ where: { id: payload.orderId }, data: { rateGeneration: 2 } });
+    await fetchRates(db, [provider], { ...payload, generation: 2 });
+
+    expect(provider.checked).toHaveLength(1);
+    expect(provider.calls.map((c) => c.residential)).toEqual([false, false]);
+  });
+
+  it("drops a QA order's rates when the store changes its address", async () => {
+    // Rates for the old address stay buyable otherwise until the new fetch lands.
+    const provider = checking({ status: "verified", messages: [] });
+    const { packages, payload } = await inQa();
+    await fetchRates(db, [provider], payload);
+    expect(await ratesOf(packages[0]?.id as string)).toHaveLength(1);
+
+    await db.$transaction((tx) => forgetShipTo(tx, { id: payload.orderId, status: "QA" }));
+
+    expect(await ratesOf(packages[0]?.id as string)).toEqual([]);
+    expect(await order(payload.orderId)).toMatchObject({ shipTo: null, rateGeneration: 2 });
+  });
+
+  it("forgets the residential flag when the address is used as given or checked again", async () => {
+    const provider = checking({ status: "verified", residential: false, messages: [] });
+    const { payload } = await inQa();
+    await fetchRates(db, [provider], payload);
+    const qa = await createActor(db, ["QA"]);
+
+    await keepOriginalAddress(db, qa, { orderId: payload.orderId });
+    expect((await order(payload.orderId)).shipToResidential).toBeNull();
+
+    await db.order.update({ where: { id: payload.orderId }, data: { shipToResidential: false } });
+    await recheckAddress(db, qa, { orderId: payload.orderId });
+    expect((await order(payload.orderId)).shipToResidential).toBeNull();
   });
 
   it("a failing check leaves the original unchecked and still rates", async () => {
@@ -1037,6 +1187,8 @@ describe("address validation (SC 7)", () => {
       const shipping = await recheckAddress(db, qa, { orderId: payload.orderId });
 
       expect(shipping.packages[0]).toMatchObject({ ratesStatus: "FETCHING", rates: [] });
+      // The original stays on show until the fetch resolves it again.
+      expect(shipping.shipTo.original).toEqual(original);
       expect(await jobs(payload.orderId)).toEqual([
         { data: { orderId: payload.orderId, generation: 2 } },
       ]);

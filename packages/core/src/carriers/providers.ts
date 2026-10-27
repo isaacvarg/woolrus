@@ -326,6 +326,19 @@ export async function shippingProviderHealth(
       } catch {
         return [id, "fail"];
       }
+      // The endpoint is public: claim the window first, so a burst of checks sends one ping, and the
+      // rest report the last result.
+      const { count } = await db.shippingProviderAccount.updateMany({
+        where: {
+          provider: id,
+          OR: [
+            { lastCheckedAt: null },
+            { lastCheckedAt: { lt: new Date(now.getTime() - HEALTH_CACHE_MS) } },
+          ],
+        },
+        data: { lastCheckedAt: now },
+      });
+      if (count === 0) return [id, row.lastErrorKey === null ? "ok" : "fail"];
       const messageKey = await ping(provider, pingTimeoutMs);
       await db.shippingProviderAccount.update({
         where: { provider: id },
