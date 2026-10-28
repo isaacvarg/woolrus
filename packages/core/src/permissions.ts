@@ -20,7 +20,7 @@ export type SystemActor = {
   roles: readonly Role[];
   stationId: null;
   requestId?: undefined;
-  system: "store-sync";
+  system: "store-sync" | "operations";
 };
 
 export type Actor = UserActor | SystemActor;
@@ -34,6 +34,14 @@ export const systemActor: SystemActor = Object.freeze({
   roles: Object.freeze(["ADMIN"] as const),
   stationId: null,
   system: "store-sync",
+});
+
+/** The PII purge's actor: its audit rows show no user and the name "operations". */
+export const operationsActor: SystemActor = Object.freeze({
+  userId: null,
+  roles: Object.freeze(["ADMIN"] as const),
+  stationId: null,
+  system: "operations",
 });
 
 export const permissions = [

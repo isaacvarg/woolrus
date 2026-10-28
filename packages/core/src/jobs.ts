@@ -23,6 +23,8 @@ export const queues = {
   storageSweep: "storage.sweep",
   /** Ask every enabled shipping provider for each package's rates (FR-PACK-07, SPEC-carriers "Rate fetch"). */
   ratesFetch: "rates.fetch",
+  /** Daily: anonymize old orders, redact old webhook payloads, drop old idempotency records (SPEC-operations "PII anonymization"). */
+  piiPurge: "ops.piiPurge",
 } as const;
 export type QueueName = (typeof queues)[keyof typeof queues];
 
@@ -44,6 +46,7 @@ export type JobPayloads = {
   [queues.storageSweep]: Record<string, never>;
   /** `generation` is the order's `rateGeneration` when enqueued; a job for an older one writes nothing. */
   [queues.ratesFetch]: { orderId: string; generation: number };
+  [queues.piiPurge]: Record<string, never>;
 };
 
 /** Finished jobs stay 30 days, so a failure over a long weekend is still there on Monday. */

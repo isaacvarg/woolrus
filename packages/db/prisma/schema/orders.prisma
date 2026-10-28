@@ -74,6 +74,8 @@ model Order {
   wooModifiedAt        DateTime @map("woo_modified_at") @db.Timestamptz(3)
   syncedAt             DateTime @map("synced_at") @db.Timestamptz(3)
   rawPayload           Json     @map("raw_payload")
+  /// Set once the customer's identity was removed (NFR-SEC-06, SPEC-operations "PII anonymization").
+  piiRedactedAt        DateTime? @map("pii_redacted_at") @db.Timestamptz(3)
 
   // Workflow
   status          WorkflowStatus  @default(PENDING)
