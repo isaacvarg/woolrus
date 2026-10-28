@@ -7,6 +7,7 @@ import {
   completeBatchMembers,
   completePack,
   completePick,
+  completeQaOrder,
   createBatch,
   createBox,
   createInvitation,
@@ -212,7 +213,7 @@ export const router = implementer.router({
       orderMutations.completePacking(db, context.actor, input),
     ),
     completeQa: api.orders.completeQa.handler(({ input, context }) =>
-      orderMutations.completeQa(db, context.actor, input),
+      completeQaOrder(db, context.actor, input),
     ),
     hold: api.orders.hold.handler(({ input, context }) =>
       orderMutations.hold(db, context.actor, input),

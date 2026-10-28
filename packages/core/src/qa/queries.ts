@@ -6,9 +6,10 @@ import { lineAndPackageNoteCounts } from "../notes/targets";
 import { type Actor, assertCan } from "../permissions";
 import { toNumber } from "../units";
 import { toOrderDetails } from "../workflow/detail";
-import { evaluateGate, loadGateSnapshot } from "../workflow/gates";
+import { loadGateSnapshot } from "../workflow/gates";
 import { displayName, nameFields } from "../workflow/people";
 import { toAttributes } from "../workflow/queries";
+import { purchaseConditions } from "./complete";
 
 // What the QA screen reads (SPEC-qa "Reads"): each package's rows with their verified quantity,
 // its label, the open critical issues and what still stops the order leaving QA.
@@ -132,9 +133,7 @@ export async function qaResult(
     orderIssueIds: issues.filter((i) => !i.orderItemId && !i.packageId).map((i) => i.id),
     purchase: purchaseState(packages),
     // Buying the labels is Complete QA's own job, so a missing label isn't something to fix first.
-    unmet: evaluateGate("verified", gate).filter(
-      (u) => u.messageKey !== "errors.workflow.gate.packageNoLabel",
-    ),
+    unmet: await purchaseConditions(tx, orderId, now, gate),
   };
 }
 

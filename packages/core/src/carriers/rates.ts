@@ -179,7 +179,9 @@ type FetchOrder = Prisma.OrderGetPayload<{ include: typeof orderInclude }>;
 type FetchPackage = FetchOrder["packages"][number];
 
 /** The package's outer size and weight, or null when it can't be rated yet. */
-function parcel(pkg: FetchPackage): RateRequest["package"] | null {
+export function parcel(
+  pkg: Pick<FetchPackage, "lengthIn" | "widthIn" | "heightIn" | "weightOz" | "box">,
+): RateRequest["package"] | null {
   const dims = (
     own: Prisma.Decimal | null,
     outer?: Prisma.Decimal | null,
