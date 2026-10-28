@@ -8,6 +8,7 @@
     "build": "tsdown",
     "start": "node dist/main.mjs",
     "typecheck": "tsc",
+    "test": "vitest run",
     "sync:pull": "NODE_ENV=development tsx --env-file-if-exists=../../.env src/cli.ts pull",
     "sync:products": "NODE_ENV=development tsx --env-file-if-exists=../../.env src/cli.ts products",
     "jobs:install": "tsx --env-file-if-exists=../../.env src/cli.ts install-jobs"
@@ -23,6 +24,7 @@
     "@types/node": "^24.19.2",
     "@woolrus/config": "workspace:*",
     "tsdown": "0.23.1",
-    "tsx": "^4.23.15"
+    "tsx": "^4.23.15",
+    "vitest": "5.0.4"
   }
 }

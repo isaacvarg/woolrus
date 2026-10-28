@@ -4,7 +4,6 @@ import { RPCHandler } from "@orpc/server/fetch";
 import { ResponseHeadersPlugin } from "@orpc/server/plugins";
 import { ZodToJsonSchemaConverter } from "@orpc/zod/zod4";
 import { contract, NOTE_REQUEST_MAX_BYTES } from "@woolrus/contracts";
-import { createLogger } from "@woolrus/logger";
 import { resolveActor } from "./actor";
 import { router } from "./router";
 
@@ -33,11 +32,6 @@ export function generateOpenApiSpec() {
     },
     security: [{ bearer: [] }, { cookie: [] }],
   });
-}
-
-export function requestContext(request: Request) {
-  const requestId = request.headers.get("x-request-id") ?? crypto.randomUUID();
-  return { headers: request.headers, log: createLogger({ requestId }) };
 }
 
 /** Every call but a note upload: JSON inputs are small. */

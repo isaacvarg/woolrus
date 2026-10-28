@@ -21,9 +21,13 @@ import {
 } from "@woolrus/core";
 import { db } from "@woolrus/db";
 import { createLogger } from "@woolrus/logger";
-import { type JobWithMetadata, PgBoss } from "pg-boss";
+import { PgBoss } from "pg-boss";
+import { runJob } from "./run-job";
 
 const log = createLogger({ module: "main" });
+
+/** `runJob` reads the attempt from pg-boss's job metadata. */
+const META = { includeMetadata: true } as const;
 
 // Fake shipping providers quote fake rates and buy fake labels: never what production should run.
 if (process.env.NODE_ENV === "production" && fakeShippingProviders()) {
@@ -61,24 +65,26 @@ const storeLog = createLogger({ module: "woocommerce" });
 const store = () =>
   configuredStore(db, { log: (entry) => storeLog.debug(entry, "woocommerce request") });
 
-await boss.work<JobPayloads[typeof queues.ordersSync]>(queues.ordersSync, async ([job]) => {
-  const reason = job?.data.reason ?? "schedule";
-  const result = await pollIfDue(db, await store(), { reason });
-  if (result.status !== "notDue")
-    log.info({ jobId: job?.id, reason, ...result }, "orders.sync done");
-});
+await boss.work(
+  queues.ordersSync,
+  META,
+  runJob<JobPayloads[typeof queues.ordersSync]>(queues.ordersSync, async (job) => {
+    const reason = job.data.reason ?? "schedule";
+    const result = await pollIfDue(db, await store(), { reason });
+    return result.status === "notDue" ? null : { reason, ...result };
+  }),
+);
 
 // FR-SYNC-11: one job per stored delivery; the order is refetched from the store, not the payload.
 // A bulk edit in the store sends a burst, so poll often and run a few at once: the per-order
 // advisory lock serialises two deliveries for the same order.
-await boss.work<JobPayloads[typeof queues.ordersWebhook]>(
+await boss.work(
   queues.ordersWebhook,
-  { pollingIntervalSeconds: 0.5, localConcurrency: 4 },
-  async ([job]) => {
-    if (!job) return;
+  { ...META, pollingIntervalSeconds: 0.5, localConcurrency: 4 },
+  runJob<JobPayloads[typeof queues.ordersWebhook]>(queues.ordersWebhook, async (job) => {
     await processWooWebhook(db, await store(), job.data.inboundWebhookId);
-    log.info({ jobId: job.id, inboundWebhookId: job.data.inboundWebhookId }, "orders.webhook done");
-  },
+    return { inboundWebhookId: job.data.inboundWebhookId };
+  }),
 );
 
 // FR-SYNC-12: the catalog nightly at 03:00 server time, and on "Sync products now".
@@ -89,44 +95,57 @@ await boss.schedule(
   { tz: Intl.DateTimeFormat().resolvedOptions().timeZone },
 );
 
-await boss.work<JobPayloads[typeof queues.productsSync]>(queues.productsSync, async ([job]) => {
-  const result = await syncProducts(db, await store());
-  log.info({ jobId: job?.id, reason: job?.data.reason, ...result }, "products.sync done");
-});
+await boss.work(
+  queues.productsSync,
+  META,
+  runJob<JobPayloads[typeof queues.productsSync]>(queues.productsSync, async (job) => ({
+    reason: job.data.reason,
+    ...(await syncProducts(db, await store())),
+  })),
+);
 
 // Age rules ("older than 2 days") change an order's priority with no event to trigger it.
 await boss.schedule(queues.ordersRecomputePriority, "*/5 * * * *", {});
 
-await boss.work<JobPayloads[typeof queues.ordersRecomputePriority]>(
+await boss.work(
   queues.ordersRecomputePriority,
-  async ([job]) => {
-    const { updated } = await db.$transaction((tx) => recomputePriorities(tx), {
-      timeout: 60_000,
-    });
-    log.info({ jobId: job?.id, updated }, "orders.recomputePriority done");
-  },
+  META,
+  runJob<JobPayloads[typeof queues.ordersRecomputePriority]>(
+    queues.ordersRecomputePriority,
+    async () => {
+      const { updated } = await db.$transaction((tx) => recomputePriorities(tx), {
+        timeout: 60_000,
+      });
+      return { updated };
+    },
+  ),
 );
 
 // App email (SPEC-identity "Email"). Retries (3 attempts, backoff) come from the queue's policy.
 const emailLog = createLogger({ module: "email" });
-await boss.work<JobPayloads[typeof queues.emailSend]>(queues.emailSend, async ([job]) => {
-  if (!job) return;
-  const sender = await getEmailSender(db, {
-    log: (entry) => emailLog.warn(entry, "email logged, not sent: Resend isn't configured"),
-  });
-  const result = await runEmailJob(sender, job.data, {
-    log: (entry) => emailLog.error(entry, "email refused by Resend; not retrying"),
-  });
-  log.info({ jobId: job.id, template: job.data.template, result }, "email.send done");
-});
+await boss.work(
+  queues.emailSend,
+  META,
+  runJob<JobPayloads[typeof queues.emailSend]>(queues.emailSend, async (job) => {
+    const sender = await getEmailSender(db, {
+      log: (entry) => emailLog.warn(entry, "email logged, not sent: Resend isn't configured"),
+    });
+    const result = await runEmailJob(sender, job.data, {
+      log: (entry) => emailLog.error(entry, "email refused by Resend; not retrying"),
+    });
+    return { template: job.data.template, result };
+  }),
+);
 
 // Note files (SPEC-notes "Deleting files"). Deletes come from the note's transaction; retries
 // (6 attempts, backoff) come from the queue's policy, and a missing object counts as done.
-await boss.work<JobPayloads[typeof queues.storageDelete]>(queues.storageDelete, async ([job]) => {
-  if (!job) return;
-  const result = await runStorageDeleteJob(storage, job.data);
-  storageLog.info({ jobId: job.id, ...result }, "storage.delete done");
-});
+await boss.work(
+  queues.storageDelete,
+  META,
+  runJob<JobPayloads[typeof queues.storageDelete]>(queues.storageDelete, async (job) => ({
+    ...(await runStorageDeleteJob(storage, job.data)),
+  })),
+);
 
 // The sweep collects files no attachment points to: failed deletes, and notes removed by a cascade
 // (a deleted package or line item). Daily at 04:00 server time, after the catalog sync.
@@ -137,22 +156,22 @@ await boss.schedule(
   { tz: Intl.DateTimeFormat().resolvedOptions().timeZone },
 );
 
-await boss.work<JobPayloads[typeof queues.storageSweep]>(queues.storageSweep, async ([job]) => {
-  const result = await sweepOrphanFiles(db, storage);
-  storageLog.info({ jobId: job?.id, ...result }, "storage.sweep done");
-});
+await boss.work(
+  queues.storageSweep,
+  META,
+  runJob<JobPayloads[typeof queues.storageSweep]>(queues.storageSweep, async () => ({
+    ...(await sweepOrphanFiles(db, storage)),
+  })),
+);
 
 // Rates after Packing → QA and on Refresh rates (FR-PACK-07). Every provider failing transiently
 // throws for a retry (3 attempts, backoff); the last attempt stores the failure for QA instead.
-const ratesLog = createLogger({ module: "rates" });
 await boss.work(
   queues.ratesFetch,
-  { includeMetadata: true, localConcurrency: 4 },
-  async ([job]: JobWithMetadata<JobPayloads[typeof queues.ratesFetch]>[]) => {
-    if (!job) return;
-    const result = await runRatesFetchJob(db, job.data, { finalAttempt: isFinalAttempt(job) });
-    ratesLog.info({ jobId: job.id, ...job.data, ...result }, "rates.fetch done");
-  },
+  { ...META, localConcurrency: 4 },
+  runJob<JobPayloads[typeof queues.ratesFetch]>(queues.ratesFetch, async (job) => ({
+    ...(await runRatesFetchJob(db, job.data, { finalAttempt: isFinalAttempt(job) })),
+  })),
 );
 
 log.info({ queues: Object.values(queues) }, "worker started");
