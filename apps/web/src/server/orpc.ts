@@ -4,7 +4,8 @@ import { contract, toFieldErrors } from "@woolrus/contracts";
 import { AppError } from "@woolrus/core";
 import type { Logger } from "@woolrus/logger";
 import { resolveActor, resolveStationDevice } from "./actor";
-import type { RequestTrace } from "./request-trace";
+import { captureServerError } from "./error-reporting";
+import { type RequestTrace, requestIdOf } from "./request-trace";
 import { clearStationCookie } from "./station-cookie";
 
 export type BaseContext = ResponseHeadersPluginContext & {
@@ -20,7 +21,7 @@ const os = implement(contract).$context<BaseContext>();
  * Turns domain AppErrors and contract input-validation failures into typed API errors carrying
  * i18n message keys. Input validation runs after this middleware, so its error passes through here.
  */
-const mapErrors = os.middleware(async ({ next, context }) => {
+export const mapErrors = os.middleware(async ({ next, context }) => {
   try {
     return await next();
   } catch (error) {
@@ -46,7 +47,14 @@ const mapErrors = os.middleware(async ({ next, context }) => {
         },
       });
     }
-    if (!(error instanceof ORPCError)) context.log.error({ err: error }, "unhandled API error");
+    if (!(error instanceof ORPCError)) {
+      context.log.error({ err: error }, "unhandled API error");
+      captureServerError(error, {
+        requestId: requestIdOf(context.headers),
+        userId: context.trace.userId,
+        stationId: context.trace.stationId,
+      });
+    }
     throw error;
   }
 });
@@ -68,6 +76,7 @@ const authed = os.middleware(async ({ next, context }) => {
   }
   const { actor, user, station, idleLockAt } = resolved;
   context.trace.userId = user.id;
+  context.trace.stationId = actor.stationId ?? undefined;
   const log = context.log.child({ userId: user.id, stationId: actor.stationId ?? undefined });
   return next({ context: { actor, user, station, idleLockAt, log } });
 });

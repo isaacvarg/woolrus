@@ -14,6 +14,7 @@
     "jobs:install": "tsx --env-file-if-exists=../../.env src/cli.ts install-jobs"
   },
   "dependencies": {
+    "@sentry/node": "11.10.0",
     "@woolrus/core": "workspace:*",
     "@woolrus/db": "workspace:*",
     "@woolrus/logger": "workspace:*",

@@ -22,7 +22,10 @@ import {
 import { db } from "@woolrus/db";
 import { createLogger } from "@woolrus/logger";
 import { PgBoss } from "pg-boss";
+import { captureError, initErrorReporting } from "./error-reporting";
 import { runJob } from "./run-job";
+
+initErrorReporting();
 
 const log = createLogger({ module: "main" });
 
@@ -38,7 +41,10 @@ const connectionString = process.env.DATABASE_URL;
 if (!connectionString) throw new Error("DATABASE_URL is not set");
 
 const boss = new PgBoss({ connectionString, schema: JOBS_SCHEMA });
-boss.on("error", (err) => log.error({ err }, "pg-boss error"));
+boss.on("error", (err) => {
+  log.error({ err }, "pg-boss error");
+  captureError(err);
+});
 
 await boss.start();
 
