@@ -8,8 +8,10 @@ import { Button } from "@/components/ui/fields";
 import { toast } from "@/components/ui/toast";
 import { useErrorMessage } from "@/lib/errors";
 import { client, orpc } from "@/lib/orpc";
+import { hasLiveLabel } from "./live-label";
 import { money } from "./money";
 import { QaDrawer } from "./qa-drawer";
+import { RatesTable, RefreshRatesButton } from "./qa-rates";
 
 // The QA screen (SPEC-qa "UI", FR-QA-01). A tap verifies a row in full and a second tap clears
 // it. Taps apply at once and the server confirms them (NFR-PERF-02); writes run one at a time per
@@ -119,6 +121,12 @@ function QaLayout({
         </div>
       )}
       <PurchaseBanner purchase={view.purchase} />
+      <div className="flex justify-end">
+        <RefreshRatesButton
+          orderId={order.id}
+          disabled={!mayVerify || view.packages.every((p) => hasLiveLabel(p))}
+        />
+      </div>
 
       {view.packages.length === 0 ? (
         <p className="alert">{t("qa.nothingToVerify")}</p>
@@ -131,6 +139,7 @@ function QaLayout({
             <PackageCard
               key={pkg.id}
               pkg={pkg}
+              orderId={order.id}
               disabled={!mayVerify}
               onTap={(row) => tap.mutate({ row, verified: row.verifiedQuantity < row.quantity })}
             />
@@ -241,10 +250,12 @@ const labelKeys = {
 
 function PackageCard({
   pkg,
+  orderId,
   disabled,
   onTap,
 }: {
   pkg: QaPackage;
+  orderId: string;
   disabled: boolean;
   onTap: (row: QaRow) => void;
 }) {
@@ -272,6 +283,7 @@ function PackageCard({
           <RowButton key={row.id} row={row} disabled={disabled} onTap={() => onTap(row)} />
         ))}
       </ul>
+      <RatesTable orderId={orderId} pkg={pkg} disabled={disabled} />
       {label && (
         <div className="rounded-box bg-base-200 p-3 text-sm" data-testid="qa-label">
           <div className="font-semibold">{t(labelKeys[label.status])}</div>

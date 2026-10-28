@@ -25,7 +25,7 @@ const packageInclude = {
       orderItem: { include: { pickedBy: { select: nameFields } } },
     },
   },
-  rates: { where: { selected: true } },
+  rates: { orderBy: [{ amountCents: "asc" }, { id: "asc" }] },
   labels: { orderBy: { createdAt: "desc" }, include: { purchasedBy: { select: nameFields } } },
 } as const satisfies Prisma.PackageInclude;
 
@@ -64,7 +64,11 @@ function purchaseState(packages: Prisma.PackageGetPayload<{ include: typeof pack
 }
 
 /** The packages and gate as every QA write returns them. */
-export async function qaResult(tx: DbTx, orderId: string): Promise<QaResult> {
+export async function qaResult(
+  tx: DbTx,
+  orderId: string,
+  { now = new Date() }: QaOptions = {},
+): Promise<QaResult> {
   const [packages, issues, notes, gate] = await Promise.all([
     tx.package.findMany({
       where: { orderId },
@@ -80,7 +84,7 @@ export async function qaResult(tx: DbTx, orderId: string): Promise<QaResult> {
     issues.find((i) => i.orderItemId === orderItemId || i.packageId === pkgId)?.id ?? null;
 
   const view: QaPackage[] = packages.map((pkg) => {
-    const rate = pkg.rates[0];
+    const rate = pkg.rates.find((r) => r.selected);
     const label = pkg.labels.find((l) => live.has(l.status)) ?? pkg.labels[0];
     return {
       id: pkg.id,
@@ -103,6 +107,15 @@ export async function qaResult(tx: DbTx, orderId: string): Promise<QaResult> {
         criticalIssueId: issueFor(pkg.id, it.orderItemId),
       })),
       label: label ? toLabel(label) : null,
+      rates: pkg.rates.map((r) => ({
+        id: r.id,
+        carrierCode: r.carrierCode,
+        serviceName: r.serviceName,
+        amountCents: r.amountCents,
+        deliveryDays: r.deliveryDays,
+        selected: r.selected,
+        expired: r.expiresAt !== null && r.expiresAt <= now,
+      })),
       selectedRate: rate
         ? {
             carrierCode: rate.carrierCode,
@@ -137,7 +150,7 @@ export async function getQaScreen(
   if (!order) throw notFound();
   const [[detail], result] = await Promise.all([
     toOrderDetails(db, [order], { now }),
-    qaResult(db, orderId),
+    qaResult(db, orderId, { now }),
   ]);
   if (!detail) throw notFound();
   return { order: detail, customerNote: order.customerNote, ...result };

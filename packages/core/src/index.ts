@@ -55,6 +55,7 @@ export * from "./picking/scan";
 export * from "./picking/service";
 export * from "./picking/sort";
 export * from "./qa/queries";
+export * from "./qa/rates";
 export * from "./qa/verify";
 export * from "./settings/crypto";
 export { encryptionKey } from "./settings/env";

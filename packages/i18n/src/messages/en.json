@@ -575,6 +575,11 @@
     "labelVoidRejected": "Void refused",
     "tracking": "Tracking {number}",
     "cost": "{cost} (quoted {quoted})",
+    "rates": "Shipping rates",
+    "noRates": "No rates yet.",
+    "refreshRates": "Refresh rates",
+    "rateExpired": "Expired",
+    "rateDays": "{days, plural, one {# day} other {# days}}",
     "buying": "Buying labels… {bought} of {total}",
     "failedPackages": "Labels failed for: {packages}",
     "stillNeeded": "Still needed before QA can finish",
@@ -1180,6 +1185,10 @@
     },
     "qa": {
       "notQa": "This order isn't in QA, so it can't be verified.",
+      "rateExpired": "That rate has expired. Refresh the rates and pick another.",
+      "packageHasLabel": "This package already has a label. Void it before choosing another rate.",
+      "addressLockedByLabel": "A package already has a label with the old address. Void the labels before changing the address.",
+      "allPackagesLabelled": "Every package already has a label, so there are no rates to refresh.",
       "purchaseInProgress": "Labels are being bought for this order. Wait for that to finish."
     }
   },
