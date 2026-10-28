@@ -18,18 +18,29 @@ const exits: Record<string, string> = {
   "errors.station.unknown": "/station/forget",
 };
 
-function leaveIfSignedOut(error: unknown) {
+function exitFor(error: unknown): string | undefined {
   const key =
     error instanceof ORPCError ? (error.data as { messageKey?: unknown })?.messageKey : undefined;
-  const exit = typeof key === "string" ? exits[key] : undefined;
+  return typeof key === "string" ? exits[key] : undefined;
+}
+
+function leaveIfSignedOut(error: unknown) {
+  const exit = exitFor(error);
   if (exit) window.location.assign(exit);
 }
+
+/**
+ * Retries a failed query up to 3 times, but never one whose actor is gone: that won't change, and
+ * the error must reach `leaveIfSignedOut` now. Otherwise each order event refetching the query
+ * would restart its retries, and a busy floor would keep a deactivated user's page open.
+ */
+const retry = (failures: number, error: unknown) => !exitFor(error) && failures < 3;
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(
     () =>
       new QueryClient({
-        defaultOptions: { queries: { staleTime: 10_000 } },
+        defaultOptions: { queries: { staleTime: 10_000, retry } },
         queryCache: new QueryCache({ onError: leaveIfSignedOut }),
         mutationCache: new MutationCache({ onError: leaveIfSignedOut }),
       }),
