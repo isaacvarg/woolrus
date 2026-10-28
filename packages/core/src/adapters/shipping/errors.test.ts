@@ -8,6 +8,11 @@ describe("ShippingError", () => {
       permanent: true,
     });
     expect(new ShippingError("rejected").permanent).toBe(true);
+    expect(new ShippingError("notOffered")).toMatchObject({
+      messageKey: "errors.shipping.notOffered",
+      permanent: true,
+    });
+    expect(new ShippingError("addressRejected").permanent).toBe(true);
     expect(new ShippingError("unavailable").permanent).toBe(false);
     expect(new ShippingError("timeout")).toMatchObject({
       messageKey: "errors.shipping.timeout",

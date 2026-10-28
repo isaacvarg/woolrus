@@ -53,6 +53,12 @@ export type ProviderCarrier = {
   /** The carrier's own code (`ups`, `usps`): what tracking shows and the Woo push sends. */
   code: string;
   name: string;
+  /** What the provider says to tell several accounts of one carrier apart. */
+  nickname?: string;
+  /** The account number's last 4 characters; the whole number is never kept. */
+  accountSuffix?: string;
+  /** Labels are paid from the provider's balance, not billed to the carrier account. */
+  billedByProvider?: boolean;
   services: ProviderService[];
 };
 

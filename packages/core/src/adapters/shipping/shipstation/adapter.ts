@@ -12,6 +12,7 @@ import {
   type ShippingProvider,
 } from "../provider";
 import {
+  type ApiError,
   carriersResponse,
   errorResponse,
   labelSchema,
@@ -31,6 +32,34 @@ const BASE_URL = "https://api.shipstation.com";
 const MAX_EXTERNAL_ID = 50;
 
 type Residential = "yes" | "no" | "unknown";
+
+/** ShipStation's codes and fields that mean it refused an address. */
+const ADDRESS_CODES = new Set(["invalid_address", "verification_failure"]);
+const ADDRESS_FIELD = /^ship_(to|from)\./;
+
+/**
+ * A refusal ShipStation's structured fields explain: an address (first, since it's the fix to
+ * make), or a carrier's business rule, which for a rate means it doesn't run that service here
+ * (e.g. UPS Standard from a US origin). Anything else stays `rejected`.
+ */
+function refusal(errors: ApiError[] | null | undefined): ShippingError["kind"] | null {
+  if (!errors?.length) return null;
+  const address = errors.some(
+    (e) => ADDRESS_CODES.has(e.error_code ?? "") || ADDRESS_FIELD.test(e.field_name ?? ""),
+  );
+  if (address) return "addressRejected";
+  const businessRules = errors.some(
+    (e) => e.error_source === "carrier" && e.error_type === "business_rules",
+  );
+  return businessRules ? "notOffered" : null;
+}
+
+/** `shippingErrorFromStatus`, narrowed to the refusal `errors` explain when it's a `rejected`. */
+function errorFrom(operation: string, status: number, errors: ApiError[] | null | undefined) {
+  const error = shippingErrorFromStatus(operation, status, errors?.[0]?.error_code ?? undefined);
+  const kind = error.kind === "rejected" ? refusal(errors) : null;
+  return kind ? new ShippingError(kind, error.detail, error.status) : error;
+}
 
 const cents = (money: { amount: number } | null | undefined) =>
   money ? Math.round(money.amount * 100) : 0;
@@ -121,7 +150,10 @@ export class ShipStationAdapter implements ShippingProvider {
     await response.body?.cancel(); // unread, it would hold the connection until collected
   }
 
-  /** Carriers with no services (not set up, or off on our plan) can't be rated, so they're left out. */
+  /**
+   * Carriers with no services (not set up, or off on our plan) can't be rated, so they're left out.
+   * A carrier that needs a funded balance is one ShipStation bills itself (its own UPS or USPS rates).
+   */
   async listCarriers(): Promise<ProviderCarrier[]> {
     const { carriers } = await this.call("listCarriers", "GET", "/v2/carriers", carriersResponse);
     return carriers.flatMap((carrier) => {
@@ -134,6 +166,9 @@ export class ShipStationAdapter implements ShippingProvider {
           externalId: carrier.carrier_id,
           code: carrier.carrier_code,
           name: carrier.friendly_name || carrier.nickname || carrier.carrier_code,
+          ...(carrier.nickname && { nickname: carrier.nickname }),
+          ...(carrier.account_number && { accountSuffix: carrier.account_number.slice(-4) }),
+          billedByProvider: carrier.requires_funded_amount === true,
           services: services.map((s) => ({
             code: s.service_code,
             name: s.name,
@@ -230,7 +265,7 @@ export class ShipStationAdapter implements ShippingProvider {
     const { rate_response: result } = response;
     if (result.status === "error") {
       // A 200 that quoted nothing: ShipStation refused the shipment (address, dimensions…).
-      throw shippingErrorFromStatus("getRates", 200, result.errors?.[0]?.error_code ?? undefined);
+      throw errorFrom("getRates", 200, result.errors);
     }
     const requested = new Set(request.services.map((s) => `${s.carrierExternalId}/${s.code}`));
     const shipmentId = result.shipment_id ?? response.shipment_id;
@@ -347,14 +382,14 @@ export class ShipStationAdapter implements ShippingProvider {
       throw shippingErrorFromCause(operation, error);
     }
     if (response.ok) return response;
-    throw shippingErrorFromStatus(operation, response.status, await errorCode(response));
+    throw errorFrom(operation, response.status, await apiErrors(response));
   }
 }
 
-async function errorCode(response: Response): Promise<string | undefined> {
+async function apiErrors(response: Response): Promise<ApiError[] | undefined> {
   try {
     const parsed = errorResponse.safeParse(await response.json());
-    return parsed.success ? (parsed.data.errors[0]?.error_code ?? undefined) : undefined;
+    return parsed.success ? parsed.data.errors : undefined;
   } catch {
     return undefined;
   }

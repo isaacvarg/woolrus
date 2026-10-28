@@ -104,6 +104,25 @@ export type SyncCarriersResult = z.infer<typeof SyncCarriersResult>;
 export const SetShippingEnabledInput = z.object({ id: Id, enabled: z.boolean() });
 export type SetShippingEnabledInput = z.infer<typeof SetShippingEnabledInput>;
 
+/** An empty label clears it. */
+export const SetCarrierLabelInput = z.object({
+  id: Id,
+  label: z
+    .string()
+    .trim()
+    .max(60)
+    .transform((value) => value || null)
+    .nullable(),
+});
+export type SetCarrierLabelInput = z.infer<typeof SetCarrierLabelInput>;
+
+/**
+ * Where a service really runs, for services whose provider flags mislead (ShipStation lists UPS
+ * Standard as domestic, but from the US it only goes to Canada or Mexico). Curated in core.
+ */
+export const ServiceNote = z.enum(["usCanadaMexico", "internationalOnly", "intoUs"]);
+export type ServiceNote = z.infer<typeof ServiceNote>;
+
 /** `missing`: the provider stopped listing it at the last sync, so it's never sent. */
 export const ShippingServiceConfig = z.object({
   id: z.string(),
@@ -113,12 +132,21 @@ export const ShippingServiceConfig = z.object({
   international: z.boolean(),
   enabled: z.boolean(),
   missing: z.boolean(),
+  note: ServiceNote.nullable(),
 });
 export type ShippingServiceConfig = z.infer<typeof ShippingServiceConfig>;
 
+/**
+ * One carrier account. `label` is ours, set to tell accounts of one carrier apart; the rest is what
+ * the provider said at the last sync (`accountSuffix`: the account number's last 4 characters).
+ */
 export const ShippingCarrierConfig = z.object({
   id: z.string(),
   name: z.string(),
+  label: z.string().nullable(),
+  providerNickname: z.string().nullable(),
+  accountSuffix: z.string().nullable(),
+  billedByProvider: z.boolean(),
   enabled: z.boolean(),
   missing: z.boolean(),
   services: z.array(ShippingServiceConfig),
@@ -300,6 +328,16 @@ export const carriers = {
       summary: "Turn a carrier on or off",
     })
     .input(SetShippingEnabledInput)
+    .output(ShippingCarrierConfig),
+
+  setCarrierLabel: base
+    .route({
+      method: "POST",
+      path: "/shipping/carriers/{id}/label",
+      tags: ["Shipping"],
+      summary: "Set or clear a carrier account's label",
+    })
+    .input(SetCarrierLabelInput)
     .output(ShippingCarrierConfig),
 
   setServiceEnabled: base

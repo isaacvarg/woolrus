@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import { SetCarrierLabelInput } from "@woolrus/contracts";
 import type { Db } from "@woolrus/db";
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createActor, resetDb, testDb } from "../../test/db";
@@ -11,6 +12,7 @@ import {
   listShippingConfig,
   listUsableServices,
   setCarrierEnabled,
+  setCarrierLabel,
   setServiceEnabled,
   syncCarriers,
 } from "./carriers";
@@ -240,6 +242,110 @@ describe("syncCarriers", () => {
   });
 });
 
+describe("carrier accounts", () => {
+  /** Two UPS accounts in one ShipStation, as the provider lists them. */
+  function upsAccounts(): AdapterFactories {
+    const ups = (externalId: string, extra: Partial<ProviderCarrier>): ProviderCarrier => ({
+      externalId,
+      code: "ups",
+      name: "UPS",
+      services: ["ups_ground", "ups_standard"].map((code) => ({
+        code,
+        name: code,
+        domestic: true,
+        international: false,
+        providerData: {},
+      })),
+      ...extra,
+    });
+    return {
+      SHIPSTATION: (creds) => {
+        const provider = createFakeShippingProvider("SHIPSTATION", { credentials: creds });
+        provider.listCarriers = async () => [
+          ups("se-1", { nickname: "UPS EBC", accountSuffix: "8w00" }),
+          ups("se-2", { billedByProvider: true }),
+        ];
+        return provider;
+      },
+    };
+  }
+
+  async function syncedAccounts() {
+    const actor = await admin();
+    const adapters = upsAccounts();
+    await enabledProvider(actor, "SHIPSTATION", adapters);
+    await syncCarriers(db, actor, { provider: "SHIPSTATION" }, adapters);
+    const { carriers } = await configFor(actor, "SHIPSTATION");
+    const byId = async (externalId: string) => {
+      const row = await db.shippingCarrier.findUniqueOrThrow({
+        where: { provider_externalId: { provider: "SHIPSTATION", externalId } },
+      });
+      const config = carriers.find((c) => c.id === row.id);
+      if (!config) throw new Error(`no config for ${externalId}`);
+      return config;
+    };
+    return { actor, adapters, first: await byId("se-1"), second: await byId("se-2") };
+  }
+
+  it("keeps what the provider says about each account, unlabelled", async () => {
+    const { first, second } = await syncedAccounts();
+    expect(first).toMatchObject({
+      name: "UPS",
+      label: null,
+      providerNickname: "UPS EBC",
+      accountSuffix: "8w00",
+      billedByProvider: false,
+    });
+    expect(second).toMatchObject({
+      providerNickname: null,
+      accountSuffix: null,
+      billedByProvider: true,
+    });
+  });
+
+  it("notes a service whose provider flags mislead, and only that one", async () => {
+    const { first } = await syncedAccounts();
+    const notes = Object.fromEntries(first.services.map((s) => [s.code, s.note]));
+    expect(notes).toEqual({ ups_ground: null, ups_standard: "usCanadaMexico" });
+  });
+
+  // Through the input schema, as the router parses it: it trims, and an empty label clears.
+  const relabel = (actor: Actor, id: string, label: string) =>
+    setCarrierLabel(db, actor, SetCarrierLabelInput.parse({ id, label }));
+
+  it("sets, trims and clears a label, auditing each change and not a no-op", async () => {
+    const { actor, first } = await syncedAccounts();
+
+    const set = await relabel(actor, first.id, "  Negotiated ");
+    expect(set.label).toBe("Negotiated");
+    await relabel(actor, first.id, "Negotiated");
+    const cleared = await relabel(actor, first.id, " ");
+    expect(cleared.label).toBeNull();
+
+    const events = await db.auditEvent.findMany({
+      where: { entityType: "ShippingCarrier", action: "relabel" },
+      orderBy: { at: "asc" },
+    });
+    expect(events.map((e) => [e.before, e.after])).toEqual([
+      [{ label: null }, { label: "Negotiated" }],
+      [{ label: "Negotiated" }, { label: null }],
+    ]);
+  });
+
+  it("keeps the label on a re-sync", async () => {
+    const { actor, adapters, first } = await syncedAccounts();
+    await relabel(actor, first.id, "Negotiated");
+    await syncCarriers(db, actor, { provider: "SHIPSTATION" }, adapters);
+    const row = await db.shippingCarrier.findUniqueOrThrow({ where: { id: first.id } });
+    expect(row).toMatchObject({ label: "Negotiated", providerNickname: "UPS EBC" });
+  });
+
+  it("refuses a label over 60 characters", () => {
+    const id = "01900000-0000-7000-8000-000000000000";
+    expect(SetCarrierLabelInput.safeParse({ id, label: "x".repeat(61) }).success).toBe(false);
+  });
+});
+
 describe("setCarrierEnabled / setServiceEnabled", () => {
   async function synced() {
     const actor = await admin();
@@ -304,6 +410,7 @@ describe("permissions", () => {
     syncCarriers: (actor: Actor) =>
       syncCarriers(db, actor, { provider: "SHIPSTATION" }, fakeAdapters().adapters),
     setCarrierEnabled: (actor: Actor) => setCarrierEnabled(db, actor, { id, enabled: true }),
+    setCarrierLabel: (actor: Actor) => setCarrierLabel(db, actor, { id, label: "Negotiated" }),
     setServiceEnabled: (actor: Actor) => setServiceEnabled(db, actor, { id, enabled: true }),
     listShippingConfig: (actor: Actor) => listShippingConfig(db, actor),
   };
@@ -316,6 +423,7 @@ describe("permissions", () => {
     await expect(calls.listShippingConfig(actor)).resolves.toBeDefined();
     // Past the check, an unknown id is not found rather than forbidden.
     await expect(calls.setCarrierEnabled(actor)).rejects.toMatchObject({ kind: "NOT_FOUND" });
+    await expect(calls.setCarrierLabel(actor)).rejects.toMatchObject({ kind: "NOT_FOUND" });
     await expect(calls.setServiceEnabled(actor)).rejects.toMatchObject({ kind: "NOT_FOUND" });
   });
 

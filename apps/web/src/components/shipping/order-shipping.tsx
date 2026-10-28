@@ -276,16 +276,22 @@ export function PackageRates({ pkg }: { pkg: PackageShipping }) {
             </thead>
             <tbody>
               {pkg.rates.map((rate) => (
-                <tr key={rate.id} className={rate.selected ? "bg-base-200" : undefined}>
+                <tr
+                  key={rate.id}
+                  className={rate.selected ? "bg-success/15 font-medium" : undefined}
+                >
                   <td>{t(`settings.shipping.names.${rate.provider}`)}</td>
                   <td>{rate.carrierName}</td>
                   <td>
-                    {rate.serviceName}
                     {rate.selected && (
-                      <span className="badge badge-primary ms-2">
-                        {t("orderShipping.selected")}
-                      </span>
+                      <>
+                        <span aria-hidden="true" className="me-1 font-bold text-success">
+                          ✓
+                        </span>
+                        <span className="sr-only">{t("orderShipping.selected")}: </span>
+                      </>
                     )}
+                    {rate.serviceName}
                     {rate.guaranteed && (
                       <span className="badge badge-ghost ms-2">
                         {t("orderShipping.guaranteed")}

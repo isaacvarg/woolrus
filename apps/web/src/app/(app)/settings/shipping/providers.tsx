@@ -483,7 +483,7 @@ function Carriers({ account, name }: { account: ProviderAccount; name: string })
                 </tr>
               </thead>
               {carriers.map((carrier) => (
-                <CarrierRows key={carrier.id} carrier={carrier} />
+                <CarrierRows key={carrier.id} carrier={carrier} provider={name} />
               ))}
             </table>
           </div>
@@ -498,35 +498,110 @@ function MissingBadge() {
   return <span className="badge badge-warning">{t("settings.shipping.noLongerOffered")}</span>;
 }
 
-/** A carrier's row and its services' rows. Each switch applies at once. */
-function CarrierRows({ carrier }: { carrier: ShippingCarrierConfig }) {
+/** What the provider says about a carrier account, so several of one carrier can be told apart. */
+function AccountDetails({
+  carrier,
+  provider,
+}: {
+  carrier: ShippingCarrierConfig;
+  provider: string;
+}) {
+  const t = useTranslations();
+  const details = [
+    carrier.label ? carrier.name : null,
+    carrier.providerNickname &&
+      t("settings.shipping.providerNickname", { provider, nickname: carrier.providerNickname }),
+    carrier.accountSuffix &&
+      t("settings.shipping.accountSuffix", { suffix: carrier.accountSuffix }),
+    carrier.billedByProvider && t("settings.shipping.billedByProvider", { provider }),
+  ].filter(Boolean);
+  if (details.length === 0) return null;
+  return <p className="text-sm font-normal text-base-content/70">{details.join(" · ")}</p>;
+}
+
+/** The account's label: shown on orders in place of the carrier's name. Empty clears it. */
+function LabelEditor({ carrier, onDone }: { carrier: ShippingCarrierConfig; onDone: () => void }) {
   const t = useTranslations();
   const errorMessage = useErrorMessage();
   const queryClient = useQueryClient();
+  const [value, setValue] = useState(carrier.label ?? "");
+  const save = useMutation(
+    orpc.carriers.setCarrierLabel.mutationOptions({
+      onSuccess: async () => {
+        await queryClient.invalidateQueries({ queryKey: orpc.carriers.config.key() });
+        onDone();
+      },
+      onError: (error) => toast.error(errorMessage(error)),
+    }),
+  );
+  return (
+    <Form
+      className="flex flex-wrap items-end gap-2 font-normal"
+      onSubmit={(event) => {
+        event.preventDefault();
+        save.mutate({ id: carrier.id, label: value });
+      }}
+    >
+      <TextField
+        label={t("settings.shipping.label")}
+        description={t("settings.shipping.labelHint")}
+        name="label"
+        maxLength={60}
+        autoFocus
+        value={value}
+        onChange={setValue}
+      />
+      <Button type="submit" isPending={save.isPending} className="btn-primary btn-sm mb-1">
+        {t("common.save")}
+      </Button>
+      <Button className="btn-ghost btn-sm mb-1" onPress={onDone}>
+        {t("common.cancel")}
+      </Button>
+    </Form>
+  );
+}
+
+/** A carrier's row and its services' rows. Each switch applies at once. */
+function CarrierRows({ carrier, provider }: { carrier: ShippingCarrierConfig; provider: string }) {
+  const t = useTranslations();
+  const errorMessage = useErrorMessage();
+  const queryClient = useQueryClient();
+  const [editing, setEditing] = useState(false);
   const options = {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: orpc.carriers.config.key() }),
     onError: (error: Error) => toast.error(errorMessage(error)),
   };
   const toggleCarrier = useMutation(orpc.carriers.setCarrierEnabled.mutationOptions(options));
   const toggleService = useMutation(orpc.carriers.setServiceEnabled.mutationOptions(options));
+  const name = carrier.label ?? carrier.name;
 
   return (
     <tbody>
       <tr>
-        <th scope="rowgroup" className="font-semibold">
+        <th scope="rowgroup" colSpan={2} className="space-y-2 font-semibold">
           <div className="flex flex-wrap items-center gap-2">
             <Switch
-              aria-label={t("settings.shipping.carrierSwitch", { name: carrier.name })}
+              aria-label={t("settings.shipping.carrierSwitch", { name })}
               isSelected={carrier.enabled}
               isDisabled={toggleCarrier.isPending}
               onChange={(enabled) => toggleCarrier.mutate({ id: carrier.id, enabled })}
             >
-              {carrier.name}
+              {name}
             </Switch>
             {carrier.missing && <MissingBadge />}
+            {!editing && (
+              <Button
+                className="btn-ghost btn-xs"
+                aria-label={t("settings.shipping.editLabelFor", { name })}
+                onPress={() => setEditing(true)}
+              >
+                {carrier.label ? t("settings.shipping.editLabel") : t("settings.shipping.addLabel")}
+              </Button>
+            )}
           </div>
+          <AccountDetails carrier={carrier} provider={provider} />
+          {editing && <LabelEditor carrier={carrier} onDone={() => setEditing(false)} />}
         </th>
-        <td />
       </tr>
       {carrier.services.map((service) => (
         <tr key={service.id}>
@@ -534,7 +609,7 @@ function CarrierRows({ carrier }: { carrier: ShippingCarrierConfig }) {
             <div className="flex flex-wrap items-center gap-2">
               <Switch
                 aria-label={t("settings.shipping.serviceSwitch", {
-                  carrier: carrier.name,
+                  carrier: name,
                   name: service.name,
                 })}
                 isSelected={service.enabled}
@@ -553,6 +628,11 @@ function CarrierRows({ carrier }: { carrier: ShippingCarrierConfig }) {
               )}
               {service.international && (
                 <span className="badge badge-ghost">{t("settings.shipping.international")}</span>
+              )}
+              {service.note && (
+                <span className="badge badge-warning h-auto">
+                  {t(`settings.shipping.serviceNotes.${service.note}`)}
+                </span>
               )}
             </div>
           </td>

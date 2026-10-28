@@ -120,18 +120,25 @@ model PackageItem {
 }
 
 model ShippingCarrier {
-  id           String             @id @default(uuid(7)) @db.Uuid
-  provider     ShippingProviderId
+  id               String             @id @default(uuid(7)) @db.Uuid
+  provider         ShippingProviderId
   /// The provider's id for this carrier (account).
-  externalId   String             @map("external_id")
-  code         String
-  name         String
-  nickname     String?
-  enabled      Boolean            @default(false)
+  externalId       String             @map("external_id")
+  code             String
+  name             String
+  /// Set in Settings → Shipping to tell accounts of one carrier apart; orders show it instead of `name`.
+  label            String?
+  /// The provider's own nickname for the account, as last synced.
+  providerNickname String?            @map("provider_nickname")
+  /// The account number's last 4 characters, as last synced; never the whole number.
+  accountSuffix    String?            @map("account_suffix")
+  /// Labels are paid from the provider's balance (ShipStation's own carrier rates), not the carrier account's.
+  billedByProvider Boolean            @default(false) @map("billed_by_provider")
+  enabled          Boolean            @default(false)
   /// The provider stopped listing it: no longer sent, never deleted (rates, labels and manifests point at it).
-  missingSince DateTime?          @map("missing_since") @db.Timestamptz(3)
-  createdAt    DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt    DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
+  missingSince     DateTime?          @map("missing_since") @db.Timestamptz(3)
+  createdAt        DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   services  CarrierService[]
   rates     ShippingRate[]

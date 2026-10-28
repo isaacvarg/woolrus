@@ -135,7 +135,9 @@ So a rate never has to have an id, and a purchase always carries the shipment:
   messages: string[] }`.
 - Money is integer cents, weights ounces, dimensions inches (decisions.md). Adapters convert at the boundary.
 - **`ShippingError`**, like `StoreError` and `EmailError`: kinds `unauthorized`, `rejected` (the provider refused
-  the request; `detail` holds its error code), `unavailable` (429, 5xx, network), `timeout`. `messageKey` is
+  the request; `detail` holds its error code), `notOffered` and `addressRejected` (a `rejected` the adapter can
+  explain from the provider's structured error fields: the carrier doesn't run that service for this shipment,
+  e.g. UPS Standard from a US origin, or it refused an address), `unavailable` (429, 5xx, network), `timeout`. `messageKey` is
   `errors.shipping.<kind>`; `permanent` is false only for `unavailable` and `timeout`. `detail` never contains
   credentials, addresses or the provider's free text.
 - **Registry** (`registry.ts`): `createShippingProviders(db): Promise<ShippingProvider[]>` returns one adapter per
@@ -197,6 +199,7 @@ these are the facts this seam was shaped around:
 | `setProviderEnabled` | `settings.manage` | Enabling requires credentials and a passing `ping()` in the same call (`errors.carriers.providerUnreachable`), and an adapter in this build (`errors.carriers.providerNotAvailable`). Disabling always works. Audited. |
 | `syncCarriers` | `settings.manage` | `listCarriers()` → upsert carriers by `(provider, externalId)` and services by `(carrierId, code)`. New ones arrive **disabled**. Ones the provider no longer lists get `missingSince` and stop being sent; they're never deleted (rates, labels and manifests point at them). Audited with counts. |
 | `setCarrierEnabled` / `setServiceEnabled` | `settings.manage` | Toggles. A service can be on while its carrier is off; only both on is used. Audited. |
+| `setCarrierLabel` | `settings.manage` | Our label for a carrier account (trimmed, ≤ 60, empty clears), so several accounts of one carrier can be told apart; orders show it in place of the carrier's name. A sync never touches it. Audited `relabel`. |
 
 `Settings.shipstationApiKeyEnc` moves to the ShipStation provider account (migration copies the ciphertext; same
 key, same `v1:` format) and the column is dropped. `getIntegrationConfig` loses `shipstation`; the settings secret
@@ -269,6 +272,7 @@ and QA sees **Refresh rates**.
 | `carriers.setProviderEnabled` | `POST /shipping/providers/{provider}/enabled` |
 | `carriers.sync` | `POST /shipping/providers/{provider}/sync` |
 | `carriers.setCarrierEnabled` | `POST /shipping/carriers/{id}/enabled` |
+| `carriers.setCarrierLabel` | `POST /shipping/carriers/{id}/label` |
 | `carriers.setServiceEnabled` | `POST /shipping/services/{id}/enabled` |
 | `carriers.orderShipping` | `GET /orders/{orderId}/shipping` |
 | `carriers.refreshRates` | `POST /orders/{orderId}/rates/refresh` |
@@ -286,6 +290,10 @@ One migration. The tables have no production data (v1 is abandoned; nothing has 
 - **`ShippingCarrier`:** `shipstationCarrierId` → `provider` + `externalId`, `@@unique([provider, externalId])`;
   add `missingSince`. `isPrimary` dropped (unused). **`CarrierService`:** add `missingSince`.
 - **`CarrierService`** also gains `providerData` jsonb default `{}`.
+- **`ShippingCarrier`** (2026-10-28, after ship): `nickname` (never written) becomes `label`; add
+  `providerNickname`, `accountSuffix` (the account number's last 4 characters, never the whole number) and
+  `billedByProvider` (ShipStation's `requires_funded_amount`: its own carrier rates, paid from its balance), all
+  written by sync.
 - **`ShippingRate`:** `shipstationRateId` → `providerRateId`, now nullable; add `provider`, `carrierId` and
   `serviceId` (FKs, Restrict), `providerShipmentId`.
 - **`ShippingLabel`:** add `provider`; `shipstationLabelId` → `providerLabelId` with
@@ -315,8 +323,9 @@ admins see each provider's state on Settings → Shipping. The go-live checklist
 - **`settings/shipping`** (Admin; a new tab beside General and Integrations): a card per provider with an
   enable switch, write-only credential fields with Set / Not set, Replace and Clear (the same pattern as
   Integrations), **Test connection** with its result, **Sync carriers** with the last sync time. Under it, a
-  table of carriers (switch, name, "no longer offered" badge) with their services (switch, Domestic /
-  International badges). A provider without an adapter in this build shows "Coming soon" and can't be enabled.
+  table of carriers (switch, label or name, "no longer offered" badge, what the provider says about the account,
+  an inline label editor) with their services (switch, Domestic / International badges, and a curated note where
+  the provider's flags mislead: `core/carriers/service-notes.ts`). A provider without an adapter in this build shows "Coming soon" and can't be enabled.
 - **Order detail:** a **Shipping** section showing the ship-to and its check (original vs corrected, with the
   change highlighted by text, not colour alone), and per package the rates table read-only with provider
   errors above it and a **Refresh rates** button for QA. `qa` reuses the same components on its screen.
