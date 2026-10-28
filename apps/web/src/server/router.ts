@@ -115,6 +115,7 @@ import {
   updateUserRoles,
   voidCounts,
   voidItem,
+  voidLabel,
 } from "@woolrus/core";
 import { db } from "@woolrus/db";
 import { createLogger } from "@woolrus/logger";
@@ -290,6 +291,9 @@ export const router = implementer.router({
       selectRate(db, context.actor, input),
     ),
     scan: api.qa.scan.handler(({ input, context }) => scanVerify(db, context.actor, input)),
+    voidLabel: api.qa.voidLabel.handler(({ input, context }) =>
+      voidLabel(db, context.actor, input),
+    ),
   },
   packing: {
     view: api.packing.view.handler(({ input, context }) => getPackView(db, context.actor, input)),

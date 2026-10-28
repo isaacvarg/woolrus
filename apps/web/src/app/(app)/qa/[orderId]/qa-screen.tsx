@@ -16,6 +16,7 @@ import { hasLiveLabel } from "./live-label";
 import { money } from "./money";
 import { QaDrawer } from "./qa-drawer";
 import { RatesTable, RefreshRatesButton } from "./qa-rates";
+import { isVoidable, VoidLabelButton } from "./qa-void";
 
 // The QA screen (SPEC-qa "UI", FR-QA-01). A tap verifies a row in full and a second tap clears
 // it. Taps apply at once and the server confirms them (NFR-PERF-02); writes run one at a time per
@@ -41,6 +42,7 @@ export function QaScreen({
   userId,
   canVerify,
   canPurchase,
+  canVoid,
   canReport,
   canWriteCustomer,
 }: {
@@ -48,6 +50,7 @@ export function QaScreen({
   userId: string | null;
   canVerify: boolean;
   canPurchase: boolean;
+  canVoid: boolean;
   canReport: boolean;
   canWriteCustomer: boolean;
 }) {
@@ -69,6 +72,7 @@ export function QaScreen({
       userId={userId}
       canVerify={canVerify}
       canPurchase={canPurchase}
+      canVoid={canVoid}
       canReport={canReport}
       canWriteCustomer={canWriteCustomer}
     />
@@ -80,6 +84,7 @@ function QaLayout({
   userId,
   canVerify,
   canPurchase,
+  canVoid,
   canReport,
   canWriteCustomer,
 }: {
@@ -87,6 +92,7 @@ function QaLayout({
   userId: string | null;
   canVerify: boolean;
   canPurchase: boolean;
+  canVoid: boolean;
   canReport: boolean;
   canWriteCustomer: boolean;
 }) {
@@ -253,6 +259,7 @@ function QaLayout({
               pkg={pkg}
               orderId={order.id}
               disabled={!mayVerify}
+              canVoid={canVoid && order.status === "QA"}
               isFocused={pkg.id === focused?.id}
               onFocus={() => setFocusedId(pkg.id)}
               onReport={
@@ -395,6 +402,7 @@ function PackageCard({
   pkg,
   orderId,
   disabled,
+  canVoid,
   isFocused,
   onFocus,
   onTap,
@@ -403,6 +411,7 @@ function PackageCard({
   pkg: QaPackage;
   orderId: string;
   disabled: boolean;
+  canVoid: boolean;
   isFocused: boolean;
   onFocus: () => void;
   onTap: (row: QaRow) => void;
@@ -457,6 +466,7 @@ function PackageCard({
             </div>
           )}
           {label.error && t.has(label.error as never) && <div>{t(label.error as never)}</div>}
+          {canVoid && isVoidable(label) && <VoidLabelButton orderId={orderId} label={label} />}
         </div>
       )}
     </li>

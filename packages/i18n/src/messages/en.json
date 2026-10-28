@@ -575,6 +575,12 @@
     "labelVoidRequested": "Void requested",
     "labelVoided": "Label voided",
     "labelVoidRejected": "Void refused",
+    "voidLabel": "Void label",
+    "voidRetry": "Void label again",
+    "voidTitle": "Void this label?",
+    "voidBody": "The provider is asked to cancel the label. If it agrees, this package can be rated and bought again.",
+    "voidReason": "Reason",
+    "voidConfirm": "Void label",
     "tracking": "Tracking {number}",
     "cost": "{cost} (quoted {quoted})",
     "rates": "Shipping rates",
@@ -1202,7 +1208,10 @@
       "purchaseUnknown": "We couldn't confirm whether this label was bought. Check the provider for a label with this order's number.",
       "scanNotOnOrder": "That's {name}. It isn't on this order.",
       "scanOtherPackage": "That belongs in package {package}, not this one.",
-      "scanAlreadyVerified": "All {line} in this package are already verified."
+      "scanAlreadyVerified": "All {line} in this package are already verified.",
+      "voidRejected": "The provider declined to void this label. It is still active.",
+      "voidUnsupported": "This provider can't void labels from here. Void it with the provider.",
+      "labelNotVoidable": "Only a bought label that is still active can be voided."
     }
   },
   "emails": {

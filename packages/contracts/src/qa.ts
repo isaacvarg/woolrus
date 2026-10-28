@@ -132,6 +132,12 @@ export const ScanVerifyInput = z.object({
 });
 export type ScanVerifyInput = z.infer<typeof ScanVerifyInput>;
 
+export const VoidLabelInput = z.object({
+  labelId: Id,
+  reason: z.string().trim().min(1).max(500),
+});
+export type VoidLabelInput = z.infer<typeof VoidLabelInput>;
+
 export const qa = {
   screen: base
     .route({
@@ -168,5 +174,14 @@ export const qa = {
       summary: "Scan a product in a package: one more verified unit of the first row that needs it",
     })
     .input(ScanVerifyInput)
+    .output(QaResult),
+  voidLabel: base
+    .route({
+      method: "POST",
+      path: "/labels/{labelId}/void",
+      tags,
+      summary: "Void a bought label of an order in QA, with a reason",
+    })
+    .input(VoidLabelInput)
     .output(QaResult),
 };

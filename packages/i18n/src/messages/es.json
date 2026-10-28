@@ -575,6 +575,12 @@
     "labelVoidRequested": "Anulación solicitada",
     "labelVoided": "Etiqueta anulada",
     "labelVoidRejected": "Anulación rechazada",
+    "voidLabel": "Anular etiqueta",
+    "voidRetry": "Anular etiqueta otra vez",
+    "voidTitle": "¿Anular esta etiqueta?",
+    "voidBody": "Se le pide al proveedor que cancele la etiqueta. Si acepta, este paquete podrá cotizarse y comprarse de nuevo.",
+    "voidReason": "Motivo",
+    "voidConfirm": "Anular etiqueta",
     "tracking": "Seguimiento {number}",
     "cost": "{cost} (cotizado {quoted})",
     "rates": "Tarifas de envío",
@@ -1202,7 +1208,10 @@
       "purchaseUnknown": "No pudimos confirmar si esta etiqueta se compró. Busca en el proveedor una etiqueta con el número de este pedido.",
       "scanNotOnOrder": "Eso es {name}. No está en este pedido.",
       "scanOtherPackage": "Eso va en el paquete {package}, no en este.",
-      "scanAlreadyVerified": "Todo {line} de este paquete ya está verificado."
+      "scanAlreadyVerified": "Todo {line} de este paquete ya está verificado.",
+      "voidRejected": "El proveedor rechazó anular esta etiqueta. Sigue activa.",
+      "voidUnsupported": "Este proveedor no permite anular etiquetas desde aquí. Anúlala con el proveedor.",
+      "labelNotVoidable": "Solo se puede anular una etiqueta comprada que siga activa."
     }
   },
   "emails": {
