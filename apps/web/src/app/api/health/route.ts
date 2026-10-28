@@ -1,4 +1,9 @@
-import { emailStatus, encryptionKey, shippingProviderHealth } from "@woolrus/core";
+import {
+  emailStatus,
+  encryptionKey,
+  fakeShippingProviders,
+  shippingProviderHealth,
+} from "@woolrus/core";
 import { db } from "@woolrus/db";
 import { storage } from "@/server/storage";
 
@@ -31,18 +36,14 @@ export async function GET() {
   } catch {
     email = "fail";
   }
-  // One entry per shipping provider; an enabled one failing degrades health, it doesn't take it
-  // down (SPEC-carriers "Health"). Pings are cached for 5 minutes.
-  let shipping: Record<string, "disabled" | "unconfigured" | "ok" | "fail"> = {};
-  let degraded = false;
+  // An enabled shipping provider failing degrades health, it doesn't take it down (SPEC-carriers
+  // "Health"). This endpoint is public, so it says only whether; admins see which provider on
+  // Settings → Shipping. Fake providers in production degrade it too: labels would be fake.
+  let degraded = process.env.NODE_ENV === "production" && fakeShippingProviders();
   try {
-    if (checks.database === "ok")
-      ({ providers: shipping, degraded } = await shippingProviderHealth(db));
+    if (checks.database === "ok") degraded ||= (await shippingProviderHealth(db)).degraded;
   } catch {
     degraded = true;
   }
-  return Response.json(
-    { ok, degraded, checks: { ...checks, email, shipping } },
-    { status: ok ? 200 : 503 },
-  );
+  return Response.json({ ok, degraded, checks: { ...checks, email } }, { status: ok ? 200 : 503 });
 }

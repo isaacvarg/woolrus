@@ -24,8 +24,8 @@ beforeEach(async () => {
   vi.stubEnv("SETTINGS_ENCRYPTION_KEY", encoded);
   vi.stubEnv("NODE_ENV", "test");
   vi.stubEnv("SHIPPING_PROVIDERS", undefined);
-  // GitHub Actions sets CI, which would turn the fakes on in the NODE_ENV cases below.
-  vi.stubEnv("CI", undefined);
+  // An e2e shell's WOOLRUS_E2E would turn the fakes on in the NODE_ENV cases below.
+  vi.stubEnv("WOOLRUS_E2E", undefined);
   key = parseEncryptionKey(encoded) as Buffer;
 });
 afterEach(() => vi.unstubAllEnvs());
@@ -219,21 +219,23 @@ describe("createShippingProviders", () => {
 });
 
 describe("fakeShippingProviders", () => {
-  it("is on only for SHIPPING_PROVIDERS=fake in development, test or CI", () => {
-    for (const [nodeEnv, ci, value, expected] of [
-      ["development", undefined, "fake", true],
-      ["test", undefined, "fake", true],
+  it("is on only for SHIPPING_PROVIDERS=fake in development, test or an e2e run", () => {
+    for (const [nodeEnv, e2e, ci, value, expected] of [
+      ["development", undefined, undefined, "fake", true],
+      ["test", undefined, undefined, "fake", true],
       // CI's Playwright runs `next start`, which is always production.
-      ["production", "true", "fake", true],
-      ["production", undefined, "fake", false],
-      ["production", "1", "fake", false],
-      ["production", "false", "fake", false],
-      [undefined, undefined, "fake", false],
-      ["development", undefined, undefined, false],
-      ["development", undefined, "real", false],
-      ["production", "true", undefined, false],
+      ["production", "1", undefined, "fake", true],
+      ["production", undefined, undefined, "fake", false],
+      ["production", "true", undefined, "fake", false],
+      // CI alone isn't enough: some hosts set it in production too.
+      ["production", undefined, "true", "fake", false],
+      [undefined, undefined, undefined, "fake", false],
+      ["development", undefined, undefined, undefined, false],
+      ["development", undefined, undefined, "real", false],
+      ["production", "1", undefined, undefined, false],
     ] as const) {
       vi.stubEnv("NODE_ENV", nodeEnv);
+      vi.stubEnv("WOOLRUS_E2E", e2e);
       vi.stubEnv("CI", ci);
       vi.stubEnv("SHIPPING_PROVIDERS", value);
       expect(fakeShippingProviders()).toBe(expected);

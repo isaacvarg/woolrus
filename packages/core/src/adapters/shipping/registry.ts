@@ -31,13 +31,14 @@ export const shippingAdapters: AdapterFactories = {
 /**
  * `SHIPPING_PROVIDERS=fake` swaps every adapter for its fake, for the dev stack and Playwright
  * (there is no ShipStation sandbox there). Fails closed: only an explicit development or test
- * environment honours it, like the integration env fallback, or CI (`CI=true`, which GitHub
- * Actions sets), whose Playwright runs the production build where `NODE_ENV` is always production.
- * A deploy sets neither.
+ * environment honours it, like the integration env fallback, or an e2e run (`WOOLRUS_E2E=1`, set
+ * only by CI's Playwright step, which runs the production build where `NODE_ENV` is always
+ * production). Not `CI`: some hosts set that in production too. The worker warns at startup, and
+ * health reports degraded, when fakes are on in production.
  */
 export function fakeShippingProviders(): boolean {
   const env = process.env.NODE_ENV;
-  const allowed = env === "development" || env === "test" || process.env.CI === "true";
+  const allowed = env === "development" || env === "test" || process.env.WOOLRUS_E2E === "1";
   return process.env.SHIPPING_PROVIDERS === "fake" && allowed;
 }
 

@@ -2,6 +2,7 @@ import {
   configuredStore,
   createS3Storage,
   ensureBucketOnFirstUse,
+  fakeShippingProviders,
   getEmailSender,
   JOBS_SCHEMA,
   type JobPayloads,
@@ -22,6 +23,11 @@ import { createLogger } from "@woolrus/logger";
 import { type JobWithMetadata, PgBoss } from "pg-boss";
 
 const log = createLogger({ module: "main" });
+
+// Fake shipping providers quote fake rates and buy fake labels: never what production should run.
+if (process.env.NODE_ENV === "production" && fakeShippingProviders()) {
+  log.warn("SHIPPING_PROVIDERS=fake is on in production: rates and labels are fake");
+}
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) throw new Error("DATABASE_URL is not set");

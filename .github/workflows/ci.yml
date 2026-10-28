@@ -43,8 +43,8 @@ jobs:
       S3_BUCKET: woolrus-attachments
       # RustFS runs here, so the shared storage suite also runs against the real S3 adapter.
       STORAGE_LIVE: "1"
-      # In-memory shipping providers for tests and Playwright: honoured in development, test, or with
-      # CI=true (which Actions sets), never in a deploy.
+      # In-memory shipping providers for tests and Playwright: honoured in development, test, or an
+      # e2e run (WOOLRUS_E2E=1 on the Playwright step below), never in a deploy.
       SHIPPING_PROVIDERS: fake
     steps:
       - uses: actions/checkout@v4
@@ -73,3 +73,5 @@ jobs:
           pnpm --filter @woolrus/web test:e2e
         env:
           E2E_BASE_URL: http://localhost:3000
+          # The production build Playwright runs honours SHIPPING_PROVIDERS=fake only with this.
+          WOOLRUS_E2E: "1"

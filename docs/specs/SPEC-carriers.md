@@ -140,9 +140,10 @@ So a rate never has to have an id, and a purchase always carries the shipment:
 - **Registry** (`registry.ts`): `createShippingProviders(db): Promise<ShippingProvider[]>` returns one adapter per
   **enabled** provider account with credentials, in fixed order (ShipStation, Bridge Source). Services take the list
   as an argument, so tests pass fakes. When `SHIPPING_PROVIDERS=fake` and `NODE_ENV` is `development` or `test`,
-  or `CI=true` (CI's Playwright runs `next start`, where `NODE_ENV` is always `production`), it returns the two fakes
-  instead (dev stack and Playwright; there is no ShipStation sandbox in the dev stack). Fails closed otherwise: a
-  deploy sets neither.
+  or `WOOLRUS_E2E=1` (set only by CI's Playwright step, which runs `next start`, where `NODE_ENV` is always
+  `production`; not `CI`, which some hosts set in production), it returns the two fakes instead (dev stack and
+  Playwright; there is no ShipStation sandbox in the dev stack). Fails closed otherwise. Fakes on under
+  `NODE_ENV=production` log a warning at worker startup and make health degraded.
 
 Each provider gets `PROVIDER_TIMEOUT_MS` (20 s, a constant) for a package's whole `getRates`, however many calls
 it makes inside. The adapter doesn't retry by itself; the job does.
@@ -302,8 +303,10 @@ belongs to a package or a return) are kept unchanged.
 
 ### Health (`apps/web/src/app/api/health/route.ts`)
 
-One entry per provider: `disabled`, `ok` (a `ping` within the last 5 minutes, cached), `fail`, or
-`unconfigured`. An enabled provider failing makes health degraded, not down. The go-live checklist line
+Each provider is `disabled`, `ok` (a `ping` within the last 5 minutes, cached; one ping per window however many
+checks arrive, bounded to 3 s), `fail`, or `unconfigured`. An enabled provider failing makes health `degraded`, not
+down, and so do fake providers under `NODE_ENV=production`. The endpoint is public, so it returns only `degraded`;
+admins see each provider's state on Settings → Shipping. The go-live checklist line
 "ShipStation green" becomes "every enabled provider green".
 
 ### UI (`apps/web/src/app/(app)/`)
