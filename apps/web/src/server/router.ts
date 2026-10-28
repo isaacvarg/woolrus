@@ -7,6 +7,7 @@ import {
   completeBatchMembers,
   completePack,
   completePick,
+  completeQaOrder,
   createBatch,
   createBox,
   createInvitation,
@@ -28,6 +29,7 @@ import {
   getPackView,
   getPickView,
   getPublicSettings,
+  getQaScreen,
   getSettings,
   getSyncStatus,
   issueAssignees,
@@ -50,6 +52,7 @@ import {
   listUsers,
   listVoids,
   lockStation,
+  markLabelNotBought,
   markOutOfStock,
   myPicks,
   orderMutations,
@@ -78,6 +81,8 @@ import {
   scan,
   scanBatch,
   scanIntoPackage,
+  scanVerify,
+  selectRate,
   sendTestEmail,
   setCarrierEnabled,
   setCarrierLabel,
@@ -88,6 +93,7 @@ import {
   setResponsible,
   setSecret,
   setServiceEnabled,
+  setVerified,
   setWeight,
   stationStatus,
   substitute,
@@ -110,6 +116,7 @@ import {
   updateUserRoles,
   voidCounts,
   voidItem,
+  voidLabel,
 } from "@woolrus/core";
 import { db } from "@woolrus/db";
 import { createLogger } from "@woolrus/logger";
@@ -208,7 +215,7 @@ export const router = implementer.router({
       orderMutations.completePacking(db, context.actor, input),
     ),
     completeQa: api.orders.completeQa.handler(({ input, context }) =>
-      orderMutations.completeQa(db, context.actor, input),
+      completeQaOrder(db, context.actor, input),
     ),
     hold: api.orders.hold.handler(({ input, context }) =>
       orderMutations.hold(db, context.actor, input),
@@ -275,6 +282,22 @@ export const router = implementer.router({
       substitute(db, context.actor, input),
     ),
     myPicks: api.picking.myPicks.handler(({ context }) => myPicks(db, context.actor)),
+  },
+  qa: {
+    screen: api.qa.screen.handler(({ input, context }) => getQaScreen(db, context.actor, input)),
+    setVerified: api.qa.setVerified.handler(({ input, context }) =>
+      setVerified(db, context.actor, input),
+    ),
+    selectRate: api.qa.selectRate.handler(({ input, context }) =>
+      selectRate(db, context.actor, input),
+    ),
+    scan: api.qa.scan.handler(({ input, context }) => scanVerify(db, context.actor, input)),
+    voidLabel: api.qa.voidLabel.handler(({ input, context }) =>
+      voidLabel(db, context.actor, input),
+    ),
+    markLabelNotBought: api.qa.markLabelNotBought.handler(({ input, context }) =>
+      markLabelNotBought(db, context.actor, input),
+    ),
   },
   packing: {
     view: api.packing.view.handler(({ input, context }) => getPackView(db, context.actor, input)),

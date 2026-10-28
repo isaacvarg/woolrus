@@ -1,6 +1,7 @@
 import { can } from "@woolrus/core";
 import { getTranslations } from "next-intl/server";
 import { currentActor } from "@/server/actor";
+import { CostCheckSection } from "./cost-check";
 import { ProvidersSection } from "./providers";
 
 export default async function ShippingSettingsPage() {
@@ -14,6 +15,7 @@ export default async function ShippingSettingsPage() {
         <>
           <p className="text-base-content/70">{t("settings.shipping.intro")}</p>
           <ProvidersSection />
+          <CostCheckSection />
         </>
       ) : (
         <p role="alert" className="alert alert-error">

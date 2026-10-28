@@ -21,7 +21,14 @@ export type TransitionInput = {
   reason?: string;
 };
 
-export type TransitionOptions = { now?: Date };
+export type TransitionOptions = {
+  now?: Date;
+  /**
+   * A move that needs the actor's claim accepts one past its expiry, as long as it's still theirs.
+   * For the label job's final move, since the claim was refreshed when the purchase began.
+   */
+  ignoreClaimExpiry?: boolean;
+};
 
 const activeStatuses: readonly WorkflowStatus[] = ["PENDING", "PICKING", "PACKING", "QA", "READY"];
 
@@ -29,7 +36,7 @@ export async function transition(
   tx: DbTx,
   actor: Actor,
   { orderId, expectedVersion, to, kind, reason }: TransitionInput,
-  { now = new Date() }: TransitionOptions = {},
+  { now = new Date(), ignoreClaimExpiry = false }: TransitionOptions = {},
 ): Promise<Order> {
   const reasonText = reason?.trim() || null;
 
@@ -54,7 +61,10 @@ export async function transition(
   if (move.claim !== "none") {
     // The system actor has no user to hold or take a claim, so claim moves are never its to make.
     if (actor.userId === null) throw new AppError("CONFLICT", "errors.workflow.claimRequired");
-    const live = isClaimLive(order, expiryMinutes, now);
+    const live =
+      ignoreClaimExpiry && move.claim === "holds"
+        ? order.claimedById !== null
+        : isClaimLive(order, expiryMinutes, now);
     if (move.claim === "holds" && (!live || !holdsClaim(actor, order.claimedById))) {
       throw new AppError("CONFLICT", "errors.workflow.claimRequired");
     }

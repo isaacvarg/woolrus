@@ -4,7 +4,7 @@
 `voidLabel`, ship-to), `exceptions` (`openCriticalIssues`, `hasOpenCriticalIssue`, the report dialog), `workflow`
 (QA → Ready, the **verified** gate, claims), `packing` (packages, `PackageItem`, the order drawer), `notes`
 (storage adapter) · **Used by:** `shipping` (active labels with a stored PDF; reuses `voidLabel` for repack),
-`returns` (the purchase job's pattern for return labels), `reporting` (label cost vs quote) · **State:** spec approved
+`returns` (the purchase job's pattern for return labels), `reporting` (label cost vs quote) · **State:** planned
 
 Project-wide commands, structure, code style, testing levels and boundaries are in [`../../SPEC.md`](../../SPEC.md);
 this spec only adds what is specific to `qa`.

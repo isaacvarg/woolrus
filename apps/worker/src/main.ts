@@ -12,7 +12,9 @@ import {
   queueOptions,
   queues,
   recomputePriorities,
+  reconcileLabels,
   runEmailJob,
+  runLabelsPurchaseJob,
   runRatesFetchJob,
   runStorageDeleteJob,
   s3ConfigFromEnv,
@@ -154,6 +156,31 @@ await boss.work(
     ratesLog.info({ jobId: job.id, ...job.data, ...result }, "rates.fetch done");
   },
 );
+
+// Labels after Complete QA (SPEC-qa "The labels.purchase job"). A provider that is down or a PDF
+// copy that fails throws, and the queue's policy retries (5 attempts, backoff); a refusal doesn't.
+const labelsLog = createLogger({ module: "labels" });
+await boss.work(
+  queues.labelsPurchase,
+  { includeMetadata: true, localConcurrency: 4 },
+  async ([job]: JobWithMetadata<JobPayloads[typeof queues.labelsPurchase]>[]) => {
+    if (!job) return;
+    await runLabelsPurchaseJob(db, job.data, { storage, finalAttempt: isFinalAttempt(job) });
+    labelsLog.info({ jobId: job.id, ...job.data }, "labels.purchase done");
+  },
+);
+
+// A worker that died mid-purchase leaves a label PURCHASING with no job: every ten minutes, and
+// once at start, queue the orders whose labels have been waiting too long.
+await boss.schedule(queues.labelsReconcile, "*/10 * * * *", {});
+await boss.work<JobPayloads[typeof queues.labelsReconcile]>(
+  queues.labelsReconcile,
+  async ([job]) => {
+    const queued = await reconcileLabels(db);
+    labelsLog.info({ jobId: job?.id, queued }, "labels.reconcile done");
+  },
+);
+await boss.send(queues.labelsReconcile, {}, { singletonKey: "start" });
 
 log.info({ queues: Object.values(queues) }, "worker started");
 

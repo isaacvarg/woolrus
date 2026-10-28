@@ -269,3 +269,46 @@ describe("FakeBridgeSourceProvider", () => {
     );
   });
 });
+
+describe("fake purchase triggers", () => {
+  async function buy(
+    provider: FakeShipStationProvider,
+    address2: string,
+    key: string,
+    packageNumber = 1,
+  ) {
+    const req = { ...(await request(provider)) };
+    req.shipTo = { ...req.shipTo, address2 };
+    const [rate] = await provider.getRates(req);
+    return provider.purchaseLabel({
+      rate: {
+        providerRateId: rate?.providerRateId,
+        carrierExternalId: "",
+        serviceCode: "",
+        providerData: {},
+      },
+      shipment: req,
+      packageNumber,
+      idempotencyKey: key,
+      reference: "1001",
+      format: "pdf",
+      size: "4x6",
+    });
+  }
+
+  it("refuses only the package a FAIL-BUY-<n> line names, with notOffered", async () => {
+    const provider = new FakeShipStationProvider();
+    await expect(buy(provider, "Apt FAIL-BUY-2", "k-fail", 2)).rejects.toMatchObject({
+      kind: "notOffered",
+    });
+    expect((await buy(provider, "Apt FAIL-BUY-2", "k-ok", 1)).providerLabelId).toBeTruthy();
+  });
+
+  it("loses the first SLOW-BUY response after buying, then answers from the label it bought", async () => {
+    const provider = new FakeShipStationProvider();
+    await expect(buy(provider, "SLOW-BUY", "k-slow")).rejects.toMatchObject({ kind: "timeout" });
+    expect(await provider.findLabel("k-slow")).not.toBeNull();
+    expect((await buy(provider, "SLOW-BUY", "k-slow")).providerLabelId).toBeTruthy();
+    expect(provider.requests.filter((r) => r.operation === "purchaseLabel")).toHaveLength(2);
+  });
+});

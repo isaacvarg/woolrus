@@ -89,7 +89,15 @@ async function unpackExcess(tx: DbTx, orderItemId: string) {
     const take = Math.min(h.quantity, excess);
     if (take === h.quantity) await tx.packageItem.delete({ where: { id: h.id } });
     else
-      await tx.packageItem.update({ where: { id: h.id }, data: { quantity: h.quantity - take } });
+      await tx.packageItem.update({
+        where: { id: h.id },
+        data: {
+          quantity: h.quantity - take,
+          qaVerifiedQuantity: 0,
+          qaVerifiedAt: null,
+          qaVerifiedById: null,
+        },
+      });
     await invalidate(tx, h.packageId, true);
     excess -= take;
   }

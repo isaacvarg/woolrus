@@ -33,6 +33,12 @@ const severityBadge = {
   CRITICAL: "badge-error",
 } as const;
 
+const labelBadge = {
+  purchasing: "badge-info",
+  failed: "badge-error",
+  unknown: "badge-warning",
+} as const;
+
 const priorityBadge: Record<number, string> = { 1: "badge-warning", 2: "badge-error" };
 
 export function QueueTable({
@@ -40,11 +46,13 @@ export function QueueTable({
   userId,
   canBeginPicking,
   canPack,
+  canQa,
 }: {
   stage: QueueStage;
   userId: string | null;
   canBeginPicking: boolean;
   canPack: boolean;
+  canQa: boolean;
 }) {
   const t = useTranslations();
   const reasonText = useReasonText();
@@ -71,7 +79,13 @@ export function QueueTable({
   const onHold = stage === "ON_HOLD";
   const showBeginPicking = stage === "PENDING" && canBeginPicking;
   const showStartPacking = stage === "PACKING" && canPack;
-  const columns = 7 + (onHold ? 1 : 0) + (showBeginPicking ? 2 : 0) + (showStartPacking ? 1 : 0);
+  const showStartQa = stage === "QA" && canQa;
+  const columns =
+    7 +
+    (onHold ? 1 : 0) +
+    (showBeginPicking ? 2 : 0) +
+    (showStartPacking ? 1 : 0) +
+    (showStartQa ? 1 : 0);
   // Ticked for Pick together, by id. Rows keep the version they were ticked at: if one changes
   // meanwhile the batch is refused as stale and the panel says so.
   const [selected, setSelected] = useState<Map<string, QueueRow>>(() => new Map());
@@ -101,6 +115,18 @@ export function QueueTable({
       onSuccess: (order) => {
         toast.success(t("queue.startedPacking", { number: order.number }));
         router.push(`/pack/${order.id}`);
+      },
+      onError: (error) => toast.error(errorMessage(error)),
+      onSettled: () => queryClient.invalidateQueries({ queryKey: orpc.orders.key() }),
+    }),
+  );
+
+  // Claiming and opening the QA screen are one tap, as in packing.
+  const startQa = useMutation(
+    orpc.orders.claim.mutationOptions({
+      onSuccess: (order) => {
+        toast.success(t("queue.startedQa", { number: order.number }));
+        router.push(`/qa/${order.id}`);
       },
       onError: (error) => toast.error(errorMessage(error)),
       onSettled: () => queryClient.invalidateQueries({ queryKey: orpc.orders.key() }),
@@ -157,6 +183,11 @@ export function QueueTable({
               {showStartPacking && (
                 <th>
                   <span className="sr-only">{t("queue.startPacking")}</span>
+                </th>
+              )}
+              {showStartQa && (
+                <th>
+                  <span className="sr-only">{t("queue.startQa")}</span>
                 </th>
               )}
             </tr>
@@ -240,6 +271,15 @@ export function QueueTable({
                         </span>
                       </span>
                     )}
+                    {row.labelState !== "none" && (
+                      <span
+                        data-testid="queue-label-badge"
+                        data-state={row.labelState}
+                        className={`badge badge-sm ms-2 ${labelBadge[row.labelState]}`}
+                      >
+                        {t(`queue.labelState.${row.labelState}`)}
+                      </span>
+                    )}
                     {row.unresolvedVoidCount > 0 && (
                       <span
                         role="img"
@@ -308,6 +348,20 @@ export function QueueTable({
                           }
                         >
                           {t("queue.startPacking")}
+                        </Button>
+                      )}
+                    </td>
+                  )}
+                  {showStartQa && (
+                    <td className="text-end">
+                      {!claimedByOther(row) && (
+                        <Button
+                          isPending={startQa.isPending && startQa.variables?.id === row.id}
+                          onPress={() =>
+                            startQa.mutate({ id: row.id, expectedVersion: row.version })
+                          }
+                        >
+                          {t("queue.startQa")}
                         </Button>
                       )}
                     </td>

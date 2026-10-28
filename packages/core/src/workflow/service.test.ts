@@ -157,6 +157,48 @@ describe("stage completions", () => {
   });
 });
 
+describe("completeQa with an open Critical issue", () => {
+  const critical = (orderId: string, status: "OPEN" | "RESOLVED" = "OPEN") =>
+    db.qualityIssue.create({
+      data: {
+        orderId,
+        type: "DAMAGED_ITEM",
+        severity: "CRITICAL",
+        status,
+        description: "Crushed jar",
+        discoveredStage: "QA",
+      },
+    });
+
+  it("is refused with criticalIssueOpen, then passes once resolved", async () => {
+    const qa = await createActor(db, ["QA"]);
+    const { order } = await readyToComplete("QA", qa.userId);
+    const issue = await critical(order.id);
+
+    await expect(
+      completeQa(db, qa, { orderId: order.id, expectedVersion: 1 }),
+    ).rejects.toMatchObject({
+      kind: "CONFLICT",
+      unmet: [{ messageKey: "errors.workflow.gate.criticalIssueOpen", params: { count: 1 } }],
+    });
+
+    await db.qualityIssue.update({ where: { id: issue.id }, data: { status: "RESOLVED" } });
+    await expect(
+      completeQa(db, qa, { orderId: order.id, expectedVersion: 1 }),
+    ).resolves.toMatchObject({ status: "READY" });
+  });
+
+  it("is skipped by forceStatus for admins", async () => {
+    const admin = await createActor(db, ["ADMIN"]);
+    const { order } = await readyToComplete("QA", admin.userId);
+    await critical(order.id);
+
+    await expect(
+      forceStatus(db, admin, { orderId: order.id, expectedVersion: 1, to: "READY", reason: "ok" }),
+    ).resolves.toMatchObject({ status: "READY" });
+  });
+});
+
 describe("claim rule", () => {
   it("refuses a completion when nobody holds the claim", async () => {
     const picker = await createActor(db, ["PICKER"]);

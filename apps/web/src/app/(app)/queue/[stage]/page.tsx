@@ -20,6 +20,7 @@ export default async function QueuePage({ params }: { params: Promise<{ stage: s
         // Only decides whether to show the button; the API checks again.
         canBeginPicking={!!actor && can(actor, ruleFor("beginPicking").permission)}
         canPack={!!actor && can(actor, "order.pack")}
+        canQa={!!actor && can(actor, "order.qa")}
       />
     </section>
   );

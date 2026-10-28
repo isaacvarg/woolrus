@@ -23,6 +23,10 @@ export const queues = {
   storageSweep: "storage.sweep",
   /** Ask every enabled shipping provider for each package's rates (FR-PACK-07, SPEC-carriers "Rate fetch"). */
   ratesFetch: "rates.fetch",
+  /** Buy an order's labels in the background after Complete QA (SPEC-qa "Complete QA"). */
+  labelsPurchase: "labels.purchase",
+  /** Settle labels left PURCHASING by a lost provider response (SPEC-qa). */
+  labelsReconcile: "labels.reconcile",
 } as const;
 export type QueueName = (typeof queues)[keyof typeof queues];
 
@@ -44,6 +48,9 @@ export type JobPayloads = {
   [queues.storageSweep]: Record<string, never>;
   /** `generation` is the order's `rateGeneration` when enqueued; a job for an older one writes nothing. */
   [queues.ratesFetch]: { orderId: string; generation: number };
+  /** `requestedById` pressed Complete QA; the job moves the order to Ready as them. */
+  [queues.labelsPurchase]: { orderId: string; requestedById: string };
+  [queues.labelsReconcile]: Record<string, never>;
 };
 
 /**
@@ -61,6 +68,8 @@ export const queueOptions: Partial<
   [queues.storageDelete]: { retryLimit: 5, retryDelay: 60, retryBackoff: true },
   // Only a fetch where every provider failed transiently throws; a partial one is QA's to refresh.
   [queues.ratesFetch]: { retryLimit: 2, retryDelay: 20, retryBackoff: true },
+  // Provider outages while buying: 5 attempts over a few minutes (SPEC-qa "The labels.purchase job").
+  [queues.labelsPurchase]: { retryLimit: 4, retryDelay: 15, retryBackoff: true },
 };
 
 /** pg-boss keeps its tables in their own schema, separate from Prisma's. */
