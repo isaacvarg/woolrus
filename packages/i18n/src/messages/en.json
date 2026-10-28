@@ -221,6 +221,16 @@
         "usCanadaMexico": "From the US: to Canada and Mexico only",
         "internationalOnly": "From the US: international only",
         "intoUs": "Only into the US from another country"
+      },
+      "costCheck": {
+        "title": "Label cost check",
+        "intro": "Complete QA asks before buying labels that cost far more than the customer paid for shipping. Leave a field empty to turn that check off.",
+        "ratio": "Ask when labels cost more than (×)",
+        "ratioHint": "Times what the customer paid for shipping.",
+        "free": "Ask when shipping was free and labels cost more than ($)",
+        "freeHint": "For orders where the customer paid nothing for shipping.",
+        "save": "Save",
+        "saved": "Label cost check saved."
       }
     }
   },
@@ -600,7 +610,13 @@
     "drawerNoRate": "No rate selected",
     "drawerVerification": "QA: {verified} of {quantity} verified",
     "drawerNotes": "Notes",
-    "drawerCustomerNote": "Customer note"
+    "drawerCustomerNote": "Customer note",
+    "costConfirm": {
+      "title": "Buy these labels?",
+      "body": "Labels cost {cost}, the customer paid {charged} for shipping. Buy anyway?",
+      "confirm": "Buy anyway",
+      "cancel": "Not yet"
+    }
   },
   "pick": {
     "title": "Pick #{number}",
@@ -1202,7 +1218,8 @@
       "purchaseUnknown": "We couldn't confirm whether this label was bought. Check the provider for a label with this order's number.",
       "scanNotOnOrder": "That's {name}. It isn't on this order.",
       "scanOtherPackage": "That belongs in package {package}, not this one.",
-      "scanAlreadyVerified": "All {line} in this package are already verified."
+      "scanAlreadyVerified": "All {line} in this package are already verified.",
+      "costConfirmRequired": "These labels cost much more than the customer paid for shipping. Confirm to buy them anyway."
     }
   },
   "emails": {

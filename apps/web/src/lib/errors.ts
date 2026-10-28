@@ -54,6 +54,22 @@ export function useFieldErrors() {
   };
 }
 
+/** The amounts of a tripped cost guard ("Buy anyway?"), from the error's `data.params`; else null. */
+export function costConfirmOf(
+  error: unknown,
+): { labelCostCents: number; chargedCents: number } | null {
+  const data = errorData(error);
+  const params = data?.params as { labelCostCents?: unknown; chargedCents?: unknown } | undefined;
+  if (
+    data?.messageKey === "errors.qa.costConfirmRequired" &&
+    typeof params?.labelCostCents === "number" &&
+    typeof params.chargedCents === "number"
+  ) {
+    return { labelCostCents: params.labelCostCents, chargedCents: params.chargedCents };
+  }
+  return null;
+}
+
 export type OrderFailure = {
   orderId: string;
   messageKey: string;

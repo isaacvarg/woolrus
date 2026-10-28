@@ -52,6 +52,12 @@ export const Reason = z.string().trim().min(1).max(500);
 export const OrderVersionInput = z.object({ id: Id, expectedVersion: ExpectedVersion });
 export type OrderVersionInput = z.infer<typeof OrderVersionInput>;
 
+/** `confirmCost`: the user answered the cost guard's "Buy anyway?" (SPEC-qa "Cost guard"). */
+export const CompleteQaOrderInput = OrderVersionInput.extend({
+  confirmCost: z.boolean().optional(),
+});
+export type CompleteQaOrderInput = z.infer<typeof CompleteQaOrderInput>;
+
 export const OrderReasonInput = OrderVersionInput.extend({ reason: Reason });
 export type OrderReasonInput = z.infer<typeof OrderReasonInput>;
 
@@ -476,7 +482,15 @@ export const orders = {
   beginPicking: move("begin-picking", "Begin picking a Pending order and claim it"),
   completePicking: move("complete-picking", "Finish picking; refused while lines are unpicked"),
   completePacking: move("complete-packing", "Finish packing; refused until every unit is packed"),
-  completeQa: move("complete-qa", "Finish QA; refused until every package is verified and labeled"),
+  completeQa: base
+    .route({
+      method: "POST",
+      path: "/orders/{id}/complete-qa",
+      tags,
+      summary: "Finish QA; refused until every package is verified and labeled",
+    })
+    .input(CompleteQaOrderInput)
+    .output(OrderDetail),
   hold: moveWithReason("hold", "Put an order on hold"),
   resume: move("resume", "Resume a held order at the stage it was held from"),
   cancel: moveWithReason("cancel", "Cancel an order"),

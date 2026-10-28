@@ -172,3 +172,121 @@ test("a Shipper doesn't get a Complete QA button", async ({ page }) => {
   await page.goto(`/qa/${order.id}`);
   await expect(page.getByTestId("qa-complete")).toHaveCount(0);
 });
+
+test("the cost guard asks before buying, and Buy anyway resends with the confirmation", async ({
+  page,
+}) => {
+  const order = await qaOrder(`E2E ${crypto.randomUUID()}`, 2);
+  const qa = await signInAs(page, ["QA"]);
+  const pkg = await db.package.findFirstOrThrow({ where: { orderId: order.id } });
+  await db.packageItem.updateMany({
+    where: { packageId: pkg.id },
+    data: { qaVerifiedQuantity: 2, qaVerifiedAt: new Date(), qaVerifiedById: qa.id },
+  });
+  // The customer paid $1.00 for shipping and the label is $6.50: over the default 2×.
+  await db.order.update({
+    where: { id: order.id },
+    data: { claimedById: qa.id, claimedAt: new Date(), shippingChargedCents: 100 },
+  });
+
+  await withSettingsLock(async () => {
+    const before = await db.shippingProviderAccount.findUnique({
+      where: { provider: "SHIPSTATION" },
+    });
+    await db.settings.updateMany({
+      data: { labelCostConfirmRatio: 2, labelCostConfirmFreeCents: 1500 },
+    });
+    await db.shippingProviderAccount.upsert({
+      where: { provider: "SHIPSTATION" },
+      create: { provider: "SHIPSTATION", enabled: true },
+      update: { enabled: true },
+    });
+    const carrier = await db.shippingCarrier.create({
+      data: {
+        provider: "SHIPSTATION",
+        externalId: `e2e-${crypto.randomUUID()}`,
+        code: "usps",
+        name: "E2E carrier",
+        enabled: true,
+      },
+    });
+    const service = await db.carrierService.create({
+      data: {
+        carrierId: carrier.id,
+        code: "e2e_ground",
+        name: "E2E Ground",
+        domestic: true,
+        international: false,
+        enabled: true,
+      },
+    });
+    await db.shippingRate.create({
+      data: {
+        packageId: pkg.id,
+        provider: "SHIPSTATION",
+        carrierId: carrier.id,
+        serviceId: service.id,
+        carrierCode: "usps",
+        serviceCode: "e2e_ground",
+        serviceName: "E2E Ground",
+        amountCents: 650,
+        currency: "USD",
+        selected: true,
+        expiresAt: new Date(Date.now() + 3_600_000),
+      },
+    });
+    try {
+      await page.goto(`/qa/${order.id}`);
+      await page.getByTestId("qa-complete").click();
+      await expect(page.getByTestId("qa-cost-confirm-body")).toHaveText(
+        "Labels cost $6.50, the customer paid $1.00 for shipping. Buy anyway?",
+      );
+      await page.getByRole("button", { name: "Not yet" }).click();
+      await expect(page.getByTestId("qa-cost-confirm-body")).toHaveCount(0);
+      expect(await db.shippingLabel.count({ where: { packageId: pkg.id } })).toBe(0);
+
+      await page.getByTestId("qa-complete").click();
+      await page.getByTestId("qa-cost-confirm").click();
+      await expect(page.getByTestId("qa-buying")).toHaveText("Buying labels… 0 of 1");
+      await expect
+        .poll(() => db.shippingLabel.count({ where: { packageId: pkg.id, status: "PURCHASING" } }))
+        .toBe(1);
+    } finally {
+      await db.shippingLabel.deleteMany({ where: { packageId: pkg.id } });
+      await db.shippingRate.deleteMany({ where: { packageId: pkg.id } });
+      await db.carrierService.deleteMany({ where: { carrierId: carrier.id } });
+      await db.shippingCarrier.delete({ where: { id: carrier.id } });
+      await db.shippingProviderAccount.update({
+        where: { provider: "SHIPSTATION" },
+        data: { enabled: before?.enabled ?? false },
+      });
+    }
+  });
+});
+
+test("an Admin sets the label cost check on Settings → Shipping; empty turns a check off", async ({
+  page,
+}) => {
+  await withSettingsLock(async () => {
+    await db.settings.updateMany({
+      data: { labelCostConfirmRatio: 2, labelCostConfirmFreeCents: 1500 },
+    });
+    try {
+      await signInAs(page, ["ADMIN"]);
+      await page.goto("/settings/shipping");
+      const card = page.getByRole("region", { name: "Label cost check" });
+      await card.getByLabel("Ask when labels cost more than (×)").fill("3");
+      await card.getByLabel(/Ask when shipping was free/).fill("");
+      await card.getByRole("button", { name: "Save" }).click();
+      await expect(page.getByText("Label cost check saved.")).toBeVisible();
+      await expect
+        .poll(() => db.settings.findFirstOrThrow())
+        .toMatchObject({ labelCostConfirmFreeCents: null });
+      expect(Number((await db.settings.findFirstOrThrow()).labelCostConfirmRatio)).toBe(3);
+    } finally {
+      await db.settings.updateMany({
+        data: { labelCostConfirmRatio: 2, labelCostConfirmFreeCents: 1500 },
+      });
+    }
+  });
+});

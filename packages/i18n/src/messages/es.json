@@ -221,6 +221,16 @@
         "usCanadaMexico": "Desde EE. UU.: solo a Canadá y México",
         "internationalOnly": "Desde EE. UU.: solo internacional",
         "intoUs": "Solo hacia EE. UU. desde otro país"
+      },
+      "costCheck": {
+        "title": "Control del costo de etiquetas",
+        "intro": "Completar QA pregunta antes de comprar etiquetas que cuestan mucho más de lo que el cliente pagó por el envío. Deja un campo vacío para desactivar ese control.",
+        "ratio": "Preguntar cuando las etiquetas cuesten más de (×)",
+        "ratioHint": "Veces lo que el cliente pagó por el envío.",
+        "free": "Preguntar cuando el envío fue gratis y las etiquetas cuesten más de ($)",
+        "freeHint": "Para pedidos en los que el cliente no pagó nada por el envío.",
+        "save": "Guardar",
+        "saved": "Control del costo guardado."
       }
     }
   },
@@ -600,7 +610,13 @@
     "drawerNoRate": "Sin tarifa elegida",
     "drawerVerification": "Calidad: {verified} de {quantity} verificados",
     "drawerNotes": "Notas",
-    "drawerCustomerNote": "Nota del cliente"
+    "drawerCustomerNote": "Nota del cliente",
+    "costConfirm": {
+      "title": "¿Comprar estas etiquetas?",
+      "body": "Las etiquetas cuestan {cost}, el cliente pagó {charged} por el envío. ¿Comprar de todos modos?",
+      "confirm": "Comprar de todos modos",
+      "cancel": "Ahora no"
+    }
   },
   "pick": {
     "title": "Surtir #{number}",
@@ -1202,7 +1218,8 @@
       "purchaseUnknown": "No pudimos confirmar si esta etiqueta se compró. Busca en el proveedor una etiqueta con el número de este pedido.",
       "scanNotOnOrder": "Eso es {name}. No está en este pedido.",
       "scanOtherPackage": "Eso va en el paquete {package}, no en este.",
-      "scanAlreadyVerified": "Todo {line} de este paquete ya está verificado."
+      "scanAlreadyVerified": "Todo {line} de este paquete ya está verificado.",
+      "costConfirmRequired": "Estas etiquetas cuestan mucho más de lo que el cliente pagó por el envío. Confirma para comprarlas de todos modos."
     }
   },
   "emails": {

@@ -6,9 +6,10 @@ import Link from "next/link";
 import { useFormatter, useTranslations } from "next-intl";
 import { useState } from "react";
 import { ReportIssueFlow } from "@/components/exceptions/report-issue-flow";
+import { Dialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/fields";
 import { toast } from "@/components/ui/toast";
-import { useErrorMessage } from "@/lib/errors";
+import { costConfirmOf, useErrorMessage } from "@/lib/errors";
 import { client, orpc } from "@/lib/orpc";
 import { playScanSound, useScanner } from "@/lib/scanner";
 import { ScanBanner, type ScanOutcome } from "../../pick/[orderId]/pick-screen";
@@ -34,6 +35,47 @@ function applyTap(view: QaView, rowId: string, verified: boolean): QaView {
       ),
     })),
   };
+}
+
+/** The cost guard's "Buy anyway?" (SPEC-qa "Cost guard"). */
+function CostConfirmDialog({
+  ask,
+  onCancel,
+  onConfirm,
+}: {
+  ask: { labelCostCents: number; chargedCents: number } | null;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const t = useTranslations();
+  const format = useFormatter();
+  return (
+    <Dialog
+      title={t("qa.costConfirm.title")}
+      isOpen={ask !== null}
+      onOpenChange={(open) => !open && onCancel()}
+    >
+      {() => (
+        <>
+          <p data-testid="qa-cost-confirm-body">
+            {ask &&
+              t("qa.costConfirm.body", {
+                cost: money(format, ask.labelCostCents),
+                charged: money(format, ask.chargedCents),
+              })}
+          </p>
+          <div className="flex justify-end gap-2">
+            <Button className="btn-ghost" onPress={onCancel}>
+              {t("qa.costConfirm.cancel")}
+            </Button>
+            <Button className="btn-primary" onPress={onConfirm} data-testid="qa-cost-confirm">
+              {t("qa.costConfirm.confirm")}
+            </Button>
+          </div>
+        </>
+      )}
+    </Dialog>
+  );
 }
 
 export function QaScreen({
@@ -155,10 +197,20 @@ function QaLayout({
     scan.mutate({ pkg: focused, code, scanId: crypto.randomUUID() });
   }, mayVerify);
 
+  // The cost guard's question; confirming resends with `confirmCost`.
+  const [costAsk, setCostAsk] = useState<{ labelCostCents: number; chargedCents: number } | null>(
+    null,
+  );
   const complete = useMutation({
-    mutationFn: () => client.orders.completeQa({ id: order.id, expectedVersion: order.version }),
+    mutationFn: (confirmCost?: boolean) =>
+      client.orders.completeQa({ id: order.id, expectedVersion: order.version, confirmCost }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: viewKey }),
     onError: (error) => {
+      const ask = costConfirmOf(error);
+      if (ask) {
+        setCostAsk(ask);
+        return;
+      }
       toast.error(errorMessage(error));
       void queryClient.invalidateQueries({ queryKey: viewKey });
     },
@@ -201,6 +253,14 @@ function QaLayout({
 
   return (
     <section className="mx-auto max-w-6xl space-y-4 pb-28">
+      <CostConfirmDialog
+        ask={costAsk}
+        onCancel={() => setCostAsk(null)}
+        onConfirm={() => {
+          setCostAsk(null);
+          complete.mutate(true);
+        }}
+      />
       {reporting && (
         <ReportIssueFlow
           key={reporting.orderItemId ?? reporting.packageId}
@@ -290,7 +350,7 @@ function QaLayout({
             {mayComplete && (
               <Button
                 className="btn-primary ms-auto"
-                onPress={() => complete.mutate()}
+                onPress={() => complete.mutate(undefined)}
                 isDisabled={complete.isPending}
                 data-testid="qa-complete"
               >
