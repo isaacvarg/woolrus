@@ -2,7 +2,7 @@
 
 **Milestone:** M4 · **Depends on:** — (runs alongside; reads `settings`, pings `store-sync`, extends the health
 entries `notes`, `identity` and `carriers` added) · **Used by:** every module (error capture, log bindings) ·
-**State:** spec approved · **Issue:** [#29](https://github.com/isaacvarg/woolrus/issues/29)
+**State:** planned · **Issue:** [#29](https://github.com/isaacvarg/woolrus/issues/29)
 
 Project-wide commands, structure, code style, testing levels and boundaries are in [`../../SPEC.md`](../../SPEC.md);
 this spec only adds what is specific to `operations`.
