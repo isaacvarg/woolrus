@@ -65,3 +65,12 @@ export const queueOptions: Partial<
 
 /** pg-boss keeps its tables in their own schema, separate from Prisma's. */
 export const JOBS_SCHEMA = "pgboss";
+
+/**
+ * Whether a pg-boss job is on its last try: `retryCount` counts the retries so far, so with
+ * `retryLimit: 2` the third run (`retryCount` 2) is the last. A handler that stores a failure for
+ * people to see does it then rather than on every attempt.
+ */
+export function isFinalAttempt(job: { retryCount: number; retryLimit: number }): boolean {
+  return job.retryCount >= job.retryLimit;
+}

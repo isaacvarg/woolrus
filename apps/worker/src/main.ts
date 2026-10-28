@@ -4,6 +4,7 @@ import {
   ensureBucketOnFirstUse,
   fakeShippingProviders,
   getEmailSender,
+  isFinalAttempt,
   JOBS_SCHEMA,
   type JobPayloads,
   pollIfDue,
@@ -149,8 +150,7 @@ await boss.work(
   { includeMetadata: true, localConcurrency: 4 },
   async ([job]: JobWithMetadata<JobPayloads[typeof queues.ratesFetch]>[]) => {
     if (!job) return;
-    const finalAttempt = job.retryCount >= job.retryLimit;
-    const result = await runRatesFetchJob(db, job.data, { finalAttempt });
+    const result = await runRatesFetchJob(db, job.data, { finalAttempt: isFinalAttempt(job) });
     ratesLog.info({ jobId: job.id, ...job.data, ...result }, "rates.fetch done");
   },
 );

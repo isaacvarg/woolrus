@@ -32,10 +32,11 @@ validation and the ShipStation adapter. It does **not** buy or void labels as a 
 ### User stories
 
 1. As an admin, on **Settings → Shipping** I see one card per provider (ShipStation, Bridge Source). I enter
-   ShipStation's API key, click **Test connection**, then **Sync carriers**: UPS, USPS and the other carriers
-   connected in our ShipStation account appear with their services.
-2. I switch on the provider, then the carriers and services we actually use. Each service shows Domestic and/or
-   International. Nothing is on until I turn it on.
+   ShipStation's API key, click **Test connection**, and switch the provider on (it needs a passing test).
+2. I click **Sync carriers**: UPS, USPS and the other carriers connected in our ShipStation account appear with
+   their services, each showing Domestic and/or International. Nothing is used until I switch on the carriers and
+   services we actually use. Sync needs the provider on (`providerOff` otherwise), so it never calls a provider
+   whose credentials haven't passed a test.
 3. When Bridge Source's adapter lands, I give it credentials and switch it on the same way. Its rates now show
    next to ShipStation's. If I switch it off, new rate fetches skip it; rates already fetched stay until refreshed.
 4. As a packer, I complete packing and move on. A few seconds later the order in QA has rates for every package.
