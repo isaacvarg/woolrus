@@ -83,6 +83,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
                 <Link href="/settings/priority-rules">{t("nav.priorityRules")}</Link>
               </li>
               <li>
+                <Link href="/settings/shipping">{t("nav.shippingSettings")}</Link>
+              </li>
+              <li>
                 <Link href="/sync">{t("nav.sync")}</Link>
               </li>
             </>

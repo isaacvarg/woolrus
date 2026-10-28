@@ -21,6 +21,7 @@
     "queues": "Colas",
     "myPicks": "Mis surtidos",
     "priorityRules": "Reglas de prioridad",
+    "shippingSettings": "Envíos",
     "sync": "Sincronización",
     "users": "Usuarios",
     "stations": "Estaciones",
@@ -127,7 +128,6 @@
       "lumexiaBaseUrl": "URL base de la API",
       "names": {
         "woocommerce": "WooCommerce",
-        "shipstation": "ShipStation",
         "lumexia": "Lumexia",
         "email": "Correo"
       },
@@ -135,7 +135,6 @@
         "wooConsumerKey": "Clave de consumidor",
         "wooConsumerSecret": "Secreto de consumidor",
         "wooWebhookSecret": "Secreto del webhook",
-        "shipstationApiKey": "Clave de API",
         "lumexiaApiKey": "Clave de API",
         "resendApiKey": "Clave API de Resend"
       },
@@ -171,6 +170,45 @@
       "sendTestEmailHint": "Se envía a tu propia dirección con el remitente y la clave guardados.",
       "testEmailSent": "Enviado a {to}. Revisa tu bandeja de entrada.",
       "testEmailLogged": "Resend no está configurado, así que el correo para {to} se escribió en el registro del servidor en lugar de enviarse."
+    },
+    "shipping": {
+      "title": "Envíos",
+      "intro": "Woolrus pide tarifas a cada proveedor de envíos solo mientras está activado. Agrega sus credenciales, prueba la conexión y luego actívalo.",
+      "names": {
+        "SHIPSTATION": "ShipStation",
+        "BRIDGE_SOURCE": "Bridge Source"
+      },
+      "fields": {
+        "apiKey": "Clave de API",
+        "customerId": "ID de cliente",
+        "baseUrl": "URL base de la API"
+      },
+      "credentials": "Credenciales",
+      "enable": "Usar {name}",
+      "enabledToast": "{name} está activado.",
+      "disabledToast": "{name} está desactivado. Las nuevas solicitudes de tarifas lo omiten.",
+      "comingSoon": "Próximamente",
+      "comingSoonHint": "Esta versión de Woolrus aún no puede conectarse a {name}.",
+      "clearConfirm": "¿Borrar las credenciales de {name}? Queda desactivado hasta que se agreguen otras.",
+      "testConnection": "Probar conexión",
+      "testOk": "Conectado.",
+      "lastChecked": "Comprobado {at}.",
+      "carrierCount": "{count, plural, =0 {Aún no hay transportistas sincronizados.} one {# transportista sincronizado.} other {# transportistas sincronizados.}}",
+      "urlMoveBody": "La nueva dirección está en otro servidor. Al guardarla se borran las credenciales guardadas y se desactiva el proveedor, para que nunca se envíen allí. Agrégalas de nuevo para la nueva dirección.",
+      "savedCredentialsCleared": "Guardado. Se borraron las credenciales de la dirección anterior: agrégalas para la nueva.",
+      "sync": "Sincronizar transportistas",
+      "lastSynced": "Última sincronización: {at}.",
+      "syncHint": "Activa {name} para sincronizar sus transportistas.",
+      "syncedToast": "{name} sincronizado: {added, plural, =0 {nada nuevo} one {# transportista o servicio nuevo} other {# transportistas y servicios nuevos}}{missing, plural, =0 {} other {, # ya no se ofrecen}}.",
+      "carriersHint": "Los transportistas y servicios nuevos llegan desactivados. Un servicio solo se usa cuando él y su transportista están activados.",
+      "carriersCaption": "Transportistas y servicios de {name}",
+      "carrierColumn": "Transportista y servicios",
+      "shipsColumn": "Envía",
+      "carrierSwitch": "Usar el transportista {name}",
+      "serviceSwitch": "Usar {carrier} {name}",
+      "domestic": "Nacional",
+      "international": "Internacional",
+      "noLongerOffered": "Ya no se ofrece"
     }
   },
   "priorityRules": {
@@ -351,6 +389,67 @@
     "pickedBy": "{name}, {time}",
     "openPickScreen": "Abrir pantalla de surtido",
     "openPackScreen": "Abrir pantalla de empaque"
+  },
+  "orderShipping": {
+    "title": "Envío",
+    "shipTo": "Enviar a",
+    "shipToStatus": {
+      "UNCHECKED": "Sin verificar",
+      "VERIFIED": "Verificada",
+      "CORRECTED": "Corregida",
+      "WARNING": "Revisa la dirección",
+      "ERROR": "No entregable",
+      "INCOMPLETE": "Incompleta"
+    },
+    "notResolved": "Todavía no se han obtenido tarifas para este pedido.",
+    "incomplete": "A la dirección le falta {fields}, así que no se obtuvieron tarifas.",
+    "fields": {
+      "name": "el nombre",
+      "address1": "la calle",
+      "city": "la ciudad",
+      "postalCode": "el código postal",
+      "country": "el país",
+      "company": "la empresa",
+      "address2": "la segunda línea",
+      "state": "el estado"
+    },
+    "package": "Paquete {number}",
+    "ratesStatus": {
+      "NONE": "Sin tarifas aún",
+      "FETCHING": "Obteniendo tarifas…",
+      "READY": "Tarifas",
+      "FAILED": "Sin tarifas",
+      "STALE": "Cambió después de obtener sus tarifas"
+    },
+    "stale": "El paquete cambió después de obtener sus tarifas. Actualiza las tarifas.",
+    "providerError": "{provider}: sin tarifas. {reason}",
+    "noRates": "No hay tarifas para este paquete.",
+    "fetchedAt": "Obtenidas {time}",
+    "rates": "Tarifas del paquete {number}",
+    "columns": {
+      "provider": "Proveedor",
+      "carrier": "Transportista",
+      "service": "Servicio",
+      "price": "Precio",
+      "delivery": "Entrega",
+      "expires": "Vence"
+    },
+    "deliveryDays": "{count, plural, one {# día} other {# días}}",
+    "guaranteed": "Garantizada",
+    "selected": "Seleccionada",
+    "expired": "Vencida",
+    "refresh": "Actualizar tarifas",
+    "refreshing": "Obteniendo las tarifas de nuevo.",
+    "original": "Original",
+    "correctedTo": "Corregida a",
+    "changed": "Cambió {fields}.",
+    "unchecked": "Ningún proveedor de envío verificó esta dirección.",
+    "undeliverable": "El proveedor no pudo confirmar esta dirección. Aun así puedes comprar una etiqueta.",
+    "checking": "Verificando la dirección…",
+    "useOriginal": "Usar la dirección original",
+    "usingOriginal": "Se usa la dirección original. Obteniendo las tarifas de nuevo.",
+    "recheck": "Verificar la dirección de nuevo",
+    "rechecking": "Verificando la dirección de nuevo."
   },
   "pack": {
     "title": "Empacar #{number}",
@@ -949,6 +1048,25 @@
         "removedHasRecords": "{line} se eliminó en la tienda, pero tiene notas, incidencias o anulaciones.",
         "pastPacking": "{line}: el pedido ya pasó Empaque, así que una línea nueva o mayor se enviaría sin surtir ni empacar. Regrésalo a Empaque primero, o descarta el cambio."
       }
+    },
+    "shipping": {
+      "unauthorized": "El proveedor de envíos rechazó sus credenciales. Revísalas en Configuración → Envíos.",
+      "rejected": "El proveedor de envíos rechazó la solicitud. Revisa la dirección, el paquete y el servicio.",
+      "unavailable": "No se pudo conectar con el proveedor de envíos. Inténtalo de nuevo en un minuto.",
+      "timeout": "El proveedor de envíos tardó demasiado en responder. Inténtalo de nuevo en un minuto."
+    },
+    "carriers": {
+      "credentialsMissing": "Primero agrega las credenciales del proveedor.",
+      "providerNotAvailable": "Este proveedor aún no está disponible en esta versión de Woolrus.",
+      "providerUnreachable": "El proveedor no aceptó la prueba de conexión, así que no se activó. Revisa sus credenciales e inténtalo de nuevo.",
+      "providerOff": "Activa el proveedor antes de sincronizar sus transportistas.",
+      "noCarriers": "Ningún transportista o servicio de este proveedor está activado para este destino.",
+      "noShipFrom": "Configura la dirección de origen en Configuración antes de obtener tarifas.",
+      "noProviders": "No hay ningún proveedor de envío activado. Un administrador lo activa en Configuración → Envíos.",
+      "packageIncomplete": "El paquete necesita un peso y una caja o medidas antes de cotizarlo.",
+      "notInQa": "Las tarifas solo se pueden actualizar mientras el pedido está en QA.",
+      "liveLabel": "Un paquete ya tiene etiqueta. Anúlala antes de actualizar las tarifas.",
+      "noShipTo": "Este pedido aún no tiene dirección de envío. Obtén sus tarifas primero."
     },
     "email": {
       "unauthorized": "Resend rechazó la clave API. Revísala en Configuración → Integraciones.",

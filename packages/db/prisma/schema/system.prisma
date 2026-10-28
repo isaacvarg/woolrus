@@ -17,7 +17,6 @@ model Settings {
   wooConsumerKeyEnc    String? @map("woo_consumer_key_enc")
   wooConsumerSecretEnc String? @map("woo_consumer_secret_enc")
   wooWebhookSecretEnc  String? @map("woo_webhook_secret_enc")
-  shipstationApiKeyEnc String? @map("shipstation_api_key_enc")
   lumexiaBaseUrl       String? @map("lumexia_base_url")
   lumexiaApiKeyEnc     String? @map("lumexia_api_key_enc")
   /// Sender for app email, e.g. "Woolrus <no-reply@example.com>" (SPEC-identity "Email").

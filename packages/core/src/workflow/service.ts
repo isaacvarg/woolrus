@@ -1,5 +1,6 @@
 import type { Db, DbTx, Order, WorkflowStatus } from "@woolrus/db";
 import { recordAudit } from "../audit";
+import { requestRateFetch } from "../carriers/rates";
 import { AppError } from "../errors";
 import { type Actor, assertCan } from "../permissions";
 import { claimExpiryMinutes, holdsClaim, isClaimLive } from "./claims";
@@ -108,6 +109,10 @@ export async function transition(
   });
   await notifyOrderChanged(tx, { id: orderId, status: to });
 
+  // FR-PACK-07: rates for every package, on this transaction so a rolled-back move asks for none.
+  if (kind === "completePacking") {
+    return { ...updated, rateGeneration: await requestRateFetch(tx, orderId) };
+  }
   return updated;
 }
 

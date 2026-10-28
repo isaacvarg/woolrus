@@ -1,12 +1,14 @@
 import type { ExternalChange } from "@woolrus/contracts";
 import { type Db, type DbTx, type Order, Prisma } from "@woolrus/db";
 import { recordAudit } from "../audit";
+import { forgetShipTo } from "../carriers/ship-to";
 import { AppError, type UnmetCondition } from "../errors";
 import { type Actor, assertCan } from "../permissions";
 import { lockOrder } from "../workflow/lock";
 import { notifyOrderChanged } from "../workflow/notify";
 import { recomputePriorities } from "../workflow/priority-rules";
 import {
+  addressChanged,
   type DismissedSummary,
   type ExternalChangeSummary,
   headerFields,
@@ -46,6 +48,7 @@ export async function applyExternalChange(
       where: { id: orderId },
       data: { ...header, ...clearFlag, version: { increment: 1 } },
     });
+    if (addressChanged(diff)) await forgetShipTo(tx, updated);
     await recordAudit(tx, actor, {
       entityType: "Order",
       entityId: orderId,

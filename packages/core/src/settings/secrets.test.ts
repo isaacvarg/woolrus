@@ -49,8 +49,8 @@ describe("settings secrets", () => {
       await getSettings(db, admin),
       await getPublicSettings(db, admin),
       await updateSettings(db, admin, { syncIntervalMinutes: 30 }),
-      await setSecret(db, admin, { name: "shipstationApiKey", value: `${SECRET}-ss` }),
-      await clearSecret(db, admin, { name: "shipstationApiKey" }),
+      await setSecret(db, admin, { name: "lumexiaApiKey", value: `${SECRET}-lx` }),
+      await clearSecret(db, admin, { name: "lumexiaApiKey" }),
     ];
     const audit = await db.auditEvent.findMany();
 
@@ -60,8 +60,8 @@ describe("settings secrets", () => {
     expect(audit.map((e) => [e.action, e.after])).toEqual(
       expect.arrayContaining([
         ["secret.set", { secret: "wooConsumerSecret" }],
-        ["secret.set", { secret: "shipstationApiKey" }],
-        ["secret.clear", { secret: "shipstationApiKey" }],
+        ["secret.set", { secret: "lumexiaApiKey" }],
+        ["secret.clear", { secret: "lumexiaApiKey" }],
       ]),
     );
   });

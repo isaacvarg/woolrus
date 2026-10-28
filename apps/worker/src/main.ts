@@ -2,7 +2,9 @@ import {
   configuredStore,
   createS3Storage,
   ensureBucketOnFirstUse,
+  fakeShippingProviders,
   getEmailSender,
+  isFinalAttempt,
   JOBS_SCHEMA,
   type JobPayloads,
   pollIfDue,
@@ -11,6 +13,7 @@ import {
   queues,
   recomputePriorities,
   runEmailJob,
+  runRatesFetchJob,
   runStorageDeleteJob,
   s3ConfigFromEnv,
   sweepOrphanFiles,
@@ -18,9 +21,14 @@ import {
 } from "@woolrus/core";
 import { db } from "@woolrus/db";
 import { createLogger } from "@woolrus/logger";
-import { PgBoss } from "pg-boss";
+import { type JobWithMetadata, PgBoss } from "pg-boss";
 
 const log = createLogger({ module: "main" });
+
+// Fake shipping providers quote fake rates and buy fake labels: never what production should run.
+if (process.env.NODE_ENV === "production" && fakeShippingProviders()) {
+  log.warn("SHIPPING_PROVIDERS=fake is on in production: rates and labels are fake");
+}
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) throw new Error("DATABASE_URL is not set");
@@ -133,6 +141,19 @@ await boss.work<JobPayloads[typeof queues.storageSweep]>(queues.storageSweep, as
   const result = await sweepOrphanFiles(db, storage);
   storageLog.info({ jobId: job?.id, ...result }, "storage.sweep done");
 });
+
+// Rates after Packing → QA and on Refresh rates (FR-PACK-07). Every provider failing transiently
+// throws for a retry (3 attempts, backoff); the last attempt stores the failure for QA instead.
+const ratesLog = createLogger({ module: "rates" });
+await boss.work(
+  queues.ratesFetch,
+  { includeMetadata: true, localConcurrency: 4 },
+  async ([job]: JobWithMetadata<JobPayloads[typeof queues.ratesFetch]>[]) => {
+    if (!job) return;
+    const result = await runRatesFetchJob(db, job.data, { finalAttempt: isFinalAttempt(job) });
+    ratesLog.info({ jobId: job.id, ...job.data, ...result }, "rates.fetch done");
+  },
+);
 
 log.info({ queues: Object.values(queues) }, "worker started");
 

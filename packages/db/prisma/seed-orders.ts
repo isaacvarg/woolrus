@@ -1,12 +1,13 @@
-import type {
-  Db,
-  DbTx,
-  PickStatus,
+import {
+  type Db,
+  type DbTx,
+  type PickStatus,
   Prisma,
-  QualityIssueSeverity,
-  QualityIssueStatus,
-  QualityIssueType,
-  WorkflowStatus,
+  type QualityIssueSeverity,
+  type QualityIssueStatus,
+  type QualityIssueType,
+  type ShippingProviderId,
+  type WorkflowStatus,
 } from "../src/index";
 
 // Demo orders for the dev stack (SPEC-workflow "Dev data"), so queues and order pages can be used
@@ -103,6 +104,8 @@ type DemoOrder = {
   voids?: { line: number; quantity: number; resolved?: boolean }[];
   /** Quality issues (exceptions dev data). */
   issues?: DemoIssue[];
+  /** The street line, when not the default; one with "Street" gets corrected by the fake ShipStation. */
+  street?: string;
 };
 
 type DemoIssue = {
@@ -144,7 +147,7 @@ const orders: DemoOrder[] = [
   // QA: two verified and labeled, two waiting for verification.
   { customer: "Rosa Delgado", status: "QA", lines: [["NDL-DPN-4", 2]], progress: "labeled", ageHours: 18, inStageMinutes: 15 },
   { customer: "Samuel Torres", status: "QA", lines: [["WOOL-MER-NAVY", 1], ["WOOL-MER-RED", 1]], progress: "labeled", ageHours: 19, inStageMinutes: 30 },
-  { customer: "Teresa Flores", status: "QA", lines: [["KIT-BEANIE", 3]], progress: "packed", ageHours: 22, inStageMinutes: 45 },
+  { customer: "Teresa Flores", status: "QA", lines: [["KIT-BEANIE", 3]], progress: "packed", ageHours: 22, inStageMinutes: 45, street: "15 Elm Street" },
   { customer: "Ulises Reyes", status: "QA", lines: [["BOOK-WINTER", 2]], progress: "packed", ageHours: 23, inStageMinutes: 90 },
   // Ready
   { customer: "Valeria Soto", status: "READY", lines: [["WOOL-ALP-CRM", 4]], progress: "labeled", ageHours: 26, inStageMinutes: 60 },
@@ -202,9 +205,9 @@ function priorityOf(order: DemoOrder): number {
   return 0;
 }
 
-const address = (name: string): Prisma.InputJsonValue => ({
+const address = (name: string, street = "742 Evergreen Terrace"): Prisma.InputJsonObject => ({
   name,
-  address1: "742 Evergreen Terrace",
+  address1: street,
   city: "Austin",
   state: "TX",
   postalCode: "78701",
@@ -243,12 +246,231 @@ async function upsertProducts(db: Db): Promise<Map<string, { id: string; physica
   return bySku;
 }
 
+type DemoService = { carrierId: string; serviceId: string };
+
+/** Both provider accounts, disabled, as Settings → Shipping would create them on first read. */
+async function upsertProviderAccounts(db: Db): Promise<void> {
+  for (const provider of ["SHIPSTATION", "BRIDGE_SOURCE"] as const) {
+    await db.shippingProviderAccount.upsert({
+      where: { provider },
+      create: { provider },
+      update: {},
+    });
+  }
+}
+
+type FakeService = {
+  code: string;
+  name: string;
+  domestic: boolean;
+  baseCents: number;
+  perOzCents: number;
+  days: number;
+  guaranteed?: boolean;
+};
+type FakeCatalog = {
+  provider: ShippingProviderId;
+  providerData: Prisma.InputJsonObject;
+  carriers: { externalId: string; code: string; name: string; services: FakeService[] }[];
+};
+
+// What core's fake providers (adapters/shipping/fake.ts) list and quote, for SHIPPING_PROVIDERS=fake.
+// This package can't depend on core, so carriers/demo-shipping.test.ts holds these to the fakes.
+// biome-ignore format: one service per line reads as a table
+const fakeCatalogs: FakeCatalog[] = [
+  {
+    provider: "SHIPSTATION",
+    providerData: {},
+    carriers: [
+      { externalId: "se-demo-ground", code: "demo_ground", name: "Demo Ground", services: [
+        { code: "demo_ground", name: "Demo Ground", domestic: true, baseCents: 450, perOzCents: 12, days: 5 },
+        { code: "demo_ground_saver", name: "Demo Ground Saver", domestic: true, baseCents: 395, perOzCents: 14, days: 7 },
+      ] },
+      { externalId: "se-demo-express", code: "demo_express", name: "Demo Express", services: [
+        { code: "demo_express", name: "Demo Express", domestic: true, baseCents: 1250, perOzCents: 20, days: 2, guaranteed: true },
+        { code: "demo_express_intl", name: "Demo Express International", domestic: false, baseCents: 3200, perOzCents: 40, days: 6 },
+      ] },
+    ],
+  },
+  {
+    provider: "BRIDGE_SOURCE",
+    providerData: { packageTypeCode: "CUSTOM" },
+    carriers: [
+      { externalId: "DEMOGND", code: "demo_ground", name: "Demo Ground", services: [
+        { code: "GND", name: "Demo Ground", domestic: true, baseCents: 430, perOzCents: 13, days: 5 },
+        { code: "GNDECO", name: "Demo Ground Economy", domestic: true, baseCents: 410, perOzCents: 13, days: 8 },
+      ] },
+      { externalId: "DEMOEXP", code: "demo_express", name: "Demo Express", services: [
+        { code: "EXP", name: "Demo Express", domestic: true, baseCents: 1290, perOzCents: 18, days: 2, guaranteed: true },
+        { code: "EXPINTL", name: "Demo Express International", domestic: false, baseCents: 3050, perOzCents: 42, days: 6 },
+      ] },
+    ],
+  },
+];
+
+type FakeServiceRow = DemoService & {
+  provider: ShippingProviderId;
+  carrierExternalId: string;
+  carrierCode: string;
+  service: FakeService;
+};
+
+/**
+ * The fakes' carriers and services as a sync stores them, with the domestic ones on. Re-running
+ * keeps whatever was switched since.
+ */
+async function upsertFakeCatalogs(db: Db): Promise<FakeServiceRow[]> {
+  const rows: FakeServiceRow[] = [];
+  for (const { provider, providerData, carriers } of fakeCatalogs) {
+    for (const { externalId, code, name, services } of carriers) {
+      const carrier = await db.shippingCarrier.upsert({
+        where: { provider_externalId: { provider, externalId } },
+        create: { provider, externalId, code, name, enabled: true },
+        // Demo stacks seeded when the code was the external id get the carrier's code.
+        update: { code },
+      });
+      for (const service of services) {
+        const row = await db.carrierService.upsert({
+          where: { carrierId_code: { carrierId: carrier.id, code: service.code } },
+          create: {
+            carrierId: carrier.id,
+            code: service.code,
+            name: service.name,
+            domestic: service.domestic,
+            international: !service.domestic,
+            enabled: service.domestic,
+            providerData,
+          },
+          update: {},
+        });
+        if (service.domestic) {
+          rows.push({
+            provider,
+            carrierExternalId: externalId,
+            carrierCode: carrier.code,
+            carrierId: carrier.id,
+            serviceId: row.id,
+            service,
+          });
+        }
+      }
+    }
+  }
+  return rows;
+}
+
+/** A demo ship-from, so Refresh rates works once a fake provider is turned on. */
+const demoShipFrom = {
+  name: "Woolrus Warehouse",
+  phone: "512-555-0100",
+  address1: "100 Dock Rd",
+  city: "Austin",
+  state: "TX",
+  postalCode: "78702",
+  country: "US",
+};
+
+/** How long a rate without its own expiry is good for (core's RATE_TTL_HOURS). */
+const RATE_TTL_HOURS = 24;
+const providerOrder: ShippingProviderId[] = ["SHIPSTATION", "BRIDGE_SOURCE"];
+
+/** What each fake quotes for a package of `weightOz`, cheapest first, as core's rate fetch stores it. */
+function fakeRates(services: FakeServiceRow[], weightOz: number, shipmentId: string, now: Date) {
+  const day = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  return services
+    .map(({ provider, carrierExternalId, carrierCode, carrierId, serviceId, service }) => {
+      const amountCents = service.baseCents + service.perOzCents * Math.ceil(weightOz);
+      // ShipStation quotes with a rate id and a delivery estimate; Bridge Source with neither.
+      const shipStation = provider === "SHIPSTATION";
+      return {
+        provider,
+        carrierId,
+        serviceId,
+        providerRateId: shipStation
+          ? `se-rate:${carrierExternalId}:${service.code}:${amountCents}`
+          : null,
+        providerShipmentId: shipStation ? shipmentId : null,
+        carrierCode,
+        serviceCode: service.code,
+        serviceName: service.name,
+        amountCents,
+        currency: "USD",
+        deliveryDays: shipStation ? service.days : null,
+        estimatedDeliveryAt: shipStation
+          ? new Date(day.getTime() + service.days * 86_400_000)
+          : null,
+        guaranteed: service.guaranteed ?? false,
+        trackable: true,
+        fetchedAt: now,
+        expiresAt: new Date(now.getTime() + RATE_TTL_HOURS * 3_600_000),
+      };
+    })
+    .sort(
+      (a, b) =>
+        a.amountCents - b.amountCents ||
+        (a.deliveryDays ?? Number.POSITIVE_INFINITY) -
+          (b.deliveryDays ?? Number.POSITIVE_INFINITY) ||
+        providerOrder.indexOf(a.provider) - providerOrder.indexOf(b.provider) ||
+        a.serviceName.localeCompare(b.serviceName),
+    )
+    .map((rate, i) => ({ ...rate, selected: i === 0 }));
+}
+
+/** What the fake ShipStation's address check answers: any "Street" becomes "St". */
+function fakeShipTo(original: Prisma.InputJsonObject, now: Date) {
+  const street = String(original.address1);
+  const fixed = street.replace(/\bStreet\b/g, "St");
+  const corrected = fixed !== street;
+  return {
+    shipTo: corrected ? { ...original, address1: fixed } : original,
+    shipToOriginal: original,
+    shipToStatus: corrected ? ("CORRECTED" as const) : ("VERIFIED" as const),
+    shipToMessages: corrected ? ["Street abbreviated."] : [],
+    shipToCheckedAt: now,
+  };
+}
+
+/**
+ * How demo packages past Packing get their rates: from both fakes (SHIPPING_PROVIDERS=fake), or
+ * one placeholder USPS rate on verified packages otherwise.
+ */
+type DemoShipping = { fake: FakeServiceRow[] } | { placeholder: DemoService };
+
+/** The carrier and service the placeholder demo rates point at, without the fake providers. */
+async function upsertDemoService(db: Db): Promise<DemoService> {
+  const carrier = await db.shippingCarrier.upsert({
+    where: { provider_externalId: { provider: "SHIPSTATION", externalId: "demo-usps" } },
+    create: {
+      provider: "SHIPSTATION",
+      externalId: "demo-usps",
+      code: "usps",
+      name: "USPS",
+      enabled: true,
+    },
+    update: {},
+  });
+  const service = await db.carrierService.upsert({
+    where: { carrierId_code: { carrierId: carrier.id, code: "usps_ground_advantage" } },
+    create: {
+      carrierId: carrier.id,
+      code: "usps_ground_advantage",
+      name: "USPS Ground Advantage",
+      domestic: true,
+      international: false,
+      enabled: true,
+    },
+    update: {},
+  });
+  return { carrierId: carrier.id, serviceId: service.id };
+}
+
 async function createDemoOrder(
   tx: DbTx,
   index: number,
   spec: DemoOrder,
   catalog: Map<string, { id: string; physical: boolean }>,
   boxId: string | null,
+  shipping: DemoShipping,
   now: Date,
 ): Promise<void> {
   const hoursAgo = (h: number) => new Date(now.getTime() - h * 3_600_000);
@@ -270,8 +492,8 @@ async function createDemoOrder(
       currency: "USD",
       customerName: spec.customer,
       customerEmail: `${spec.customer.split(" ")[0]?.toLowerCase()}@example.test`,
-      shippingAddress: address(spec.customer),
-      billingAddress: address(spec.customer),
+      shippingAddress: address(spec.customer, spec.street),
+      billingAddress: address(spec.customer, spec.street),
       totalCents: spec.lines.reduce((sum, [, qty]) => sum + qty * 1800, 0),
       shippingMethod: spec.method ?? "Flat rate",
       orderedAt,
@@ -390,11 +612,34 @@ async function createDemoOrder(
         },
       });
     }
-    if (verified) {
+    // Packing → QA fetched rates for every package that got that far.
+    const rated = "fake" in shipping && ["QA", "READY", "COMPLETED"].includes(spec.status);
+    let bought = {
+      provider: "SHIPSTATION" as ShippingProviderId,
+      carrierCode: "usps",
+      serviceCode: "usps_ground_advantage",
+      costCents: 650,
+    };
+    if (rated && "fake" in shipping) {
+      const rates = fakeRates(shipping.fake, 24, `se-shp-demo-${index + 1}`, now);
+      await tx.shippingRate.createMany({ data: rates.map((r) => ({ ...r, packageId: pkg.id })) });
+      await tx.package.update({
+        where: { id: pkg.id },
+        data: { ratesStatus: "READY", ratesFetchedAt: now },
+      });
+      const [cheapest] = rates;
+      if (cheapest) bought = { ...cheapest, costCents: cheapest.amountCents };
+      await tx.order.update({
+        where: { id: order.id },
+        data: fakeShipTo(address(spec.customer, spec.street), now),
+      });
+    } else if (verified && "placeholder" in shipping) {
       await tx.shippingRate.create({
         data: {
           packageId: pkg.id,
-          shipstationRateId: `demo-rate-${index + 1}`,
+          provider: "SHIPSTATION",
+          ...shipping.placeholder,
+          providerRateId: `demo-rate-${index + 1}`,
           carrierCode: "usps",
           serviceCode: "usps_ground_advantage",
           serviceName: "USPS Ground Advantage",
@@ -409,11 +654,12 @@ async function createDemoOrder(
         data: {
           packageId: pkg.id,
           status: "ACTIVE",
+          provider: bought.provider,
           idempotencyKey: `demo-label-${index + 1}`,
           trackingNumber: `9400100000000000${String(index + 1).padStart(6, "0")}`,
-          carrierCode: "usps",
-          serviceCode: "usps_ground_advantage",
-          costCents: 650,
+          carrierCode: bought.carrierCode,
+          serviceCode: bought.serviceCode,
+          costCents: bought.costCents,
           currency: "USD",
           purchasedAt: enteredAt,
         },
@@ -447,17 +693,38 @@ async function seedDemoRules(db: Db): Promise<void> {
   }
 }
 
-/** Adds the demo rules and orders that don't exist yet. Returns how many orders were created. */
-export async function seedDemoOrders(db: Db, { now = new Date() }: { now?: Date } = {}) {
+/**
+ * Adds the demo rules and orders that don't exist yet, and both shipping provider accounts
+ * (disabled). With `fakeShipping` (SHIPPING_PROVIDERS=fake) the orders past Packing carry rates
+ * from both fake providers (SPEC-carriers "Dev data"). Returns how many orders were created.
+ */
+export async function seedDemoOrders(
+  db: Db,
+  { now = new Date(), fakeShipping = false }: { now?: Date; fakeShipping?: boolean } = {},
+) {
   await seedDemoRules(db);
+  await upsertProviderAccounts(db);
   const catalog = await upsertProducts(db);
   const box = await db.box.findFirst({ where: { archivedAt: null }, orderBy: { name: "asc" } });
+  let shipping: DemoShipping;
+  if (fakeShipping) {
+    shipping = { fake: await upsertFakeCatalogs(db) };
+    await db.settings.upsert({ where: { id: 1 }, create: { id: 1 }, update: {} });
+    await db.settings.updateMany({
+      where: { shipFromAddress: { equals: Prisma.DbNull } },
+      data: { shipFromAddress: demoShipFrom },
+    });
+  } else {
+    shipping = { placeholder: await upsertDemoService(db) };
+  }
 
   let created = 0;
   for (const [index, spec] of orders.entries()) {
     const exists = await db.order.findUnique({ where: { wooOrderId: ID_BASE + index + 1 } });
     if (exists) continue;
-    await db.$transaction((tx) => createDemoOrder(tx, index, spec, catalog, box?.id ?? null, now));
+    await db.$transaction((tx) =>
+      createDemoOrder(tx, index, spec, catalog, box?.id ?? null, shipping, now),
+    );
     created += 1;
   }
   return created;

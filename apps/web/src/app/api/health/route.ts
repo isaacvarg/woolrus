@@ -1,10 +1,15 @@
-import { emailStatus, encryptionKey } from "@woolrus/core";
+import {
+  emailStatus,
+  encryptionKey,
+  fakeShippingProviders,
+  shippingProviderHealth,
+} from "@woolrus/core";
 import { db } from "@woolrus/db";
 import { storage } from "@/server/storage";
 
 export const dynamic = "force-dynamic";
 
-/** Dependency checks (NFR-OPS-02). WooCommerce, ShipStation and Lumexia join as their adapters land. */
+/** Dependency checks (NFR-OPS-02). WooCommerce and Lumexia join as their adapters land. */
 export async function GET() {
   const checks: Record<string, "ok" | "fail"> = {};
   try {
@@ -31,5 +36,14 @@ export async function GET() {
   } catch {
     email = "fail";
   }
-  return Response.json({ ok, checks: { ...checks, email } }, { status: ok ? 200 : 503 });
+  // An enabled shipping provider failing degrades health, it doesn't take it down (SPEC-carriers
+  // "Health"). This endpoint is public, so it says only whether; admins see which provider on
+  // Settings → Shipping. Fake providers in production degrade it too: labels would be fake.
+  let degraded = process.env.NODE_ENV === "production" && fakeShippingProviders();
+  try {
+    if (checks.database === "ok") degraded ||= (await shippingProviderHealth(db)).degraded;
+  } catch {
+    degraded = true;
+  }
+  return Response.json({ ok, degraded, checks: { ...checks, email } }, { status: ok ? 200 : 503 });
 }

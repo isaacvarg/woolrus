@@ -10,7 +10,6 @@ export type IntegrationConfig = {
     consumerSecret: string;
     webhookSecret: string | null;
   } | null;
-  shipstation: { apiKey: string } | null;
   lumexia: { baseUrl: string; apiKey: string } | null;
   /** Null sends app email to the log instead (`getEmailSender`). No env fallback: dev logs. */
   email: { from: string; resendApiKey: string } | null;
@@ -39,7 +38,6 @@ export async function getIntegrationConfig(db: Db): Promise<IntegrationConfig> {
   const consumerKey = secret("wooConsumerKeyEnc", env?.wooConsumerKey);
   const consumerSecret = secret("wooConsumerSecretEnc", env?.wooConsumerSecret);
   const webhookSecret = secret("wooWebhookSecretEnc", env?.wooWebhookSecret);
-  const shipstationApiKey = secret("shipstationApiKeyEnc", env?.shipstationApiKey);
   const lumexiaBaseUrl = row?.lumexiaBaseUrl ?? env?.lumexiaBaseUrl ?? null;
   const lumexiaApiKey = secret("lumexiaApiKeyEnc", env?.lumexiaApiKey);
   const emailFrom = row?.emailFrom ?? null;
@@ -50,7 +48,6 @@ export async function getIntegrationConfig(db: Db): Promise<IntegrationConfig> {
       wooUrl && consumerKey && consumerSecret
         ? { url: wooUrl, consumerKey, consumerSecret, webhookSecret }
         : null,
-    shipstation: shipstationApiKey ? { apiKey: shipstationApiKey } : null,
     lumexia:
       lumexiaBaseUrl && lumexiaApiKey ? { baseUrl: lumexiaBaseUrl, apiKey: lumexiaApiKey } : null,
     email: emailFrom && resendApiKey ? { from: emailFrom, resendApiKey } : null,

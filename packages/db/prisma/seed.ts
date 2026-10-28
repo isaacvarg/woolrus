@@ -33,9 +33,11 @@ async function main() {
   }
   console.log(`Seeded settings and ${boxes.length} boxes`);
 
-  // Demo data is for the dev stack only (SPEC-workflow "Dev data").
+  // Demo data is for the dev stack only (SPEC-workflow "Dev data"); with the fake shipping
+  // providers it carries their rates too (SPEC-carriers "Dev data").
   if (process.env.NODE_ENV !== "production") {
-    console.log(`Seeded ${await seedDemoOrders(db)} demo orders`);
+    const fakeShipping = process.env.SHIPPING_PROVIDERS === "fake";
+    console.log(`Seeded ${await seedDemoOrders(db, { fakeShipping })} demo orders`);
   }
 }
 

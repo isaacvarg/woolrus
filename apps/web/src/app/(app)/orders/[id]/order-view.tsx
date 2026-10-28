@@ -15,6 +15,7 @@ import { VoidRow } from "@/components/exceptions/void-row";
 import type { TargetOption } from "@/components/notes/note-composer";
 import { useTargetName } from "@/components/notes/note-list";
 import { NoteOnTarget, NotesPanel } from "@/components/notes/notes-panel";
+import { OrderShippingPanel } from "@/components/shipping/order-shipping";
 import { Button } from "@/components/ui/fields";
 import { toast } from "@/components/ui/toast";
 import { useErrorMessage } from "@/lib/errors";
@@ -62,12 +63,14 @@ export function OrderView({
   canWriteCustomer,
   canVoid,
   canReport,
+  canRefreshRates,
 }: {
   id: string;
   userId: string | null;
   canWriteCustomer: boolean;
   canVoid: boolean;
   canReport: boolean;
+  canRefreshRates: boolean;
 }) {
   const t = useTranslations();
   const errorMessage = useErrorMessage();
@@ -88,6 +91,7 @@ export function OrderView({
       canWriteCustomer={canWriteCustomer}
       canVoid={canVoid}
       canReport={canReport}
+      canRefreshRates={canRefreshRates}
     />
   );
 }
@@ -98,12 +102,14 @@ function OrderLayout({
   canWriteCustomer,
   canVoid,
   canReport,
+  canRefreshRates,
 }: {
   order: Order;
   userId: string | null;
   canWriteCustomer: boolean;
   canVoid: boolean;
   canReport: boolean;
+  canRefreshRates: boolean;
 }) {
   const t = useTranslations();
   const targets = useNoteTargets(order);
@@ -127,6 +133,9 @@ function OrderLayout({
         <div className="space-y-6 lg:col-span-2">
           <OrderLines order={order} notes={notes} canVoid={canVoid} />
           <OrderPackages order={order} notes={notes} />
+          {order.packages.length > 0 && (
+            <OrderShippingPanel orderId={order.id} canRefresh={canRefreshRates} />
+          )}
           <ExceptionsPanel
             order={order}
             canReport={canReport}

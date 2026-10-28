@@ -1,6 +1,11 @@
 export * from "./adapters/email/log";
 export * from "./adapters/email/resend";
 export * from "./adapters/email/sender";
+export * from "./adapters/shipping/errors";
+// For Playwright, which runs the rate fetch itself (CI has no worker).
+export { createFakeShippingProvider } from "./adapters/shipping/fake";
+export * from "./adapters/shipping/provider";
+export * from "./adapters/shipping/registry";
 export * from "./adapters/storage/ensured";
 export * from "./adapters/storage/s3";
 export * from "./adapters/storage/storage";
@@ -9,6 +14,11 @@ export * from "./adapters/woocommerce/errors";
 export * from "./adapters/woocommerce/http";
 export * from "./audit";
 export * from "./boxes/service";
+export * from "./carriers/address";
+export * from "./carriers/carriers";
+export * from "./carriers/providers";
+export * from "./carriers/rates";
+export * from "./carriers/ship-to";
 export * from "./enqueue";
 export * from "./errors";
 export * from "./exceptions/issues";

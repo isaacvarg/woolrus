@@ -1,7 +1,7 @@
 import type { Db } from "@woolrus/db";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { createActor, resetDb, testDb } from "../../test/db";
-import { createOrder, type LineSpec } from "../../test/factories";
+import { createOrder, createRate, type LineSpec } from "../../test/factories";
 import { getPackView } from "./queries";
 import {
   addPackage,
@@ -266,21 +266,12 @@ describe("packUnits / unpackUnits", () => {
       where: { packageId: pkg },
       data: { qaVerifiedAt: new Date(), qaVerifiedById: packer.userId },
     });
-    await db.shippingRate.create({
-      data: {
-        packageId: pkg,
-        shipstationRateId: "r1",
-        carrierCode: "usps",
-        serviceCode: "ground",
-        serviceName: "Ground",
-        amountCents: 500,
-        currency: "USD",
-      },
-    });
+    await createRate(db, pkg);
     await db.shippingLabel.create({
       data: {
         packageId: pkg,
         status: "VOIDED",
+        provider: "SHIPSTATION",
         idempotencyKey: key(),
         carrierCode: "usps",
         serviceCode: "ground",
@@ -367,17 +358,7 @@ describe("setPackageBox: what a box change keeps and clears", () => {
       where: { packageId: pkg },
       data: { qaVerifiedAt: new Date(), qaVerifiedById: packer.userId },
     });
-    await db.shippingRate.create({
-      data: {
-        packageId: pkg,
-        shipstationRateId: "r1",
-        carrierCode: "usps",
-        serviceCode: "ground",
-        serviceName: "Ground",
-        amountCents: 500,
-        currency: "USD",
-      },
-    });
+    await createRate(db, pkg);
     expect(small.id).not.toBe(large.id);
 
     await setPackageBox(db, packer, { packageId: pkg, box: { boxId: large.id } });
@@ -502,6 +483,7 @@ describe("deletePackage", () => {
       data: {
         packageId: pkg,
         status: "VOIDED",
+        provider: "SHIPSTATION",
         idempotencyKey: key(),
         carrierCode: "usps",
         serviceCode: "ground",
@@ -784,17 +766,7 @@ describe("setWeight", () => {
       where: { packageId: pkg },
       data: { qaVerifiedAt: new Date(), qaVerifiedById: packer.userId },
     });
-    await db.shippingRate.create({
-      data: {
-        packageId: pkg,
-        shipstationRateId: "r1",
-        carrierCode: "usps",
-        serviceCode: "ground",
-        serviceName: "Ground",
-        amountCents: 500,
-        currency: "USD",
-      },
-    });
+    await createRate(db, pkg);
 
     await setWeight(db, packer, { packageId: pkg, weightOz: 10 });
 

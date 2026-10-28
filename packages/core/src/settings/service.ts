@@ -26,7 +26,6 @@ const secretColumns = {
   wooConsumerKey: "wooConsumerKeyEnc",
   wooConsumerSecret: "wooConsumerSecretEnc",
   wooWebhookSecret: "wooWebhookSecretEnc",
-  shipstationApiKey: "shipstationApiKeyEnc",
   lumexiaApiKey: "lumexiaApiKeyEnc",
   resendApiKey: "resendApiKeyEnc",
 } as const satisfies Record<SecretName, keyof Settings>;

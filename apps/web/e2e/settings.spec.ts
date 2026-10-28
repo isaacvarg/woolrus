@@ -202,7 +202,7 @@ test("a missing encryption key is explained in the user's language", async ({ pa
   });
   await signInAs(page, ["ADMIN"]);
   await page.goto("/settings");
-  const row = secretRow(page, "ShipStation", "API key");
+  const row = secretRow(page, "Lumexia", "API key");
 
   await row.getByRole("button", { name: /^(Add|Replace)$/ }).click();
   await row.getByLabel("New value").fill("anything");

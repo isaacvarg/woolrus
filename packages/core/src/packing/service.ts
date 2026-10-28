@@ -98,13 +98,25 @@ async function lockPackage(tx: DbTx, actor: Actor, packageId: string, now: Date)
 }
 
 /**
+ * Rates fetched for the package no longer fit it: they go, and a package that had some says it's
+ * `STALE`, so QA sees Refresh rates (SPEC-carriers "Rate fetch").
+ */
+async function dropRates(tx: DbTx, packageId: string) {
+  await tx.shippingRate.deleteMany({ where: { packageId } });
+  await tx.package.updateMany({
+    where: { id: packageId, ratesStatus: { not: "NONE" } },
+    data: { ratesStatus: "STALE" },
+  });
+}
+
+/**
  * The package's contents or box changed: rates were fetched for the old one, and a weight read
  * before the change is kept but flagged to re-weigh or confirm (SPEC-packing decision 5). QA
  * verified the old contents, so a contents change clears it; a box change doesn't. Labels are
  * never touched.
  */
 export async function invalidate(tx: DbTx, packageId: string, contentsChanged: boolean) {
-  await tx.shippingRate.deleteMany({ where: { packageId } });
+  await dropRates(tx, packageId);
   await tx.package.updateMany({
     where: { id: packageId, weightOz: { not: null } },
     data: { weightStale: true },
@@ -134,6 +146,8 @@ async function finish(
   now: Date,
 ): Promise<PackResult> {
   const after = deleted ? undefined : await reload(tx, packageId);
+  // A rate fetch still running was asked for the packages as they were: it now writes nothing.
+  await tx.order.update({ where: { id: order.id }, data: { rateGeneration: { increment: 1 } } });
   await recordAudit(tx, actor, {
     entityType: "Package",
     entityId: packageId,
@@ -396,7 +410,7 @@ export async function setWeight(
       where: { id: packageId },
       data: { weightOz, weightOverrideReason: over ? reason : null, weightStale: false },
     });
-    await tx.shippingRate.deleteMany({ where: { packageId } });
+    await dropRates(tx, packageId);
     return finish(tx, actor, order, "setWeight", { packageId, before: pkg }, now);
   });
 }

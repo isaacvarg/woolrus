@@ -41,7 +41,6 @@ describe("settings service", () => {
         wooConsumerKey: { configured: false },
         wooConsumerSecret: { configured: false },
         wooWebhookSecret: { configured: false },
-        shipstationApiKey: { configured: false },
         lumexiaApiKey: { configured: false },
         resendApiKey: { configured: false },
       },
@@ -183,7 +182,7 @@ describe("integration URL origin changes", () => {
   async function withWooSecrets(url: string | null) {
     const admin = await createActor(db, ["ADMIN"]);
     if (url) await updateSettings(db, admin, { wooStoreUrl: url });
-    for (const name of [...wooSecrets, "lumexiaApiKey", "shipstationApiKey"] as const) {
+    for (const name of [...wooSecrets, "lumexiaApiKey", "resendApiKey"] as const) {
       await setSecret(db, admin, { name, value: `value-of-${name}` });
     }
     return admin;
@@ -210,7 +209,7 @@ describe("integration URL origin changes", () => {
     for (const name of wooSecrets) expect(result.secrets[name]).toEqual({ configured: false });
     // Other integrations keep theirs.
     expect(result.secrets.lumexiaApiKey).toEqual({ configured: true });
-    expect(result.secrets.shipstationApiKey).toEqual({ configured: true });
+    expect(result.secrets.resendApiKey).toEqual({ configured: true });
     const audits = await clearAudits();
     expect(audits.map((a) => a.after)).toEqual(
       wooSecrets.map((secret) => ({ secret, reason: "urlChanged" })),

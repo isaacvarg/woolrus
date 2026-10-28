@@ -21,6 +21,7 @@
     "queues": "Queues",
     "myPicks": "My picks",
     "priorityRules": "Priority rules",
+    "shippingSettings": "Shipping",
     "sync": "Sync",
     "users": "Users",
     "stations": "Stations",
@@ -127,7 +128,6 @@
       "lumexiaBaseUrl": "API base URL",
       "names": {
         "woocommerce": "WooCommerce",
-        "shipstation": "ShipStation",
         "lumexia": "Lumexia",
         "email": "Email"
       },
@@ -135,7 +135,6 @@
         "wooConsumerKey": "Consumer key",
         "wooConsumerSecret": "Consumer secret",
         "wooWebhookSecret": "Webhook secret",
-        "shipstationApiKey": "API key",
         "lumexiaApiKey": "API key",
         "resendApiKey": "Resend API key"
       },
@@ -171,6 +170,45 @@
       "sendTestEmailHint": "Sends to your own address with the saved sender and key.",
       "testEmailSent": "Sent to {to}. Check your inbox.",
       "testEmailLogged": "Resend isn't set up, so the email to {to} was written to the server log instead of sent."
+    },
+    "shipping": {
+      "title": "Shipping",
+      "intro": "Woolrus asks each shipping provider for rates only while it's on. Add its credentials and test the connection, then turn it on.",
+      "names": {
+        "SHIPSTATION": "ShipStation",
+        "BRIDGE_SOURCE": "Bridge Source"
+      },
+      "fields": {
+        "apiKey": "API key",
+        "customerId": "Customer ID",
+        "baseUrl": "API base URL"
+      },
+      "credentials": "Credentials",
+      "enable": "Use {name}",
+      "enabledToast": "{name} is on.",
+      "disabledToast": "{name} is off. New rate requests skip it.",
+      "comingSoon": "Coming soon",
+      "comingSoonHint": "This version of Woolrus can't connect to {name} yet.",
+      "clearConfirm": "Clear {name}'s credentials? It's turned off until new ones are added.",
+      "testConnection": "Test connection",
+      "testOk": "Connected.",
+      "lastChecked": "Checked {at}.",
+      "carrierCount": "{count, plural, =0 {No carriers synced yet.} one {# carrier synced.} other {# carriers synced.}}",
+      "urlMoveBody": "The new address is on a different server. Saving it removes the saved credentials and turns the provider off, so they're never sent there. Add them again for the new address.",
+      "savedCredentialsCleared": "Saved. The credentials for the old address were removed: add them for the new one.",
+      "sync": "Sync carriers",
+      "lastSynced": "Last synced {at}.",
+      "syncHint": "Turn {name} on to sync its carriers.",
+      "syncedToast": "{name} synced: {added, plural, =0 {nothing new} one {# new carrier or service} other {# new carriers and services}}{missing, plural, =0 {} other {, # no longer offered}}.",
+      "carriersHint": "New carriers and services arrive off. A service is used only when it and its carrier are both on.",
+      "carriersCaption": "{name} carriers and services",
+      "carrierColumn": "Carrier and services",
+      "shipsColumn": "Ships",
+      "carrierSwitch": "Use carrier {name}",
+      "serviceSwitch": "Use {carrier} {name}",
+      "domestic": "Domestic",
+      "international": "International",
+      "noLongerOffered": "No longer offered"
     }
   },
   "priorityRules": {
@@ -351,6 +389,67 @@
     "pickedBy": "{name}, {time}",
     "openPickScreen": "Open pick screen",
     "openPackScreen": "Open pack screen"
+  },
+  "orderShipping": {
+    "title": "Shipping",
+    "shipTo": "Ship to",
+    "shipToStatus": {
+      "UNCHECKED": "Not checked",
+      "VERIFIED": "Verified",
+      "CORRECTED": "Corrected",
+      "WARNING": "Check the address",
+      "ERROR": "Undeliverable",
+      "INCOMPLETE": "Incomplete"
+    },
+    "notResolved": "Rates haven't been fetched for this order yet.",
+    "incomplete": "The address is missing {fields}, so no rates were fetched.",
+    "fields": {
+      "name": "the name",
+      "address1": "the street",
+      "city": "the city",
+      "postalCode": "the postal code",
+      "country": "the country",
+      "company": "the company",
+      "address2": "the second line",
+      "state": "the state"
+    },
+    "package": "Package {number}",
+    "ratesStatus": {
+      "NONE": "No rates yet",
+      "FETCHING": "Fetching rates…",
+      "READY": "Rates",
+      "FAILED": "No rates",
+      "STALE": "Changed since its rates were fetched"
+    },
+    "stale": "The package changed after its rates were fetched. Refresh the rates.",
+    "providerError": "{provider}: no rates. {reason}",
+    "noRates": "No rates for this package.",
+    "fetchedAt": "Fetched {time}",
+    "rates": "Rates for package {number}",
+    "columns": {
+      "provider": "Provider",
+      "carrier": "Carrier",
+      "service": "Service",
+      "price": "Price",
+      "delivery": "Delivery",
+      "expires": "Expires"
+    },
+    "deliveryDays": "{count, plural, one {# day} other {# days}}",
+    "guaranteed": "Guaranteed",
+    "selected": "Selected",
+    "expired": "Expired",
+    "refresh": "Refresh rates",
+    "refreshing": "Fetching the rates again.",
+    "original": "Original",
+    "correctedTo": "Corrected to",
+    "changed": "Changed {fields}.",
+    "unchecked": "No shipping provider checked this address.",
+    "undeliverable": "The provider couldn't confirm this address. You can still buy a label.",
+    "checking": "Checking the address…",
+    "useOriginal": "Use original address",
+    "usingOriginal": "Using the original address. Fetching rates again.",
+    "recheck": "Check address again",
+    "rechecking": "Checking the address again."
   },
   "pack": {
     "title": "Pack #{number}",
@@ -949,6 +1048,25 @@
         "removedHasRecords": "{line} was removed in the store but has notes, issues or voids on it.",
         "pastPacking": "{line}: the order is already past Packing, so an added or larger line would ship without being picked and packed. Force it back to Packing first, or dismiss."
       }
+    },
+    "shipping": {
+      "unauthorized": "The shipping provider refused its credentials. Check them in Settings → Shipping.",
+      "rejected": "The shipping provider refused the request. Check the address, package and service.",
+      "unavailable": "The shipping provider couldn't be reached. Try again in a minute.",
+      "timeout": "The shipping provider took too long to answer. Try again in a minute."
+    },
+    "carriers": {
+      "credentialsMissing": "Add the provider's credentials first.",
+      "providerNotAvailable": "This provider isn't available in this version of Woolrus yet.",
+      "providerUnreachable": "The provider didn't accept the connection test, so it wasn't turned on. Check its credentials and try again.",
+      "providerOff": "Turn the provider on before syncing its carriers.",
+      "noCarriers": "No carrier or service of this provider is turned on for this destination.",
+      "noShipFrom": "Set the ship-from address in Settings before fetching rates.",
+      "noProviders": "No shipping provider is turned on. An admin turns one on in Settings → Shipping.",
+      "packageIncomplete": "The package needs a weight and a box or dimensions before it can be rated.",
+      "notInQa": "Rates can only be refreshed while the order is in QA.",
+      "liveLabel": "A package already has a label. Void it before refreshing the rates.",
+      "noShipTo": "This order has no ship-to address yet. Fetch its rates first."
     },
     "email": {
       "unauthorized": "Resend refused the API key. Check it in Settings → Integrations.",

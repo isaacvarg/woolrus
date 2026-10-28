@@ -4,7 +4,7 @@
 box, dimensions and weight; deletes a package's rates when it changes), `workflow` (Packing → QA, the **verified**
 gate's `packageNoRate`) · **Used by:** `qa` (rate choice, label purchase through the rate's provider),
 `bridge-source` (implements `ShippingProvider`), `shipping` (void, manifests, carrier for the Woo push),
-`returns` (return labels), `reporting` (spend by provider, carrier and service) · **State:** planned
+`returns` (return labels), `reporting` (spend by provider, carrier and service) · **State:** done
 
 Project-wide commands, structure, code style, testing levels and boundaries are in [`../../SPEC.md`](../../SPEC.md);
 this spec only adds what is specific to `carriers`.
@@ -32,10 +32,11 @@ validation and the ShipStation adapter. It does **not** buy or void labels as a 
 ### User stories
 
 1. As an admin, on **Settings → Shipping** I see one card per provider (ShipStation, Bridge Source). I enter
-   ShipStation's API key, click **Test connection**, then **Sync carriers**: UPS, USPS and the other carriers
-   connected in our ShipStation account appear with their services.
-2. I switch on the provider, then the carriers and services we actually use. Each service shows Domestic and/or
-   International. Nothing is on until I turn it on.
+   ShipStation's API key, click **Test connection**, and switch the provider on (it needs a passing test).
+2. I click **Sync carriers**: UPS, USPS and the other carriers connected in our ShipStation account appear with
+   their services, each showing Domestic and/or International. Nothing is used until I switch on the carriers and
+   services we actually use. Sync needs the provider on (`providerOff` otherwise), so it never calls a provider
+   whose credentials haven't passed a test.
 3. When Bridge Source's adapter lands, I give it credentials and switch it on the same way. Its rates now show
    next to ShipStation's. If I switch it off, new rate fetches skip it; rates already fetched stay until refreshed.
 4. As a packer, I complete packing and move on. A few seconds later the order in QA has rates for every package.
@@ -117,8 +118,9 @@ So a rate never has to have an id, and a purchase always carries the shipment:
 - **`RateRequest`:** `{ orderNumber, shipFrom, shipTo, residential, package: { lengthIn, widthIn, heightIn,
   weightOz }, items: { sku, name, quantity }[], services: { carrierExternalId, code, providerData }[] }`. Only
   enabled carriers and services are sent (FR-SHIP-02). Order number and items let the provider link the shipment
-  to the sale (FR-SHIP-01). `residential` comes from the address check when the provider says, else "no company
-  name on the ship-to".
+  to the sale (FR-SHIP-01). `residential` comes from the address check when the provider says (stored as
+  `Order.shipToResidential`, so later fetches of the stored ship-to price it the same), else "no company name on the
+  ship-to".
 - **`ProviderRate`:** `{ providerRateId?, providerShipmentId?, carrierExternalId, serviceCode, serviceName,
   amountCents, currency, deliveryDays?, estimatedDeliveryAt?, guaranteed, trackable, expiresAt? }`.
 - **`PurchaseInput`:** `{ rate: { providerRateId?, providerShipmentId?, carrierExternalId, serviceCode,
@@ -138,9 +140,11 @@ So a rate never has to have an id, and a purchase always carries the shipment:
   credentials, addresses or the provider's free text.
 - **Registry** (`registry.ts`): `createShippingProviders(db): Promise<ShippingProvider[]>` returns one adapter per
   **enabled** provider account with credentials, in fixed order (ShipStation, Bridge Source). Services take the list
-  as an argument, so tests pass fakes. When `SHIPPING_PROVIDERS=fake` and `NODE_ENV` is `development` or `test`
-  (fails closed otherwise), it returns the two fakes instead (dev stack and Playwright; there is no ShipStation sandbox
-  in the dev stack).
+  as an argument, so tests pass fakes. When `SHIPPING_PROVIDERS=fake` and `NODE_ENV` is `development` or `test`,
+  or `WOOLRUS_E2E=1` (set only by CI's Playwright step, which runs `next start`, where `NODE_ENV` is always
+  `production`; not `CI`, which some hosts set in production), it returns the two fakes instead (dev stack and
+  Playwright; there is no ShipStation sandbox in the dev stack). Fails closed otherwise. Fakes on under
+  `NODE_ENV=production` log a warning at worker startup and make health degraded.
 
 Each provider gets `PROVIDER_TIMEOUT_MS` (20 s, a constant) for a package's whole `getRates`, however many calls
 it makes inside. The adapter doesn't retry by itself; the job does.
@@ -188,7 +192,7 @@ these are the facts this seam was shaped around:
 | `listProviders` | `settings.manage` | Every known provider id, created on first read if missing: enabled, `credentials: { [field]: { configured } }` (never values), non-secret config, last test result, carrier count, whether its adapter exists in this build. |
 | `setProviderCredentials` | `settings.manage` | `{ provider, credentials }` validated by that provider's Zod schema (ShipStation: `{ apiKey }`), encrypted with `encryptSecret` as one JSON blob. Audited `secret.set` with field names only. |
 | `clearProviderCredentials` | `settings.manage` | Clears them and **disables** the provider. Audited `secret.clear`. |
-| `updateProviderConfig` | `settings.manage` | Non-secret config (Bridge Source will have a base URL). An origin change clears the credentials in the same transaction, as decisions.md 2026-10-15 does for Woo and Lumexia. |
+| `updateProviderConfig` | `settings.manage` | Non-secret config (Bridge Source will have a base URL). An origin change, a removal or a first URL clears the credentials in the same transaction (decisions.md 2026-10-15; a first URL counts because Bridge Source has no default host). |
 | `testProvider` | `settings.manage` | `ping()`; stores `lastCheckedAt` and `lastErrorKey`; returns ok or the error key. |
 | `setProviderEnabled` | `settings.manage` | Enabling requires credentials and a passing `ping()` in the same call (`errors.carriers.providerUnreachable`), and an adapter in this build (`errors.carriers.providerNotAvailable`). Disabling always works. Audited. |
 | `syncCarriers` | `settings.manage` | `listCarriers()` → upsert carriers by `(provider, externalId)` and services by `(carrierId, code)`. New ones arrive **disabled**. Ones the provider no longer lists get `missingSince` and stop being sent; they're never deleted (rates, labels and manifests point at them). Audited with counts. |
@@ -201,9 +205,10 @@ The dev env fallback stays: `SHIPSTATION_API_KEY` fills an unset key in developm
 
 ### Ship-to and address validation (`packages/core/src/carriers/address.ts`)
 
-- **Resolution (FR-SHIP-03, pure):** `resolveShipTo(order)` takes each field from `shippingAddress`, falling back
-  field by field to `billingAddress`; phone and email too. Missing name, line 1, city, postal code or country →
-  `{ kind: "incomplete", missing }`, and no provider is called.
+- **Resolution (FR-SHIP-03, pure):** `resolveShipTo(order)` takes the location (line 1, line 2, city, state, postal
+  code, country) from `shippingAddress` as a block, or from `billingAddress` as a block when shipping has none of it,
+  so the two are never mixed (decisions 2026-10-27). Name, company, phone and email fall back field by field.
+  Missing name, line 1, city, postal code or country → `{ kind: "incomplete", missing }`, and no provider is called.
 - **Validation (FR-SHIP-12):** before rating, the first enabled provider with `addressValidation` checks the
   resolved address. Stored on the order: `shipTo` (what rates use), `shipToOriginal` (resolved, unvalidated),
   `shipToStatus` (`UNCHECKED | VERIFIED | CORRECTED | WARNING | ERROR | INCOMPLETE`), `shipToMessages`,
@@ -213,7 +218,7 @@ The dev env fallback stays: `SHIPSTATION_API_KEY` fills an unset key in developm
     blocks the purchase (decision 7).
   - No provider can validate, or validation itself fails → `UNCHECKED`, original used, warning shown. It never
     blocks the rate fetch.
-- `useOriginalAddress({ orderId })` (`order.qa`, order in QA): `shipTo` = original, status `UNCHECKED` with a
+- `keepOriginalAddress({ orderId })` (**Use original address**; not `use…`, which Biome takes for a hook) (`order.qa`, order in QA): `shipTo` = original, status `UNCHECKED` with a
   "kept by <user>" note in the audit, then re-rates. `recheckAddress({ orderId })` (`order.qa`) runs validation
   and re-rates.
 - A change to the order's addresses from a Woo sync clears `shipTo*` and re-rates if the order is in QA.
@@ -267,7 +272,7 @@ and QA sees **Refresh rates**.
 | `carriers.setServiceEnabled` | `POST /shipping/services/{id}/enabled` |
 | `carriers.orderShipping` | `GET /orders/{orderId}/shipping` |
 | `carriers.refreshRates` | `POST /orders/{orderId}/rates/refresh` |
-| `carriers.recheckAddress` / `useOriginalAddress` | `POST /orders/{orderId}/ship-to/recheck`, `…/use-original` |
+| `carriers.recheckAddress` / `keepOriginalAddress` | `POST /orders/{orderId}/ship-to/recheck`, `…/use-original` |
 
 No output schema can carry a credential value.
 
@@ -299,8 +304,10 @@ belongs to a package or a return) are kept unchanged.
 
 ### Health (`apps/web/src/app/api/health/route.ts`)
 
-One entry per provider: `disabled`, `ok` (a `ping` within the last 5 minutes, cached), `fail`, or
-`unconfigured`. An enabled provider failing makes health degraded, not down. The go-live checklist line
+Each provider is `disabled`, `ok` (a `ping` within the last 5 minutes, cached; one ping per window however many
+checks arrive, bounded to 3 s), `fail`, or `unconfigured`. An enabled provider failing makes health `degraded`, not
+down, and so do fake providers under `NODE_ENV=production`. The endpoint is public, so it returns only `degraded`;
+admins see each provider's state on Settings → Shipping. The go-live checklist line
 "ShipStation green" becomes "every enabled provider green".
 
 ### UI (`apps/web/src/app/(app)/`)
@@ -350,7 +357,8 @@ orders get rates from both fakes.
    changes nothing; with a passing ping it's enabled and audited.
 5. **Sync:** new carriers and services arrive disabled; a re-sync keeps toggles; a carrier the provider drops gets
    `missingSince` and is never sent, and its old rates and labels still load.
-6. **Ship-to:** field-by-field fallback is tested as a pure function; an incomplete address calls no provider and
+6. **Ship-to:** the fallback (location as a block, contact fields one by one) is tested as a pure function, including
+   that a partial shipping location never borrows from billing; an incomplete address calls no provider and
    leaves `INCOMPLETE` with the missing fields.
 7. **Validation:** verified, corrected, warning, error and validation-failure each store the right `shipTo` and
    status; rates are requested for `shipTo`; **Use original address** re-rates with the original.

@@ -1,4 +1,5 @@
 import type {
+  CarrierService,
   Db,
   LabelStatus,
   Order,
@@ -6,6 +7,9 @@ import type {
   Package,
   PickStatus,
   Prisma,
+  ShippingCarrier,
+  ShippingProviderId,
+  ShippingRate,
   WorkflowStatus,
 } from "@woolrus/db";
 
@@ -253,17 +257,7 @@ async function createPackage(
   }
 
   for (const rate of spec.rates ?? []) {
-    const data: Prisma.ShippingRateUncheckedCreateInput = {
-      packageId: pkg.id,
-      shipstationRateId: `rate-${next()}`,
-      carrierCode: "usps",
-      serviceCode: "usps_ground_advantage",
-      serviceName: "USPS Ground Advantage",
-      amountCents: 650,
-      currency: "USD",
-      selected: rate.selected,
-    };
-    await db.shippingRate.create({ data });
+    await createRate(db, pkg.id, { selected: rate.selected });
   }
 
   if (spec.label) {
@@ -271,6 +265,7 @@ async function createPackage(
       data: {
         packageId: pkg.id,
         status: spec.label,
+        provider: "SHIPSTATION",
         idempotencyKey: `label-${next()}`,
         carrierCode: "usps",
         serviceCode: "usps_ground_advantage",
@@ -279,4 +274,54 @@ async function createPackage(
     });
   }
   return pkg;
+}
+
+/** A carrier with one service, both enabled. */
+export async function createCarrierService(
+  db: Db,
+  provider: ShippingProviderId = "SHIPSTATION",
+): Promise<{ carrier: ShippingCarrier; service: CarrierService }> {
+  const carrier = await db.shippingCarrier.create({
+    data: { provider, externalId: `se-${next()}`, code: "usps", name: "USPS", enabled: true },
+  });
+  const service = await db.carrierService.create({
+    data: {
+      carrierId: carrier.id,
+      code: "usps_ground_advantage",
+      name: "USPS Ground Advantage",
+      domestic: true,
+      international: false,
+      enabled: true,
+    },
+  });
+  return { carrier, service };
+}
+
+/** A rate for a package, on a new carrier and service unless `carrierId` and `serviceId` are given. */
+export async function createRate(
+  db: Db,
+  packageId: string,
+  overrides: Partial<Prisma.ShippingRateUncheckedCreateInput> = {},
+): Promise<ShippingRate> {
+  let { carrierId, serviceId } = overrides;
+  if (!carrierId || !serviceId) {
+    const { carrier, service } = await createCarrierService(db, overrides.provider);
+    carrierId = carrier.id;
+    serviceId = service.id;
+  }
+  return db.shippingRate.create({
+    data: {
+      packageId,
+      provider: "SHIPSTATION",
+      providerRateId: `rate-${next()}`,
+      carrierCode: "usps",
+      serviceCode: "usps_ground_advantage",
+      serviceName: "USPS Ground Advantage",
+      amountCents: 650,
+      currency: "USD",
+      ...overrides,
+      carrierId,
+      serviceId,
+    },
+  });
 }

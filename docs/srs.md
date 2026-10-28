@@ -154,7 +154,7 @@ Each stage exits only through its gate; Ready can loop back to Packing, and On H
 | --- | --- | --- |
 | FR-SHIP-01 | For each package the system creates a ShipStation shipment linked to a sales order (order number, items, ship-from, ship-to). | Existing |
 | FR-SHIP-02 | Rates are requested only for enabled carriers and filtered to enabled services. | Existing |
-| FR-SHIP-03 | Ship-to falls back field-by-field from shipping to billing address. | Existing |
+| FR-SHIP-03 | Ship-to falls back from shipping to billing address: the location (street, line 2, city, state, postal code, country) only as a whole, when shipping has none of it; name, company, phone and email field by field (changed from v1's field-by-field location, decisions 2026-10-27). | Existing |
 | FR-SHIP-04 | Labels are bought as 4×6 PDF; tracking number, cost, carrier, service and download links are stored per package. | Existing |
 | FR-SHIP-05 | In Ready, the user selects orders and clicks Ship: orders become Completed, and one merged PDF of all their labels opens for printing. | Existing |
 | FR-SHIP-06 | Shipping pushes status Completed, tracking number and provider to WooCommerce, then posts all internal notes as private order notes. | Existing |

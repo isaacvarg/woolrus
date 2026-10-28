@@ -2,6 +2,7 @@ import {
   addPackage,
   archiveBox,
   clearPin,
+  clearProviderCredentials,
   clearSecret,
   completeBatchMembers,
   completePack,
@@ -23,6 +24,7 @@ import {
   getIssue,
   getOrder,
   getOrderHistory,
+  getOrderShipping,
   getPackView,
   getPickView,
   getPublicSettings,
@@ -31,6 +33,7 @@ import {
   issueAssignees,
   issueBadge,
   issueCounts,
+  keepOriginalAddress,
   linkBarcode,
   listBoxes,
   listInvitations,
@@ -38,7 +41,9 @@ import {
   listNotes,
   listOrders,
   listPriorityRules,
+  listProviders,
   listQueue,
+  listShippingConfig,
   listStations,
   listSyncRunErrors,
   listSyncRuns,
@@ -54,6 +59,8 @@ import {
   pickLine,
   queueCounts,
   reactivateUser,
+  recheckAddress,
+  refreshRates,
   registerStation,
   removeFromBatch,
   renameStation,
@@ -72,13 +79,19 @@ import {
   scanBatch,
   scanIntoPackage,
   sendTestEmail,
+  setCarrierEnabled,
   setPackageBox,
   setPin,
+  setProviderCredentials,
+  setProviderEnabled,
   setResponsible,
   setSecret,
+  setServiceEnabled,
   setWeight,
   stationStatus,
   substitute,
+  syncCarriers,
+  testProvider,
   testStoreConnection,
   touchStation,
   undoVoid,
@@ -91,6 +104,7 @@ import {
   updateNote,
   updatePreferences,
   updatePriorityRule,
+  updateProviderConfig,
   updateSettings,
   updateUserRoles,
   voidCounts,
@@ -439,6 +453,42 @@ export const router = implementer.router({
       return { ok: true as const };
     }),
     touch: api.station.touch.handler(({ context }) => touchStation(db, context.actor)),
+  },
+  carriers: {
+    providers: api.carriers.providers.handler(({ context }) => listProviders(db, context.actor)),
+    setCredentials: api.carriers.setCredentials.handler(({ input, context }) =>
+      setProviderCredentials(db, context.actor, input),
+    ),
+    clearCredentials: api.carriers.clearCredentials.handler(({ input, context }) =>
+      clearProviderCredentials(db, context.actor, input),
+    ),
+    updateConfig: api.carriers.updateConfig.handler(({ input, context }) =>
+      updateProviderConfig(db, context.actor, input),
+    ),
+    test: api.carriers.test.handler(({ input, context }) => testProvider(db, context.actor, input)),
+    setProviderEnabled: api.carriers.setProviderEnabled.handler(({ input, context }) =>
+      setProviderEnabled(db, context.actor, input),
+    ),
+    config: api.carriers.config.handler(({ context }) => listShippingConfig(db, context.actor)),
+    sync: api.carriers.sync.handler(({ input, context }) => syncCarriers(db, context.actor, input)),
+    setCarrierEnabled: api.carriers.setCarrierEnabled.handler(({ input, context }) =>
+      setCarrierEnabled(db, context.actor, input),
+    ),
+    setServiceEnabled: api.carriers.setServiceEnabled.handler(({ input, context }) =>
+      setServiceEnabled(db, context.actor, input),
+    ),
+    orderShipping: api.carriers.orderShipping.handler(({ input, context }) =>
+      getOrderShipping(db, context.actor, input),
+    ),
+    refreshRates: api.carriers.refreshRates.handler(({ input, context }) =>
+      refreshRates(db, context.actor, input),
+    ),
+    recheckAddress: api.carriers.recheckAddress.handler(({ input, context }) =>
+      recheckAddress(db, context.actor, input),
+    ),
+    keepOriginalAddress: api.carriers.keepOriginalAddress.handler(({ input, context }) =>
+      keepOriginalAddress(db, context.actor, input),
+    ),
   },
 });
 

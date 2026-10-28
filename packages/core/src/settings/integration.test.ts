@@ -47,7 +47,6 @@ describe("getIntegrationConfig", () => {
     const admin = await configureWooInSettings();
     await updateSettings(db, admin, { lumexiaBaseUrl: "https://lumexia.example.com" });
     await setSecret(db, admin, { name: "wooWebhookSecret", value: "wh_settings" });
-    await setSecret(db, admin, { name: "shipstationApiKey", value: "ss_settings" });
     await setSecret(db, admin, { name: "lumexiaApiKey", value: "lx_settings" });
     await updateSettings(db, admin, { emailFrom: "Woolrus <no-reply@example.com>" });
     await setSecret(db, admin, { name: "resendApiKey", value: "re_settings" });
@@ -59,7 +58,6 @@ describe("getIntegrationConfig", () => {
         consumerSecret: "cs_settings",
         webhookSecret: "wh_settings",
       },
-      shipstation: { apiKey: "ss_settings" },
       lumexia: { baseUrl: "https://lumexia.example.com", apiKey: "lx_settings" },
       email: { from: "Woolrus <no-reply@example.com>", resendApiKey: "re_settings" },
     });
@@ -76,7 +74,6 @@ describe("getIntegrationConfig", () => {
         consumerSecret: "cs_settings",
         webhookSecret: null,
       },
-      shipstation: null,
       lumexia: null,
       email: null,
     });
@@ -89,7 +86,6 @@ describe("getIntegrationConfig", () => {
       stubEnv(nodeEnv, fallbackEnv);
       expect(await getIntegrationConfig(db)).toEqual({
         woocommerce: null,
-        shipstation: null,
         lumexia: null,
         email: null,
       });
@@ -107,7 +103,6 @@ describe("getIntegrationConfig", () => {
           consumerSecret: "cs_env",
           webhookSecret: "wh_env",
         },
-        shipstation: { apiKey: "ss_env" },
         lumexia: { baseUrl: "http://lumexia.localhost", apiKey: "lx_env" },
         email: null,
       });
