@@ -121,6 +121,16 @@ export type SetVerifiedInput = z.infer<typeof SetVerifiedInput>;
 
 export const SelectRateInput = z.object({ packageId: Id, rateId: Id });
 export type SelectRateInput = z.infer<typeof SelectRateInput>;
+export const ScanVerifyInput = z.object({
+  orderId: Id,
+  /** The package the scanner is pointed at: the card the user touched last. */
+  packageId: Id,
+  /** What the scanner typed: a barcode or SKU, matched like picking's. */
+  code: z.string().trim().min(1).max(200),
+  /** One per physical scan, so a retried request doesn't count the unit twice. */
+  scanId: IdempotencyKey,
+});
+export type ScanVerifyInput = z.infer<typeof ScanVerifyInput>;
 
 export const qa = {
   screen: base
@@ -149,5 +159,14 @@ export const qa = {
       summary: "Select another of the package's rates",
     })
     .input(SelectRateInput)
+    .output(QaResult),
+  scan: base
+    .route({
+      method: "POST",
+      path: "/orders/{orderId}/qa/scan",
+      tags,
+      summary: "Scan a product in a package: one more verified unit of the first row that needs it",
+    })
+    .input(ScanVerifyInput)
     .output(QaResult),
 };

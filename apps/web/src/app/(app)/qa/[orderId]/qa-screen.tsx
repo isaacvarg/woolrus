@@ -4,11 +4,14 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { QaPackage, QaResult, QaRow, QaView } from "@woolrus/contracts";
 import Link from "next/link";
 import { useFormatter, useTranslations } from "next-intl";
+import { useState } from "react";
 import { Button } from "@/components/ui/fields";
 import { toast } from "@/components/ui/toast";
 import { useErrorMessage } from "@/lib/errors";
 import { client, orpc } from "@/lib/orpc";
 import { hasLiveLabel } from "./live-label";
+import { playScanSound, useScanner } from "@/lib/scanner";
+import { ScanBanner, type ScanOutcome } from "../../pick/[orderId]/pick-screen";
 import { money } from "./money";
 import { QaDrawer } from "./qa-drawer";
 import { RatesTable, RefreshRatesButton } from "./qa-rates";
@@ -75,6 +78,57 @@ function QaLayout({
   const mayVerify =
     canVerify && order.status === "QA" && order.claim?.userId === userId && !purchasing;
 
+  // The package a scan goes to: the card touched last, else the first with something unverified.
+  const [focusedId, setFocusedId] = useState<string | null>(null);
+  const focused =
+    view.packages.find((p) => p.id === focusedId) ??
+    view.packages.find((p) => p.rows.some((r) => r.verifiedQuantity < r.quantity)) ??
+    view.packages[0];
+  const [scanned, setScanned] = useState<ScanOutcome | null>(null);
+
+  const scan = useMutation({
+    mutationKey: writeKey,
+    // Same lane as taps: a scan and a tap on the same row land in the order they were made.
+    scope: { id: `qa:${order.id}` },
+    // The id is made with the scan, not per request, so a retried request replays it.
+    mutationFn: ({ pkg, code, scanId }: { pkg: QaPackage; code: string; scanId: string }) =>
+      client.qa.scan({ orderId: order.id, packageId: pkg.id, code, scanId }),
+    onSuccess: async (result: QaResult, { pkg }) => {
+      playScanSound(true);
+      const before = new Map(pkg.rows.map((r) => [r.id, r.verifiedQuantity]));
+      const row = result.packages
+        .find((p) => p.id === pkg.id)
+        ?.rows.find((r) => r.verifiedQuantity > (before.get(r.id) ?? 0));
+      setScanned({
+        ok: true,
+        at: Date.now(),
+        message: t("qa.scanned", {
+          name: row?.name ?? "",
+          verified: row?.verifiedQuantity ?? 0,
+          quantity: row?.quantity ?? 0,
+        }),
+      });
+      if (queryClient.isMutating({ mutationKey: writeKey }) > 1) return;
+      await queryClient.cancelQueries({ queryKey: viewKey });
+      queryClient.setQueryData<QaView>(viewKey, (v) => (v ? { ...v, ...result } : v));
+    },
+    onError: (error) => {
+      playScanSound(false);
+      setScanned({
+        ok: false,
+        at: Date.now(),
+        message: errorMessage(error),
+        amber:
+          (error as { data?: { messageKey?: string } }).data?.messageKey ===
+          "errors.qa.scanAlreadyVerified",
+      });
+    },
+  });
+  useScanner((code) => {
+    if (!focused) return;
+    scan.mutate({ pkg: focused, code, scanId: crypto.randomUUID() });
+  }, mayVerify);
+
   const tap = useMutation({
     mutationKey: writeKey,
     // One at a time per order: a tap and its undo reach the server in the order they were made.
@@ -127,6 +181,7 @@ function QaLayout({
           disabled={!mayVerify || view.packages.every((p) => hasLiveLabel(p))}
         />
       </div>
+      {mayVerify && <ScanBanner outcome={scanned} linkTo={[]} linking={false} onLink={() => {}} />}
 
       {view.packages.length === 0 ? (
         <p className="alert">{t("qa.nothingToVerify")}</p>
@@ -141,7 +196,12 @@ function QaLayout({
               pkg={pkg}
               orderId={order.id}
               disabled={!mayVerify}
-              onTap={(row) => tap.mutate({ row, verified: row.verifiedQuantity < row.quantity })}
+              isFocused={pkg.id === focused?.id}
+              onFocus={() => setFocusedId(pkg.id)}
+              onTap={(row) => {
+                setFocusedId(pkg.id);
+                tap.mutate({ row, verified: row.verifiedQuantity < row.quantity });
+              }}
             />
           ))}
         </ul>
@@ -252,11 +312,15 @@ function PackageCard({
   pkg,
   orderId,
   disabled,
+  isFocused,
+  onFocus,
   onTap,
 }: {
   pkg: QaPackage;
   orderId: string;
   disabled: boolean;
+  isFocused: boolean;
+  onFocus: () => void;
   onTap: (row: QaRow) => void;
 }) {
   const t = useTranslations();
@@ -265,12 +329,17 @@ function PackageCard({
   const { label } = pkg;
   return (
     <li
-      className="space-y-3 rounded-box bg-base-100 p-4 shadow-sm"
+      onPointerDown={onFocus}
+      className={`space-y-3 rounded-box bg-base-100 p-4 shadow-sm ${isFocused ? "ring-2 ring-primary" : ""}`}
       data-testid="qa-package"
       data-package={pkg.number}
+      data-focused={isFocused || undefined}
     >
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="text-xl font-bold">{t("qa.package", { number: pkg.number })}</h2>
+        <h2 className="text-xl font-bold">
+          {t("qa.package", { number: pkg.number })}
+          {isFocused && <span className="badge badge-primary ms-2">{t("qa.scanningHere")}</span>}
+        </h2>
         <span className="text-sm" data-testid="qa-package-count">
           {t("qa.verifiedCount", { verified, total: pkg.rows.length })}
         </span>

@@ -80,6 +80,7 @@ import {
   scanBatch,
   scanIntoPackage,
   selectRate,
+  scanVerify,
   sendTestEmail,
   setCarrierEnabled,
   setCarrierLabel,
@@ -287,6 +288,7 @@ export const router = implementer.router({
     selectRate: api.qa.selectRate.handler(({ input, context }) =>
       selectRate(db, context.actor, input),
     ),
+    scan: api.qa.scan.handler(({ input, context }) => scanVerify(db, context.actor, input)),
   },
   packing: {
     view: api.packing.view.handler(({ input, context }) => getPackView(db, context.actor, input)),

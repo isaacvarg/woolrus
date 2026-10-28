@@ -559,6 +559,8 @@
     "verifyRow": "Verify {name}: {quantity} units",
     "clearRow": "Clear verification of {name}",
     "unitsProgress": "{verified} of {quantity}",
+    "scanningHere": "Scanning here",
+    "scanned": "Verified {name}: {verified} of {quantity}",
     "sku": "SKU {sku}",
     "criticalIssue": "Critical issue",
     "orderCritical": "{count, plural, one {# open Critical issue on this order} other {# open Critical issues on this order}}",
@@ -1189,7 +1191,10 @@
       "packageHasLabel": "This package already has a label. Void it before choosing another rate.",
       "addressLockedByLabel": "A package already has a label with the old address. Void the labels before changing the address.",
       "allPackagesLabelled": "Every package already has a label, so there are no rates to refresh.",
-      "purchaseInProgress": "Labels are being bought for this order. Wait for that to finish."
+      "purchaseInProgress": "Labels are being bought for this order. Wait for that to finish.",
+      "scanNotOnOrder": "That's {name}. It isn't on this order.",
+      "scanOtherPackage": "That belongs in package {package}, not this one.",
+      "scanAlreadyVerified": "All {line} in this package are already verified."
     }
   },
   "emails": {
