@@ -52,6 +52,7 @@ import {
   listUsers,
   listVoids,
   lockStation,
+  markLabelNotBought,
   markOutOfStock,
   myPicks,
   orderMutations,
@@ -290,6 +291,9 @@ export const router = implementer.router({
       selectRate(db, context.actor, input),
     ),
     scan: api.qa.scan.handler(({ input, context }) => scanVerify(db, context.actor, input)),
+    markLabelNotBought: api.qa.markLabelNotBought.handler(({ input, context }) =>
+      markLabelNotBought(db, context.actor, input),
+    ),
   },
   packing: {
     view: api.packing.view.handler(({ input, context }) => getPackView(db, context.actor, input)),

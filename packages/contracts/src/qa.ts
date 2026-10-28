@@ -132,6 +132,13 @@ export const ScanVerifyInput = z.object({
 });
 export type ScanVerifyInput = z.infer<typeof ScanVerifyInput>;
 
+export const MarkLabelNotBoughtInput = z.object({
+  labelId: Id,
+  /** What was checked at the provider; kept in the audit trail. */
+  reason: z.string().trim().min(1).max(500),
+});
+export type MarkLabelNotBoughtInput = z.infer<typeof MarkLabelNotBoughtInput>;
+
 export const qa = {
   screen: base
     .route({
@@ -168,5 +175,14 @@ export const qa = {
       summary: "Scan a product in a package: one more verified unit of the first row that needs it",
     })
     .input(ScanVerifyInput)
+    .output(QaResult),
+  markLabelNotBought: base
+    .route({
+      method: "POST",
+      path: "/labels/{labelId}/not-bought",
+      tags,
+      summary: "Release a purchase nobody could confirm, once the provider has no label for it",
+    })
+    .input(MarkLabelNotBoughtInput)
     .output(QaResult),
 };

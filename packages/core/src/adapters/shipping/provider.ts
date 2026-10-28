@@ -123,6 +123,8 @@ export type PurchaseInput = {
   };
   /** Rebuilt by `qa` from the package and ship-to; a provider without rate ids books from it. */
   shipment: RateRequest;
+  /** Which of the order's packages this is; providers ignore it, the fakes use it for dev triggers. */
+  packageNumber?: number;
   idempotencyKey: string;
   reference: string;
   format: "pdf";

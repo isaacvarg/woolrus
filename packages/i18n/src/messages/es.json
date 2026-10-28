@@ -269,6 +269,11 @@
     "disabledToast": "Regla «{name}» desactivada."
   },
   "queue": {
+    "labelState": {
+      "purchasing": "Comprando etiquetas",
+      "failed": "Etiqueta fallida",
+      "unknown": "Etiqueta sin confirmar"
+    },
     "openIssues": "{count, plural, one {# problema abierto} other {# problemas abiertos}}, el peor: {severity}",
     "unresolvedVoids": "{count, plural, one {# anulación sin resolver} other {# anulaciones sin resolver}}",
     "search": "Buscar pedidos",
@@ -584,6 +589,14 @@
     "rateDays": "{days, plural, one {# día} other {# días}}",
     "buying": "Comprando etiquetas… {bought} de {total}",
     "failedPackages": "Fallaron las etiquetas de: {packages}",
+    "partlyBought": "{bought} de {total} etiquetas compradas.",
+    "failedPackage": "Paquete {number}: {reason}",
+    "failedNext": "Elige otra tarifa para los paquetes fallidos y vuelve a pulsar Completar QA. Solo se compran las etiquetas que faltan.",
+    "checkProvider": "Busca en el proveedor una etiqueta con la referencia {number}.",
+    "markNotBought": "Marcar como no comprada",
+    "markNotBoughtTitle": "Paquete {number}: no se compró ninguna etiqueta",
+    "markNotBoughtBody": "Hazlo solo después de revisar el proveedor y no encontrar una etiqueta de este pedido, o de anularla allí. Después se podrá volver a comprar el paquete.",
+    "markNotBoughtReason": "¿Qué revisaste?",
     "stillNeeded": "Falta esto para terminar el control de calidad",
     "allDone": "Todo está verificado.",
     "complete": "Completar QA",
@@ -1200,6 +1213,8 @@
       "packageProviderOff": "El proveedor de envíos del paquete {package} está desactivado. Un administrador lo activa en Ajustes → Envíos.",
       "providerUnavailable": "No hay un proveedor disponible para comprar esta etiqueta. Revisa Ajustes → Envíos.",
       "purchaseUnknown": "No pudimos confirmar si esta etiqueta se compró. Busca en el proveedor una etiqueta con el número de este pedido.",
+      "labelNotUnknown": "Esa etiqueta no está esperando a que una persona la resuelva.",
+      "settledManually": "Marcada como no comprada a mano.",
       "scanNotOnOrder": "Eso es {name}. No está en este pedido.",
       "scanOtherPackage": "Eso va en el paquete {package}, no en este.",
       "scanAlreadyVerified": "Todo {line} de este paquete ya está verificado."

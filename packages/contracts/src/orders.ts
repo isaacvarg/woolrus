@@ -131,6 +131,8 @@ export const QueueRow = z.object({
   topOpenSeverity: QualityIssueSeverity.nullable(),
   /** Voids that are neither undone nor resolved yet. */
   unresolvedVoidCount: z.number().int(),
+  /** Label purchase state for QA's badge; `none` outside QA and when nothing went wrong. */
+  labelState: z.enum(["none", "purchasing", "failed", "unknown"]),
 });
 export type QueueRow = z.infer<typeof QueueRow>;
 

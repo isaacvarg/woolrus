@@ -16,6 +16,7 @@ import { hasLiveLabel } from "./live-label";
 import { money } from "./money";
 import { QaDrawer } from "./qa-drawer";
 import { RatesTable, RefreshRatesButton } from "./qa-rates";
+import { FailedPackages, isUnknownPurchase, MarkNotBought } from "./qa-settle";
 
 // The QA screen (SPEC-qa "UI", FR-QA-01). A tap verifies a row in full and a second tap clears
 // it. Taps apply at once and the server confirms them (NFR-PERF-02); writes run one at a time per
@@ -41,6 +42,7 @@ export function QaScreen({
   userId,
   canVerify,
   canPurchase,
+  canSettle,
   canReport,
   canWriteCustomer,
 }: {
@@ -48,6 +50,7 @@ export function QaScreen({
   userId: string | null;
   canVerify: boolean;
   canPurchase: boolean;
+  canSettle: boolean;
   canReport: boolean;
   canWriteCustomer: boolean;
 }) {
@@ -69,6 +72,7 @@ export function QaScreen({
       userId={userId}
       canVerify={canVerify}
       canPurchase={canPurchase}
+      canSettle={canSettle}
       canReport={canReport}
       canWriteCustomer={canWriteCustomer}
     />
@@ -80,6 +84,7 @@ function QaLayout({
   userId,
   canVerify,
   canPurchase,
+  canSettle,
   canReport,
   canWriteCustomer,
 }: {
@@ -87,6 +92,7 @@ function QaLayout({
   userId: string | null;
   canVerify: boolean;
   canPurchase: boolean;
+  canSettle: boolean;
   canReport: boolean;
   canWriteCustomer: boolean;
 }) {
@@ -231,7 +237,7 @@ function QaLayout({
           {t("qa.orderCritical", { count: view.orderIssueIds.length })}
         </div>
       )}
-      <PurchaseBanner purchase={view.purchase} />
+      <PurchaseBanner view={view} />
       <div className="flex justify-end">
         <RefreshRatesButton
           orderId={order.id}
@@ -252,6 +258,8 @@ function QaLayout({
               key={pkg.id}
               pkg={pkg}
               orderId={order.id}
+              orderNumber={order.number}
+              canSettle={canSettle}
               disabled={!mayVerify}
               isFocused={pkg.id === focused?.id}
               onFocus={() => setFocusedId(pkg.id)}
@@ -363,8 +371,9 @@ function QaBanner({ view, userId }: { view: QaView; userId: string | null }) {
   );
 }
 
-function PurchaseBanner({ purchase }: { purchase: QaView["purchase"] }) {
+function PurchaseBanner({ view }: { view: QaView }) {
   const t = useTranslations();
+  const { purchase } = view;
   if (purchase.kind === "purchasing") {
     return (
       <div role="status" className="alert alert-info" data-testid="qa-buying">
@@ -372,14 +381,7 @@ function PurchaseBanner({ purchase }: { purchase: QaView["purchase"] }) {
       </div>
     );
   }
-  if (purchase.kind === "failed") {
-    return (
-      <div role="alert" className="alert alert-error" data-testid="qa-failed">
-        {t("qa.failedPackages", { packages: purchase.packages.map((n) => `#${n}`).join(", ") })}
-      </div>
-    );
-  }
-  return null;
+  return <FailedPackages view={view} />;
 }
 
 const labelKeys = {
@@ -394,6 +396,8 @@ const labelKeys = {
 function PackageCard({
   pkg,
   orderId,
+  orderNumber,
+  canSettle,
   disabled,
   isFocused,
   onFocus,
@@ -402,6 +406,8 @@ function PackageCard({
 }: {
   pkg: QaPackage;
   orderId: string;
+  orderNumber: string;
+  canSettle: boolean;
   disabled: boolean;
   isFocused: boolean;
   onFocus: () => void;
@@ -457,6 +463,9 @@ function PackageCard({
             </div>
           )}
           {label.error && t.has(label.error as never) && <div>{t(label.error as never)}</div>}
+          {canSettle && isUnknownPurchase(pkg) && (
+            <MarkNotBought orderId={orderId} orderNumber={orderNumber} pkg={pkg} />
+          )}
         </div>
       )}
     </li>

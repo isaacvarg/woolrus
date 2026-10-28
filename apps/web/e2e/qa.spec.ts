@@ -6,7 +6,12 @@ import { withSettingsLock } from "./support/settings-lock";
 
 const db = createDb();
 
-test.afterAll(deleteCreatedOrders);
+// Labels are kept for history (Restrict), so a test that made some removes them first.
+const labelled: string[] = [];
+test.afterAll(async () => {
+  await db.shippingLabel.deleteMany({ where: { package: { orderId: { in: labelled } } } });
+  await deleteCreatedOrders();
+});
 
 /** A QA order with one package holding all of the line's units. */
 async function qaOrder(customerName: string, quantity = 3) {
@@ -171,4 +176,97 @@ test("a Shipper doesn't get a Complete QA button", async ({ page }) => {
   await signInAs(page, ["SHIPPER"]);
   await page.goto(`/qa/${order.id}`);
   await expect(page.getByTestId("qa-complete")).toHaveCount(0);
+});
+
+/** A QA order with two packages, each with a label in the given state. */
+async function labelledOrder(
+  customerName: string,
+  labels: [
+    { status: "ACTIVE" | "PURCHASING" | "PURCHASE_FAILED"; error?: string },
+    { status: "ACTIVE" | "PURCHASING" | "PURCHASE_FAILED"; error?: string },
+  ],
+) {
+  const order = await createOrder({ customerName, status: "QA", quantity: 2 });
+  labelled.push(order.id);
+  const line = await db.orderItem.findFirstOrThrow({ where: { orderId: order.id } });
+  for (const [index, label] of labels.entries()) {
+    const pkg = await db.package.create({
+      data: { orderId: order.id, number: index + 1, weightOz: 16 },
+    });
+    await db.packageItem.create({
+      data: {
+        packageId: pkg.id,
+        orderItemId: line.id,
+        quantity: 1,
+        qaVerifiedQuantity: 1,
+        qaVerifiedAt: new Date(),
+      },
+    });
+    await db.shippingLabel.create({
+      data: {
+        packageId: pkg.id,
+        status: label.status,
+        provider: "SHIPSTATION",
+        idempotencyKey: crypto.randomUUID(),
+        carrierCode: "usps",
+        serviceCode: "e2e_ground",
+        currency: "USD",
+        error: label.error ?? null,
+        ...(label.status === "ACTIVE" ? { trackingNumber: "E2E123", costCents: 450 } : {}),
+      },
+    });
+  }
+  return order;
+}
+
+test("a refused label shows a banner per failed package and the queue badge says Label failed", async ({
+  page,
+}) => {
+  const customerName = `E2E ${crypto.randomUUID()}`;
+  const order = await labelledOrder(customerName, [
+    { status: "ACTIVE" },
+    { status: "PURCHASE_FAILED", error: "errors.shipping.notOffered" },
+  ]);
+  await signInAs(page, ["QA"]);
+
+  await page.goto("/queue/qa");
+  await page.getByRole("searchbox", { name: "Search orders" }).fill(customerName);
+  await expect(
+    page.getByRole("row", { name: new RegExp(order.number) }).getByTestId("queue-label-badge"),
+  ).toHaveText("Label failed");
+
+  await page.goto(`/qa/${order.id}`);
+  const banner = page.getByTestId("qa-failed");
+  await expect(banner).toContainText("1 of 2 labels bought.");
+  await expect(page.getByTestId("qa-failed-package")).toContainText("Package 2:");
+});
+
+test("an unconfirmed purchase can be marked not bought, with a reason", async ({ page }) => {
+  const order = await labelledOrder(`E2E ${crypto.randomUUID()}`, [
+    { status: "ACTIVE" },
+    { status: "PURCHASING", error: "errors.qa.purchaseUnknown" },
+  ]);
+  await signInAs(page, ["QA"]);
+  await page.goto(`/qa/${order.id}`);
+
+  await page.getByTestId("qa-mark-not-bought").click();
+  await page.getByRole("dialog").getByLabel("What did you check?").fill("Not in ShipStation");
+  await page.getByRole("dialog").getByRole("button", { name: "Mark not bought" }).click();
+
+  await expect(page.getByTestId("qa-failed")).toContainText("Package 2:");
+  const failed = await db.shippingLabel.findFirstOrThrow({
+    where: { package: { orderId: order.id }, status: "PURCHASE_FAILED" },
+  });
+  expect(failed.error).toBe("errors.qa.settledManually");
+});
+
+test("a Shipper doesn't get Mark not bought", async ({ page }) => {
+  const order = await labelledOrder(`E2E ${crypto.randomUUID()}`, [
+    { status: "ACTIVE" },
+    { status: "PURCHASING", error: "errors.qa.purchaseUnknown" },
+  ]);
+  await signInAs(page, ["SHIPPER"]);
+  await page.goto(`/qa/${order.id}`);
+  await expect(page.getByTestId("qa-label").last()).toBeVisible();
+  await expect(page.getByTestId("qa-mark-not-bought")).toHaveCount(0);
 });

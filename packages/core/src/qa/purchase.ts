@@ -36,6 +36,8 @@ export type PurchaseDeps = { providers: ShippingProvider[]; storage: ObjectStora
 export type PurchaseOptions = {
   now?: Date;
   timeoutMs?: number;
+  /** The job's last try: a label still unresolved is settled instead of left for another retry. */
+  finalAttempt?: boolean;
 };
 export type PurchasePayload = { orderId: string; requestedById: string };
 
@@ -72,6 +74,7 @@ class Purchase {
     private readonly orderId: string,
     private readonly now: Date,
     private readonly timeoutMs: number,
+    private readonly finalAttempt = false,
   ) {}
 
   /** Tells the screens something about the order changed. */
@@ -178,6 +181,7 @@ class Purchase {
               },
             ],
           },
+          packageNumber: pkg.number,
           idempotencyKey: label.idempotencyKey,
           reference: shipment.orderNumber,
           format: "pdf",
@@ -190,8 +194,35 @@ class Purchase {
       // A refusal is final for this label; anything else (provider down, a timeout) may pass.
       const error = shippingErrorFromCause("purchaseLabel", cause);
       if (error.permanent) return await this.fail(label, error.messageKey);
+      if (this.finalAttempt) return await this.resolveUnfinished(label, error.messageKey);
       return { kind: "retry", error: cause };
     }
+  }
+
+  /**
+   * The last try ended without an answer. Failed only on the provider's word that no label exists
+   * (or when no paid call was ever made); a label that may exist waits for a person.
+   */
+  private async resolveUnfinished(label: Label, messageKey: ErrorCode): Promise<Outcome> {
+    if (!(await this.attempted(label))) return await this.fail(label, messageKey);
+    const provider = this.deps.providers.find((p) => p.id === label.provider);
+    if (!provider?.capabilities.labelLookup || !provider.findLabel)
+      return await this.markUnknown(label);
+    try {
+      const found = await withTimeout(provider.findLabel(label.idempotencyKey), this.timeoutMs);
+      return found ? await this.bought(label, found) : await this.fail(label, messageKey);
+    } catch {
+      return await this.markUnknown(label);
+    }
+  }
+
+  /** Whether the intent was committed by the attempt that just failed (the loaded row predates it). */
+  private async attempted(label: Label): Promise<boolean> {
+    const row = await this.db.shippingLabel.findUnique({
+      where: { id: label.id },
+      select: { purchaseAttemptedAt: true },
+    });
+    return row?.purchaseAttemptedAt != null;
   }
 
   /** Records a bought label, then copies its PDF. */
@@ -316,7 +347,7 @@ export async function purchaseLabels(
   db: Db,
   deps: PurchaseDeps,
   { orderId, requestedById }: PurchasePayload,
-  { now = new Date(), timeoutMs = PURCHASE_TIMEOUT_MS }: PurchaseOptions = {},
+  { now = new Date(), timeoutMs = PURCHASE_TIMEOUT_MS, finalAttempt = false }: PurchaseOptions = {},
 ): Promise<void> {
   const requester = await db.user.findUnique({ where: { id: requestedById } });
   const actor: Actor = {
@@ -324,7 +355,7 @@ export async function purchaseLabels(
     roles: requester?.roles ?? [],
     stationId: null,
   };
-  const run = new Purchase(db, deps, actor, orderId, now, timeoutMs);
+  const run = new Purchase(db, deps, actor, orderId, now, timeoutMs, finalAttempt);
 
   const labels = await db.shippingLabel.findMany({
     where: {
@@ -341,14 +372,18 @@ export async function purchaseLabels(
   await run.finish(requestedById);
 }
 
-export type PurchaseJobOptions = { adapters?: AdapterFactories; storage: ObjectStorage };
+export type PurchaseJobOptions = {
+  adapters?: AdapterFactories;
+  storage: ObjectStorage;
+  finalAttempt?: boolean;
+};
 
 /** The worker's handler: the enabled providers, then `purchaseLabels`. */
 export async function runLabelsPurchaseJob(
   db: Db,
   payload: PurchasePayload,
-  { adapters, storage }: PurchaseJobOptions,
+  { adapters, storage, finalAttempt }: PurchaseJobOptions,
 ): Promise<void> {
   const providers = await createShippingProviders(db, adapters);
-  await purchaseLabels(db, { providers, storage }, payload);
+  await purchaseLabels(db, { providers, storage }, payload, { finalAttempt });
 }

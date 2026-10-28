@@ -269,6 +269,11 @@
     "disabledToast": "Rule “{name}” disabled."
   },
   "queue": {
+    "labelState": {
+      "purchasing": "Buying labels",
+      "failed": "Label failed",
+      "unknown": "Label unconfirmed"
+    },
     "openIssues": "{count, plural, one {# open issue} other {# open issues}}, worst: {severity}",
     "unresolvedVoids": "{count, plural, one {# unresolved void} other {# unresolved voids}}",
     "search": "Search orders",
@@ -584,6 +589,14 @@
     "rateDays": "{days, plural, one {# day} other {# days}}",
     "buying": "Buying labels… {bought} of {total}",
     "failedPackages": "Labels failed for: {packages}",
+    "partlyBought": "{bought} of {total} labels bought.",
+    "failedPackage": "Package {number}: {reason}",
+    "failedNext": "Pick another rate for the failed packages, then press Complete QA again. Only the missing labels are bought.",
+    "checkProvider": "Check the provider for a label with reference {number}.",
+    "markNotBought": "Mark not bought",
+    "markNotBoughtTitle": "Package {number}: no label was bought",
+    "markNotBoughtBody": "Only do this after checking the provider and finding no label for this order, or voiding it there. Package can then be bought again.",
+    "markNotBoughtReason": "What did you check?",
     "stillNeeded": "Still needed before QA can finish",
     "allDone": "Everything is verified.",
     "complete": "Complete QA",
@@ -1200,6 +1213,8 @@
       "packageProviderOff": "The shipping provider for package {package} is turned off. An admin turns it on in Settings → Shipping.",
       "providerUnavailable": "A provider isn't available to buy this label. Check Settings → Shipping.",
       "purchaseUnknown": "We couldn't confirm whether this label was bought. Check the provider for a label with this order's number.",
+      "labelNotUnknown": "That label isn't waiting for a person to settle it.",
+      "settledManually": "Marked as not bought by hand.",
       "scanNotOnOrder": "That's {name}. It isn't on this order.",
       "scanOtherPackage": "That belongs in package {package}, not this one.",
       "scanAlreadyVerified": "All {line} in this package are already verified."

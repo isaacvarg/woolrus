@@ -1,5 +1,5 @@
 import type { SimulatedFailure } from "./contract";
-import { shippingErrorFromCause, shippingErrorFromStatus } from "./errors";
+import { ShippingError, shippingErrorFromCause, shippingErrorFromStatus } from "./errors";
 import type {
   AddressCheck,
   ProviderCapabilities,
@@ -143,6 +143,33 @@ abstract class FakeProvider implements ShippingProvider {
     return service.baseCents + service.perOzCents * Math.ceil(request.package.weightOz);
   }
 
+  #slowed = new Set<string>();
+
+  /**
+   * Dev and e2e triggers in the ship-to's second line: `FAIL-BUY-<n>` refuses package `n` as
+   * `notOffered`; `SLOW-BUY` buys the label but loses the first response (a timeout), so the
+   * retry has to find it by its idempotency key instead of buying again.
+   */
+  protected purchaseTrigger(input: PurchaseInput): "slow" | undefined {
+    const line = input.shipment.shipTo.address2 ?? "";
+    const failing = /FAIL-BUY-(\d+)/.exec(line)?.[1];
+    if (failing !== undefined && Number(failing) === input.packageNumber) {
+      throw new ShippingError("notOffered", "purchaseLabel 422 service_not_offered", 422);
+    }
+    return line.includes("SLOW-BUY") && !this.#slowed.has(input.idempotencyKey)
+      ? "slow"
+      : undefined;
+  }
+
+  /** Throws the lost response after the label was bought, once per key. */
+  protected loseResponse(input: PurchaseInput): never {
+    this.#slowed.add(input.idempotencyKey);
+    throw shippingErrorFromCause(
+      "purchaseLabel",
+      new DOMException("The operation timed out", "TimeoutError"),
+    );
+  }
+
   protected newLabel(
     input: PurchaseInput,
     fields: Pick<
@@ -270,6 +297,7 @@ export class FakeShipStationProvider extends FakeProvider {
     await this.request({ operation: "purchaseLabel" });
     const existing = this.labels.get(input.idempotencyKey);
     if (existing) return this.label(existing);
+    const slow = this.purchaseTrigger(input);
     const [prefix, carrierExternalId, code, amount] = (input.rate.providerRateId ?? "").split(":");
     const known = this.catalog
       .find((c) => c.externalId === carrierExternalId)
@@ -278,14 +306,14 @@ export class FakeShipStationProvider extends FakeProvider {
       throw shippingErrorFromStatus("purchaseLabel", 400, "rate_not_found");
     }
     const id = `se-label-${crypto.randomUUID()}`;
-    return this.label(
-      this.newLabel(input, {
-        providerLabelId: id,
-        providerShipmentId: input.rate.providerShipmentId,
-        costCents: Number(amount),
-        document: { url: `data:application/pdf;base64,${btoa(fakeLabelPdf(id))}` },
-      }),
-    );
+    const bought = this.newLabel(input, {
+      providerLabelId: id,
+      providerShipmentId: input.rate.providerShipmentId,
+      costCents: Number(amount),
+      document: { url: `data:application/pdf;base64,${btoa(fakeLabelPdf(id))}` },
+    });
+    if (slow) this.loseResponse(input);
+    return this.label(bought);
   }
 
   async findLabel(idempotencyKey: string): Promise<PurchasedLabel | null> {
@@ -382,6 +410,7 @@ export class FakeBridgeSourceProvider extends FakeProvider {
   /** Books from the full shipment; the label PDF comes back as bytes. */
   async purchaseLabel(input: PurchaseInput): Promise<PurchasedLabel> {
     await this.request({ operation: "purchaseLabel" });
+    const slow = this.purchaseTrigger(input);
     const match = this.service(
       input.shipment,
       input.rate.carrierExternalId,
@@ -391,13 +420,13 @@ export class FakeBridgeSourceProvider extends FakeProvider {
       throw shippingErrorFromStatus("purchaseLabel", 422, "INVALID_SERVICE");
     }
     const bookNumber = `BS${digits(10)}`;
-    return this.label(
-      this.newLabel(input, {
-        providerLabelId: bookNumber,
-        costCents: this.price(match.service, input.shipment),
-        document: { pdf: new TextEncoder().encode(fakeLabelPdf(bookNumber)) },
-      }),
-    );
+    const bought = this.newLabel(input, {
+      providerLabelId: bookNumber,
+      costCents: this.price(match.service, input.shipment),
+      document: { pdf: new TextEncoder().encode(fakeLabelPdf(bookNumber)) },
+    });
+    if (slow) this.loseResponse(input);
+    return this.label(bought);
   }
 
   async voidLabel(providerLabelId: string): Promise<{ approved: boolean; message?: string }> {
