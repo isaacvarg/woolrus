@@ -3,13 +3,14 @@ import {
   encryptionKey,
   fakeShippingProviders,
   shippingProviderHealth,
+  woocommerceHealth,
 } from "@woolrus/core";
 import { db } from "@woolrus/db";
 import { storage } from "@/server/storage";
 
 export const dynamic = "force-dynamic";
 
-/** Dependency checks (NFR-OPS-02). WooCommerce and Lumexia join as their adapters land. */
+/** Dependency checks (NFR-OPS-02). Lumexia joins as its adapter lands. */
 export async function GET() {
   const checks: Record<string, "ok" | "fail"> = {};
   try {
@@ -45,5 +46,17 @@ export async function GET() {
   } catch {
     degraded = true;
   }
-  return Response.json({ ok, degraded, checks: { ...checks, email } }, { status: ok ? 200 : 503 });
+  // A broken store degrades health, it doesn't take it down: the floor keeps working on the orders
+  // already imported (SPEC-operations "Health"). Says only ok/fail, never why or which host.
+  let woocommerce: "ok" | "fail" | "unconfigured" = "fail";
+  try {
+    if (checks.database === "ok") woocommerce = await woocommerceHealth(db);
+  } catch {
+    woocommerce = "fail";
+  }
+  degraded ||= woocommerce === "fail";
+  return Response.json(
+    { ok, degraded, checks: { ...checks, email, woocommerce } },
+    { status: ok ? 200 : 503 },
+  );
 }
