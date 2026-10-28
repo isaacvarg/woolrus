@@ -65,8 +65,8 @@ the latest version of the order. That place records the change and tells every o
 - Voiding labels before a repack, and pushing Completed to Woo: `shipping`.
 - Detecting and acknowledging external changes from WooCommerce (`Order.externalChange*`): `store-sync`. This
   module only shows the flag on queues and order detail.
-- The "no open critical quality issue" condition on QA → Ready: added to that gate by `qa` (it's an edit to this
-  spec when `qa` is specified).
+- The QA screen and label purchase: `qa`, which added the "no open critical quality issue" condition to the
+  **verified** gate (SPEC-qa, 2026-10-28).
 - Notes on orders: `notes`. Returns after Completed: `returns`.
 
 ## Design
@@ -107,7 +107,7 @@ store's Rush Order product: it changes priority but nothing is picked, packed or
 |---|---|
 | **picked** | Every active line is `PICKED` or `SUBSTITUTED` with `pickedQuantity` = active quantity. `OUT_OF_STOCK` and `PENDING` lines block (a picker voids them first, FR-VOID). |
 | **packed** | Σ `PackageItem.quantity` per active line = its active quantity; no line is over-packed; every package has items, a box (or all three override dimensions) and a weight. |
-| **verified** | The order has at least one package; every `PackageItem` of the order has `qaVerifiedAt`; every package has exactly one selected `ShippingRate` and one `ACTIVE` label. |
+| **verified** | The order has at least one package; every `PackageItem` of the order has `qaVerifiedAt`; every package has exactly one selected `ShippingRate` and one `ACTIVE` label; no open Critical quality issue on the order (`criticalIssueOpen`, FR-QA-06, added by `qa`). |
 | **shippable** | Status is READY and every package has an `ACTIVE` label (fixes §7.1 #7). |
 
 Gates take nothing from the client: they only read the database. That's what makes "hidden buttons" irrelevant.
@@ -145,6 +145,9 @@ its `tx`, so its own writes and the transition commit or roll back together.
   clears it. Reads show it as unclaimed, and the next claim simply overwrites it. Every workflow action by the
   claimer on that order refreshes `claimedAt`, and `touchClaim(tx, actor, orderId)` lets stage modules refresh it
   when someone picks or packs.
+- One exception (SPEC-qa): `qa`'s `labels.purchase` job makes the QA → Ready move as the user who pressed Complete
+  QA with `TransitionOptions.ignoreClaimExpiry`. The claim must still be that user's (`claimedById`); only its expiry
+  is ignored, because the purchase kept the order busy. A takeover still stops the move.
 - `claim({ orderId, expectedVersion })`: needs the permission for the order's current stage (Pending/Picking →
   `order.pick`, Packing → `order.pack`, QA → `order.qa`). Fails with `CONFLICT` / `errors.workflow.claimedByOther`
   (message includes the holder's name) if someone else holds a live claim. Not allowed for ON_HOLD, READY or
