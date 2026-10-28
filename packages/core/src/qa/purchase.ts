@@ -32,6 +32,19 @@ import { isStored } from "./complete";
 /** One provider call, however long the provider takes to answer. */
 export const PURCHASE_TIMEOUT_MS = 30_000;
 
+/** A shipping label is a page or two; anything bigger isn't one. */
+export const MAX_PDF_BYTES = 5 * 1024 * 1024;
+
+/** Provider-supplied URLs are fetched over https only (`data:` is what the fake provider hands out). */
+const allowedPdfUrl = (url: string) => url.startsWith("https://") || url.startsWith("data:");
+
+function assertPdf(bytes: Uint8Array): Uint8Array {
+  if (bytes.byteLength > MAX_PDF_BYTES) throw new Error("label PDF is too large");
+  const magic = new TextDecoder().decode(bytes.subarray(0, 5));
+  if (magic !== "%PDF-") throw new Error("label document is not a PDF");
+  return bytes;
+}
+
 export type PurchaseDeps = { providers: ShippingProvider[]; storage: ObjectStorage };
 export type PurchaseOptions = {
   now?: Date;
@@ -87,8 +100,8 @@ class Purchase {
   }
 
   private async fail(label: Label, messageKey: ErrorCode): Promise<Outcome> {
-    await this.db.shippingLabel.update({
-      where: { id: label.id },
+    await this.db.shippingLabel.updateMany({
+      where: { id: label.id, status: "PURCHASING" },
       data: { status: "PURCHASE_FAILED", error: messageKey },
     });
     await this.notify();
@@ -96,7 +109,10 @@ class Purchase {
   }
 
   private async markUnknown(label: Label): Promise<Outcome> {
-    await this.db.shippingLabel.update({ where: { id: label.id }, data: { error: unknownKey } });
+    await this.db.shippingLabel.updateMany({
+      where: { id: label.id, status: "PURCHASING" },
+      data: { error: unknownKey },
+    });
     await this.notify();
     return { kind: "settled" };
   }
@@ -151,11 +167,18 @@ class Purchase {
       const shipment = await this.shipment(pkg);
       if (typeof shipment === "string") return await this.fail(label, shipment);
 
-      // The intent, committed before the paid call.
-      await this.db.shippingLabel.update({
-        where: { id: label.id },
+      // The intent, committed before the paid call. Compare-and-set on what this run read, so a
+      // second job racing on the same label sees the claim and doesn't buy: the first run
+      // settles it, and the sweep finds it by its idempotency key if that run dies.
+      const claimed = await this.db.shippingLabel.updateMany({
+        where: {
+          id: label.id,
+          status: "PURCHASING",
+          purchaseAttemptedAt: label.purchaseAttemptedAt,
+        },
         data: { purchaseAttemptedAt: this.now },
       });
+      if (claimed.count === 0) return { kind: "settled" };
       const purchased = await withTimeout(
         provider.purchaseLabel({
           rate: {
@@ -277,7 +300,12 @@ class Purchase {
     }
   }
 
+  /** What we store as the label: a PDF, of a size a label can have. */
   private async pdfBytes(label: Label, purchased?: PurchasedLabel): Promise<Uint8Array> {
+    return assertPdf(await this.pdfSource(label, purchased));
+  }
+
+  private async pdfSource(label: Label, purchased?: PurchasedLabel): Promise<Uint8Array> {
     if (purchased && "pdf" in purchased.document) return purchased.document.pdf;
     let url = purchased && "url" in purchased.document ? purchased.document.url : label.pdfUrl;
     if (!url) {
@@ -288,8 +316,11 @@ class Purchase {
       if ("pdf" in found.document) return found.document.pdf;
       url = found.document.url;
     }
+    if (!allowedPdfUrl(url)) throw new Error("label PDF URL is not https");
     const response = await fetch(url, { signal: AbortSignal.timeout(this.timeoutMs) });
     if (!response.ok) throw new Error(`label PDF download failed: ${response.status}`);
+    const declared = Number(response.headers.get("content-length") ?? 0);
+    if (declared > MAX_PDF_BYTES) throw new Error("label PDF is too large");
     return new Uint8Array(await response.arrayBuffer());
   }
 

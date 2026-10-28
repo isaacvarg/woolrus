@@ -122,6 +122,23 @@ describe("reconcileLabels", () => {
     });
     expect(await reconcileLabels(db, { now })).toBe(0);
   });
+
+  it("queues the job for a bought label whose PDF never reached storage, once it is stale", async () => {
+    const { order, qa } = await requested(1);
+    await db.shippingLabel.updateMany({
+      data: { status: "ACTIVE", storageKey: null, purchasedAt: old },
+    });
+    expect(await reconcileLabels(db, { now })).toBe(1);
+    expect((await queued()).map((j) => j.data)).toEqual([
+      { orderId: order.id, requestedById: qa.userId },
+    ]);
+
+    await db.$executeRawUnsafe(`DELETE FROM pgboss.job WHERE name = 'labels.purchase'`);
+    await db.shippingLabel.updateMany({ data: { purchasedAt: now } });
+    expect(await reconcileLabels(db, { now })).toBe(0); // fresh: the job may still be running
+    await db.shippingLabel.updateMany({ data: { purchasedAt: old, storageKey: "labels/x.pdf" } });
+    expect(await reconcileLabels(db, { now })).toBe(0); // stored: nothing to do
+  });
 });
 
 describe("QA queue labelState", () => {

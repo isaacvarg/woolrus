@@ -12,7 +12,7 @@ import { lockOrder } from "../workflow/lock";
 import { notifyOrderChanged } from "../workflow/notify";
 import { type QaOptions, qaResult } from "./queries";
 
-// Settling and voiding (SPEC-qa "Settling and voiding"). `shipping` reuses `voidLabel` for repack.
+// Settling and voiding (SPEC-qa "Settling and voiding"). `shipping` will widen the QA-only check for repack (SPEC-qa).
 
 /** One provider call, however long the provider takes to answer. */
 export const VOID_TIMEOUT_MS = 30_000;
@@ -170,7 +170,7 @@ export async function markLabelNotBought(
 
 /**
  * `labels.reconcile`: queues a `labels.purchase` job for every order with a label left PURCHASING
- * for over ten minutes (a worker died mid-purchase). Labels waiting for a person are skipped, and
+ * for over ten minutes (a worker died mid-purchase), or bought but never stored. Labels waiting for a person are skipped, and
  * the per-order singleton key stops a second job while one is queued. Returns the orders queued.
  */
 export async function reconcileLabels(
@@ -180,9 +180,16 @@ export async function reconcileLabels(
   const cutoff = new Date(now.getTime() - STALE_PURCHASE_MINUTES * 60_000);
   const stale = await db.shippingLabel.findMany({
     where: {
-      status: "PURCHASING",
-      createdAt: { lt: cutoff },
-      OR: [{ error: null }, { error: { not: "errors.qa.purchaseUnknown" } }],
+      OR: [
+        {
+          status: "PURCHASING",
+          createdAt: { lt: cutoff },
+          // Labels waiting for a person are skipped.
+          AND: [{ OR: [{ error: null }, { error: { not: "errors.qa.purchaseUnknown" } }] }],
+        },
+        // Bought, but the PDF never reached our storage: the job only has to copy it.
+        { status: "ACTIVE", storageKey: null, purchasedAt: { lt: cutoff } },
+      ],
       purchasedById: { not: null },
       package: { isNot: null },
     },

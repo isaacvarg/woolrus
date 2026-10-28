@@ -200,6 +200,50 @@ describe("purchaseLabels", () => {
     expect(await status(order.id)).toBe("READY");
   });
 
+  it("buys each label once when two jobs run at the same time", async () => {
+    const { run, provider, order } = await requested(2);
+
+    await Promise.allSettled([run(), run()]);
+
+    expect(purchaseCalls(provider)).toBe(2);
+    expect((await labels()).every((l) => l.status === "ACTIVE")).toBe(true);
+    expect(await status(order.id)).toBe("READY");
+  });
+
+  it("doesn't buy a label another run already claimed", async () => {
+    const { run, provider } = await requested(1);
+    const [label] = await labels();
+    // Another job stamped the intent between this run's read and its claim.
+    const real = db.shippingLabel.updateMany.bind(db.shippingLabel);
+    vi.spyOn(db.shippingLabel, "updateMany").mockImplementationOnce(((args: never) => {
+      return real({
+        where: { id: label?.id },
+        data: { purchaseAttemptedAt: new Date(Date.now() - 1000) },
+      }).then(() => real(args));
+    }) as never);
+
+    await run();
+
+    expect(purchaseCalls(provider)).toBe(0);
+    expect((await labels())[0]).toMatchObject({ status: "PURCHASING" });
+    vi.restoreAllMocks();
+  });
+
+  it("refuses to store a label document that isn't a PDF, and keeps the purchase", async () => {
+    const { run, provider, storage, order } = await requested(1);
+    const real = provider.purchaseLabel.bind(provider);
+    vi.spyOn(provider, "purchaseLabel").mockImplementation(async (input) => {
+      const bought = await real(input);
+      return { ...bought, document: { pdf: new TextEncoder().encode("<html>nope</html>") } };
+    });
+
+    await expect(run()).rejects.toThrow();
+
+    expect((await labels())[0]).toMatchObject({ status: "ACTIVE", storageKey: null });
+    expect(storage.keys()).toEqual([]);
+    expect(await status(order.id)).toBe("QA");
+  });
+
   it("never buys again when the provider can't look a label up", async () => {
     const { payload, order, storage } = await requested(1);
     const bridge = {
