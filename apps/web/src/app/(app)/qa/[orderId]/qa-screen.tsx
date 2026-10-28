@@ -5,6 +5,7 @@ import type { QaPackage, QaResult, QaRow, QaView } from "@woolrus/contracts";
 import Link from "next/link";
 import { useFormatter, useTranslations } from "next-intl";
 import { useState } from "react";
+import { ReportIssueFlow } from "@/components/exceptions/report-issue-flow";
 import { Button } from "@/components/ui/fields";
 import { toast } from "@/components/ui/toast";
 import { useErrorMessage } from "@/lib/errors";
@@ -39,10 +40,14 @@ export function QaScreen({
   orderId,
   userId,
   canVerify,
+  canReport,
+  canWriteCustomer,
 }: {
   orderId: string;
   userId: string | null;
   canVerify: boolean;
+  canReport: boolean;
+  canWriteCustomer: boolean;
 }) {
   const t = useTranslations();
   const errorMessage = useErrorMessage();
@@ -56,17 +61,29 @@ export function QaScreen({
       </p>
     );
   }
-  return <QaLayout view={view.data} userId={userId} canVerify={canVerify} />;
+  return (
+    <QaLayout
+      view={view.data}
+      userId={userId}
+      canVerify={canVerify}
+      canReport={canReport}
+      canWriteCustomer={canWriteCustomer}
+    />
+  );
 }
 
 function QaLayout({
   view,
   userId,
   canVerify,
+  canReport,
+  canWriteCustomer,
 }: {
   view: QaView;
   userId: string | null;
   canVerify: boolean;
+  canReport: boolean;
+  canWriteCustomer: boolean;
 }) {
   const t = useTranslations();
   const errorMessage = useErrorMessage();
@@ -75,6 +92,10 @@ function QaLayout({
   const viewKey = orpc.qa.screen.queryKey({ input: { orderId: order.id } });
   const writeKey = ["qaWrite", order.id];
   const purchasing = view.purchase.kind === "purchasing";
+  const [reporting, setReporting] = useState<{ orderItemId?: string; packageId?: string } | null>(
+    null,
+  );
+  const mayReport = canReport && order.status !== "COMPLETED" && order.status !== "CANCELLED";
   const mayVerify =
     canVerify && order.status === "QA" && order.claim?.userId === userId && !purchasing;
 
@@ -160,6 +181,22 @@ function QaLayout({
 
   return (
     <section className="mx-auto max-w-6xl space-y-4 pb-28">
+      {reporting && (
+        <ReportIssueFlow
+          key={reporting.orderItemId ?? reporting.packageId}
+          order={order}
+          canWriteCustomer={canWriteCustomer}
+          targets={view.packages.flatMap((pkg) => [
+            { packageId: pkg.id, label: t("issues.package", { number: pkg.number }) },
+            ...pkg.rows.map((row) => ({
+              orderItemId: row.orderItemId,
+              label: t("issues.line", { name: row.name }),
+            })),
+          ])}
+          initialTarget={reporting}
+          onClose={() => setReporting(null)}
+        />
+      )}
       <QaHeader view={view} />
       <QaBanner view={view} userId={userId} />
       {view.customerNote && (
@@ -198,6 +235,9 @@ function QaLayout({
               disabled={!mayVerify}
               isFocused={pkg.id === focused?.id}
               onFocus={() => setFocusedId(pkg.id)}
+              onReport={
+                mayReport ? (row) => setReporting({ orderItemId: row.orderItemId }) : undefined
+              }
               onTap={(row) => {
                 setFocusedId(pkg.id);
                 tap.mutate({ row, verified: row.verifiedQuantity < row.quantity });
@@ -315,6 +355,7 @@ function PackageCard({
   isFocused,
   onFocus,
   onTap,
+  onReport,
 }: {
   pkg: QaPackage;
   orderId: string;
@@ -322,6 +363,7 @@ function PackageCard({
   isFocused: boolean;
   onFocus: () => void;
   onTap: (row: QaRow) => void;
+  onReport?: (row: QaRow) => void;
 }) {
   const t = useTranslations();
   const format = useFormatter();
@@ -349,7 +391,13 @@ function PackageCard({
       </p>
       <ul className="grid gap-2">
         {pkg.rows.map((row) => (
-          <RowButton key={row.id} row={row} disabled={disabled} onTap={() => onTap(row)} />
+          <RowButton
+            key={row.id}
+            row={row}
+            disabled={disabled}
+            onTap={() => onTap(row)}
+            onReport={onReport ? () => onReport(row) : undefined}
+          />
         ))}
       </ul>
       <RatesTable orderId={orderId} pkg={pkg} disabled={disabled} />
@@ -372,7 +420,17 @@ function PackageCard({
   );
 }
 
-function RowButton({ row, disabled, onTap }: { row: QaRow; disabled: boolean; onTap: () => void }) {
+function RowButton({
+  row,
+  disabled,
+  onTap,
+  onReport,
+}: {
+  row: QaRow;
+  disabled: boolean;
+  onTap: () => void;
+  onReport?: () => void;
+}) {
   const t = useTranslations();
   const done = row.verifiedQuantity === row.quantity;
   return (
@@ -423,6 +481,18 @@ function RowButton({ row, disabled, onTap }: { row: QaRow; disabled: boolean; on
           </span>
         </span>
       </Button>
+      {onReport && (
+        <div className="flex justify-end pt-1">
+          <Button
+            className="btn-outline btn-warning btn-sm"
+            onPress={onReport}
+            aria-label={t("issues.reportRow", { name: row.name })}
+            data-testid="qa-report"
+          >
+            {t("issues.button")}
+          </Button>
+        </div>
+      )}
     </li>
   );
 }
