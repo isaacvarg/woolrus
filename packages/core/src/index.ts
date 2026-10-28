@@ -7,6 +7,7 @@ export { createFakeShippingProvider } from "./adapters/shipping/fake";
 export * from "./adapters/shipping/provider";
 export * from "./adapters/shipping/registry";
 export * from "./adapters/storage/ensured";
+export * from "./adapters/storage/memory";
 export * from "./adapters/storage/s3";
 export * from "./adapters/storage/storage";
 export * from "./adapters/woocommerce/adapter";

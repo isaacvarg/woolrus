@@ -64,7 +64,7 @@ export function createMemoryStorage(options: MemoryStorageOptions = {}): MemoryS
         contentRange = `bytes ${start}-${end}/${entry.body.length}`;
       }
       return {
-        body: new Blob([bytes]).stream(),
+        body: new Blob([new Uint8Array(bytes)]).stream(),
         size: bytes.length,
         contentType: entry.contentType,
         contentRange,
