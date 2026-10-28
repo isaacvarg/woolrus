@@ -23,6 +23,10 @@ export const queues = {
   storageSweep: "storage.sweep",
   /** Ask every enabled shipping provider for each package's rates (FR-PACK-07, SPEC-carriers "Rate fetch"). */
   ratesFetch: "rates.fetch",
+  /** Buy an order's labels in the background after Complete QA (SPEC-qa "Complete QA"). */
+  labelsPurchase: "labels.purchase",
+  /** Settle labels left PURCHASING by a lost provider response (SPEC-qa). */
+  labelsReconcile: "labels.reconcile",
 } as const;
 export type QueueName = (typeof queues)[keyof typeof queues];
 
@@ -44,6 +48,8 @@ export type JobPayloads = {
   [queues.storageSweep]: Record<string, never>;
   /** `generation` is the order's `rateGeneration` when enqueued; a job for an older one writes nothing. */
   [queues.ratesFetch]: { orderId: string; generation: number };
+  [queues.labelsPurchase]: { orderId: string };
+  [queues.labelsReconcile]: Record<string, never>;
 };
 
 /**

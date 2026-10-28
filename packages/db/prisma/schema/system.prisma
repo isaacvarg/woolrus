@@ -36,6 +36,11 @@ model Settings {
   /// Days after completion before customer PII is purged (NFR-SEC-06). Null = keep.
   piiRetentionDays       Int?          @map("pii_retention_days")
 
+  /// Complete QA asks to confirm when the labels cost more than this multiple of the shipping charged. Null = off.
+  labelCostConfirmRatio     Decimal? @default(2.0) @map("label_cost_confirm_ratio") @db.Decimal(6, 2)
+  /// ...or more than this much when the customer paid nothing for shipping. Null = off.
+  labelCostConfirmFreeCents Int?     @default(1500) @map("label_cost_confirm_free_cents")
+
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   @@map("settings")
