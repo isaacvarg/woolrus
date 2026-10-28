@@ -5,18 +5,23 @@ import { z } from "zod";
 
 const money = z.object({ currency: z.string(), amount: z.number() });
 
+/** Text we store and show: cut to `max`, so a runaway response can't bloat a row or the UI. */
+const text = (max: number) => z.string().transform((value) => value.slice(0, max));
+const NAME = 200;
+const MESSAGE = 500;
+
 export const carriersResponse = z.object({
   carriers: z.array(
     z.object({
       carrier_id: z.string(),
       carrier_code: z.string(),
-      friendly_name: z.string().nullish(),
-      nickname: z.string().nullish(),
+      friendly_name: text(NAME).nullish(),
+      nickname: text(NAME).nullish(),
       services: z
         .array(
           z.object({
             service_code: z.string(),
-            name: z.string(),
+            name: text(NAME),
             domestic: z.boolean(),
             international: z.boolean(),
           }),
@@ -30,7 +35,7 @@ export const rateSchema = z.object({
   rate_id: z.string().nullish(),
   carrier_id: z.string(),
   service_code: z.string(),
-  service_type: z.string(),
+  service_type: text(NAME),
   shipping_amount: money,
   insurance_amount: money.nullish(),
   confirmation_amount: money.nullish(),
@@ -69,7 +74,7 @@ export const validateResponse = z
     z.object({
       status: z.enum(["unverified", "verified", "warning", "error"]),
       matched_address: validatedAddress.nullish(),
-      messages: z.array(z.object({ message: z.string() })).nullish(),
+      messages: z.array(z.object({ message: text(MESSAGE) })).nullish(),
     }),
   )
   .min(1);
@@ -84,6 +89,7 @@ export const labelSchema = z.object({
   insurance_cost: money.nullish(),
   tracking_number: z.string(),
   carrier_id: z.string(),
+  carrier_code: z.string(),
   service_code: z.string(),
   label_download: z.object({
     pdf: z.string().nullish(),

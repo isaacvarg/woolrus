@@ -57,15 +57,31 @@ const deliveryLines = (a: ShipAddress) =>
     part.trim().toUpperCase(),
   );
 
+/**
+ * `qa` fetches the label server-side, so only ShipStation's own hosts (v2 runs on ShipEngine's) are
+ * accepted: any other would be a request to wherever a response said. Confirm against the live API.
+ */
+const DOWNLOAD_DOMAINS = ["shipstation.com", "shipengine.com"];
+
+function isShipStationDownload(url: string): boolean {
+  if (!URL.canParse(url)) return false;
+  const { protocol, hostname } = new URL(url);
+  return (
+    protocol === "https:" &&
+    DOWNLOAD_DOMAINS.some((domain) => hostname === domain || hostname.endsWith(`.${domain}`))
+  );
+}
+
 function toLabel(label: z.output<typeof labelSchema>, operation: string): PurchasedLabel {
   const url = label.label_download.pdf ?? label.label_download.href;
-  if (!url?.startsWith("https://"))
+  if (!url || !isShipStationDownload(url)) {
     throw new ShippingError("unavailable", `${operation} malformed`);
+  }
   return {
     providerLabelId: label.label_id,
     ...(label.shipment_id && { providerShipmentId: label.shipment_id }),
     trackingNumber: label.tracking_number,
-    carrierCode: label.carrier_id,
+    carrierCode: label.carrier_code,
     serviceCode: label.service_code,
     costCents: cents(label.shipment_cost) + cents(label.insurance_cost),
     currency: label.shipment_cost.currency.toUpperCase(),
@@ -116,6 +132,7 @@ export class ShipStationAdapter implements ShippingProvider {
       return [
         {
           externalId: carrier.carrier_id,
+          code: carrier.carrier_code,
           name: carrier.friendly_name || carrier.nickname || carrier.carrier_code,
           services: services.map((s) => ({
             code: s.service_code,

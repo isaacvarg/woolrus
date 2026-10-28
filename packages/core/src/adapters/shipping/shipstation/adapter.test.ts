@@ -165,9 +165,10 @@ describe("ShipStation adapter", () => {
   it("lists carriers with their services, skipping a carrier that has none", async () => {
     const { provider } = setup();
     const list = await provider.listCarriers();
-    expect(list.map((c) => [c.externalId, c.name])).toEqual([
-      ["se-1000001", "UPS"],
-      ["se-1000002", "USPS"],
+    // `code` is the carrier's own (ups), not the account-specific carrier id.
+    expect(list.map((c) => [c.externalId, c.code, c.name])).toEqual([
+      ["se-1000001", "ups", "UPS"],
+      ["se-1000002", "stamps_com", "USPS"],
     ]);
     expect(list[0]?.services).toEqual([
       {
@@ -373,6 +374,13 @@ describe("ShipStation adapter", () => {
       });
     });
 
+    it("caps the provider's messages it passes on, which are stored and shown", async () => {
+      const long = [{ ...addressWarning[0], messages: [{ message: "x".repeat(5_000) }] }];
+      const { provider } = setup({ "POST /v2/addresses/validate": () => json(long) });
+      const [message] = (await provider.validateAddress(contractShipTo)).messages;
+      expect(message).toHaveLength(500);
+    });
+
     it("treats unverified as a warning", async () => {
       const unverified = [{ ...addressVerified[0], status: "unverified", matched_address: null }];
       const { provider } = setup({ "POST /v2/addresses/validate": () => json(unverified) });
@@ -381,6 +389,24 @@ describe("ShipStation adapter", () => {
   });
 
   describe("labels", () => {
+    it("refuses a label whose download isn't on a ShipStation host", async () => {
+      // `qa` fetches this URL server-side: another host would be an SSRF, and maybe a leaked key.
+      for (const url of [
+        "https://evil.example.com/label.pdf",
+        "https://shipstation.com.evil.example/label.pdf",
+        "http://api.shipstation.com/v2/downloads/label.pdf",
+      ]) {
+        const elsewhere = { ...label, label_download: { pdf: url, href: url } };
+        const { provider } = setup({
+          "POST /v2/labels/rates/se-3000001": () => json(elsewhere),
+        });
+        expect(await rejection(provider.purchaseLabel(purchaseInput()))).toMatchObject({
+          kind: "unavailable",
+          detail: "purchaseLabel malformed",
+        });
+      }
+    });
+
     it("buys a 4x6 PDF from the rate id with our key as the external shipment id", async () => {
       const { provider, calls } = setup();
       const bought = await provider.purchaseLabel(purchaseInput("label-key-1"));
@@ -398,7 +424,7 @@ describe("ShipStation adapter", () => {
         providerLabelId: "se-500001",
         providerShipmentId: "se-2000001",
         trackingNumber: "1Z000000000000001",
-        carrierCode: "se-1000001",
+        carrierCode: "ups",
         serviceCode: "ups_ground",
         costCents: 1339,
         currency: "USD",

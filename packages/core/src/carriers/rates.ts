@@ -389,7 +389,8 @@ export async function fetchRates(
   );
   const expiry = new Date(now.getTime() + RATE_TTL_HOURS * 3_600_000);
   for (const { pkg, outcomes } of asked) {
-    // Extras the provider returned for services that aren't on are dropped.
+    // Extras the provider returned for services that aren't on are dropped, and so is a negative
+    // price: a malformed quote that would sort first and be selected.
     const rates = outcomes
       .flatMap((o) =>
         o.ok
@@ -397,7 +398,9 @@ export async function fetchRates(
               const service = services
                 .get(o.provider)
                 ?.get(serviceKey(rate.carrierExternalId, rate.serviceCode));
-              return service ? [{ ...rate, provider: o.provider, service }] : [];
+              return service && rate.amountCents >= 0
+                ? [{ ...rate, provider: o.provider, service }]
+                : [];
             })
           : [],
       )

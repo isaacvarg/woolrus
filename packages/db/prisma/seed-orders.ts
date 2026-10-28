@@ -271,7 +271,7 @@ type FakeService = {
 type FakeCatalog = {
   provider: ShippingProviderId;
   providerData: Prisma.InputJsonObject;
-  carriers: { externalId: string; name: string; services: FakeService[] }[];
+  carriers: { externalId: string; code: string; name: string; services: FakeService[] }[];
 };
 
 // What core's fake providers (adapters/shipping/fake.ts) list and quote, for SHIPPING_PROVIDERS=fake.
@@ -282,11 +282,11 @@ const fakeCatalogs: FakeCatalog[] = [
     provider: "SHIPSTATION",
     providerData: {},
     carriers: [
-      { externalId: "se-demo-ground", name: "Demo Ground", services: [
+      { externalId: "se-demo-ground", code: "demo_ground", name: "Demo Ground", services: [
         { code: "demo_ground", name: "Demo Ground", domestic: true, baseCents: 450, perOzCents: 12, days: 5 },
         { code: "demo_ground_saver", name: "Demo Ground Saver", domestic: true, baseCents: 395, perOzCents: 14, days: 7 },
       ] },
-      { externalId: "se-demo-express", name: "Demo Express", services: [
+      { externalId: "se-demo-express", code: "demo_express", name: "Demo Express", services: [
         { code: "demo_express", name: "Demo Express", domestic: true, baseCents: 1250, perOzCents: 20, days: 2, guaranteed: true },
         { code: "demo_express_intl", name: "Demo Express International", domestic: false, baseCents: 3200, perOzCents: 40, days: 6 },
       ] },
@@ -296,11 +296,11 @@ const fakeCatalogs: FakeCatalog[] = [
     provider: "BRIDGE_SOURCE",
     providerData: { packageTypeCode: "CUSTOM" },
     carriers: [
-      { externalId: "DEMOGND", name: "Demo Ground", services: [
+      { externalId: "DEMOGND", code: "demo_ground", name: "Demo Ground", services: [
         { code: "GND", name: "Demo Ground", domestic: true, baseCents: 430, perOzCents: 13, days: 5 },
         { code: "GNDECO", name: "Demo Ground Economy", domestic: true, baseCents: 410, perOzCents: 13, days: 8 },
       ] },
-      { externalId: "DEMOEXP", name: "Demo Express", services: [
+      { externalId: "DEMOEXP", code: "demo_express", name: "Demo Express", services: [
         { code: "EXP", name: "Demo Express", domestic: true, baseCents: 1290, perOzCents: 18, days: 2, guaranteed: true },
         { code: "EXPINTL", name: "Demo Express International", domestic: false, baseCents: 3050, perOzCents: 42, days: 6 },
       ] },
@@ -310,6 +310,7 @@ const fakeCatalogs: FakeCatalog[] = [
 
 type FakeServiceRow = DemoService & {
   provider: ShippingProviderId;
+  carrierExternalId: string;
   carrierCode: string;
   service: FakeService;
 };
@@ -321,11 +322,12 @@ type FakeServiceRow = DemoService & {
 async function upsertFakeCatalogs(db: Db): Promise<FakeServiceRow[]> {
   const rows: FakeServiceRow[] = [];
   for (const { provider, providerData, carriers } of fakeCatalogs) {
-    for (const { externalId, name, services } of carriers) {
+    for (const { externalId, code, name, services } of carriers) {
       const carrier = await db.shippingCarrier.upsert({
         where: { provider_externalId: { provider, externalId } },
-        create: { provider, externalId, code: externalId, name, enabled: true },
-        update: {},
+        create: { provider, externalId, code, name, enabled: true },
+        // Demo stacks seeded when the code was the external id get the carrier's code.
+        update: { code },
       });
       for (const service of services) {
         const row = await db.carrierService.upsert({
@@ -344,6 +346,7 @@ async function upsertFakeCatalogs(db: Db): Promise<FakeServiceRow[]> {
         if (service.domestic) {
           rows.push({
             provider,
+            carrierExternalId: externalId,
             carrierCode: carrier.code,
             carrierId: carrier.id,
             serviceId: row.id,
@@ -375,7 +378,7 @@ const providerOrder: ShippingProviderId[] = ["SHIPSTATION", "BRIDGE_SOURCE"];
 function fakeRates(services: FakeServiceRow[], weightOz: number, shipmentId: string, now: Date) {
   const day = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
   return services
-    .map(({ provider, carrierCode, carrierId, serviceId, service }) => {
+    .map(({ provider, carrierExternalId, carrierCode, carrierId, serviceId, service }) => {
       const amountCents = service.baseCents + service.perOzCents * Math.ceil(weightOz);
       // ShipStation quotes with a rate id and a delivery estimate; Bridge Source with neither.
       const shipStation = provider === "SHIPSTATION";
@@ -384,7 +387,7 @@ function fakeRates(services: FakeServiceRow[], weightOz: number, shipmentId: str
         carrierId,
         serviceId,
         providerRateId: shipStation
-          ? `se-rate:${carrierCode}:${service.code}:${amountCents}`
+          ? `se-rate:${carrierExternalId}:${service.code}:${amountCents}`
           : null,
         providerShipmentId: shipStation ? shipmentId : null,
         carrierCode,

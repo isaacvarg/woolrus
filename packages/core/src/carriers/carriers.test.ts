@@ -87,6 +87,9 @@ describe.each(["SHIPSTATION", "BRIDGE_SOURCE"] as const)("syncCarriers (%s fake)
     const { carriers, lastSyncedAt } = await configFor(actor, id);
     expect(lastSyncedAt).toBeInstanceOf(Date);
     expect(carriers).toHaveLength(listed?.length ?? -1);
+    // Stored with the carrier's own code, which tracking and the Woo push use.
+    const rows = await db.shippingCarrier.findMany({ where: { provider: id } });
+    expect(rows.map((r) => r.code).sort()).toEqual(listed?.map((c) => c.code).sort());
     for (const carrier of carriers) {
       expect(carrier).toMatchObject({ enabled: false, missing: false });
       for (const service of carrier.services) {

@@ -43,7 +43,12 @@ type CatalogService = {
   days: number;
   guaranteed: boolean;
 };
-type CatalogCarrier = { externalId: string; name: string; services: CatalogService[] };
+type CatalogCarrier = {
+  externalId: string;
+  code: string;
+  name: string;
+  services: CatalogService[];
+};
 
 const UNAUTHORIZED_CREDENTIAL = "invalid";
 const BRIDGE_QUOTE_CONCURRENCY = 4;
@@ -80,6 +85,7 @@ abstract class FakeProvider implements ShippingProvider {
     await this.request({ operation: "listCarriers" });
     return this.catalog.map((carrier) => ({
       externalId: carrier.externalId,
+      code: carrier.code,
       name: carrier.name,
       services: carrier.services.map((service) => ({
         code: service.code,
@@ -147,7 +153,9 @@ abstract class FakeProvider implements ShippingProvider {
     const label: FakeLabel = {
       ...fields,
       trackingNumber: `FAKE${digits(18)}`,
-      carrierCode: input.rate.carrierExternalId,
+      carrierCode:
+        this.catalog.find((c) => c.externalId === input.rate.carrierExternalId)?.code ??
+        input.rate.carrierExternalId,
       serviceCode: input.rate.serviceCode,
       currency: "USD",
       shipDate: startOfDay(new Date()),
@@ -178,6 +186,7 @@ export class FakeShipStationProvider extends FakeProvider {
       [
         {
           externalId: "se-demo-ground",
+          code: "demo_ground",
           name: "Demo Ground",
           services: [
             service("demo_ground", "Demo Ground", "domestic", 450, 12, 5),
@@ -186,6 +195,7 @@ export class FakeShipStationProvider extends FakeProvider {
         },
         {
           externalId: "se-demo-express",
+          code: "demo_express",
           name: "Demo Express",
           services: [
             service("demo_express", "Demo Express", "domestic", 1250, 20, 2, true),
@@ -309,6 +319,7 @@ export class FakeBridgeSourceProvider extends FakeProvider {
       [
         {
           externalId: "DEMOGND",
+          code: "demo_ground",
           name: "Demo Ground",
           services: [
             service("GND", "Demo Ground", "domestic", 430, 13, 5),
@@ -317,6 +328,7 @@ export class FakeBridgeSourceProvider extends FakeProvider {
         },
         {
           externalId: "DEMOEXP",
+          code: "demo_express",
           name: "Demo Express",
           services: [
             service("EXP", "Demo Express", "domestic", 1290, 18, 2, true),

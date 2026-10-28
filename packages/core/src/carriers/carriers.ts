@@ -57,10 +57,10 @@ export async function syncCarriers(
         create: {
           provider,
           externalId: listedCarrier.externalId,
-          code: listedCarrier.externalId,
+          code: listedCarrier.code,
           name: listedCarrier.name,
         },
-        update: { name: listedCarrier.name, missingSince: null },
+        update: { code: listedCarrier.code, name: listedCarrier.name, missingSince: null },
       });
       for (const listedService of listedCarrier.services) {
         if (!before?.services.some((s) => s.code === listedService.code)) result.servicesAdded++;

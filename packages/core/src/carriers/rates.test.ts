@@ -300,6 +300,22 @@ describe("fetchRates fan-out (SC 8)", () => {
     ).toBe("Known");
   });
 
+  it("drops a rate with a negative price, which would otherwise be selected", async () => {
+    await catalog("SHIPSTATION", ["demo_ground", "demo_ground_saver"]);
+    const ground = { carrierExternalId: "se-demo-ground" };
+    const provider = stub("SHIPSTATION", [
+      { ...ground, serviceCode: "demo_ground", serviceName: "Broken", amountCents: -100 },
+      { ...ground, serviceCode: "demo_ground_saver", serviceName: "Real", amountCents: 700 },
+    ]);
+    const { packages, payload } = await inQa();
+
+    await fetchRates(db, [provider], payload);
+
+    expect(
+      (await ratesOf(packages[0]?.id as string)).map((r) => [r.serviceName, r.selected]),
+    ).toEqual([["Real", true]]);
+  });
+
   it("sends a box's outer size, not its inner one", async () => {
     // Carriers price the outside of the parcel; inner dimensions would quote low.
     await catalog("BRIDGE_SOURCE", ["GND"]);

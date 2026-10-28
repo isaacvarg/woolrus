@@ -50,6 +50,8 @@ export type ProviderService = {
 
 export type ProviderCarrier = {
   externalId: string;
+  /** The carrier's own code (`ups`, `usps`): what tracking shows and the Woo push sends. */
+  code: string;
   name: string;
   services: ProviderService[];
 };
