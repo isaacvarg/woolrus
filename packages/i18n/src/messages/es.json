@@ -772,6 +772,7 @@
     "packageButton": "Reportar problema de embalaje",
     "panel": "Excepciones",
     "button": "Reportar problema",
+    "reportRow": "Reportar problema en {name}",
     "title": "Reportar un problema",
     "titleOn": "Reportar un problema en {name}",
     "on": "Sobre",
@@ -1085,6 +1086,7 @@
         "packageNoRate": "El paquete {package} necesita exactamente una tarifa seleccionada.",
         "packageNoLabel": "El paquete {package} necesita una etiqueta activa.",
         "packageLiveLabel": "El paquete {package} tiene una etiqueta que primero debe anularse.",
+        "criticalIssueOpen": "Resuelve los {count} problemas críticos abiertos antes de que el pedido salga de QA.",
         "notReady": "El pedido no está Listo.",
         "noPackages": "El pedido no tiene paquetes.",
         "packageOverweight": "El paquete {package} supera el límite de su caja de {maxOz} oz y necesita un motivo."

@@ -772,6 +772,7 @@
     "packageButton": "Report packaging issue",
     "panel": "Exceptions",
     "button": "Report issue",
+    "reportRow": "Report issue on {name}",
     "title": "Report an issue",
     "titleOn": "Report an issue on {name}",
     "on": "About",
@@ -1085,6 +1086,7 @@
         "packageNoRate": "Package {package} needs exactly one selected rate.",
         "packageNoLabel": "Package {package} needs an active label.",
         "packageLiveLabel": "Package {package} has a label that must be voided first.",
+        "criticalIssueOpen": "Resolve the {count} open critical issue(s) before the order can leave QA.",
         "notReady": "The order isn't Ready.",
         "noPackages": "The order has no packages.",
         "packageOverweight": "Package {package} is over its box's limit of {maxOz} oz and needs a reason."
