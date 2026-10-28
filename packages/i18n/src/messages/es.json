@@ -304,7 +304,9 @@
     "loadMore": "Cargar más",
     "noOrders": "No hay pedidos en esta cola.",
     "startPacking": "Empezar a empacar",
-    "startedPacking": "Empacarás el pedido {number}."
+    "startedPacking": "Empacarás el pedido {number}.",
+    "startQa": "Iniciar control de calidad",
+    "startedQa": "El pedido {number} es tuyo para revisar."
   },
   "order": {
     "title": "Pedido #{number}",
@@ -544,6 +546,52 @@
     "done": "Listo",
     "doneNext": "Listo, siguiente pedido",
     "noneLeft": "No hay más pedidos de Empaque."
+  },
+  "qa": {
+    "title": "Control de calidad #{number}",
+    "packages": "Paquetes",
+    "package": "Paquete {number}",
+    "box": "Caja: {name}",
+    "customBox": "Tamaño personalizado",
+    "verifiedCount": "{verified} de {total} verificados",
+    "rowVerified": "Verificado",
+    "rowNotVerified": "Sin verificar",
+    "verifyRow": "Verificar {name}: {quantity} unidades",
+    "clearRow": "Quitar la verificación de {name}",
+    "unitsProgress": "{verified} de {quantity}",
+    "sku": "SKU {sku}",
+    "criticalIssue": "Problema crítico",
+    "orderCritical": "{count, plural, one {# problema crítico abierto en este pedido} other {# problemas críticos abiertos en este pedido}}",
+    "verifiedBy": "Verificado por {name}",
+    "nothingToVerify": "No hay paquetes que verificar.",
+    "notClaimed": "Este pedido no está asignado a ti, así que no se puede verificar nada. Tómalo desde la cola de control de calidad.",
+    "notInQa": "Este pedido está {status}, no en control de calidad.",
+    "labelState": "Etiqueta: {state}",
+    "labelPurchasing": "Comprando etiqueta",
+    "labelActive": "Etiqueta comprada",
+    "labelFailed": "Falló la etiqueta",
+    "labelVoidRequested": "Anulación solicitada",
+    "labelVoided": "Etiqueta anulada",
+    "labelVoidRejected": "Anulación rechazada",
+    "tracking": "Seguimiento {number}",
+    "cost": "{cost} (cotizado {quoted})",
+    "buying": "Comprando etiquetas… {bought} de {total}",
+    "failedPackages": "Fallaron las etiquetas de: {packages}",
+    "stillNeeded": "Falta esto para terminar el control de calidad",
+    "allDone": "Todo está verificado.",
+    "drawerOpen": "Detalles del pedido",
+    "drawerTitle": "Pedido {number}",
+    "drawerClose": "Cerrar detalles del pedido",
+    "drawerAddress": "Enviar a",
+    "drawerPackages": "Paquetes",
+    "drawerPicked": "Recogido por {name}",
+    "drawerPacked": "Empacado por {name}",
+    "drawerNobody": "Sin registro",
+    "drawerRate": "Tarifa elegida: {service} ({carrier}), {amount}",
+    "drawerNoRate": "Sin tarifa elegida",
+    "drawerVerification": "Calidad: {verified} de {quantity} verificados",
+    "drawerNotes": "Notas",
+    "drawerCustomerNote": "Nota del cliente"
   },
   "pick": {
     "title": "Surtir #{number}",
@@ -1129,6 +1177,10 @@
       "imageTooLarge": "Esa foto tiene demasiados píxeles (más de 40 megapíxeles). Tómala con menor resolución.",
       "tooManyPhotos": "Una nota puede tener como máximo 10 fotos.",
       "tooManyVoiceMemos": "Una nota puede tener una sola nota de voz. Quita la anterior para grabar otra."
+    },
+    "qa": {
+      "notQa": "Este pedido no está en control de calidad, así que no se puede verificar.",
+      "purchaseInProgress": "Se están comprando las etiquetas de este pedido. Espera a que termine."
     }
   },
   "emails": {

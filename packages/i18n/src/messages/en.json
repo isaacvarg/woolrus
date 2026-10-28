@@ -304,7 +304,9 @@
     "loadMore": "Load more",
     "noOrders": "No orders in this queue.",
     "startPacking": "Start packing",
-    "startedPacking": "Order {number} is yours to pack."
+    "startedPacking": "Order {number} is yours to pack.",
+    "startQa": "Start QA",
+    "startedQa": "Order {number} is yours to check."
   },
   "order": {
     "title": "Order #{number}",
@@ -544,6 +546,52 @@
     "done": "Done",
     "doneNext": "Done, next order",
     "noneLeft": "No more Packing orders to pack."
+  },
+  "qa": {
+    "title": "QA #{number}",
+    "packages": "Packages",
+    "package": "Package {number}",
+    "box": "Box: {name}",
+    "customBox": "Custom size",
+    "verifiedCount": "{verified} of {total} verified",
+    "rowVerified": "Verified",
+    "rowNotVerified": "Not verified",
+    "verifyRow": "Verify {name}: {quantity} units",
+    "clearRow": "Clear verification of {name}",
+    "unitsProgress": "{verified} of {quantity}",
+    "sku": "SKU {sku}",
+    "criticalIssue": "Critical issue",
+    "orderCritical": "{count, plural, one {# open Critical issue on this order} other {# open Critical issues on this order}}",
+    "verifiedBy": "Verified by {name}",
+    "nothingToVerify": "There are no packages to verify.",
+    "notClaimed": "This order is not claimed by you, so nothing can be verified. Claim it from the QA queue.",
+    "notInQa": "This order is {status}, not in QA.",
+    "labelState": "Label: {state}",
+    "labelPurchasing": "Buying label",
+    "labelActive": "Label bought",
+    "labelFailed": "Label failed",
+    "labelVoidRequested": "Void requested",
+    "labelVoided": "Label voided",
+    "labelVoidRejected": "Void refused",
+    "tracking": "Tracking {number}",
+    "cost": "{cost} (quoted {quoted})",
+    "buying": "Buying labels… {bought} of {total}",
+    "failedPackages": "Labels failed for: {packages}",
+    "stillNeeded": "Still needed before QA can finish",
+    "allDone": "Everything is verified.",
+    "drawerOpen": "Order details",
+    "drawerTitle": "Order {number}",
+    "drawerClose": "Close order details",
+    "drawerAddress": "Ship to",
+    "drawerPackages": "Packages",
+    "drawerPicked": "Picked by {name}",
+    "drawerPacked": "Packed by {name}",
+    "drawerNobody": "Nobody recorded",
+    "drawerRate": "Selected rate: {service} ({carrier}), {amount}",
+    "drawerNoRate": "No rate selected",
+    "drawerVerification": "QA: {verified} of {quantity} verified",
+    "drawerNotes": "Notes",
+    "drawerCustomerNote": "Customer note"
   },
   "pick": {
     "title": "Pick #{number}",
@@ -1129,6 +1177,10 @@
       "imageTooLarge": "That photo has too many pixels (over 40 megapixels). Take it at a lower resolution.",
       "tooManyPhotos": "A note can have at most 10 photos.",
       "tooManyVoiceMemos": "A note can have one voice memo. Remove the old one to record a new one."
+    },
+    "qa": {
+      "notQa": "This order isn't in QA, so it can't be verified.",
+      "purchaseInProgress": "Labels are being bought for this order. Wait for that to finish."
     }
   },
   "emails": {

@@ -264,7 +264,7 @@ describe("packUnits / unpackUnits", () => {
     await packUnits(db, packer, { packageId: pkg, orderItemId: id(items[0]) });
     await db.packageItem.updateMany({
       where: { packageId: pkg },
-      data: { qaVerifiedAt: new Date(), qaVerifiedById: packer.userId },
+      data: { qaVerifiedAt: new Date(), qaVerifiedById: packer.userId, qaVerifiedQuantity: 1 },
     });
     await createRate(db, pkg);
     await db.shippingLabel.create({
@@ -285,6 +285,7 @@ describe("packUnits / unpackUnits", () => {
       quantity: 2,
       qaVerifiedAt: null,
       qaVerifiedById: null,
+      qaVerifiedQuantity: 0,
     });
     expect(await db.shippingRate.count({ where: { packageId: pkg } })).toBe(0);
     expect(await db.shippingLabel.count({ where: { packageId: pkg } })).toBe(1);
@@ -1075,5 +1076,31 @@ describe("scanIntoPackage", () => {
       messageKey: "errors.packing.notPacking",
     });
     expect(await db.packageItem.count()).toBe(0);
+  });
+});
+
+describe("QA verification after a repack (SPEC-qa success criterion 2)", () => {
+  it("unpacking part of a fully verified row zeroes the verified quantity", async () => {
+    const { packer, order, items } = await packing([{ quantity: 3 }]);
+    const box = await makeBox();
+    const { packages } = await addPackage(db, packer, {
+      orderId: order.id,
+      box: { boxId: box.id },
+      idempotencyKey: key(),
+    });
+    const pkg = id(packages[0]);
+    await packUnits(db, packer, { packageId: pkg, orderItemId: id(items[0]), quantity: 3 });
+    await db.packageItem.updateMany({
+      where: { packageId: pkg },
+      data: { qaVerifiedAt: new Date(), qaVerifiedById: packer.userId, qaVerifiedQuantity: 3 },
+    });
+
+    await unpackUnits(db, packer, { packageId: pkg, orderItemId: id(items[0]), quantity: 1 });
+
+    expect((await rows(pkg))[0]).toMatchObject({
+      quantity: 2,
+      qaVerifiedQuantity: 0,
+      qaVerifiedAt: null,
+    });
   });
 });

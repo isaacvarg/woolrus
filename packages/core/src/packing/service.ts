@@ -124,7 +124,7 @@ export async function invalidate(tx: DbTx, packageId: string, contentsChanged: b
   if (contentsChanged) {
     await tx.packageItem.updateMany({
       where: { packageId },
-      data: { qaVerifiedAt: null, qaVerifiedById: null },
+      data: { qaVerifiedQuantity: 0, qaVerifiedAt: null, qaVerifiedById: null },
     });
   }
 }
@@ -354,7 +354,18 @@ export async function unpackUnits(
 
     const where = { packageId_orderItemId: { packageId, orderItemId } };
     if (quantity === held) await tx.packageItem.delete({ where });
-    else await tx.packageItem.update({ where, data: { quantity: { decrement: quantity } } });
+    // Verification goes in the same write: the verified count can't exceed the new quantity.
+    else {
+      await tx.packageItem.update({
+        where,
+        data: {
+          quantity: { decrement: quantity },
+          qaVerifiedQuantity: 0,
+          qaVerifiedAt: null,
+          qaVerifiedById: null,
+        },
+      });
+    }
     await invalidate(tx, packageId, true);
     return finish(tx, actor, order, "unpackUnits", { packageId, before: pkg }, now);
   });

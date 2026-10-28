@@ -28,6 +28,7 @@ import {
   getPackView,
   getPickView,
   getPublicSettings,
+  getQaScreen,
   getSettings,
   getSyncStatus,
   issueAssignees,
@@ -88,6 +89,7 @@ import {
   setResponsible,
   setSecret,
   setServiceEnabled,
+  setVerified,
   setWeight,
   stationStatus,
   substitute,
@@ -275,6 +277,12 @@ export const router = implementer.router({
       substitute(db, context.actor, input),
     ),
     myPicks: api.picking.myPicks.handler(({ context }) => myPicks(db, context.actor)),
+  },
+  qa: {
+    screen: api.qa.screen.handler(({ input, context }) => getQaScreen(db, context.actor, input)),
+    setVerified: api.qa.setVerified.handler(({ input, context }) =>
+      setVerified(db, context.actor, input),
+    ),
   },
   packing: {
     view: api.packing.view.handler(({ input, context }) => getPackView(db, context.actor, input)),
