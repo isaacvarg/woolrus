@@ -575,6 +575,11 @@
     "labelVoidRejected": "Anulación rechazada",
     "tracking": "Seguimiento {number}",
     "cost": "{cost} (cotizado {quoted})",
+    "rates": "Tarifas de envío",
+    "noRates": "Aún no hay tarifas.",
+    "refreshRates": "Actualizar tarifas",
+    "rateExpired": "Vencida",
+    "rateDays": "{days, plural, one {# día} other {# días}}",
     "buying": "Comprando etiquetas… {bought} de {total}",
     "failedPackages": "Fallaron las etiquetas de: {packages}",
     "stillNeeded": "Falta esto para terminar el control de calidad",
@@ -1180,6 +1185,10 @@
     },
     "qa": {
       "notQa": "Este pedido no está en control de calidad, así que no se puede verificar.",
+      "rateExpired": "Esa tarifa venció. Actualiza las tarifas y elige otra.",
+      "packageHasLabel": "Este paquete ya tiene etiqueta. Anúlala antes de elegir otra tarifa.",
+      "addressLockedByLabel": "Un paquete ya tiene etiqueta con la dirección anterior. Anula las etiquetas antes de cambiar la dirección.",
+      "allPackagesLabelled": "Todos los paquetes ya tienen etiqueta, así que no hay tarifas que actualizar.",
       "purchaseInProgress": "Se están comprando las etiquetas de este pedido. Espera a que termine."
     }
   },

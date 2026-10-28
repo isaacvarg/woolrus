@@ -52,6 +52,17 @@ export const QaRow = z.object({
 });
 export type QaRow = z.infer<typeof QaRow>;
 
+export const QaRate = z.object({
+  id: Id,
+  carrierCode: z.string(),
+  serviceName: z.string(),
+  amountCents: z.number().int(),
+  deliveryDays: z.number().int().nullable(),
+  selected: z.boolean(),
+  expired: z.boolean(),
+});
+export type QaRate = z.infer<typeof QaRate>;
+
 export const QaPackage = z.object({
   id: Id,
   number: z.number().int(),
@@ -60,6 +71,8 @@ export const QaPackage = z.object({
   rows: z.array(QaRow),
   /** The package's live label, or its latest attempt when none is live. */
   label: QaLabel.nullable(),
+  /** Every rate fetched for the package, cheapest first, for the rates table. */
+  rates: z.array(QaRate),
   /** The selected rate, for the drawer. */
   selectedRate: z
     .object({ carrierCode: z.string(), serviceName: z.string(), amountCents: z.number().int() })
@@ -106,6 +119,9 @@ export const SetVerifiedInput = z.object({
 });
 export type SetVerifiedInput = z.infer<typeof SetVerifiedInput>;
 
+export const SelectRateInput = z.object({ packageId: Id, rateId: Id });
+export type SelectRateInput = z.infer<typeof SelectRateInput>;
+
 export const qa = {
   screen: base
     .route({
@@ -124,5 +140,14 @@ export const qa = {
       summary: "Verify a package row in full, or clear it",
     })
     .input(SetVerifiedInput)
+    .output(QaResult),
+  selectRate: base
+    .route({
+      method: "POST",
+      path: "/packages/{packageId}/rates/{rateId}/select",
+      tags,
+      summary: "Select another of the package's rates",
+    })
+    .input(SelectRateInput)
     .output(QaResult),
 };
