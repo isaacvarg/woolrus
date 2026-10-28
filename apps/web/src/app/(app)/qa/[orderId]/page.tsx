@@ -15,6 +15,7 @@ export default async function QaPage({ params }: { params: Promise<{ orderId: st
       userId={actor?.userId ?? null}
       // Only for showing the controls; the API checks again.
       canVerify={actor ? can(actor, "order.qa") : false}
+      canPurchase={actor ? can(actor, "order.qa") && can(actor, "label.purchase") : false}
       canReport={actor ? can(actor, "issue.report") : false}
       canWriteCustomer={actor ? can(actor, "note.customer") : false}
     />

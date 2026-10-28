@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 import { createDb } from "@woolrus/db";
 import { signInAs } from "./support/auth";
 import { createOrder, deleteCreatedOrders } from "./support/orders";
+import { withSettingsLock } from "./support/settings-lock";
 
 const db = createDb();
 
@@ -82,4 +83,92 @@ test("a Packer can read the screen but not tap", async ({ page }) => {
   await page.goto(`/qa/${order.id}`);
   await expect(page.getByTestId("qa-row")).toBeDisabled();
   await expect(page.getByTestId("qa-banner")).toContainText("not claimed by you");
+});
+
+test("Complete QA records the intent and shows the labels being bought, with Next order", async ({
+  page,
+}) => {
+  const order = await qaOrder(`E2E ${crypto.randomUUID()}`, 2);
+  const qa = await signInAs(page, ["QA"]);
+  const pkg = await db.package.findFirstOrThrow({ where: { orderId: order.id } });
+  await db.packageItem.updateMany({
+    where: { packageId: pkg.id },
+    data: { qaVerifiedQuantity: 2, qaVerifiedAt: new Date(), qaVerifiedById: qa.id },
+  });
+  await db.order.update({
+    where: { id: order.id },
+    data: { claimedById: qa.id, claimedAt: new Date() },
+  });
+
+  await withSettingsLock(async () => {
+    const before = await db.shippingProviderAccount.findUnique({
+      where: { provider: "SHIPSTATION" },
+    });
+    await db.shippingProviderAccount.upsert({
+      where: { provider: "SHIPSTATION" },
+      create: { provider: "SHIPSTATION", enabled: true },
+      update: { enabled: true },
+    });
+    const carrier = await db.shippingCarrier.create({
+      data: {
+        provider: "SHIPSTATION",
+        externalId: `e2e-${crypto.randomUUID()}`,
+        code: "usps",
+        name: "E2E carrier",
+        enabled: true,
+      },
+    });
+    const service = await db.carrierService.create({
+      data: {
+        carrierId: carrier.id,
+        code: "e2e_ground",
+        name: "E2E Ground",
+        domestic: true,
+        international: false,
+        enabled: true,
+      },
+    });
+    await db.shippingRate.create({
+      data: {
+        packageId: pkg.id,
+        provider: "SHIPSTATION",
+        carrierId: carrier.id,
+        serviceId: service.id,
+        carrierCode: "usps",
+        serviceCode: "e2e_ground",
+        serviceName: "E2E Ground",
+        amountCents: 650,
+        currency: "USD",
+        selected: true,
+        expiresAt: new Date(Date.now() + 3_600_000),
+      },
+    });
+    try {
+      await page.goto(`/qa/${order.id}`);
+      await expect(page.getByTestId("qa-all-done")).toBeVisible();
+      await page.getByTestId("qa-complete").click();
+      await expect(page.getByTestId("qa-buying")).toHaveText("Buying labels… 0 of 1");
+      await expect(page.getByTestId("qa-next-order")).toBeVisible();
+      await expect(page.getByTestId("qa-complete")).toHaveCount(0);
+      await expect
+        .poll(() => db.shippingLabel.count({ where: { packageId: pkg.id, status: "PURCHASING" } }))
+        .toBe(1);
+    } finally {
+      await db.shippingLabel.deleteMany({ where: { packageId: pkg.id } });
+      await db.shippingRate.deleteMany({ where: { packageId: pkg.id } });
+      await db.carrierService.deleteMany({ where: { carrierId: carrier.id } });
+      await db.shippingCarrier.delete({ where: { id: carrier.id } });
+      await db.shippingProviderAccount.update({
+        where: { provider: "SHIPSTATION" },
+        data: { enabled: before?.enabled ?? false },
+      });
+    }
+  });
+});
+
+test("a Shipper doesn't get a Complete QA button", async ({ page }) => {
+  const order = await qaOrder(`E2E ${crypto.randomUUID()}`, 1);
+  await signInAs(page, ["SHIPPER"]);
+  await page.goto(`/qa/${order.id}`);
+  await expect(page.getByTestId("qa-complete")).toHaveCount(0);
 });

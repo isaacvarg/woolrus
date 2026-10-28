@@ -13,6 +13,7 @@ import {
   queues,
   recomputePriorities,
   runEmailJob,
+  runLabelsPurchaseJob,
   runRatesFetchJob,
   runStorageDeleteJob,
   s3ConfigFromEnv,
@@ -152,6 +153,19 @@ await boss.work(
     if (!job) return;
     const result = await runRatesFetchJob(db, job.data, { finalAttempt: isFinalAttempt(job) });
     ratesLog.info({ jobId: job.id, ...job.data, ...result }, "rates.fetch done");
+  },
+);
+
+// Labels after Complete QA (SPEC-qa "The labels.purchase job"). A provider that is down or a PDF
+// copy that fails throws, and the queue's policy retries (5 attempts, backoff); a refusal doesn't.
+const labelsLog = createLogger({ module: "labels" });
+await boss.work<JobPayloads[typeof queues.labelsPurchase]>(
+  queues.labelsPurchase,
+  { localConcurrency: 4 },
+  async ([job]) => {
+    if (!job) return;
+    await runLabelsPurchaseJob(db, job.data, { storage });
+    labelsLog.info({ jobId: job.id, ...job.data }, "labels.purchase done");
   },
 );
 

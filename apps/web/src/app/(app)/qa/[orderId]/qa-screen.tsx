@@ -40,12 +40,14 @@ export function QaScreen({
   orderId,
   userId,
   canVerify,
+  canPurchase,
   canReport,
   canWriteCustomer,
 }: {
   orderId: string;
   userId: string | null;
   canVerify: boolean;
+  canPurchase: boolean;
   canReport: boolean;
   canWriteCustomer: boolean;
 }) {
@@ -66,6 +68,7 @@ export function QaScreen({
       view={view.data}
       userId={userId}
       canVerify={canVerify}
+      canPurchase={canPurchase}
       canReport={canReport}
       canWriteCustomer={canWriteCustomer}
     />
@@ -76,12 +79,14 @@ function QaLayout({
   view,
   userId,
   canVerify,
+  canPurchase,
   canReport,
   canWriteCustomer,
 }: {
   view: QaView;
   userId: string | null;
   canVerify: boolean;
+  canPurchase: boolean;
   canReport: boolean;
   canWriteCustomer: boolean;
 }) {
@@ -149,6 +154,21 @@ function QaLayout({
     if (!focused) return;
     scan.mutate({ pkg: focused, code, scanId: crypto.randomUUID() });
   }, mayVerify);
+
+  const complete = useMutation({
+    mutationFn: () => client.orders.completeQa({ id: order.id, expectedVersion: order.version }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: viewKey }),
+    onError: (error) => {
+      toast.error(errorMessage(error));
+      void queryClient.invalidateQueries({ queryKey: viewKey });
+    },
+  });
+  const mayComplete =
+    canPurchase &&
+    order.status === "QA" &&
+    order.claim?.userId === userId &&
+    view.unmet.length === 0 &&
+    !purchasing;
 
   const tap = useMutation({
     mutationKey: writeKey,
@@ -251,11 +271,34 @@ function QaLayout({
         data-toast-clearance
         className="fixed inset-x-0 bottom-0 z-10 space-y-1 border-t border-base-300 bg-base-100 p-4"
       >
-        {view.unmet.length === 0 ? (
-          <p className="font-semibold" data-testid="qa-all-done">
-            {t("qa.allDone")}
-          </p>
-        ) : (
+        {purchasing && (
+          <div className="flex items-center gap-3">
+            <p className="font-semibold" data-testid="qa-buying-footer">
+              {view.purchase.kind === "purchasing" &&
+                t("qa.buying", { bought: view.purchase.bought, total: view.purchase.total })}
+            </p>
+            <Link href="/queue/qa" className="btn btn-primary ms-auto" data-testid="qa-next-order">
+              {t("qa.nextOrder")}
+            </Link>
+          </div>
+        )}
+        {!purchasing && view.unmet.length === 0 ? (
+          <div className="flex items-center gap-3">
+            <p className="font-semibold" data-testid="qa-all-done">
+              {t("qa.allDone")}
+            </p>
+            {mayComplete && (
+              <Button
+                className="btn-primary ms-auto"
+                onPress={() => complete.mutate()}
+                isDisabled={complete.isPending}
+                data-testid="qa-complete"
+              >
+                {t("qa.complete")}
+              </Button>
+            )}
+          </div>
+        ) : !purchasing ? (
           <>
             <p className="font-semibold">{t("qa.stillNeeded")}</p>
             <ul className="list-disc ps-6 text-sm" data-testid="qa-unmet">
@@ -268,7 +311,7 @@ function QaLayout({
               ))}
             </ul>
           </>
-        )}
+        ) : null}
       </footer>
     </section>
   );
