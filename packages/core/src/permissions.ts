@@ -79,7 +79,7 @@ export const rolePermissions: Record<Role, readonly Permission[]> = {
   ADMIN: permissions,
   PICKER: [...everyone, "order.pick"],
   PACKER: [...everyone, "order.pack"],
-  QA: [...everyone, "order.qa", "label.purchase", "label.print", "note.customer"],
+  QA: [...everyone, "order.qa", "label.purchase", "label.void", "label.print", "note.customer"],
   SHIPPER: [...everyone, "label.print", "order.ship", "note.customer"],
 };
 
