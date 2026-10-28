@@ -59,6 +59,8 @@ export type ScanOutcome = {
   message: string;
   lineId?: string;
   linkCode?: string;
+  /** A refusal that isn't an error, e.g. QA's "already verified": amber instead of red. */
+  amber?: boolean;
   at: number;
 };
 
@@ -475,7 +477,9 @@ export function ScanBanner({
       {outcome && (
         <div
           key={outcome.at}
-          className={`alert ${outcome.ok ? "alert-success" : "alert-error"} text-lg font-semibold`}
+          className={`alert ${
+            outcome.ok ? "alert-success" : outcome.amber ? "alert-warning" : "alert-error"
+          } text-lg font-semibold`}
           data-testid="scan-banner"
           data-ok={outcome.ok}
         >

@@ -559,6 +559,8 @@
     "verifyRow": "Verificar {name}: {quantity} unidades",
     "clearRow": "Quitar la verificación de {name}",
     "unitsProgress": "{verified} de {quantity}",
+    "scanningHere": "Escaneando aquí",
+    "scanned": "Verificado {name}: {verified} de {quantity}",
     "sku": "SKU {sku}",
     "criticalIssue": "Problema crítico",
     "orderCritical": "{count, plural, one {# problema crítico abierto en este pedido} other {# problemas críticos abiertos en este pedido}}",
@@ -1180,7 +1182,10 @@
     },
     "qa": {
       "notQa": "Este pedido no está en control de calidad, así que no se puede verificar.",
-      "purchaseInProgress": "Se están comprando las etiquetas de este pedido. Espera a que termine."
+      "purchaseInProgress": "Se están comprando las etiquetas de este pedido. Espera a que termine.",
+      "scanNotOnOrder": "Eso es {name}. No está en este pedido.",
+      "scanOtherPackage": "Eso va en el paquete {package}, no en este.",
+      "scanAlreadyVerified": "Todo {line} de este paquete ya está verificado."
     }
   },
   "emails": {
