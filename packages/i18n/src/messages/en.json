@@ -28,6 +28,7 @@
     "openMenu": "Open menu",
     "closeMenu": "Close menu",
     "voids": "Voids",
+    "failedJobs": "Failed jobs",
     "issues": "Issues"
   },
   "navFooter": {
@@ -1279,5 +1280,26 @@
     "emailMe": "Email me a link",
     "checkEmail": "Check your email for a sign-in link.",
     "useAnother": "Use another email"
+  },
+  "jobs": {
+    "title": "Failed jobs",
+    "intro": "Background jobs that used up their retries. Retry runs one again; Dismiss removes it. Finished jobs are kept for 30 days.",
+    "queue": "Queue",
+    "allQueues": "All queues",
+    "failedAt": "Failed",
+    "attempts": "Attempts",
+    "error": "Error",
+    "about": "About",
+    "actions": "Actions",
+    "retry": "Retry",
+    "dismiss": "Dismiss",
+    "retried": "Job queued to run again.",
+    "dismissed": "Job dismissed.",
+    "template": "Email: {name}",
+    "empty": "No failed jobs.",
+    "loadMore": "Load more",
+    "retryLabel": "Retry job {queue}",
+    "dismissLabel": "Dismiss job {queue}",
+    "order": "Order"
   }
 }

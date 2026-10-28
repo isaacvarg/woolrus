@@ -12,6 +12,7 @@ import {
   resolveStationDevice,
 } from "@/server/actor";
 import { DrawerNav } from "./drawer-nav";
+import { FailedJobsNav } from "./failed-jobs-nav";
 import { NavFooter } from "./nav-footer";
 import { QueueNav } from "./queue-nav";
 import { StationIdleLock } from "./station-idle-lock";
@@ -90,6 +91,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               </li>
             </>
           )}
+          {can(actor, "ops.jobs") && <FailedJobsNav />}
           {user && (
             <NavFooter
               name={user.name}

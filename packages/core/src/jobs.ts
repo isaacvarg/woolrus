@@ -46,21 +46,36 @@ export type JobPayloads = {
   [queues.ratesFetch]: { orderId: string; generation: number };
 };
 
+/** Finished jobs stay 30 days, so a failure over a long weekend is still there on Monday. */
+export const JOB_RETENTION_SECONDS = 30 * 24 * 60 * 60;
+
+const keep = { deleteAfterSeconds: JOB_RETENTION_SECONDS };
+
+type QueueSettings = {
+  deleteAfterSeconds: number;
+  retryLimit?: number;
+  retryDelay?: number;
+  retryBackoff?: boolean;
+};
+
 /**
- * Per-queue retry policy, set when the queue is created; every job sent to it inherits it.
- * Queues not listed keep pg-boss's defaults.
+ * Per-queue policy, set when the queue is created; every job sent to it inherits it. Every queue
+ * keeps finished jobs for `JOB_RETENTION_SECONDS`; the retry settings are for queues that retry.
+ * The rest keep pg-boss's retry defaults.
  */
-export const queueOptions: Partial<
-  Record<QueueName, { retryLimit: number; retryDelay: number; retryBackoff: boolean }>
-> = {
+export const queueOptions: Record<QueueName, QueueSettings> = {
+  ...(Object.fromEntries(Object.values(queues).map((name) => [name, keep])) as Record<
+    QueueName,
+    QueueSettings
+  >),
   // 3 attempts: a 429 or 5xx from Resend throws and is retried after ~30 s, then ~60 s. The
   // idempotency key makes a retry after a lost response harmless.
-  [queues.emailSend]: { retryLimit: 2, retryDelay: 30, retryBackoff: true },
+  [queues.emailSend]: { ...keep, retryLimit: 2, retryDelay: 30, retryBackoff: true },
   // Storage down for a while shouldn't lose a delete: 6 attempts over roughly half an hour. A job
   // that still fails leaves orphans, which the daily sweep collects.
-  [queues.storageDelete]: { retryLimit: 5, retryDelay: 60, retryBackoff: true },
+  [queues.storageDelete]: { ...keep, retryLimit: 5, retryDelay: 60, retryBackoff: true },
   // Only a fetch where every provider failed transiently throws; a partial one is QA's to refresh.
-  [queues.ratesFetch]: { retryLimit: 2, retryDelay: 20, retryBackoff: true },
+  [queues.ratesFetch]: { ...keep, retryLimit: 2, retryDelay: 20, retryBackoff: true },
 };
 
 /** pg-boss keeps its tables in their own schema, separate from Prisma's. */

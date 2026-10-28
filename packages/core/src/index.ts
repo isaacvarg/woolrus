@@ -42,6 +42,7 @@ export * from "./jobs";
 export * from "./notes/files";
 export * from "./notes/push";
 export * from "./notes/service";
+export * from "./operations/jobs";
 export * from "./packing/complete";
 export * from "./packing/queries";
 export * from "./packing/service";

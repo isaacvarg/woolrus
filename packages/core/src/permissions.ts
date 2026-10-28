@@ -63,6 +63,8 @@ export const permissions = [
   "report.read",
   /** Catalog data the warehouse owns, e.g. linking a scanned barcode to a product. */
   "product.manage",
+  /** The failed-jobs page: see, retry and dismiss background jobs that gave up. */
+  "ops.jobs",
 ] as const;
 export type Permission = (typeof permissions)[number];
 
