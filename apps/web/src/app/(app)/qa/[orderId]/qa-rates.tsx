@@ -13,7 +13,7 @@ import { money } from "./money";
 // The carriers' rates table of one package (SPEC-qa "Rate selection"): QA picks another service.
 
 /** Writes that change the screen's rates. They refetch it instead of patching, as the rates change. */
-function useQaRefetch(orderId: string) {
+export function useQaRefetch(orderId: string) {
   const errorMessage = useErrorMessage();
   const queryClient = useQueryClient();
   const viewKey = orpc.qa.screen.queryKey({ input: { orderId } });

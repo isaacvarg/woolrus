@@ -221,6 +221,16 @@
         "usCanadaMexico": "From the US: to Canada and Mexico only",
         "internationalOnly": "From the US: international only",
         "intoUs": "Only into the US from another country"
+      },
+      "costCheck": {
+        "title": "Label cost check",
+        "intro": "Complete QA asks before buying labels that cost far more than the customer paid for shipping. Leave a field empty to turn that check off.",
+        "ratio": "Ask when labels cost more than (×)",
+        "ratioHint": "Times what the customer paid for shipping.",
+        "free": "Ask when shipping was free and labels cost more than ($)",
+        "freeHint": "For orders where the customer paid nothing for shipping.",
+        "save": "Save",
+        "saved": "Label cost check saved."
       }
     }
   },
@@ -269,6 +279,11 @@
     "disabledToast": "Rule “{name}” disabled."
   },
   "queue": {
+    "labelState": {
+      "purchasing": "Buying labels",
+      "failed": "Label failed",
+      "unknown": "Label unconfirmed"
+    },
     "openIssues": "{count, plural, one {# open issue} other {# open issues}}, worst: {severity}",
     "unresolvedVoids": "{count, plural, one {# unresolved void} other {# unresolved voids}}",
     "search": "Search orders",
@@ -575,6 +590,12 @@
     "labelVoidRequested": "Void requested",
     "labelVoided": "Label voided",
     "labelVoidRejected": "Void refused",
+    "voidLabel": "Void label",
+    "voidRetry": "Void label again",
+    "voidTitle": "Void this label?",
+    "voidBody": "The provider is asked to cancel the label. If it agrees, this package can be rated and bought again.",
+    "voidReason": "Reason",
+    "voidConfirm": "Void label",
     "tracking": "Tracking {number}",
     "cost": "{cost} (quoted {quoted})",
     "rates": "Shipping rates",
@@ -584,6 +605,14 @@
     "rateDays": "{days, plural, one {# day} other {# days}}",
     "buying": "Buying labels… {bought} of {total}",
     "failedPackages": "Labels failed for: {packages}",
+    "partlyBought": "{bought} of {total} labels bought.",
+    "failedPackage": "Package {number}: {reason}",
+    "failedNext": "Pick another rate for the failed packages, then press Complete QA again. Only the missing labels are bought.",
+    "checkProvider": "Check the provider for a label with reference {number}.",
+    "markNotBought": "Mark not bought",
+    "markNotBoughtTitle": "Package {number}: no label was bought",
+    "markNotBoughtBody": "Only do this after checking the provider and finding no label for this order, or voiding it there. Package can then be bought again.",
+    "markNotBoughtReason": "What did you check?",
     "stillNeeded": "Still needed before QA can finish",
     "allDone": "Everything is verified.",
     "complete": "Complete QA",
@@ -600,7 +629,13 @@
     "drawerNoRate": "No rate selected",
     "drawerVerification": "QA: {verified} of {quantity} verified",
     "drawerNotes": "Notes",
-    "drawerCustomerNote": "Customer note"
+    "drawerCustomerNote": "Customer note",
+    "costConfirm": {
+      "title": "Buy these labels?",
+      "body": "Labels cost {cost}, the customer paid {charged} for shipping. Buy anyway?",
+      "confirm": "Buy anyway",
+      "cancel": "Not yet"
+    }
   },
   "pick": {
     "title": "Pick #{number}",
@@ -1200,9 +1235,15 @@
       "packageProviderOff": "The shipping provider for package {package} is turned off. An admin turns it on in Settings → Shipping.",
       "providerUnavailable": "A provider isn't available to buy this label. Check Settings → Shipping.",
       "purchaseUnknown": "We couldn't confirm whether this label was bought. Check the provider for a label with this order's number.",
+      "labelNotUnknown": "That label isn't waiting for a person to settle it.",
+      "settledManually": "Marked as not bought by hand.",
       "scanNotOnOrder": "That's {name}. It isn't on this order.",
       "scanOtherPackage": "That belongs in package {package}, not this one.",
-      "scanAlreadyVerified": "All {line} in this package are already verified."
+      "scanAlreadyVerified": "All {line} in this package are already verified.",
+      "voidRejected": "The provider declined to void this label. It is still active.",
+      "voidUnsupported": "This provider can't void labels from here. Void it with the provider.",
+      "labelNotVoidable": "Only a bought label that is still active can be voided.",
+      "costConfirmRequired": "These labels cost much more than the customer paid for shipping. Confirm to buy them anyway."
     }
   },
   "emails": {

@@ -1,4 +1,4 @@
-import type { OrderDetail, OrderVersionInput } from "@woolrus/contracts";
+import type { CompleteQaOrderInput, OrderDetail } from "@woolrus/contracts";
 import type { Db, DbTx, LabelStatus, Order } from "@woolrus/db";
 import type { ErrorCode } from "@woolrus/i18n";
 import { recordAudit } from "../audit";
@@ -7,6 +7,7 @@ import { AppError, type UnmetCondition } from "../errors";
 import { uuidv7 } from "../ids";
 import { queues } from "../jobs";
 import { type Actor, assertCan } from "../permissions";
+import { loadSettings } from "../settings/service";
 import { toOrderDetails } from "../workflow/detail";
 import {
   evaluateGate,
@@ -16,6 +17,7 @@ import {
 } from "../workflow/gates";
 import { notifyOrderChanged } from "../workflow/notify";
 import { transition } from "../workflow/service";
+import { labelCostCents, needsCostConfirmation } from "./cost-guard";
 import type { QaOptions } from "./queries";
 import { lockForQa } from "./verify";
 
@@ -112,7 +114,12 @@ export async function purchaseConditions(
   return purchasePreconditions({ gate: evaluateGate("verified", snapshot), now, ...inputs });
 }
 
-export type CompleteQaInput = { orderId: string; expectedVersion: number };
+export type CompleteQaInput = {
+  orderId: string;
+  expectedVersion: number;
+  /** The user answered the cost guard's "Buy anyway?". */
+  confirmCost?: boolean;
+};
 
 /**
  * Complete QA. With every package's label bought and stored, it only moves the order to Ready.
@@ -122,7 +129,7 @@ export type CompleteQaInput = { orderId: string; expectedVersion: number };
 export async function completeQaWithLabels(
   db: Db,
   actor: Actor,
-  { orderId, expectedVersion }: CompleteQaInput,
+  { orderId, expectedVersion, confirmCost = false }: CompleteQaInput,
   { now = new Date() }: QaOptions = {},
 ): Promise<Order> {
   assertCan(actor, "order.qa");
@@ -157,6 +164,25 @@ export async function completeQaWithLabels(
       );
     }
 
+    const [labelCost, settings, charged] = await Promise.all([
+      labelCostCents(tx, orderId),
+      loadSettings(tx),
+      tx.order.findUniqueOrThrow({
+        where: { id: orderId },
+        select: { shippingChargedCents: true },
+      }),
+    ]);
+    const chargedCents = charged.shippingChargedCents;
+    const guard = {
+      ratio: settings.labelCostConfirmRatio,
+      freeCents: settings.labelCostConfirmFreeCents,
+    };
+    if (!confirmCost && needsCostConfirmation(labelCost, chargedCents, guard)) {
+      throw new AppError("CONFLICT", "errors.qa.costConfirmRequired", undefined, {
+        params: { labelCostCents: labelCost, chargedCents },
+      });
+    }
+
     const toBuy = packages.filter((p) => p.labels.length === 0);
     for (const pkg of toBuy) {
       const rate = pkg.rates[0];
@@ -186,7 +212,12 @@ export async function completeQaWithLabels(
       entityType: "Order",
       entityId: orderId,
       action: "labels.purchaseRequested",
-      after: { packages: toBuy.map((p) => p.number) },
+      after: {
+        packages: toBuy.map((p) => p.number),
+        costConfirmed: confirmCost && needsCostConfirmation(labelCost, chargedCents, guard),
+        labelCostCents: labelCost,
+        chargedCents,
+      },
       at: now,
     });
     if (actor.userId !== null) {
@@ -206,9 +237,13 @@ export async function completeQaWithLabels(
 export async function completeQaOrder(
   db: Db,
   actor: Actor,
-  { id, expectedVersion }: OrderVersionInput,
+  { id, expectedVersion, confirmCost }: CompleteQaOrderInput,
 ): Promise<OrderDetail> {
-  const order = await completeQaWithLabels(db, actor, { orderId: id, expectedVersion });
+  const order = await completeQaWithLabels(db, actor, {
+    orderId: id,
+    expectedVersion,
+    confirmCost,
+  });
   const [detail] = await toOrderDetails(db, [order]);
   return detail as OrderDetail;
 }

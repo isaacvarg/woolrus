@@ -55,6 +55,8 @@ export * from "./picking/scan";
 export * from "./picking/service";
 export * from "./picking/sort";
 export * from "./qa/complete";
+export * from "./qa/cost-guard";
+export * from "./qa/labels";
 export * from "./qa/purchase";
 export * from "./qa/queries";
 export * from "./qa/rates";

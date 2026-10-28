@@ -6,7 +6,12 @@ import { withSettingsLock } from "./support/settings-lock";
 
 const db = createDb();
 
-test.afterAll(deleteCreatedOrders);
+// Labels are kept for history (Restrict), so a test that made some removes them first.
+const labelled: string[] = [];
+test.afterAll(async () => {
+  await db.shippingLabel.deleteMany({ where: { package: { orderId: { in: labelled } } } });
+  await deleteCreatedOrders();
+});
 
 /** A QA order with one package holding all of the line's units. */
 async function qaOrder(customerName: string, quantity = 3) {
@@ -171,4 +176,215 @@ test("a Shipper doesn't get a Complete QA button", async ({ page }) => {
   await signInAs(page, ["SHIPPER"]);
   await page.goto(`/qa/${order.id}`);
   await expect(page.getByTestId("qa-complete")).toHaveCount(0);
+});
+
+/** A QA order with two packages, each with a label in the given state. */
+async function labelledOrder(
+  customerName: string,
+  labels: [
+    { status: "ACTIVE" | "PURCHASING" | "PURCHASE_FAILED"; error?: string },
+    { status: "ACTIVE" | "PURCHASING" | "PURCHASE_FAILED"; error?: string },
+  ],
+) {
+  const order = await createOrder({ customerName, status: "QA", quantity: 2 });
+  labelled.push(order.id);
+  const line = await db.orderItem.findFirstOrThrow({ where: { orderId: order.id } });
+  for (const [index, label] of labels.entries()) {
+    const pkg = await db.package.create({
+      data: { orderId: order.id, number: index + 1, weightOz: 16 },
+    });
+    await db.packageItem.create({
+      data: {
+        packageId: pkg.id,
+        orderItemId: line.id,
+        quantity: 1,
+        qaVerifiedQuantity: 1,
+        qaVerifiedAt: new Date(),
+      },
+    });
+    await db.shippingLabel.create({
+      data: {
+        packageId: pkg.id,
+        status: label.status,
+        provider: "SHIPSTATION",
+        idempotencyKey: crypto.randomUUID(),
+        carrierCode: "usps",
+        serviceCode: "e2e_ground",
+        currency: "USD",
+        error: label.error ?? null,
+        ...(label.status === "ACTIVE" ? { trackingNumber: "E2E123", costCents: 450 } : {}),
+      },
+    });
+  }
+  return order;
+}
+
+test("a refused label shows a banner per failed package and the queue badge says Label failed", async ({
+  page,
+}) => {
+  const customerName = `E2E ${crypto.randomUUID()}`;
+  const order = await labelledOrder(customerName, [
+    { status: "ACTIVE" },
+    { status: "PURCHASE_FAILED", error: "errors.shipping.notOffered" },
+  ]);
+  await signInAs(page, ["QA"]);
+
+  await page.goto("/queue/qa");
+  await page.getByRole("searchbox", { name: "Search orders" }).fill(customerName);
+  await expect(
+    page.getByRole("row", { name: new RegExp(order.number) }).getByTestId("queue-label-badge"),
+  ).toHaveText("Label failed");
+
+  await page.goto(`/qa/${order.id}`);
+  const banner = page.getByTestId("qa-failed");
+  await expect(banner).toContainText("1 of 2 labels bought.");
+  await expect(page.getByTestId("qa-failed-package")).toContainText("Package 2:");
+});
+
+test("an unconfirmed purchase can be marked not bought, with a reason", async ({ page }) => {
+  const order = await labelledOrder(`E2E ${crypto.randomUUID()}`, [
+    { status: "ACTIVE" },
+    { status: "PURCHASING", error: "errors.qa.purchaseUnknown" },
+  ]);
+  await signInAs(page, ["QA"]);
+  await page.goto(`/qa/${order.id}`);
+
+  await page.getByTestId("qa-mark-not-bought").click();
+  await page.getByRole("dialog").getByLabel("What did you check?").fill("Not in ShipStation");
+  await page.getByRole("dialog").getByRole("button", { name: "Mark not bought" }).click();
+
+  await expect(page.getByTestId("qa-failed")).toContainText("Package 2:");
+  const failed = await db.shippingLabel.findFirstOrThrow({
+    where: { package: { orderId: order.id }, status: "PURCHASE_FAILED" },
+  });
+  expect(failed.error).toBe("errors.qa.settledManually");
+});
+
+test("a Shipper doesn't get Mark not bought", async ({ page }) => {
+  const order = await labelledOrder(`E2E ${crypto.randomUUID()}`, [
+    { status: "ACTIVE" },
+    { status: "PURCHASING", error: "errors.qa.purchaseUnknown" },
+  ]);
+  await signInAs(page, ["SHIPPER"]);
+  await page.goto(`/qa/${order.id}`);
+  await expect(page.getByTestId("qa-label").last()).toBeVisible();
+  await expect(page.getByTestId("qa-mark-not-bought")).toHaveCount(0);
+});
+
+test("the cost guard asks before buying, and Buy anyway resends with the confirmation", async ({
+  page,
+}) => {
+  const order = await qaOrder(`E2E ${crypto.randomUUID()}`, 2);
+  const qa = await signInAs(page, ["QA"]);
+  const pkg = await db.package.findFirstOrThrow({ where: { orderId: order.id } });
+  await db.packageItem.updateMany({
+    where: { packageId: pkg.id },
+    data: { qaVerifiedQuantity: 2, qaVerifiedAt: new Date(), qaVerifiedById: qa.id },
+  });
+  // The customer paid $1.00 for shipping and the label is $6.50: over the default 2×.
+  await db.order.update({
+    where: { id: order.id },
+    data: { claimedById: qa.id, claimedAt: new Date(), shippingChargedCents: 100 },
+  });
+
+  await withSettingsLock(async () => {
+    const before = await db.shippingProviderAccount.findUnique({
+      where: { provider: "SHIPSTATION" },
+    });
+    await db.settings.updateMany({
+      data: { labelCostConfirmRatio: 2, labelCostConfirmFreeCents: 1500 },
+    });
+    await db.shippingProviderAccount.upsert({
+      where: { provider: "SHIPSTATION" },
+      create: { provider: "SHIPSTATION", enabled: true },
+      update: { enabled: true },
+    });
+    const carrier = await db.shippingCarrier.create({
+      data: {
+        provider: "SHIPSTATION",
+        externalId: `e2e-${crypto.randomUUID()}`,
+        code: "usps",
+        name: "E2E carrier",
+        enabled: true,
+      },
+    });
+    const service = await db.carrierService.create({
+      data: {
+        carrierId: carrier.id,
+        code: "e2e_ground",
+        name: "E2E Ground",
+        domestic: true,
+        international: false,
+        enabled: true,
+      },
+    });
+    await db.shippingRate.create({
+      data: {
+        packageId: pkg.id,
+        provider: "SHIPSTATION",
+        carrierId: carrier.id,
+        serviceId: service.id,
+        carrierCode: "usps",
+        serviceCode: "e2e_ground",
+        serviceName: "E2E Ground",
+        amountCents: 650,
+        currency: "USD",
+        selected: true,
+        expiresAt: new Date(Date.now() + 3_600_000),
+      },
+    });
+    try {
+      await page.goto(`/qa/${order.id}`);
+      await page.getByTestId("qa-complete").click();
+      await expect(page.getByTestId("qa-cost-confirm-body")).toHaveText(
+        "Labels cost $6.50, the customer paid $1.00 for shipping. Buy anyway?",
+      );
+      await page.getByRole("button", { name: "Not yet" }).click();
+      await expect(page.getByTestId("qa-cost-confirm-body")).toHaveCount(0);
+      expect(await db.shippingLabel.count({ where: { packageId: pkg.id } })).toBe(0);
+
+      await page.getByTestId("qa-complete").click();
+      await page.getByTestId("qa-cost-confirm").click();
+      await expect(page.getByTestId("qa-buying")).toHaveText("Buying labels… 0 of 1");
+      await expect
+        .poll(() => db.shippingLabel.count({ where: { packageId: pkg.id, status: "PURCHASING" } }))
+        .toBe(1);
+    } finally {
+      await db.shippingLabel.deleteMany({ where: { packageId: pkg.id } });
+      await db.shippingRate.deleteMany({ where: { packageId: pkg.id } });
+      await db.carrierService.deleteMany({ where: { carrierId: carrier.id } });
+      await db.shippingCarrier.delete({ where: { id: carrier.id } });
+      await db.shippingProviderAccount.update({
+        where: { provider: "SHIPSTATION" },
+        data: { enabled: before?.enabled ?? false },
+      });
+    }
+  });
+});
+
+test("an Admin sets the label cost check on Settings → Shipping; empty turns a check off", async ({
+  page,
+}) => {
+  await withSettingsLock(async () => {
+    await db.settings.updateMany({
+      data: { labelCostConfirmRatio: 2, labelCostConfirmFreeCents: 1500 },
+    });
+    try {
+      await signInAs(page, ["ADMIN"]);
+      await page.goto("/settings/shipping");
+      const card = page.getByRole("region", { name: "Label cost check" });
+      await card.getByLabel("Ask when labels cost more than (×)").fill("3");
+      await card.getByLabel(/Ask when shipping was free/).fill("");
+      await card.getByRole("button", { name: "Save" }).click();
+      await expect(page.getByText("Label cost check saved.")).toBeVisible();
+      await expect
+        .poll(() => db.settings.findFirstOrThrow())
+        .toMatchObject({ labelCostConfirmFreeCents: null });
+      expect(Number((await db.settings.findFirstOrThrow()).labelCostConfirmRatio)).toBe(3);
+    } finally {
+      await db.settings.updateMany({
+        data: { labelCostConfirmRatio: 2, labelCostConfirmFreeCents: 1500 },
+      });
+    }
+  });
 });

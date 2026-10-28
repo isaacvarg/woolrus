@@ -33,6 +33,12 @@ const severityBadge = {
   CRITICAL: "badge-error",
 } as const;
 
+const labelBadge = {
+  purchasing: "badge-info",
+  failed: "badge-error",
+  unknown: "badge-warning",
+} as const;
+
 const priorityBadge: Record<number, string> = { 1: "badge-warning", 2: "badge-error" };
 
 export function QueueTable({
@@ -263,6 +269,15 @@ export function QueueTable({
                         <span aria-hidden="true">
                           {severityIcon[row.topOpenSeverity]} {row.openIssueCount}
                         </span>
+                      </span>
+                    )}
+                    {row.labelState !== "none" && (
+                      <span
+                        data-testid="queue-label-badge"
+                        data-state={row.labelState}
+                        className={`badge badge-sm ms-2 ${labelBadge[row.labelState]}`}
+                      >
+                        {t(`queue.labelState.${row.labelState}`)}
                       </span>
                     )}
                     {row.unresolvedVoidCount > 0 && (

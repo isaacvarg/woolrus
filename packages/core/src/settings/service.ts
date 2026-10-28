@@ -78,6 +78,8 @@ function toAdminSettings(row: Settings): AdminSettings {
     weightDisplay: row.weightDisplay,
     piiRetentionDays: row.piiRetentionDays,
     qaMustDifferFromPacker: row.qaMustDifferFromPacker,
+    labelCostConfirmRatio: row.labelCostConfirmRatio?.toNumber() ?? null,
+    labelCostConfirmFreeCents: row.labelCostConfirmFreeCents,
     // Status comes from the column alone, so reads never decrypt and work without a key.
     secrets: Object.fromEntries(
       SecretName.options.map((name) => [name, { configured: row[secretColumns[name]] !== null }]),

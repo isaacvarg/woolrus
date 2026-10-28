@@ -6,9 +6,10 @@ import Link from "next/link";
 import { useFormatter, useTranslations } from "next-intl";
 import { useState } from "react";
 import { ReportIssueFlow } from "@/components/exceptions/report-issue-flow";
+import { Dialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/fields";
 import { toast } from "@/components/ui/toast";
-import { useErrorMessage } from "@/lib/errors";
+import { costConfirmOf, useErrorMessage } from "@/lib/errors";
 import { client, orpc } from "@/lib/orpc";
 import { playScanSound, useScanner } from "@/lib/scanner";
 import { ScanBanner, type ScanOutcome } from "../../pick/[orderId]/pick-screen";
@@ -16,6 +17,8 @@ import { hasLiveLabel } from "./live-label";
 import { money } from "./money";
 import { QaDrawer } from "./qa-drawer";
 import { RatesTable, RefreshRatesButton } from "./qa-rates";
+import { FailedPackages, isUnknownPurchase, MarkNotBought } from "./qa-settle";
+import { isVoidable, VoidLabelButton } from "./qa-void";
 
 // The QA screen (SPEC-qa "UI", FR-QA-01). A tap verifies a row in full and a second tap clears
 // it. Taps apply at once and the server confirms them (NFR-PERF-02); writes run one at a time per
@@ -36,11 +39,54 @@ function applyTap(view: QaView, rowId: string, verified: boolean): QaView {
   };
 }
 
+/** The cost guard's "Buy anyway?" (SPEC-qa "Cost guard"). */
+function CostConfirmDialog({
+  ask,
+  onCancel,
+  onConfirm,
+}: {
+  ask: { labelCostCents: number; chargedCents: number } | null;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const t = useTranslations();
+  const format = useFormatter();
+  return (
+    <Dialog
+      title={t("qa.costConfirm.title")}
+      isOpen={ask !== null}
+      onOpenChange={(open) => !open && onCancel()}
+    >
+      {() => (
+        <>
+          <p data-testid="qa-cost-confirm-body">
+            {ask &&
+              t("qa.costConfirm.body", {
+                cost: money(format, ask.labelCostCents),
+                charged: money(format, ask.chargedCents),
+              })}
+          </p>
+          <div className="flex justify-end gap-2">
+            <Button className="btn-ghost" onPress={onCancel}>
+              {t("qa.costConfirm.cancel")}
+            </Button>
+            <Button className="btn-primary" onPress={onConfirm} data-testid="qa-cost-confirm">
+              {t("qa.costConfirm.confirm")}
+            </Button>
+          </div>
+        </>
+      )}
+    </Dialog>
+  );
+}
+
 export function QaScreen({
   orderId,
   userId,
   canVerify,
   canPurchase,
+  canVoid,
+  canSettle,
   canReport,
   canWriteCustomer,
 }: {
@@ -48,6 +94,8 @@ export function QaScreen({
   userId: string | null;
   canVerify: boolean;
   canPurchase: boolean;
+  canVoid: boolean;
+  canSettle: boolean;
   canReport: boolean;
   canWriteCustomer: boolean;
 }) {
@@ -69,6 +117,8 @@ export function QaScreen({
       userId={userId}
       canVerify={canVerify}
       canPurchase={canPurchase}
+      canVoid={canVoid}
+      canSettle={canSettle}
       canReport={canReport}
       canWriteCustomer={canWriteCustomer}
     />
@@ -80,6 +130,8 @@ function QaLayout({
   userId,
   canVerify,
   canPurchase,
+  canVoid,
+  canSettle,
   canReport,
   canWriteCustomer,
 }: {
@@ -87,6 +139,8 @@ function QaLayout({
   userId: string | null;
   canVerify: boolean;
   canPurchase: boolean;
+  canVoid: boolean;
+  canSettle: boolean;
   canReport: boolean;
   canWriteCustomer: boolean;
 }) {
@@ -155,10 +209,20 @@ function QaLayout({
     scan.mutate({ pkg: focused, code, scanId: crypto.randomUUID() });
   }, mayVerify);
 
+  // The cost guard's question; confirming resends with `confirmCost`.
+  const [costAsk, setCostAsk] = useState<{ labelCostCents: number; chargedCents: number } | null>(
+    null,
+  );
   const complete = useMutation({
-    mutationFn: () => client.orders.completeQa({ id: order.id, expectedVersion: order.version }),
+    mutationFn: (confirmCost?: boolean) =>
+      client.orders.completeQa({ id: order.id, expectedVersion: order.version, confirmCost }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: viewKey }),
     onError: (error) => {
+      const ask = costConfirmOf(error);
+      if (ask) {
+        setCostAsk(ask);
+        return;
+      }
       toast.error(errorMessage(error));
       void queryClient.invalidateQueries({ queryKey: viewKey });
     },
@@ -201,6 +265,14 @@ function QaLayout({
 
   return (
     <section className="mx-auto max-w-6xl space-y-4 pb-28">
+      <CostConfirmDialog
+        ask={costAsk}
+        onCancel={() => setCostAsk(null)}
+        onConfirm={() => {
+          setCostAsk(null);
+          complete.mutate(true);
+        }}
+      />
       {reporting && (
         <ReportIssueFlow
           key={reporting.orderItemId ?? reporting.packageId}
@@ -231,7 +303,7 @@ function QaLayout({
           {t("qa.orderCritical", { count: view.orderIssueIds.length })}
         </div>
       )}
-      <PurchaseBanner purchase={view.purchase} />
+      <PurchaseBanner view={view} />
       <div className="flex justify-end">
         <RefreshRatesButton
           orderId={order.id}
@@ -252,7 +324,10 @@ function QaLayout({
               key={pkg.id}
               pkg={pkg}
               orderId={order.id}
+              orderNumber={order.number}
+              canSettle={canSettle}
               disabled={!mayVerify}
+              canVoid={canVoid && order.status === "QA"}
               isFocused={pkg.id === focused?.id}
               onFocus={() => setFocusedId(pkg.id)}
               onReport={
@@ -290,7 +365,7 @@ function QaLayout({
             {mayComplete && (
               <Button
                 className="btn-primary ms-auto"
-                onPress={() => complete.mutate()}
+                onPress={() => complete.mutate(undefined)}
                 isDisabled={complete.isPending}
                 data-testid="qa-complete"
               >
@@ -363,8 +438,9 @@ function QaBanner({ view, userId }: { view: QaView; userId: string | null }) {
   );
 }
 
-function PurchaseBanner({ purchase }: { purchase: QaView["purchase"] }) {
+function PurchaseBanner({ view }: { view: QaView }) {
   const t = useTranslations();
+  const { purchase } = view;
   if (purchase.kind === "purchasing") {
     return (
       <div role="status" className="alert alert-info" data-testid="qa-buying">
@@ -372,14 +448,7 @@ function PurchaseBanner({ purchase }: { purchase: QaView["purchase"] }) {
       </div>
     );
   }
-  if (purchase.kind === "failed") {
-    return (
-      <div role="alert" className="alert alert-error" data-testid="qa-failed">
-        {t("qa.failedPackages", { packages: purchase.packages.map((n) => `#${n}`).join(", ") })}
-      </div>
-    );
-  }
-  return null;
+  return <FailedPackages view={view} />;
 }
 
 const labelKeys = {
@@ -394,7 +463,10 @@ const labelKeys = {
 function PackageCard({
   pkg,
   orderId,
+  orderNumber,
+  canSettle,
   disabled,
+  canVoid,
   isFocused,
   onFocus,
   onTap,
@@ -402,7 +474,10 @@ function PackageCard({
 }: {
   pkg: QaPackage;
   orderId: string;
+  orderNumber: string;
+  canSettle: boolean;
   disabled: boolean;
+  canVoid: boolean;
   isFocused: boolean;
   onFocus: () => void;
   onTap: (row: QaRow) => void;
@@ -457,6 +532,10 @@ function PackageCard({
             </div>
           )}
           {label.error && t.has(label.error as never) && <div>{t(label.error as never)}</div>}
+          {canVoid && isVoidable(label) && <VoidLabelButton orderId={orderId} label={label} />}
+          {canSettle && isUnknownPurchase(pkg) && (
+            <MarkNotBought orderId={orderId} orderNumber={orderNumber} pkg={pkg} />
+          )}
         </div>
       )}
     </li>

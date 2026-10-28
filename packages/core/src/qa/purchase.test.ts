@@ -230,6 +230,100 @@ describe("purchaseLabels", () => {
     expect(purchaseCalls(provider)).toBe(0);
   });
 
+  it("sends the package number so the fake's FAIL-BUY-<n> refuses just that package", async () => {
+    const { run, order } = await requested(2);
+    await db.order.update({
+      where: { id: order.id },
+      data: {
+        shipTo: {
+          name: "T",
+          address1: "1 Main St",
+          address2: "FAIL-BUY-2",
+          city: "Austin",
+          state: "TX",
+          postalCode: "78701",
+          country: "US",
+        },
+      },
+    });
+    await run();
+    const rows = await db.shippingLabel.findMany({
+      include: { package: true },
+      orderBy: { createdAt: "asc" },
+    });
+    expect(rows.map((l) => [l.package?.number, l.status])).toEqual([
+      [1, "ACTIVE"],
+      [2, "PURCHASE_FAILED"],
+    ]);
+    expect(await status(order.id)).toBe("QA");
+  });
+
+  describe("on the final attempt", () => {
+    const lose = (provider: ReturnType<typeof fakeProvider>) => {
+      const real = provider.purchaseLabel.bind(provider);
+      return vi.spyOn(provider, "purchaseLabel").mockImplementation(async (input) => {
+        await real(input);
+        throw new ShippingError("timeout", "purchaseLabel timeout");
+      });
+    };
+
+    it("fails a label the provider says it never bought", async () => {
+      const { provider, payload, storage, order } = await requested(1);
+      vi.spyOn(provider, "purchaseLabel").mockRejectedValue(
+        new ShippingError("unavailable", "purchaseLabel 503"),
+      );
+
+      await purchaseLabels(db, { providers: [provider], storage }, payload, { finalAttempt: true });
+
+      expect((await labels())[0]).toMatchObject({ status: "PURCHASE_FAILED" });
+      expect(await status(order.id)).toBe("QA");
+    });
+
+    it("records a label the provider did buy, without buying again", async () => {
+      const { provider, payload, storage, order } = await requested(1);
+      lose(provider);
+
+      await purchaseLabels(db, { providers: [provider], storage }, payload, { finalAttempt: true });
+
+      expect((await labels())[0]).toMatchObject({ status: "ACTIVE" });
+      expect(purchaseCalls(provider)).toBe(1);
+      expect(await status(order.id)).toBe("READY");
+    });
+
+    it("leaves the label unknown when the provider can't say", async () => {
+      const { payload, storage } = await requested(1);
+      const bridge = {
+        id: "SHIPSTATION" as const,
+        capabilities: {
+          addressValidation: false,
+          labelLookup: false,
+          void: true,
+          manifests: false,
+        },
+        purchaseLabel: vi
+          .fn()
+          .mockRejectedValue(new ShippingError("timeout", "purchaseLabel timeout")),
+      };
+
+      await purchaseLabels(db, { providers: [bridge as never], storage }, payload, {
+        finalAttempt: true,
+      });
+
+      expect((await labels())[0]).toMatchObject({
+        status: "PURCHASING",
+        error: "errors.qa.purchaseUnknown",
+      });
+      expect(bridge.purchaseLabel).toHaveBeenCalledTimes(1);
+    });
+
+    it("still throws for a retry before the final attempt", async () => {
+      const { provider, run } = await requested(1);
+      lose(provider);
+      await expect(run()).rejects.toThrow();
+      expect((await labels())[0]?.status).toBe("PURCHASING");
+    });
+  });
+
   it("does nothing for an order with no labels to buy", async () => {
     const { run, order } = await requested(1);
     await run();
