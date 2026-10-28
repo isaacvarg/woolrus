@@ -57,6 +57,29 @@ services:
       migrate:
         condition: service_completed_successfully
 
+  # Nightly pg_dump at 02:00 into ./backups (newest 14 kept). See docs/runbook-backup-restore.md.
+  backup:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      PGHOST: postgres
+      PGUSER: ${POSTGRES_USER:-woolrus}
+      PGPASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+    # busybox crond doesn't pass the container env to jobs, so snapshot it for the job to source.
+    command:
+      - sh
+      - -c
+      - |
+        export -p | grep ' PG' > /etc/backup.env
+        echo '0 2 * * * . /etc/backup.env; sh /backup.sh > /proc/1/fd/1 2>&1' > /etc/crontabs/root
+        exec crond -f -l 8
+    volumes:
+      - ./backup/backup.sh:/backup.sh:ro
+      - ./backups:/backups
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   # Error tracking (Sentry-compatible). All-in-one mode on Postgres; no Valkey/Redis.
   glitchtip:
     image: glitchtip/glitchtip:latest

@@ -15,3 +15,6 @@ next-env.d.ts
 
 # Personal Claude Code overrides
 .claude/settings.local.json
+
+# Nightly dumps written by the prod backup service
+docker/backups
