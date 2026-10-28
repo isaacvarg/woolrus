@@ -59,6 +59,7 @@ export { encryptionKey } from "./settings/env";
 export * from "./settings/format";
 export * from "./settings/integration";
 export * from "./settings/service";
+export * from "./sync/health";
 export * from "./sync/lock";
 export * from "./sync/orders";
 export * from "./sync/products";
