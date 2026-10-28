@@ -4,6 +4,7 @@ import { invitations } from "./invitations";
 import { issues } from "./issues";
 import { me } from "./me";
 import { notes } from "./notes";
+import { operations } from "./operations";
 import { orders } from "./orders";
 import { packing } from "./packing";
 import { pickBatches, picking } from "./picking";
@@ -21,6 +22,7 @@ export * from "./invitations";
 export * from "./issues";
 export * from "./me";
 export * from "./notes";
+export * from "./operations";
 export * from "./orders";
 export * from "./packing";
 export * from "./picking";
@@ -53,5 +55,6 @@ export const contract = {
   voids,
   issues,
   carriers,
+  operations,
 };
 export type Contract = typeof contract;

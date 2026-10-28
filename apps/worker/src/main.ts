@@ -1,5 +1,6 @@
 import {
   configuredStore,
+  createQueue,
   createS3Storage,
   ensureBucketOnFirstUse,
   fakeShippingProviders,
@@ -9,7 +10,6 @@ import {
   type JobPayloads,
   pollIfDue,
   processWooWebhook,
-  queueOptions,
   queues,
   recomputePriorities,
   runEmailJob,
@@ -54,7 +54,7 @@ await storage
   );
 
 for (const name of Object.values(queues)) {
-  await boss.createQueue(name, queueOptions[name]);
+  await createQueue(boss, name);
 }
 
 // FR-SYNC-09: tick every minute; `pollIfDue` polls once `syncIntervalMinutes` have passed, so a

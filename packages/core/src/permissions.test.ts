@@ -50,6 +50,13 @@ describe("permissions", () => {
     }
   });
 
+  it("lets only admins see and act on failed jobs", () => {
+    expect(can(actor(["ADMIN"]), "ops.jobs")).toBe(true);
+    for (const role of ["PICKER", "PACKER", "QA", "SHIPPER"] as const) {
+      expect(can(actor([role]), "ops.jobs")).toBe(false);
+    }
+  });
+
   it("gives the system actor no user and no station", () => {
     expect(systemActor).toMatchObject({ userId: null, stationId: null, system: "store-sync" });
     expect(can(systemActor, "order.cancel")).toBe(true);

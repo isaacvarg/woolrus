@@ -15,12 +15,19 @@ export async function enqueue<Q extends QueueName>(
   payload: JobPayloads[Q],
   options: { singletonKey?: string } = {},
 ): Promise<string | null> {
+  const { boss, db } = bossOn(tx);
+  return boss.send(queue, payload, { ...options, db });
+}
+
+/**
+ * A never-started pg-boss whose statements run on `tx`. Built per call: its queue lookups go
+ * through `tx` too, and it holds no connections or timers. Pass `db` as the call's option.
+ */
+export function bossOn(tx: DbTx) {
   const db = {
     executeSql: async (text: string, values: unknown[] = []) => ({
       rows: await tx.$queryRawUnsafe<unknown[]>(text, ...values),
     }),
   };
-  // Built per call: its queue lookups go through `tx` too, and it holds no connections or timers.
-  const boss = new PgBoss({ db, schema: JOBS_SCHEMA });
-  return boss.send(queue, payload, { ...options, db });
+  return { boss: new PgBoss({ db, schema: JOBS_SCHEMA }), db };
 }
