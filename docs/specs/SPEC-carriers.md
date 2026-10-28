@@ -223,14 +223,17 @@ The dev env fallback stays: `SHIPSTATION_API_KEY` fills an unset key in developm
     blocks the rate fetch.
 - `keepOriginalAddress({ orderId })` (**Use original address**; not `use…`, which Biome takes for a hook) (`order.qa`, order in QA): `shipTo` = original, status `UNCHECKED` with a
   "kept by <user>" note in the audit, then re-rates. `recheckAddress({ orderId })` (`order.qa`) runs validation
-  and re-rates.
+  and re-rates. Both are refused while any package has a live label (`errors.qa.addressLockedByLabel`; SPEC-qa):
+  a bought label carries the old address.
 - A change to the order's addresses from a Woo sync clears `shipTo*` and re-rates if the order is in QA.
 
 ### Rate fetch (`packages/core/src/carriers/rates.ts`, job `rates.fetch`)
 
 Payload `{ orderId, generation }`. Enqueued in the transaction that moves an order Packing → QA (a hook in
-`workflow`'s `completePacking`, added here) and by `refreshRates({ orderId })` (`order.qa`, order in QA, no live
-labels). Each enqueue bumps `Order.rateGeneration`; a job whose generation is no longer current exits, and writes
+`workflow`'s `completePacking`, added here) and by `refreshRates({ orderId })` (`order.qa`, order in QA). Refresh
+re-rates only the packages **without** a live label, so a partly bought order can re-rate the failed package; it is
+refused while a label of the order is `PURCHASING` or when every package has a live label (changed by SPEC-qa,
+2026-10-28). The job skips a package that has a live label by the time it writes. Each enqueue bumps `Order.rateGeneration`; a job whose generation is no longer current exits, and writes
 are checked against it, so a refresh or a repack never gets overwritten by an older job.
 
 1. Resolve and, if needed, validate the ship-to (above). Load ship-from from Settings.
@@ -379,7 +382,8 @@ orders get rates from both fakes.
 10. **Disabled provider:** a disabled provider is never called; rates it returned earlier stay until a refresh.
 11. **Generation:** a slow job finishing after a refresh or a package change writes nothing.
 12. **Hook:** completing packing enqueues exactly one `rates.fetch` in the same transaction; a rolled-back
-    completion enqueues none. `refreshRates` is refused while any package has a live label.
+    completion enqueues none. `refreshRates` skips packages with a live label, and is refused while a label is
+    `PURCHASING` or when every package has one (SPEC-qa).
 13. **Health:** each provider reports `disabled`, `unconfigured`, `ok` or `fail` correctly; a failing enabled
     provider marks health degraded.
 14. **Permissions:** every procedure has an allowed and a forbidden test (QA can't change providers; a Picker
