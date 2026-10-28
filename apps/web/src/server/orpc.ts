@@ -4,11 +4,14 @@ import { contract, toFieldErrors } from "@woolrus/contracts";
 import { AppError } from "@woolrus/core";
 import type { Logger } from "@woolrus/logger";
 import { resolveActor, resolveStationDevice } from "./actor";
+import type { RequestTrace } from "./request-trace";
 import { clearStationCookie } from "./station-cookie";
 
 export type BaseContext = ResponseHeadersPluginContext & {
   headers: Headers;
   log: Logger;
+  /** Filled in by `authed` so the request log line can name the user. */
+  trace: RequestTrace;
 };
 
 const os = implement(contract).$context<BaseContext>();
@@ -64,6 +67,7 @@ const authed = os.middleware(async ({ next, context }) => {
     throw new ORPCError("UNAUTHORIZED", { data: { messageKey: "errors.unauthenticated" } });
   }
   const { actor, user, station, idleLockAt } = resolved;
+  context.trace.userId = user.id;
   const log = context.log.child({ userId: user.id, stationId: actor.stationId ?? undefined });
   return next({ context: { actor, user, station, idleLockAt, log } });
 });

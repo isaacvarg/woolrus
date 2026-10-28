@@ -15,6 +15,11 @@ export async function recordAudit(
   },
 ): Promise<void> {
   await tx.auditEvent.create({
-    data: { ...event, actorId: actor.userId, stationId: actor.stationId },
+    data: {
+      ...event,
+      actorId: actor.userId,
+      stationId: actor.stationId,
+      requestId: actor.requestId,
+    },
   });
 }

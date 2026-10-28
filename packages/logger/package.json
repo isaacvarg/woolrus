@@ -7,13 +7,15 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "typecheck": "tsc"
+    "typecheck": "tsc",
+    "test": "vitest run"
   },
   "dependencies": {
     "pino": "10.4.0"
   },
   "devDependencies": {
     "@types/node": "^24.19.2",
-    "@woolrus/config": "workspace:*"
+    "@woolrus/config": "workspace:*",
+    "vitest": "5.0.4"
   }
 }

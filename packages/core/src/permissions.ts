@@ -9,6 +9,8 @@ export type UserActor = {
   userId: string;
   roles: readonly Role[];
   stationId: string | null;
+  /** The API call this actor was resolved for; audit rows record it. Absent outside a request. */
+  requestId?: string;
   system?: undefined;
 };
 
@@ -17,6 +19,7 @@ export type SystemActor = {
   userId: null;
   roles: readonly Role[];
   stationId: null;
+  requestId?: undefined;
   system: "store-sync";
 };
 
