@@ -80,6 +80,7 @@ import {
   scanIntoPackage,
   sendTestEmail,
   setCarrierEnabled,
+  setCarrierLabel,
   setPackageBox,
   setPin,
   setProviderCredentials,
@@ -473,6 +474,9 @@ export const router = implementer.router({
     sync: api.carriers.sync.handler(({ input, context }) => syncCarriers(db, context.actor, input)),
     setCarrierEnabled: api.carriers.setCarrierEnabled.handler(({ input, context }) =>
       setCarrierEnabled(db, context.actor, input),
+    ),
+    setCarrierLabel: api.carriers.setCarrierLabel.handler(({ input, context }) =>
+      setCarrierLabel(db, context.actor, input),
     ),
     setServiceEnabled: api.carriers.setServiceEnabled.handler(({ input, context }) =>
       setServiceEnabled(db, context.actor, input),

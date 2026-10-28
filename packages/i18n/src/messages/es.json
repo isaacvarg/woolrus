@@ -208,7 +208,20 @@
       "serviceSwitch": "Usar {carrier} {name}",
       "domestic": "Nacional",
       "international": "Internacional",
-      "noLongerOffered": "Ya no se ofrece"
+      "noLongerOffered": "Ya no se ofrece",
+      "providerNickname": "{nickname} en {provider}",
+      "accountSuffix": "Cuenta terminada en {suffix}",
+      "billedByProvider": "Se cobra de tu saldo de {provider}",
+      "label": "Etiqueta",
+      "labelHint": "Se muestra en los pedidos en lugar del nombre de la paquetería, para distinguir sus cuentas. Déjala vacía para quitarla.",
+      "addLabel": "Añadir etiqueta",
+      "editLabel": "Editar etiqueta",
+      "editLabelFor": "Editar la etiqueta de {name}",
+      "serviceNotes": {
+        "usCanadaMexico": "Desde EE. UU.: solo a Canadá y México",
+        "internationalOnly": "Desde EE. UU.: solo internacional",
+        "intoUs": "Solo hacia EE. UU. desde otro país"
+      }
     }
   },
   "priorityRules": {
@@ -1052,6 +1065,8 @@
     "shipping": {
       "unauthorized": "El proveedor de envíos rechazó sus credenciales. Revísalas en Configuración → Envíos.",
       "rejected": "El proveedor de envíos rechazó la solicitud. Revisa la dirección, el paquete y el servicio.",
+      "notOffered": "La paquetería no ofrece los servicios activados para este envío, desde esta dirección de origen o hacia esta dirección. Revisa qué servicios están activados en Ajustes → Envíos.",
+      "addressRejected": "La paquetería rechazó la dirección de destino o de origen. Revisa ambas direcciones.",
       "unavailable": "No se pudo conectar con el proveedor de envíos. Inténtalo de nuevo en un minuto.",
       "timeout": "El proveedor de envíos tardó demasiado en responder. Inténtalo de nuevo en un minuto."
     },

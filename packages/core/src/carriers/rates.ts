@@ -570,7 +570,7 @@ export async function getOrderShipping(
           ratesStatus: true,
           ratesFetchedAt: true,
           rateErrors: true,
-          rates: { include: { carrier: { select: { name: true } } } },
+          rates: { include: { carrier: { select: { name: true, label: true } } } },
           labels: { where: { status: { in: [...liveLabelStatuses] } }, select: { id: true } },
         },
       },
@@ -596,7 +596,7 @@ export async function getOrderShipping(
       rates: [...pkg.rates].sort(compareRates).map((rate) => ({
         id: rate.id,
         provider: rate.provider,
-        carrierName: rate.carrier.name,
+        carrierName: rate.carrier.label ?? rate.carrier.name,
         serviceName: rate.serviceName,
         amountCents: rate.amountCents,
         currency: rate.currency,

@@ -1,5 +1,6 @@
 import type {
   ProviderShippingConfig,
+  SetCarrierLabelInput,
   SetShippingEnabledInput,
   ShippingCarrierConfig,
   ShippingServiceConfig,
@@ -14,6 +15,7 @@ import { recordAudit } from "../audit";
 import { AppError, notFound } from "../errors";
 import { type Actor, assertCan } from "../permissions";
 import { loadAccount, providerFor } from "./providers";
+import { serviceNote } from "./service-notes";
 
 // Carrier and service sync and toggles (SPEC-carriers "Provider accounts and settings"). Synced
 // carriers and services arrive off; ones the provider stops listing get `missingSince` and are
@@ -52,15 +54,18 @@ export async function syncCarriers(
       const before = existing.find((c) => c.externalId === listedCarrier.externalId);
       if (!before) result.carriersAdded++;
       // Upserts, so a sync racing another doesn't fail on the unique keys.
+      // The label is ours, so a sync never touches it.
+      const synced = {
+        code: listedCarrier.code,
+        name: listedCarrier.name,
+        providerNickname: listedCarrier.nickname ?? null,
+        accountSuffix: listedCarrier.accountSuffix ?? null,
+        billedByProvider: listedCarrier.billedByProvider ?? false,
+      };
       const carrier = await tx.shippingCarrier.upsert({
         where: { provider_externalId: { provider, externalId: listedCarrier.externalId } },
-        create: {
-          provider,
-          externalId: listedCarrier.externalId,
-          code: listedCarrier.code,
-          name: listedCarrier.name,
-        },
-        update: { code: listedCarrier.code, name: listedCarrier.name, missingSince: null },
+        create: { provider, externalId: listedCarrier.externalId, ...synced },
+        update: { ...synced, missingSince: null },
       });
       for (const listedService of listedCarrier.services) {
         if (!before?.services.some((s) => s.code === listedService.code)) result.servicesAdded++;
@@ -110,7 +115,9 @@ export async function syncCarriers(
 /** One upsert per carrier and service: a large account outlasts Prisma's 5 s default. */
 const SYNC_TRANSACTION = { maxWait: 5_000, timeout: 30_000 };
 
-function toServiceConfig(row: CarrierService): ShippingServiceConfig {
+type CarrierKey = Pick<ShippingCarrier, "provider" | "code">;
+
+function toServiceConfig(row: CarrierService, carrier: CarrierKey): ShippingServiceConfig {
   return {
     id: row.id,
     code: row.code,
@@ -119,6 +126,7 @@ function toServiceConfig(row: CarrierService): ShippingServiceConfig {
     international: row.international,
     enabled: row.enabled,
     missing: row.missingSince !== null,
+    note: serviceNote(carrier.provider, carrier.code, row.code),
   };
 }
 
@@ -126,9 +134,13 @@ function toCarrierConfig(row: ShippingCarrier & { services: CarrierService[] }) 
   return {
     id: row.id,
     name: row.name,
+    label: row.label,
+    providerNickname: row.providerNickname,
+    accountSuffix: row.accountSuffix,
+    billedByProvider: row.billedByProvider,
     enabled: row.enabled,
     missing: row.missingSince !== null,
-    services: row.services.map(toServiceConfig),
+    services: row.services.map((service) => toServiceConfig(service, row)),
   } satisfies ShippingCarrierConfig;
 }
 
@@ -177,6 +189,32 @@ export async function setCarrierEnabled(
   });
 }
 
+/** Our name for a carrier account; orders show it in place of the carrier's name. Audited `relabel`. */
+export async function setCarrierLabel(
+  db: Db,
+  actor: Actor,
+  { id, label }: SetCarrierLabelInput,
+): Promise<ShippingCarrierConfig> {
+  assertCan(actor, "settings.manage");
+  return db.$transaction(async (tx) => {
+    const current = await tx.shippingCarrier.findUnique({ where: { id } });
+    if (!current) throw notFound();
+    if (current.label !== label) {
+      await tx.shippingCarrier.update({ where: { id }, data: { label } });
+      await recordAudit(tx, actor, {
+        entityType: "ShippingCarrier",
+        entityId: id,
+        action: "relabel",
+        before: { label: current.label },
+        after: { label },
+      });
+    }
+    return toCarrierConfig(
+      await tx.shippingCarrier.findUniqueOrThrow({ where: { id }, include: { services: byName } }),
+    );
+  });
+}
+
 export async function setServiceEnabled(
   db: Db,
   actor: Actor,
@@ -184,9 +222,12 @@ export async function setServiceEnabled(
 ): Promise<ShippingServiceConfig> {
   assertCan(actor, "settings.manage");
   return db.$transaction(async (tx) => {
-    const current = await tx.carrierService.findUnique({ where: { id } });
+    const current = await tx.carrierService.findUnique({
+      where: { id },
+      include: { carrier: true },
+    });
     if (!current) throw notFound();
-    if (current.enabled === enabled) return toServiceConfig(current);
+    if (current.enabled === enabled) return toServiceConfig(current, current.carrier);
     const row = await tx.carrierService.update({ where: { id }, data: { enabled } });
     await recordAudit(tx, actor, {
       entityType: "CarrierService",
@@ -194,7 +235,7 @@ export async function setServiceEnabled(
       action: enabled ? "enable" : "disable",
       after: { carrierId: current.carrierId, code: current.code },
     });
-    return toServiceConfig(row);
+    return toServiceConfig(row, current.carrier);
   });
 }
 

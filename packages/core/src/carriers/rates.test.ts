@@ -960,6 +960,24 @@ describe("getOrderShipping", () => {
     });
   });
 
+  it("names a rate's carrier by the account's label when it has one", async () => {
+    await catalog("BRIDGE_SOURCE", ["GND"]);
+    const { bridge } = fakes();
+    const { payload } = await inQa();
+    await fetchRates(db, [bridge], payload);
+    const qa = await createActor(db, ["QA"]);
+    const carrierNames = async () =>
+      (await getOrderShipping(db, qa, { orderId: payload.orderId })).packages[0]?.rates.map(
+        (r) => r.carrierName,
+      );
+    const [unlabelled] = (await carrierNames()) ?? [];
+
+    await db.shippingCarrier.updateMany({ data: { label: "Negotiated" } });
+
+    expect(unlabelled).not.toBe("Negotiated");
+    expect(await carrierNames()).toEqual(["Negotiated"]);
+  });
+
   it("counts a rate as expired from the moment it expires", async () => {
     await catalog("BRIDGE_SOURCE", ["GND"]);
     const { bridge } = fakes();

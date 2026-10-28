@@ -1,11 +1,20 @@
 import type { ErrorCode } from "@woolrus/i18n";
 
-export const shippingErrorKinds = ["unauthorized", "rejected", "unavailable", "timeout"] as const;
+export const shippingErrorKinds = [
+  "unauthorized",
+  "rejected",
+  "notOffered",
+  "addressRejected",
+  "unavailable",
+  "timeout",
+] as const;
 export type ShippingErrorKind = (typeof shippingErrorKinds)[number];
 
 /**
  * A provider call that failed. `unavailable` (429, 5xx, network) and `timeout` may work later, so
- * jobs retry them; the others are permanent. `detail` names the operation, the status and the
+ * jobs retry them; the others are permanent. `notOffered` and `addressRejected` are a `rejected`
+ * the adapter could tell apart: the carrier doesn't run that service for this shipment, or it
+ * refused an address. `detail` names the operation, the status and the
  * provider's error code, never credentials, addresses or the provider's free text (which can echo
  * the request). Build it with `shippingErrorFromStatus` / `shippingErrorFromCause`.
  */
@@ -21,7 +30,7 @@ export class ShippingError extends Error {
     super(detail ? `${kind}: ${detail}` : kind);
     this.name = "ShippingError";
     this.messageKey = `errors.shipping.${kind}`;
-    this.permanent = kind === "unauthorized" || kind === "rejected";
+    this.permanent = kind !== "unavailable" && kind !== "timeout";
   }
 }
 

@@ -208,7 +208,20 @@
       "serviceSwitch": "Use {carrier} {name}",
       "domestic": "Domestic",
       "international": "International",
-      "noLongerOffered": "No longer offered"
+      "noLongerOffered": "No longer offered",
+      "providerNickname": "{nickname} in {provider}",
+      "accountSuffix": "Account ending {suffix}",
+      "billedByProvider": "Billed to your {provider} balance",
+      "label": "Label",
+      "labelHint": "Shown on orders instead of the carrier's name, to tell its accounts apart. Leave empty to clear.",
+      "addLabel": "Add label",
+      "editLabel": "Edit label",
+      "editLabelFor": "Edit label for {name}",
+      "serviceNotes": {
+        "usCanadaMexico": "From the US: to Canada and Mexico only",
+        "internationalOnly": "From the US: international only",
+        "intoUs": "Only into the US from another country"
+      }
     }
   },
   "priorityRules": {
@@ -1052,6 +1065,8 @@
     "shipping": {
       "unauthorized": "The shipping provider refused its credentials. Check them in Settings → Shipping.",
       "rejected": "The shipping provider refused the request. Check the address, package and service.",
+      "notOffered": "The carrier doesn't offer the services that are on for this shipment, from this ship-from address or to this address. Check which services are on in Settings → Shipping.",
+      "addressRejected": "The carrier refused the ship-to or ship-from address. Check both addresses.",
       "unavailable": "The shipping provider couldn't be reached. Try again in a minute.",
       "timeout": "The shipping provider took too long to answer. Try again in a minute."
     },

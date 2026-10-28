@@ -15,6 +15,8 @@ export const carriersResponse = z.object({
     z.object({
       carrier_id: z.string(),
       carrier_code: z.string(),
+      account_number: z.string().nullish(),
+      requires_funded_amount: z.boolean().nullish(),
       friendly_name: text(NAME).nullish(),
       nickname: text(NAME).nullish(),
       services: z
@@ -46,7 +48,14 @@ export const rateSchema = z.object({
   trackable: z.boolean(),
 });
 
-const apiError = z.object({ error_code: z.string().nullish() });
+/** Only the structured fields: `message` is free text that can echo the request, so it's never read. */
+const apiError = z.object({
+  error_source: z.string().nullish(),
+  error_type: z.string().nullish(),
+  error_code: z.string().nullish(),
+  field_name: z.string().nullish(),
+});
+export type ApiError = z.output<typeof apiError>;
 
 export const ratesResponse = z.object({
   shipment_id: z.string().nullish(),

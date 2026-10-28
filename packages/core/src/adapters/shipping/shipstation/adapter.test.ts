@@ -195,6 +195,15 @@ describe("ShipStation adapter", () => {
     ]);
   });
 
+  it("keeps each account's nickname, account number ending and who bills it", async () => {
+    const { provider } = setup();
+    const list = await provider.listCarriers();
+    expect(list.map((c) => [c.nickname, c.accountSuffix, c.billedByProvider])).toEqual([
+      ["UPS by ShipStation", "XXXX", false],
+      ["USPS by ShipStation", "XXXX", true],
+    ]);
+  });
+
   describe("rates", () => {
     it("asks for the enabled carriers and services with the shipment inline, in ounces and inches", async () => {
       const { provider, calls } = setup();
@@ -298,11 +307,50 @@ describe("ShipStation adapter", () => {
       expect(calls).toHaveLength(0);
     });
 
-    it("treats a rate response with status error as rejected, keeping only its code", async () => {
+    it("reads a rate response with status error as a refused address, keeping only its code", async () => {
       const { provider } = setup({ "POST /v2/rates": () => json(ratesError) });
       const error = await rejection(provider.getRates(request));
-      expect(error).toMatchObject({ kind: "rejected", permanent: true });
+      expect(error).toMatchObject({ kind: "addressRejected", permanent: true });
       expect(error.detail).toBe("getRates 200 invalid_address");
+      expect(error.message).not.toContain("postal code");
+    });
+
+    it("reads a carrier's business-rule refusal as a service it doesn't offer", async () => {
+      const refusal = {
+        error_source: "carrier",
+        error_type: "business_rules",
+        error_code: "unspecified",
+        message: "A shipping carrier error occurred: The requested service is invalid.",
+        carrier_id: "se-1000001",
+        carrier_code: "ups",
+      };
+      const body = {
+        ...ratesError,
+        rate_response: { ...ratesError.rate_response, errors: [refusal, refusal] },
+      };
+      const { provider } = setup({ "POST /v2/rates": () => json(body) });
+      const error = await rejection(provider.getRates(request));
+      expect(error).toMatchObject({ kind: "notOffered", permanent: true });
+      expect(error.detail).toBe("getRates 200 unspecified");
+      expect(error.message).not.toContain("invalid");
+    });
+
+    it("reads a refusal naming a ship-to or ship-from field as a refused address", async () => {
+      const body = {
+        errors: [
+          {
+            error_source: "shipengine",
+            error_type: "validation",
+            error_code: "invalid_field_value",
+            message: "ship_to.postal_code: '97477' is not valid.",
+            field_name: "ship_to.postal_code",
+          },
+        ],
+      };
+      const { provider } = setup({ "POST /v2/rates": () => json(body, 400) });
+      const error = await rejection(provider.getRates(request));
+      expect(error).toMatchObject({ kind: "addressRejected", status: 400 });
+      expect(error.detail).toBe("getRates 400 invalid_field_value");
     });
   });
 
