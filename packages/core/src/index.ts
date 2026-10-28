@@ -54,6 +54,8 @@ export * from "./picking/link-barcode";
 export * from "./picking/scan";
 export * from "./picking/service";
 export * from "./picking/sort";
+export * from "./qa/queries";
+export * from "./qa/verify";
 export * from "./settings/crypto";
 export { encryptionKey } from "./settings/env";
 export * from "./settings/format";

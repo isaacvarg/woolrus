@@ -45,6 +45,7 @@ const followed = () => [
   orpc.orders.key(),
   orpc.picking.key(),
   orpc.packing.key(),
+  orpc.qa.key(),
   orpc.pickBatches.key(),
   orpc.notes.key(),
   orpc.carriers.orderShipping.key(),
@@ -64,6 +65,9 @@ function invalidateOrders(queryClient: QueryClient, ids: Iterable<string>) {
     });
     void queryClient.invalidateQueries({
       queryKey: orpc.packing.view.key({ input: { orderId: id } }),
+    });
+    void queryClient.invalidateQueries({
+      queryKey: orpc.qa.screen.key({ input: { orderId: id } }),
     });
     // The rate fetch writes rates and the ship-to, and says so with the same event.
     void queryClient.invalidateQueries({
