@@ -1,5 +1,5 @@
 import { type Db, type DbTx, Prisma, type ReturnStatus } from "@woolrus/db";
-import { PII_KEYS } from "@woolrus/logger";
+import { isPiiKey } from "@woolrus/logger";
 import { recordAudit } from "../audit";
 import { operationsActor } from "../permissions";
 import { lockWooOrder } from "../sync/order-lock";
@@ -82,7 +82,7 @@ export async function purgePii(
         for (const { id } of batch) {
           try {
             if (
-              await db.$transaction((tx) => anonymizeOrder(tx, id, now), {
+              await db.$transaction((tx) => anonymizeOrder(tx, id, now, cutoff), {
                 timeout: ORDER_TX_TIMEOUT_MS,
               })
             )
@@ -123,8 +123,6 @@ function reduceAddress(value: Prisma.JsonValue | null): Prisma.InputJsonValue | 
   return out;
 }
 
-const piiKeys: ReadonlySet<string> = new Set(PII_KEYS);
-
 /** `value` with the values of PII keys, at any depth, replaced. Other keys are kept as they were. */
 export function scrubPii(value: Prisma.JsonValue): Prisma.JsonValue {
   if (Array.isArray(value)) return value.map(scrubPii);
@@ -132,7 +130,7 @@ export function scrubPii(value: Prisma.JsonValue): Prisma.JsonValue {
   return Object.fromEntries(
     Object.entries(value).map(([key, inner]) => [
       key,
-      piiKeys.has(key) ? REDACTED : inner === undefined ? inner : scrubPii(inner),
+      isPiiKey(key) ? REDACTED : inner === undefined ? inner : scrubPii(inner),
     ]),
   ) as Prisma.JsonObject;
 }
@@ -157,15 +155,23 @@ function keptPayload(raw: Prisma.JsonValue): Prisma.InputJsonObject {
 }
 
 /**
- * Anonymizes one order in `tx` (the spec's table). False when the order was already done, which
- * happens when two runs overlap; the guarded update makes the second a no-op.
+ * Anonymizes one order in `tx` (the spec's table). False when the order was already done (two runs
+ * overlapping) or is no longer eligible for `cutoff`; the guarded update makes the second a no-op.
  */
-export async function anonymizeOrder(tx: DbTx, orderId: string, now: Date): Promise<boolean> {
+export async function anonymizeOrder(
+  tx: DbTx,
+  orderId: string,
+  now: Date,
+  cutoff: Date,
+): Promise<boolean> {
   // Same lock as the store import, taken before reading: an import in flight finishes first, and
   // the next one sees the redaction and skips the order.
   const known = await tx.order.findUnique({ where: { id: orderId }, select: { wooOrderId: true } });
   if (!known) return false;
   await lockWooOrder(tx, known.wooOrderId);
+  // Eligibility was decided outside the transaction: an import may since have moved the order back
+  // into the workflow, or a return may have opened. Decide again, now that nothing else can change it.
+  if ((await tx.order.count({ where: { id: orderId, ...eligible(cutoff) } })) === 0) return false;
   const order = await tx.order.findUnique({
     where: { id: orderId },
     include: { packages: { select: { id: true, labels: { select: { id: true } } } } },

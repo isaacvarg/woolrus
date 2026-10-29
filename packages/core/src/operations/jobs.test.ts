@@ -109,20 +109,52 @@ describe("listFailedJobs", () => {
 
 describe("listFailedJobs input", () => {
   it("refuses a cursor whose id isn't a uuid", async () => {
-    const cursor = Buffer.from(JSON.stringify(["2026-01-01T00:00:00Z", "x"])).toString("base64url");
-    await expect(listFailedJobs(db, admin, { cursor })).rejects.toMatchObject({
-      kind: "BAD_REQUEST",
-    });
-  });
-
-  it("refuses a cursor whose timestamp Postgres would reject", async () => {
-    const id = crypto.randomUUID();
-    for (const at of ["1", "foo 1", "2026-01-01"]) {
+    const at = "2026-01-01T00:00:00.000000Z";
+    for (const id of ["x", "not-a-uuid", "0000"]) {
       const cursor = Buffer.from(JSON.stringify([at, id])).toString("base64url");
       await expect(listFailedJobs(db, admin, { cursor })).rejects.toMatchObject({
         kind: "BAD_REQUEST",
       });
     }
+  });
+
+  it("refuses a cursor whose timestamp Postgres would reject", async () => {
+    const id = crypto.randomUUID();
+    for (const at of [
+      "1",
+      "foo 1",
+      "2026-01-01",
+      "2026-01-01T00:00:00.000Z",
+      "+275760-09-13T00:00:00.000000Z",
+      "1800-01-01T00:00:00.000000Z",
+      "2026-13-01T00:00:00.000000Z",
+    ]) {
+      const cursor = Buffer.from(JSON.stringify([at, id])).toString("base64url");
+      await expect(listFailedJobs(db, admin, { cursor })).rejects.toMatchObject({
+        kind: "BAD_REQUEST",
+      });
+    }
+  });
+
+  it("pages without skipping jobs that share a millisecond but differ in microseconds", async () => {
+    const ids: string[] = [];
+    for (let i = 0; i < 52; i++) {
+      const id = await failedJob(queues.storageDelete, { keys: [] });
+      await db.$executeRawUnsafe(
+        `UPDATE ${JOBS_SCHEMA}.job SET completed_on = '2026-10-01 00:00:00.123000+00'::timestamptz + ($1 || ' microseconds')::interval WHERE id = $2::uuid`,
+        String(i),
+        id,
+      );
+      ids.push(id);
+    }
+    const first = await listFailedJobs(db, admin, { queue: queues.storageDelete });
+    const second = await listFailedJobs(db, admin, {
+      queue: queues.storageDelete,
+      cursor: first.nextCursor ?? undefined,
+    });
+    const seen = [...first.rows, ...second.rows].map((r) => r.id);
+    expect(new Set(seen).size).toBe(52);
+    expect(seen.sort()).toEqual([...ids].sort());
   });
 
   it("masks email addresses in a stored error message", async () => {

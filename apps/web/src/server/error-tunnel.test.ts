@@ -89,6 +89,52 @@ describe("item types and counting", () => {
   });
 });
 
+describe("hostile item headers", () => {
+  const withItem = (header: string, payload = "{}") =>
+    `${JSON.stringify({ dsn })}\n${header}\n${payload}`;
+
+  it("refuses a negative, fractional or string length without hanging", async () => {
+    const line = '{"type":"event","length":-31}';
+    for (const header of [
+      line,
+      '{"type":"event","length":-1}',
+      '{"type":"event","length":1.5}',
+      '{"type":"event","length":"5"}',
+      '{"type":"event","length":1e999}',
+    ]) {
+      const started = performance.now();
+      expect(await forwardErrorEnvelope(post(withItem(header)), dsn)).toBe(false);
+      expect(performance.now() - started).toBeLessThan(500);
+    }
+    expect(posted).toEqual([]);
+  });
+
+  it("refuses an envelope with more than 20 items", async () => {
+    const items = Array.from({ length: 21 }, () => '{"type":"event"}\n{}').join("\n");
+    expect(await forwardErrorEnvelope(post(`${JSON.stringify({ dsn })}\n${items}`), dsn)).toBe(
+      false,
+    );
+  });
+
+  it("honours a declared length: a fake attachment line inside the payload is just payload", async () => {
+    const payload = 'line one\n{"type":"attachment"}';
+    const body = withItem(`{"type":"event","length":${payload.length}}`, payload);
+    expect(await forwardErrorEnvelope(post(body), dsn)).toBe(true);
+  });
+
+  it("drops an attachment that follows a length-framed item", async () => {
+    const body = `${JSON.stringify({ dsn })}\n{"type":"event","length":3}\nabc\n{"type":"attachment","length":2}\nab`;
+    expect(await forwardErrorEnvelope(post(body), dsn)).toBe(false);
+  });
+
+  it("does not count rejected attachment envelopes against the limit", async () => {
+    const attachment = `${JSON.stringify({ dsn })}\n{"type":"attachment","length":2}\nab`;
+    for (let i = 0; i < TUNNEL_MAX_PER_MINUTE + 5; i++)
+      await forwardErrorEnvelope(post(attachment), dsn);
+    expect(await forwardErrorEnvelope(post(envelope(dsn)), dsn)).toBe(true);
+  });
+});
+
 describe("rate limit", () => {
   it("stops forwarding past the per-minute cap", async () => {
     for (let i = 0; i < TUNNEL_MAX_PER_MINUTE; i++)

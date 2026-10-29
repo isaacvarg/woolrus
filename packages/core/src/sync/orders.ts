@@ -190,18 +190,22 @@ async function importOrder(
 
   // The order's products (an edit's added lines too), so the transaction needs no HTTP.
   const catalog = await fetchOrderCatalog(db, store, units, order, now);
-  return db.$transaction(async (tx) => {
-    await lockWooOrder(tx, order.wooOrderId);
-    const current = await findKnown(tx, order.wooOrderId);
-    if (!current) {
-      await createOrder(tx, order, catalog, now, fetchedAt);
-      return "imported";
-    }
-    if (current.piiRedactedAt || !isNewVersion(order, fetchedAt, current)) return "skipped";
-    await upsertCatalog(tx, catalog, now);
-    await reconcileKnownOrder(tx, current.id, order, now, fetchedAt);
-    return "updated";
-  });
+  return db.$transaction(
+    async (tx) => {
+      await lockWooOrder(tx, order.wooOrderId);
+      const current = await findKnown(tx, order.wooOrderId);
+      if (!current) {
+        await createOrder(tx, order, catalog, now, fetchedAt);
+        return "imported";
+      }
+      if (current.piiRedactedAt || !isNewVersion(order, fetchedAt, current)) return "skipped";
+      await upsertCatalog(tx, catalog, now);
+      await reconcileKnownOrder(tx, current.id, order, now, fetchedAt);
+      return "updated";
+    },
+    // The order lock can wait on a PII purge rewriting this order's audit history (up to 60 s).
+    { timeout: 90_000 },
+  );
 }
 
 /**

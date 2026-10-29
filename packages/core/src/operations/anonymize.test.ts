@@ -375,8 +375,12 @@ describe("purgePii edge cases", () => {
 
   it("anonymizeOrder on an already anonymized order does nothing", async () => {
     const { order } = await finished("COMPLETED", 40);
-    expect(await db.$transaction((tx) => anonymizeOrder(tx, order.id, now))).toBe(true);
-    expect(await db.$transaction((tx) => anonymizeOrder(tx, order.id, new Date()))).toBe(false);
+    expect(await db.$transaction((tx) => anonymizeOrder(tx, order.id, now, daysAgo(30)))).toBe(
+      true,
+    );
+    expect(
+      await db.$transaction((tx) => anonymizeOrder(tx, order.id, new Date(), daysAgo(30))),
+    ).toBe(false);
     expect(await db.auditEvent.count({ where: { action: "pii.anonymize" } })).toBe(1);
     expect((await reload(order.id)).piiRedactedAt).toEqual(now);
   });
@@ -464,5 +468,34 @@ describe("purgePii edge cases", () => {
     });
     expect((await purgePii(db, { now })).webhooks).toBe(1);
     expect((await purgePii(db, { now })).webhooks).toBe(0);
+  });
+
+  it("skips an order that stopped being eligible after the batch was chosen", async () => {
+    const reopened = await finished("COMPLETED", 40);
+    await db.order.update({ where: { id: reopened.order.id }, data: { status: "PICKING" } });
+    expect(
+      await db.$transaction((tx) => anonymizeOrder(tx, reopened.order.id, now, daysAgo(30))),
+    ).toBe(false);
+    expect((await reload(reopened.order.id)).customerName).toBe("Ann Buyer");
+
+    const returning = await finished("COMPLETED", 40);
+    await db.returnRequest.create({
+      data: { orderId: returning.order.id, rmaNumber: "RMA-LATE", reason: "x" },
+    });
+    expect(
+      await db.$transaction((tx) => anonymizeOrder(tx, returning.order.id, now, daysAgo(30))),
+    ).toBe(false);
+    expect((await reload(returning.order.id)).piiRedactedAt).toBeNull();
+  });
+
+  it("keeps only state, postcode and country of an address", async () => {
+    const { order } = await finished("COMPLETED", 40);
+    await purgePii(db, { now });
+    const o = await db.order.findUniqueOrThrow({ where: { id: order.id } });
+    expect(o.shippingAddress).toEqual({ state: "TX", postcode: "78701", country: "US" });
+    const text = JSON.stringify([o.shippingAddress, o.billingAddress, o.shipTo, o.shipToOriginal]);
+    for (const secret of ["1 Main St", "Apt 2", "Austin", "555-0100", "ann@example.test", "Ann"]) {
+      expect(text).not.toContain(secret);
+    }
   });
 });

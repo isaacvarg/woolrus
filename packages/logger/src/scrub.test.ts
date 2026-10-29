@@ -61,4 +61,80 @@ describe("scrubEvent", () => {
       { data: { from: "/orders", to: "/orders/o-1" } },
     ]);
   });
+
+  it("keeps only allowlisted request headers: no referer, next-url or client addresses", () => {
+    const event = scrubEvent({
+      request: {
+        headers: {
+          Referer: "https://woolrus.test/orders?search=Jane",
+          "next-url": "/orders?search=Jane",
+          "x-forwarded-for": "203.0.113.9",
+          "user-agent": "ua",
+          "Content-Type": "application/json",
+        },
+      },
+    });
+    expect(event.request?.headers).toEqual({
+      "user-agent": "ua",
+      "Content-Type": "application/json",
+    });
+  });
+
+  it("strips fragments and userinfo from URLs", () => {
+    const event = scrubEvent({
+      request: { url: "https://bob:secret@woolrus.test/orders#frag?x=ann@x.com" },
+      transaction: "/orders#frag?x=ann@x.com",
+      breadcrumbs: [
+        { data: { from: "/a#f?q=1", to: "//u:p@h/b?q=1", url: "https://u:p@h/c?q=1" } },
+      ],
+    });
+    expect(event.request?.url).toBe("https://woolrus.test/orders");
+    expect(event.transaction).toBe("/orders");
+    expect(event.breadcrumbs?.[0]?.data).toEqual({ from: "/a", to: "//h/b", url: "https://h/c" });
+  });
+
+  it("masks emails and strips URL queries in any string of extra, tags and breadcrumb data", () => {
+    const event = scrubEvent({
+      extra: { note: "bounced for ann@example.com", link: "/orders?search=Jane" },
+      tags: { page: "/orders?search=Jane" },
+      breadcrumbs: [{ data: { arguments: ["sent to ann@example.com"] } }],
+    });
+    expect(event.extra).toEqual({ note: "bounced for [redacted]", link: "/orders" });
+    expect(event.tags).toEqual({ page: "/orders" });
+    expect(event.breadcrumbs?.[0]?.data).toEqual({ arguments: ["sent to [redacted]"] });
+  });
+
+  it("matches PII keys whatever their case or separators, and WooCommerce's spellings", () => {
+    const event = scrubEvent({
+      extra: {
+        Customer_Email: "a@b.c",
+        "customer-note": "n",
+        Company: "Acme",
+        city: "Austin",
+        ok: 1,
+      },
+    });
+    expect(event.extra).toEqual({
+      Customer_Email: "[redacted]",
+      "customer-note": "[redacted]",
+      Company: "[redacted]",
+      city: "[redacted]",
+      ok: 1,
+    });
+  });
+
+  it("fails closed past the depth limit, and survives a cycle", () => {
+    let deep: Record<string, unknown> = { customerName: "Ann" };
+    for (let i = 0; i < 12; i++) deep = { inner: deep };
+    expect(JSON.stringify(scrubEvent({ extra: deep }).extra)).not.toContain("Ann");
+    const cyclic: Record<string, unknown> = { a: 1 };
+    cyclic.self = cyclic;
+    expect(() => scrubEvent({ extra: cyclic })).not.toThrow();
+  });
+
+  it("masks emails in linear time on a long address-like token", () => {
+    const started = performance.now();
+    scrubEvent({ message: "a".repeat(100_000) });
+    expect(performance.now() - started).toBeLessThan(250);
+  });
 });

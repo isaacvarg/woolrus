@@ -45,25 +45,34 @@ async function readCapped(request: Request, max: number): Promise<Buffer | null>
   return Buffer.concat(chunks);
 }
 
-/** True when every item in the envelope is of an allowed type. Walks item headers by `length`. */
+/** More items than a browser ever sends in one envelope. */
+const MAX_ITEMS = 20;
+
+/**
+ * True when every item in the envelope is of an allowed type. Walks item headers, framing the
+ * payload by `length` when the header has one (a non-negative integer, or the envelope is refused)
+ * and by the next newline when it doesn't. The position must advance each step, so a hostile
+ * header can't make this loop.
+ */
 function onlyAllowedItems(body: Buffer): boolean {
   let at = body.indexOf(10) + 1; // past the envelope header line
   if (at === 0) return false;
-  while (at < body.length) {
+  for (let items = 0; at < body.length; items++) {
+    if (items >= MAX_ITEMS) return false;
     const headerEnd = body.indexOf(10, at);
     const headerLine = body.subarray(at, headerEnd === -1 ? body.length : headerEnd);
     const header = JSON.parse(headerLine.toString("utf8")) as { type?: unknown; length?: unknown };
     if (typeof header.type !== "string" || !ALLOWED_ITEMS.has(header.type)) return false;
+    if (header.length !== undefined && !Number.isSafeInteger(header.length)) return false;
+    const length = header.length as number | undefined;
+    if (length !== undefined && length < 0) return false;
     if (headerEnd === -1) return true;
     const start = headerEnd + 1;
     const lineEnd = body.indexOf(10, start);
-    const end =
-      typeof header.length === "number"
-        ? start + header.length
-        : lineEnd === -1
-          ? body.length
-          : lineEnd;
-    at = end + 1;
+    const end = length !== undefined ? start + length : lineEnd === -1 ? body.length : lineEnd;
+    const next = end + 1;
+    if (next <= at) return false;
+    at = next;
   }
   return true;
 }

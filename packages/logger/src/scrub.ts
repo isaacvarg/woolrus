@@ -1,16 +1,33 @@
-import { PII_KEYS } from "./pii";
+import { isPiiKey, maskEmails } from "./pii";
 
-const PII = new Set<string>(PII_KEYS);
 const MAX_DEPTH = 8;
+const REDACTED = "[redacted]";
 
-/** Copy of `value` with the value of every PII key, at any depth, replaced by `[redacted]`. */
+/** A URL without userinfo, query string and fragment: staff search orders by customer name or email. */
+function stripUrl(url: string): string {
+  const bare = url.split(/[?#]/, 1)[0] ?? url;
+  return bare.replace(/^((?:[a-z][a-z\d+.-]*:)?\/\/)[^/@]*@/i, "$1");
+}
+
+const looksLikeUrl = (text: string) => /^(?:[a-z][a-z\d+.-]*:)?\/\/|^\//i.test(text);
+
+/** Masks emails in a string, and strips the query from it if it is a URL. */
+const scrubText = (text: string) => maskEmails(looksLikeUrl(text) ? stripUrl(text) : text);
+
+/**
+ * Copy of `value` where the value of every PII key, at any depth, is replaced by `[redacted]` and
+ * every other string is passed through `scrubText`. Fails closed: anything nested deeper than
+ * `MAX_DEPTH` is replaced too, and a cycle ends at that depth.
+ */
 function redactDeep(value: unknown, depth = 0): unknown {
-  if (depth > MAX_DEPTH || value === null || typeof value !== "object") return value;
+  if (typeof value === "string") return scrubText(value);
+  if (value === null || typeof value !== "object") return value;
+  if (depth >= MAX_DEPTH) return REDACTED;
   if (Array.isArray(value)) return value.map((item) => redactDeep(item, depth + 1));
   return Object.fromEntries(
     Object.entries(value).map(([key, item]) => [
       key,
-      PII.has(key) ? "[redacted]" : redactDeep(item, depth + 1),
+      isPiiKey(key) ? REDACTED : redactDeep(item, depth + 1),
     ]),
   );
 }
@@ -28,32 +45,19 @@ export type ScrubbableEvent = {
   transaction?: string;
   extra?: Record<string, unknown>;
   contexts?: object;
+  tags?: Record<string, unknown>;
   breadcrumbs?: { message?: string; data?: Record<string, unknown> }[];
   exception?: { values?: { value?: string }[] };
 };
 
-const EMAIL = /[^\s@<>"']+@[\w-]+(?:\.[\w-]+)+/g;
-const maskEmails = (text: string) => text.replace(EMAIL, "[redacted]");
+/** The only request headers that leave the process: the rest can carry the page URL or client addresses. */
+const KEPT_HEADERS = new Set(["user-agent", "content-type", "accept-language", "x-request-id"]);
 
 /**
- * A URL without its query string and fragment: staff search orders by customer name or email, and
- * the search term travels in the query. Relative URLs stay relative.
- */
-const stripQuery = (url: string) => url.split(/[?#]/, 1)[0] ?? url;
-const URL_KEYS = ["url", "from", "to"];
-
-function scrubCrumbData(data: Record<string, unknown>): Record<string, unknown> {
-  const redacted = redactDeep(data) as Record<string, unknown>;
-  for (const key of URL_KEYS) {
-    const value = redacted[key];
-    if (typeof value === "string") redacted[key] = stripQuery(value);
-  }
-  return redacted;
-}
-
-/**
- * The shared `beforeSend` for error reports (SPEC-operations "Error tracking"): drops request
- * bodies, cookies, query strings and the authorization header, strips queries from URLs, and redacts PII keys in `extra` and `contexts`.
+ * The shared `beforeSend` for error reports (SPEC-operations "Error tracking"). Drops request
+ * bodies, cookies, query strings and every request header but a short allowlist; strips queries and
+ * userinfo from URLs; masks emails in every string; and redacts PII keys in `extra`, `contexts`,
+ * `tags` and breadcrumb data.
  */
 export function scrubEvent<T extends ScrubbableEvent>(event: T): T {
   const scrubbed: T = { ...event };
@@ -67,25 +71,26 @@ export function scrubEvent<T extends ScrubbableEvent>(event: T): T {
       ...request
     } = event.request;
     const kept = Object.fromEntries(
-      Object.entries(headers ?? {}).filter(
-        ([name]) => !["authorization", "cookie", "set-cookie"].includes(name.toLowerCase()),
-      ),
+      Object.entries(headers ?? {}).filter(([name]) => KEPT_HEADERS.has(name.toLowerCase())),
     );
     scrubbed.request = {
       ...request,
-      ...(url === undefined ? {} : { url: stripQuery(url) }),
+      ...(url === undefined ? {} : { url: stripUrl(url) }),
       ...(headers ? { headers: kept } : {}),
     } as T["request"];
   }
-  if (event.message !== undefined) scrubbed.message = maskEmails(event.message);
-  if (event.transaction !== undefined) scrubbed.transaction = stripQuery(event.transaction);
+  if (event.message !== undefined) scrubbed.message = scrubText(event.message);
+  if (event.transaction !== undefined) scrubbed.transaction = stripUrl(event.transaction);
   if (event.extra) scrubbed.extra = redactDeep(event.extra) as T["extra"];
   if (event.contexts) scrubbed.contexts = redactDeep(event.contexts) as T["contexts"];
+  if (event.tags) scrubbed.tags = redactDeep(event.tags) as T["tags"];
   if (event.breadcrumbs) {
     scrubbed.breadcrumbs = event.breadcrumbs.map((crumb) => ({
       ...crumb,
-      ...(crumb.message === undefined ? {} : { message: maskEmails(crumb.message) }),
-      ...(crumb.data === undefined ? {} : { data: scrubCrumbData(crumb.data) }),
+      ...(crumb.message === undefined ? {} : { message: scrubText(crumb.message) }),
+      ...(crumb.data === undefined
+        ? {}
+        : { data: redactDeep(crumb.data) as Record<string, unknown> }),
     }));
   }
   if (event.exception?.values) {

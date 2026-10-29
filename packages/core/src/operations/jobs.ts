@@ -6,6 +6,7 @@ import type {
 } from "@woolrus/contracts";
 import { FAILED_JOBS_PAGE } from "@woolrus/contracts";
 import type { Db } from "@woolrus/db";
+import { maskEmails } from "@woolrus/logger";
 import { recordAudit } from "../audit";
 import { bossOn } from "../enqueue";
 import { AppError, notFound } from "../errors";
@@ -21,6 +22,8 @@ type JobRow = {
   created_on: Date;
   completed_on: Date | null;
   retry_count: number;
+  /** The sort timestamp at microsecond precision, as the cursor carries it. */
+  cursor_at: string;
   output: unknown;
   data: unknown;
 };
@@ -29,10 +32,10 @@ type JobRow = {
 type Cursor = { at: string; id: string };
 
 const encodeCursor = (row: JobRow): string =>
-  Buffer.from(
-    JSON.stringify([(row.completed_on ?? row.created_on).toISOString(), row.id]),
-  ).toString("base64url");
+  Buffer.from(JSON.stringify([row.cursor_at, row.id])).toString("base64url");
 
+/** What `cursor_at` is selected as: UTC, microseconds. */
+const CURSOR_AT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function decodeCursor(cursor: string): Cursor {
@@ -40,9 +43,9 @@ function decodeCursor(cursor: string): Cursor {
     const [at, id] = JSON.parse(Buffer.from(cursor, "base64url").toString());
     // Both are cast in SQL, so only the exact forms the server emits get through: anything else
     // would be a database error, not a 400.
-    if (typeof at === "string" && typeof id === "string" && UUID.test(id)) {
-      const date = new Date(at);
-      if (!Number.isNaN(date.getTime()) && date.toISOString() === at) return { at, id };
+    if (typeof at === "string" && typeof id === "string" && UUID.test(id) && CURSOR_AT.test(at)) {
+      const year = Number(at.slice(0, 4));
+      if (year >= 1970 && year <= 2100 && !Number.isNaN(Date.parse(at))) return { at, id };
     }
   } catch {}
   throw new AppError("BAD_REQUEST", "errors.validation", { cursor: "errors.field.invalid" });
@@ -66,12 +69,10 @@ export function summarizePayload(data: unknown): FailedJobSummary {
   };
 }
 
-const EMAIL = /[^\s@<>"']+@[\w-]+(?:\.[\w-]+)+/g;
-
 /** The error message a failed handler stored, never its stack, with email addresses masked. */
 function errorMessage(output: unknown): string | null {
   const message = isRecord(output) ? text(output.message) : text(output);
-  return message === null ? null : message.replace(EMAIL, "[redacted]");
+  return message === null ? null : maskEmails(message);
 }
 
 export async function listFailedJobs(
@@ -95,7 +96,9 @@ export async function listFailedJobs(
   }
   const [rows, [totals]] = await Promise.all([
     db.$queryRawUnsafe<JobRow[]>(
-      `SELECT id, name, created_on, completed_on, retry_count, output, data
+      `SELECT id, name, created_on, completed_on, retry_count, output, data,
+              to_char(coalesce(completed_on, created_on) AT TIME ZONE 'UTC',
+                      'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS cursor_at
          FROM ${JOBS_SCHEMA}.job
         WHERE ${where.join(" AND ")}
         ORDER BY coalesce(completed_on, created_on) DESC, id DESC

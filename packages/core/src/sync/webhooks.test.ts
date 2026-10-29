@@ -193,8 +193,39 @@ describe("processWooWebhook", () => {
     return db.inboundWebhook.findFirstOrThrow({ where: { deliveryId: "second" } });
   }
 
-  it("a redacted delivery retried after the purge is marked done and imports nothing", async () => {
-    // An anonymized order exists, so a payload without an id must not match it by accident.
+  it("a redacted delivery with no anonymized order in the database is marked done and calls the store zero times", async () => {
+    const row = await db.inboundWebhook.create({
+      data: {
+        source: "woocommerce",
+        deliveryId: "redacted-alone",
+        topic: "order.updated",
+        payload: { redacted: true },
+      },
+    });
+    const store = new FakeStoreAdapter();
+    await processWooWebhook(db, store, row.id);
+    expect(
+      (await db.inboundWebhook.findUniqueOrThrow({ where: { id: row.id } })).processedAt,
+    ).not.toBeNull();
+    expect(store.calls).toEqual([]);
+  });
+
+  it("a payload with neither an order id nor the redaction marker fails instead of completing", async () => {
+    const row = await db.inboundWebhook.create({
+      data: {
+        source: "woocommerce",
+        deliveryId: "no-id",
+        topic: "order.updated",
+        payload: { id: "7" },
+      },
+    });
+    await expect(processWooWebhook(db, new FakeStoreAdapter(), row.id)).rejects.toThrow(
+      /no order id/,
+    );
+  });
+
+  it("a redacted delivery retried after the purge, with an anonymized order present, is marked done too", async () => {
+    // The anonymized order must not be matched through an undefined id.
     const { order } = await createOrder(db, {});
     await db.order.update({ where: { id: order.id }, data: { piiRedactedAt: new Date() } });
     const row = await db.inboundWebhook.create({

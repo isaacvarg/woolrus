@@ -1,9 +1,9 @@
 import type { Writable } from "node:stream";
 import pino, { type Logger } from "pino";
-import { PII_KEYS } from "./pii";
+import { isPiiKey, maskEmails, PII_KEYS } from "./pii";
 
 export type { Logger };
-export { PII_KEYS };
+export { isPiiKey, maskEmails, PII_KEYS };
 
 const isDev = process.env.NODE_ENV !== "production";
 
