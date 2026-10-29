@@ -45,7 +45,11 @@ function decodeCursor(cursor: string): Cursor {
     // would be a database error, not a 400.
     if (typeof at === "string" && typeof id === "string" && UUID.test(id) && CURSOR_AT.test(at)) {
       const year = Number(at.slice(0, 4));
-      if (year >= 1970 && year <= 2100 && !Number.isNaN(Date.parse(at))) return { at, id };
+      const parsed = new Date(at);
+      // Round-trip rejects impossible dates (Feb 31) that `Date` would roll over.
+      const exact =
+        !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 19) === at.slice(0, 19);
+      if (year >= 1970 && year <= 2100 && exact) return { at, id };
     }
   } catch {}
   throw new AppError("BAD_REQUEST", "errors.validation", { cursor: "errors.field.invalid" });

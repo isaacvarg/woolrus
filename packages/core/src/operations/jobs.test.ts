@@ -128,6 +128,8 @@ describe("listFailedJobs input", () => {
       "+275760-09-13T00:00:00.000000Z",
       "1800-01-01T00:00:00.000000Z",
       "2026-13-01T00:00:00.000000Z",
+      "2026-02-31T00:00:00.000000Z",
+      "2026-04-31T10:00:00.000000Z",
     ]) {
       const cursor = Buffer.from(JSON.stringify([at, id])).toString("base64url");
       await expect(listFailedJobs(db, admin, { cursor })).rejects.toMatchObject({

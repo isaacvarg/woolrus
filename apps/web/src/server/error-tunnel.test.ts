@@ -122,6 +122,17 @@ describe("hostile item headers", () => {
     expect(await forwardErrorEnvelope(post(body), dsn)).toBe(true);
   });
 
+  it("refuses a length that overruns the body or isn't followed by a newline", async () => {
+    for (const body of [
+      withItem('{"type":"event","length":500}', "{}"),
+      withItem('{"type":"event","length":2}', '{}{"type":"attachment"}'),
+      withItem('{"type":"event","length":1}', "{}"),
+    ]) {
+      expect(await forwardErrorEnvelope(post(body), dsn)).toBe(false);
+    }
+    expect(posted).toEqual([]);
+  });
+
   it("drops an attachment that follows a length-framed item", async () => {
     const body = `${JSON.stringify({ dsn })}\n{"type":"event","length":3}\nabc\n{"type":"attachment","length":2}\nab`;
     expect(await forwardErrorEnvelope(post(body), dsn)).toBe(false);

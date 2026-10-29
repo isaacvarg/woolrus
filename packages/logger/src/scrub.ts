@@ -6,7 +6,7 @@ const REDACTED = "[redacted]";
 /** A URL without userinfo, query string and fragment: staff search orders by customer name or email. */
 function stripUrl(url: string): string {
   const bare = url.split(/[?#]/, 1)[0] ?? url;
-  return bare.replace(/^((?:[a-z][a-z\d+.-]*:)?\/\/)[^/@]*@/i, "$1");
+  return bare.replace(/^((?:[a-z][a-z\d+.-]*:)?\/\/)[^/\\]*@/i, "$1");
 }
 
 const looksLikeUrl = (text: string) => /^(?:[a-z][a-z\d+.-]*:)?\/\/|^\//i.test(text);

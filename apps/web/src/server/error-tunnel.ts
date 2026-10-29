@@ -70,6 +70,8 @@ function onlyAllowedItems(body: Buffer): boolean {
     const start = headerEnd + 1;
     const lineEnd = body.indexOf(10, start);
     const end = length !== undefined ? start + length : lineEnd === -1 ? body.length : lineEnd;
+    // A declared payload must fit the body and end at a newline (or the end of the body).
+    if (end > body.length || (end < body.length && body[end] !== 10)) return false;
     const next = end + 1;
     if (next <= at) return false;
     at = next;

@@ -93,6 +93,15 @@ describe("scrubEvent", () => {
     expect(event.breadcrumbs?.[0]?.data).toEqual({ from: "/a", to: "//h/b", url: "https://h/c" });
   });
 
+  it("strips userinfo whose password contains an @", () => {
+    const event = scrubEvent({
+      request: { url: "https://bob:p@ss@woolrus.test/orders" },
+      breadcrumbs: [{ data: { url: "//u:p@a@h/b" } }],
+    });
+    expect(event.request?.url).toBe("https://woolrus.test/orders");
+    expect(event.breadcrumbs?.[0]?.data).toEqual({ url: "//h/b" });
+  });
+
   it("masks emails and strips URL queries in any string of extra, tags and breadcrumb data", () => {
     const event = scrubEvent({
       extra: { note: "bounced for ann@example.com", link: "/orders?search=Jane" },
