@@ -8,6 +8,12 @@
     "dismiss": "Dismiss",
     "notifications": "Notifications"
   },
+  "errorScreen": {
+    "title": "Something went wrong",
+    "body": "Woolrus hit an unexpected problem. Try again; if it keeps happening, tell whoever runs the server.",
+    "retry": "Try again",
+    "reference": "Reference:"
+  },
   "nav": {
     "boxes": "Boxes",
     "settings": "Settings",
