@@ -222,6 +222,28 @@ describe("processWooWebhook", () => {
     await expect(processWooWebhook(db, new FakeStoreAdapter(), row.id)).rejects.toThrow(
       /no order id/,
     );
+    expect((await db.inboundWebhook.findUniqueOrThrow({ where: { id: row.id } })).error).toBe(
+      "errors.sync.importFailed",
+    );
+  });
+
+  it("a redacted delivery keeps its earlier processedAt and clears its error", async () => {
+    const earlier = new Date("2026-01-01T00:00:00Z");
+    const row = await db.inboundWebhook.create({
+      data: {
+        source: "woocommerce",
+        deliveryId: "redacted-twice",
+        topic: "order.updated",
+        payload: { redacted: true },
+        processedAt: earlier,
+        error: "old",
+      },
+    });
+    await processWooWebhook(db, new FakeStoreAdapter(), row.id, { now: new Date("2026-06-01") });
+    expect(await db.inboundWebhook.findUniqueOrThrow({ where: { id: row.id } })).toMatchObject({
+      processedAt: earlier,
+      error: null,
+    });
   });
 
   it("a redacted delivery retried after the purge, with an anonymized order present, is marked done too", async () => {
