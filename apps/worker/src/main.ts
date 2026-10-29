@@ -10,6 +10,7 @@ import {
   type JobPayloads,
   pollIfDue,
   processWooWebhook,
+  purgePii,
   queues,
   recomputePriorities,
   runEmailJob,
@@ -177,6 +178,18 @@ await boss.work(
   { ...META, localConcurrency: 4 },
   runJob<JobPayloads[typeof queues.ratesFetch]>(queues.ratesFetch, async (job) => ({
     ...(await runRatesFetchJob(db, job.data, { finalAttempt: isFinalAttempt(job) })),
+  })),
+);
+
+// PII purge (SPEC-operations "PII anonymization"): daily at 03:00 Chicago time. A failure leaves the
+// orders it didn't reach for the next run.
+await boss.schedule(queues.piiPurge, "0 3 * * *", {}, { tz: "America/Chicago" });
+
+await boss.work(
+  queues.piiPurge,
+  META,
+  runJob<JobPayloads[typeof queues.piiPurge]>(queues.piiPurge, async () => ({
+    ...(await purgePii(db)),
   })),
 );
 

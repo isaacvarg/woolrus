@@ -351,6 +351,9 @@ importers:
       '@woolrus/i18n':
         specifier: workspace:*
         version: link:../i18n
+      '@woolrus/logger':
+        specifier: workspace:*
+        version: link:../logger
       aws4fetch:
         specifier: 1.0.20
         version: 1.0.20

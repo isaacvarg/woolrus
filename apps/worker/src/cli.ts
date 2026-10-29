@@ -1,13 +1,18 @@
-import { configuredStore, installJobs, pollIfDue, syncProducts } from "@woolrus/core";
+import { configuredStore, installJobs, pollIfDue, purgePii, syncProducts } from "@woolrus/core";
 import { db } from "@woolrus/db";
 
 // `pnpm sync:pull` / `pnpm sync:products` (FR-SYNC-08): the same runs as the worker and the Sync
 // page, from a shell. They take the same locks, so they report "already running" rather than
 // overlapping a worker run.
 
-const usage = "usage: cli pull|products|install-jobs";
-const [command] = process.argv.slice(2);
-if (command !== "pull" && command !== "products" && command !== "install-jobs") {
+const usage = "usage: cli pull|products|install-jobs|purge-pii [--dry-run]";
+const [command, ...flags] = process.argv.slice(2);
+if (
+  command !== "pull" &&
+  command !== "products" &&
+  command !== "install-jobs" &&
+  command !== "purge-pii"
+) {
   console.error(usage);
   process.exit(2);
 }
@@ -18,6 +23,17 @@ if (command === "install-jobs") {
   if (!url) throw new Error("DATABASE_URL is not set");
   await installJobs(url);
   console.log("jobs: installed");
+  await db.$disconnect();
+  process.exit(0);
+}
+
+// `pnpm pii:purge [--dry-run]`: the daily PII purge from a shell; a dry run only prints the counts.
+if (command === "purge-pii") {
+  const dryRun = flags.includes("--dry-run");
+  const { orders, webhooks, idempotency } = await purgePii(db, { dryRun });
+  console.log(
+    `pii: ${dryRun ? "would anonymize" : "anonymized"} ${orders} orders, ${dryRun ? "would redact" : "redacted"} ${webhooks} webhook payloads, ${dryRun ? "would delete" : "deleted"} ${idempotency} idempotency records`,
+  );
   await db.$disconnect();
   process.exit(0);
 }
