@@ -18,7 +18,6 @@ import {
   cancel,
   completePacking,
   completePicking,
-  completeQa,
   forceStatus,
   hold,
   resume,
@@ -113,8 +112,6 @@ export const orderMutations = {
     detailOf(db, completePicking(db, actor, { orderId: id, expectedVersion })),
   completePacking: (db: Db, actor: Actor, { id, expectedVersion }: OrderVersionInput) =>
     detailOf(db, completePacking(db, actor, { orderId: id, expectedVersion })),
-  completeQa: (db: Db, actor: Actor, { id, expectedVersion }: OrderVersionInput) =>
-    detailOf(db, completeQa(db, actor, { orderId: id, expectedVersion })),
   hold: (db: Db, actor: Actor, { id, ...input }: OrderReasonInput) =>
     detailOf(db, hold(db, actor, { orderId: id, ...input })),
   resume: (db: Db, actor: Actor, { id, expectedVersion }: OrderVersionInput) =>

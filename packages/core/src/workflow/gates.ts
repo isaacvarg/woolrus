@@ -42,7 +42,13 @@ export type GatePackage = {
   liveLabels: number;
 };
 
-export type GateSnapshot = { status: WorkflowStatus; lines: GateLine[]; packages: GatePackage[] };
+export type GateSnapshot = {
+  status: WorkflowStatus;
+  lines: GateLine[];
+  packages: GatePackage[];
+  /** Open Critical issues on the order (FR-QA-05). */
+  openCriticalIssues: number;
+};
 
 // Clamped: a store-sync quantity cut below the voided total mustn't read as a negative.
 const activeQuantity = (line: GateLine) => Math.max(line.quantity - line.voidedQuantity, 0);
@@ -124,7 +130,11 @@ function verified(snap: GateSnapshot): UnmetCondition[] {
       ...(p.activeLabels !== 1 ? [unmet("packageNoLabel", { package: p.number })] : []),
     ];
   });
-  return [...allVoidedCondition(snap), ...conditions];
+  const critical =
+    snap.openCriticalIssues > 0
+      ? [unmet("criticalIssueOpen", { count: snap.openCriticalIssues })]
+      : [];
+  return [...allVoidedCondition(snap), ...conditions, ...critical];
 }
 
 function shippable(snap: GateSnapshot): UnmetCondition[] {
@@ -197,9 +207,13 @@ export async function loadGateSnapshot(tx: DbTx, orderId: string): Promise<GateS
     },
   });
   if (!order) throw notFound();
+  const openCriticalIssues = await tx.qualityIssue.count({
+    where: { orderId, status: "OPEN", severity: "CRITICAL" },
+  });
 
   return {
     status: order.status,
+    openCriticalIssues,
     lines: order.items.map((it) => ({
       id: it.id,
       name: it.name,

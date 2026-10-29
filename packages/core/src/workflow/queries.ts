@@ -100,6 +100,7 @@ type QueueSqlRow = {
   openIssueCount: number;
   topOpenSeverity: QualityIssueSeverity | null;
   unresolvedVoidCount: number;
+  labelState: "none" | "purchasing" | "failed" | "unknown";
 };
 
 /**
@@ -138,7 +139,9 @@ export async function listQueue(
       ), 0)::int AS "itemCount",
       COALESCE(qi.open_count, 0)::int AS "openIssueCount",
       qi.top_severity AS "topOpenSeverity",
-      COALESCE(uv.unresolved_count, 0)::int AS "unresolvedVoidCount"
+      COALESCE(uv.unresolved_count, 0)::int AS "unresolvedVoidCount",
+      CASE WHEN lb.has_unknown THEN 'unknown' WHEN lb.has_purchasing THEN 'purchasing'
+        WHEN lb.has_failed THEN 'failed' ELSE 'none' END AS "labelState"
     FROM orders o
     LEFT JOIN users u ON u.id = o.claimed_by_id AND o.claimed_at > ${claimCutoff}
     -- One grouped subquery each, over this stage's orders only.
@@ -158,6 +161,20 @@ export async function listQueue(
         AND v.order_id IN (SELECT id FROM orders WHERE status = ${stage}::workflow_status)
       GROUP BY v.order_id
     ) uv ON uv.order_id = o.id
+    LEFT JOIN (
+      SELECT p.order_id,
+        BOOL_OR(l.status::text = 'PURCHASING' AND l.error = 'errors.qa.purchaseUnknown') AS has_unknown,
+        BOOL_OR(l.status::text = 'PURCHASING'
+          AND l.error IS DISTINCT FROM 'errors.qa.purchaseUnknown') AS has_purchasing,
+        -- Failed only while no later attempt for the package is live.
+        BOOL_OR(l.status::text = 'PURCHASE_FAILED' AND NOT EXISTS (
+          SELECT 1 FROM shipping_labels l2 WHERE l2.package_id = p.id
+            AND l2.status::text IN ('PURCHASING', 'ACTIVE', 'VOID_REQUESTED', 'VOID_REJECTED')
+        )) AS has_failed
+      FROM shipping_labels l JOIN packages p ON p.id = l.package_id
+      WHERE p.order_id IN (SELECT id FROM orders WHERE status = ${stage}::workflow_status)
+      GROUP BY p.order_id
+    ) lb ON lb.order_id = o.id
     WHERE o.status = ${stage}::workflow_status
       ${searchFilter(search)}
       ${afterCursor(after)}
@@ -198,6 +215,7 @@ export async function listQueue(
       openIssueCount: r.openIssueCount,
       topOpenSeverity: r.topOpenSeverity,
       unresolvedVoidCount: r.unresolvedVoidCount,
+      labelState: r.labelState,
     })),
     nextCursor: rows.length > pageSize && last ? encodeCursor(last) : null,
   };

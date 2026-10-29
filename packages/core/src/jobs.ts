@@ -27,6 +27,10 @@ export const queues = {
   piiPurge: "ops.piiPurge",
   /** Every minute: record that the worker is consuming jobs (SPEC-operations "Worker heartbeat"). */
   opsHeartbeat: "ops.heartbeat",
+  /** Buy an order's labels in the background after Complete QA (SPEC-qa "Complete QA"). */
+  labelsPurchase: "labels.purchase",
+  /** Settle labels left PURCHASING by a lost provider response (SPEC-qa). */
+  labelsReconcile: "labels.reconcile",
 } as const;
 export type QueueName = (typeof queues)[keyof typeof queues];
 
@@ -50,6 +54,9 @@ export type JobPayloads = {
   [queues.ratesFetch]: { orderId: string; generation: number };
   [queues.piiPurge]: Record<string, never>;
   [queues.opsHeartbeat]: Record<string, never>;
+  /** `requestedById` pressed Complete QA; the job moves the order to Ready as them. */
+  [queues.labelsPurchase]: { orderId: string; requestedById: string };
+  [queues.labelsReconcile]: Record<string, never>;
 };
 
 /** Finished jobs stay 30 days, so a failure over a long weekend is still there on Monday. */
@@ -82,6 +89,8 @@ export const queueOptions: Record<QueueName, QueueSettings> = {
   [queues.storageDelete]: { ...keep, retryLimit: 5, retryDelay: 60, retryBackoff: true },
   // Only a fetch where every provider failed transiently throws; a partial one is QA's to refresh.
   [queues.ratesFetch]: { ...keep, retryLimit: 2, retryDelay: 20, retryBackoff: true },
+  // Provider outages while buying: 5 attempts over a few minutes (SPEC-qa "The labels.purchase job").
+  [queues.labelsPurchase]: { ...keep, retryLimit: 4, retryDelay: 15, retryBackoff: true },
 };
 
 /** pg-boss keeps its tables in their own schema, separate from Prisma's. */

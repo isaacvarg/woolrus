@@ -845,7 +845,7 @@ describe("refreshRates", () => {
     });
   });
 
-  it("refused while a package has a live label", async () => {
+  it("refused when every package has a live label", async () => {
     const qa = await createActor(db, ["QA"]);
     const { payload } = await inQa({
       lines: [{ quantity: 1, pickStatus: "PICKED" }],
@@ -853,9 +853,84 @@ describe("refreshRates", () => {
     });
     await expect(refreshRates(db, qa, { orderId: payload.orderId })).rejects.toMatchObject({
       kind: "CONFLICT",
-      messageKey: "errors.carriers.liveLabel",
+      messageKey: "errors.qa.allPackagesLabelled",
     });
     expect(await jobs(payload.orderId)).toEqual([]);
+  });
+
+  it("refused while a label is being bought", async () => {
+    const qa = await createActor(db, ["QA"]);
+    const { payload } = await inQa(
+      {
+        lines: [{ quantity: 2, pickStatus: "PICKED" }],
+        packages: [
+          { items: [{ line: 0, quantity: 1 }], label: "PURCHASING" },
+          { items: [{ line: 0, quantity: 1 }] },
+        ],
+      },
+      2,
+    );
+    await expect(refreshRates(db, qa, { orderId: payload.orderId })).rejects.toMatchObject({
+      kind: "CONFLICT",
+      messageKey: "errors.qa.purchaseInProgress",
+    });
+    expect(await jobs(payload.orderId)).toEqual([]);
+  });
+
+  it("re-rates only the packages without a live label", async () => {
+    const qa = await createActor(db, ["QA"]);
+    const { payload, packages } = await inQa({
+      lines: [{ quantity: 2, pickStatus: "PICKED" }],
+      packages: [
+        { items: [{ line: 0, quantity: 1 }], label: "ACTIVE", rates: [{ selected: true }] },
+        {
+          items: [{ line: 0, quantity: 1 }],
+          label: "PURCHASE_FAILED",
+          rates: [{ selected: true }],
+        },
+      ],
+    });
+    const [bought, failed] = packages;
+
+    const shipping = await refreshRates(db, qa, { orderId: payload.orderId });
+
+    expect(shipping.packages.map((p) => p.ratesStatus)).toEqual(["NONE", "FETCHING"]);
+    expect(await ratesOf(bought?.id as string)).toHaveLength(1);
+    expect(await jobs(payload.orderId)).toHaveLength(1);
+    expect((await pkgRow(failed?.id as string)).ratesStatus).toBe("FETCHING");
+  });
+
+  it("the job leaves a package that got a live label meanwhile alone", async () => {
+    await catalog("SHIPSTATION", ["demo_ground"]);
+    const { shipStation } = fakes();
+    const { payload, packages } = await inQa(
+      {
+        lines: [{ quantity: 2, pickStatus: "PICKED" }],
+        packages: [
+          { items: [{ line: 0, quantity: 1 }], rates: [{ selected: true }] },
+          { items: [{ line: 0, quantity: 1 }] },
+        ],
+      },
+      2,
+    );
+    const [labelled, open] = packages;
+    await db.shippingLabel.create({
+      data: {
+        packageId: labelled?.id as string,
+        status: "ACTIVE",
+        provider: "SHIPSTATION",
+        idempotencyKey: `late-${randomBytes(4).toString("hex")}`,
+        carrierCode: "usps",
+        serviceCode: "usps_ground_advantage",
+        currency: "USD",
+      },
+    });
+    const before = await ratesOf(labelled?.id as string);
+
+    await fetchRates(db, [shipStation], payload);
+
+    expect(await ratesOf(labelled?.id as string)).toEqual(before);
+    expect((await ratesOf(open?.id as string)).length).toBeGreaterThan(0);
   });
 });
 
@@ -1311,7 +1386,7 @@ describe("address validation (SC 7)", () => {
       });
       await expect(
         keepOriginalAddress(db, qa, { orderId: labelled.payload.orderId }),
-      ).rejects.toMatchObject({ kind: "CONFLICT", messageKey: "errors.carriers.liveLabel" });
+      ).rejects.toMatchObject({ kind: "CONFLICT", messageKey: "errors.qa.addressLockedByLabel" });
 
       const unresolved = await inQa();
       await expect(

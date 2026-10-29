@@ -13,8 +13,10 @@ import {
   purgePii,
   queues,
   recomputePriorities,
+  reconcileLabels,
   recordWorkerHeartbeat,
   runEmailJob,
+  runLabelsPurchaseJob,
   runRatesFetchJob,
   runStorageDeleteJob,
   s3ConfigFromEnv,
@@ -210,6 +212,29 @@ await boss.work(
     return null;
   }),
 );
+
+// Labels after Complete QA (SPEC-qa "The labels.purchase job"). A provider that is down or a PDF
+// copy that fails throws, and the queue's policy retries (5 attempts, backoff); a refusal doesn't.
+await boss.work(
+  queues.labelsPurchase,
+  { ...META, localConcurrency: 4 },
+  runJob<JobPayloads[typeof queues.labelsPurchase]>(queues.labelsPurchase, async (job) => {
+    await runLabelsPurchaseJob(db, job.data, { storage, finalAttempt: isFinalAttempt(job) });
+    return { ...job.data };
+  }),
+);
+
+// A worker that died mid-purchase leaves a label PURCHASING with no job: every ten minutes, and
+// once at start, queue the orders whose labels have been waiting too long.
+await boss.schedule(queues.labelsReconcile, "*/10 * * * *", {});
+await boss.work(
+  queues.labelsReconcile,
+  META,
+  runJob<JobPayloads[typeof queues.labelsReconcile]>(queues.labelsReconcile, async () => ({
+    queued: await reconcileLabels(db),
+  })),
+);
+await boss.send(queues.labelsReconcile, {}, { singletonKey: "start" });
 
 log.info({ queues: Object.values(queues) }, "worker started");
 

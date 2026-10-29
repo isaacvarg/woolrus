@@ -9,6 +9,7 @@ import { orders } from "./orders";
 import { packing } from "./packing";
 import { pickBatches, picking } from "./picking";
 import { priorityRules } from "./priority-rules";
+import { qa } from "./qa";
 import { settings } from "./settings";
 import { station, stations } from "./stations";
 import { sync } from "./sync";
@@ -27,6 +28,7 @@ export * from "./orders";
 export * from "./packing";
 export * from "./picking";
 export * from "./priority-rules";
+export * from "./qa";
 export * from "./settings";
 export * from "./stations";
 export * from "./sync";
@@ -45,6 +47,7 @@ export const contract = {
   notes,
   picking,
   packing,
+  qa,
   pickBatches,
   priorityRules,
   sync,

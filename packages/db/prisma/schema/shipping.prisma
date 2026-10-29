@@ -94,17 +94,19 @@ model Package {
 /// How many units of an order line are in a package. Splitting a line across boxes creates
 /// several PackageItems; the OrderItem itself never changes.
 model PackageItem {
-  id             String    @id @default(uuid(7)) @db.Uuid
-  packageId      String    @map("package_id") @db.Uuid
-  orderItemId    String    @map("order_item_id") @db.Uuid
-  quantity       Int
-  packedById     String?   @map("packed_by_id") @db.Uuid
-  packedAt       DateTime  @default(now()) @map("packed_at") @db.Timestamptz(3)
-  qaVerifiedById String?   @map("qa_verified_by_id") @db.Uuid
-  qaVerifiedAt   DateTime? @map("qa_verified_at") @db.Timestamptz(3)
+  id                 String    @id @default(uuid(7)) @db.Uuid
+  packageId          String    @map("package_id") @db.Uuid
+  orderItemId        String    @map("order_item_id") @db.Uuid
+  quantity           Int
+  packedById         String?   @map("packed_by_id") @db.Uuid
+  packedAt           DateTime  @default(now()) @map("packed_at") @db.Timestamptz(3)
+  qaVerifiedById     String?   @map("qa_verified_by_id") @db.Uuid
+  qaVerifiedAt       DateTime? @map("qa_verified_at") @db.Timestamptz(3)
+  /// Units QA has confirmed, 0…quantity (hand-written CHECK); `qaVerifiedAt` is set when it reaches `quantity`.
+  qaVerifiedQuantity Int       @default(0) @map("qa_verified_quantity")
   // Lot traceability (Lumexia). Null until lot capture is enabled for the product.
-  lotCode        String?   @map("lot_code")
-  lumexiaLotId   String?   @map("lumexia_lot_id")
+  lotCode            String?   @map("lot_code")
+  lumexiaLotId       String?   @map("lumexia_lot_id")
 
   package      Package   @relation(fields: [packageId], references: [id], onDelete: Cascade)
   orderItem    OrderItem @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
@@ -143,6 +145,7 @@ model ShippingCarrier {
   services  CarrierService[]
   rates     ShippingRate[]
   manifests Manifest[]
+  labels    ShippingLabel[]
 
   @@unique([provider, externalId])
   @@map("shipping_carriers")
@@ -164,6 +167,7 @@ model CarrierService {
 
   carrier ShippingCarrier @relation(fields: [carrierId], references: [id], onDelete: Cascade)
   rates   ShippingRate[]
+  labels  ShippingLabel[]
 
   @@unique([carrierId, code])
   @@map("carrier_services")
@@ -216,45 +220,54 @@ enum LabelStatus {
 /// A purchased (or attempted) label. Voided labels are kept for history and billing reconciliation.
 /// Exactly one of packageId / returnId is set (check constraint in migration).
 model ShippingLabel {
-  id                 String             @id @default(uuid(7)) @db.Uuid
-  packageId          String?            @map("package_id") @db.Uuid
-  returnId           String?            @map("return_id") @db.Uuid
-  status             LabelStatus
-  provider           ShippingProviderId
+  id                  String             @id @default(uuid(7)) @db.Uuid
+  packageId           String?            @map("package_id") @db.Uuid
+  returnId            String?            @map("return_id") @db.Uuid
+  status              LabelStatus
+  provider            ShippingProviderId
   /// Sent to the provider so a retried purchase can never buy twice.
-  idempotencyKey     String             @unique @map("idempotency_key")
-  providerLabelId    String?            @map("provider_label_id")
-  providerShipmentId String?            @map("provider_shipment_id")
-  trackingNumber     String?            @map("tracking_number")
-  carrierCode        String             @map("carrier_code")
-  serviceCode        String             @map("service_code")
-  costCents          Int?               @map("cost_cents")
-  currency           String             @db.Char(3)
-  format             String             @default("pdf")
-  pdfUrl             String?            @map("pdf_url")
-  pngUrl             String?            @map("png_url")
+  idempotencyKey      String             @unique @map("idempotency_key")
+  providerLabelId     String?            @map("provider_label_id")
+  providerShipmentId  String?            @map("provider_shipment_id")
+  trackingNumber      String?            @map("tracking_number")
+  carrierCode         String             @map("carrier_code")
+  serviceCode         String             @map("service_code")
+  costCents           Int?               @map("cost_cents")
+  currency            String             @db.Char(3)
+  format              String             @default("pdf")
+  pdfUrl              String?            @map("pdf_url")
+  pngUrl              String?            @map("png_url")
   /// Our copy of the label PDF, so printing never depends on the provider's URL.
-  storageKey         String?            @map("storage_key")
-  shipDate           DateTime?          @map("ship_date") @db.Date
-  error              String?
-  purchasedById      String?            @map("purchased_by_id") @db.Uuid
-  purchasedAt        DateTime?          @map("purchased_at") @db.Timestamptz(3)
+  storageKey          String?            @map("storage_key")
+  shipDate            DateTime?          @map("ship_date") @db.Date
+  /// A message key (errors.*), never literal text.
+  error               String?
+  /// Set just before the provider call: the intent marker that lets a lost response be reconciled.
+  purchaseAttemptedAt DateTime?          @map("purchase_attempted_at") @db.Timestamptz(3)
+  /// The exact account and service bought, so reporting and voids know where the label came from.
+  carrierId           String?            @map("carrier_id") @db.Uuid
+  serviceId           String?            @map("service_id") @db.Uuid
+  quotedAmountCents   Int?               @map("quoted_amount_cents")
+  purchasedById       String?            @map("purchased_by_id") @db.Uuid
+  purchasedAt         DateTime?          @map("purchased_at") @db.Timestamptz(3)
   // Printing is separate from shipping (FR-SHIP-11).
-  printCount         Int                @default(0) @map("print_count")
-  lastPrintedAt      DateTime?          @map("last_printed_at") @db.Timestamptz(3)
-  voidedById         String?            @map("voided_by_id") @db.Uuid
-  voidRequestedAt    DateTime?          @map("void_requested_at") @db.Timestamptz(3)
-  voidedAt           DateTime?          @map("voided_at") @db.Timestamptz(3)
-  voidReason         String?            @map("void_reason")
-  manifestId         String?            @map("manifest_id") @db.Uuid
-  createdAt          DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt          DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
+  printCount          Int                @default(0) @map("print_count")
+  lastPrintedAt       DateTime?          @map("last_printed_at") @db.Timestamptz(3)
+  voidedById          String?            @map("voided_by_id") @db.Uuid
+  voidRequestedAt     DateTime?          @map("void_requested_at") @db.Timestamptz(3)
+  voidedAt            DateTime?          @map("voided_at") @db.Timestamptz(3)
+  voidReason          String?            @map("void_reason")
+  manifestId          String?            @map("manifest_id") @db.Uuid
+  createdAt           DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt           DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  package       Package?       @relation(fields: [packageId], references: [id], onDelete: Restrict)
-  return        ReturnRequest? @relation(fields: [returnId], references: [id], onDelete: Restrict)
-  purchasedBy   User?          @relation("LabelPurchasedBy", fields: [purchasedById], references: [id], onDelete: SetNull)
-  voidedBy      User?          @relation("LabelVoidedBy", fields: [voidedById], references: [id], onDelete: SetNull)
-  manifest      Manifest?      @relation(fields: [manifestId], references: [id], onDelete: SetNull)
+  package       Package?         @relation(fields: [packageId], references: [id], onDelete: Restrict)
+  return        ReturnRequest?   @relation(fields: [returnId], references: [id], onDelete: Restrict)
+  purchasedBy   User?            @relation("LabelPurchasedBy", fields: [purchasedById], references: [id], onDelete: SetNull)
+  voidedBy      User?            @relation("LabelVoidedBy", fields: [voidedById], references: [id], onDelete: SetNull)
+  manifest      Manifest?        @relation(fields: [manifestId], references: [id], onDelete: SetNull)
+  carrier       ShippingCarrier? @relation(fields: [carrierId], references: [id], onDelete: Restrict)
+  service       CarrierService?  @relation(fields: [serviceId], references: [id], onDelete: Restrict)
   qualityIssues QualityIssue[]
 
   @@unique([provider, providerLabelId])

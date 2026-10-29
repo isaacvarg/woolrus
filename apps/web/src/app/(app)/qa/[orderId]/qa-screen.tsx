@@ -1,0 +1,620 @@
+"use client";
+
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { QaPackage, QaResult, QaRow, QaView } from "@woolrus/contracts";
+import Link from "next/link";
+import { useFormatter, useTranslations } from "next-intl";
+import { useState } from "react";
+import { ReportIssueFlow } from "@/components/exceptions/report-issue-flow";
+import { Dialog } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/fields";
+import { toast } from "@/components/ui/toast";
+import { costConfirmOf, useErrorMessage } from "@/lib/errors";
+import { client, orpc } from "@/lib/orpc";
+import { playScanSound, useScanner } from "@/lib/scanner";
+import { ScanBanner, type ScanOutcome } from "../../pick/[orderId]/pick-screen";
+import { hasLiveLabel } from "./live-label";
+import { money } from "./money";
+import { QaDrawer } from "./qa-drawer";
+import { RatesTable, RefreshRatesButton } from "./qa-rates";
+import { FailedPackages, isUnknownPurchase, MarkNotBought } from "./qa-settle";
+import { isVoidable, VoidLabelButton } from "./qa-void";
+
+// The QA screen (SPEC-qa "UI", FR-QA-01). A tap verifies a row in full and a second tap clears
+// it. Taps apply at once and the server confirms them (NFR-PERF-02); writes run one at a time per
+// order so they land in the order they were made.
+
+const priorityBadge: Record<number, string> = { 1: "badge-warning", 2: "badge-error" };
+
+/** What the server will make of a tap, so the screen can show it before the answer comes. */
+function applyTap(view: QaView, rowId: string, verified: boolean): QaView {
+  return {
+    ...view,
+    packages: view.packages.map((pkg) => ({
+      ...pkg,
+      rows: pkg.rows.map((row) =>
+        row.id === rowId ? { ...row, verifiedQuantity: verified ? row.quantity : 0 } : row,
+      ),
+    })),
+  };
+}
+
+/** The cost guard's "Buy anyway?" (SPEC-qa "Cost guard"). */
+function CostConfirmDialog({
+  ask,
+  onCancel,
+  onConfirm,
+}: {
+  ask: { labelCostCents: number; chargedCents: number } | null;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const t = useTranslations();
+  const format = useFormatter();
+  return (
+    <Dialog
+      title={t("qa.costConfirm.title")}
+      isOpen={ask !== null}
+      onOpenChange={(open) => !open && onCancel()}
+    >
+      {() => (
+        <>
+          <p data-testid="qa-cost-confirm-body">
+            {ask &&
+              t("qa.costConfirm.body", {
+                cost: money(format, ask.labelCostCents),
+                charged: money(format, ask.chargedCents),
+              })}
+          </p>
+          <div className="flex justify-end gap-2">
+            <Button className="btn-ghost" onPress={onCancel}>
+              {t("qa.costConfirm.cancel")}
+            </Button>
+            <Button className="btn-primary" onPress={onConfirm} data-testid="qa-cost-confirm">
+              {t("qa.costConfirm.confirm")}
+            </Button>
+          </div>
+        </>
+      )}
+    </Dialog>
+  );
+}
+
+export function QaScreen({
+  orderId,
+  userId,
+  canVerify,
+  canPurchase,
+  canVoid,
+  canSettle,
+  canReport,
+  canWriteCustomer,
+}: {
+  orderId: string;
+  userId: string | null;
+  canVerify: boolean;
+  canPurchase: boolean;
+  canVoid: boolean;
+  canSettle: boolean;
+  canReport: boolean;
+  canWriteCustomer: boolean;
+}) {
+  const t = useTranslations();
+  const errorMessage = useErrorMessage();
+  const view = useQuery(orpc.qa.screen.queryOptions({ input: { orderId } }));
+
+  if (view.isPending) return <p>{t("common.loading")}</p>;
+  if (view.error) {
+    return (
+      <p role="alert" className="alert alert-error">
+        {errorMessage(view.error)}
+      </p>
+    );
+  }
+  return (
+    <QaLayout
+      view={view.data}
+      userId={userId}
+      canVerify={canVerify}
+      canPurchase={canPurchase}
+      canVoid={canVoid}
+      canSettle={canSettle}
+      canReport={canReport}
+      canWriteCustomer={canWriteCustomer}
+    />
+  );
+}
+
+function QaLayout({
+  view,
+  userId,
+  canVerify,
+  canPurchase,
+  canVoid,
+  canSettle,
+  canReport,
+  canWriteCustomer,
+}: {
+  view: QaView;
+  userId: string | null;
+  canVerify: boolean;
+  canPurchase: boolean;
+  canVoid: boolean;
+  canSettle: boolean;
+  canReport: boolean;
+  canWriteCustomer: boolean;
+}) {
+  const t = useTranslations();
+  const errorMessage = useErrorMessage();
+  const queryClient = useQueryClient();
+  const { order } = view;
+  const viewKey = orpc.qa.screen.queryKey({ input: { orderId: order.id } });
+  const writeKey = ["qaWrite", order.id];
+  const purchasing = view.purchase.kind === "purchasing";
+  const [reporting, setReporting] = useState<{ orderItemId?: string; packageId?: string } | null>(
+    null,
+  );
+  const mayReport = canReport && order.status !== "COMPLETED" && order.status !== "CANCELLED";
+  const mayVerify =
+    canVerify && order.status === "QA" && order.claim?.userId === userId && !purchasing;
+
+  // The package a scan goes to: the card touched last, else the first with something unverified.
+  const [focusedId, setFocusedId] = useState<string | null>(null);
+  const focused =
+    view.packages.find((p) => p.id === focusedId) ??
+    view.packages.find((p) => p.rows.some((r) => r.verifiedQuantity < r.quantity)) ??
+    view.packages[0];
+  const [scanned, setScanned] = useState<ScanOutcome | null>(null);
+
+  const scan = useMutation({
+    mutationKey: writeKey,
+    // Same lane as taps: a scan and a tap on the same row land in the order they were made.
+    scope: { id: `qa:${order.id}` },
+    // The id is made with the scan, not per request, so a retried request replays it.
+    mutationFn: ({ pkg, code, scanId }: { pkg: QaPackage; code: string; scanId: string }) =>
+      client.qa.scan({ orderId: order.id, packageId: pkg.id, code, scanId }),
+    onSuccess: async (result: QaResult, { pkg }) => {
+      playScanSound(true);
+      const before = new Map(pkg.rows.map((r) => [r.id, r.verifiedQuantity]));
+      const row = result.packages
+        .find((p) => p.id === pkg.id)
+        ?.rows.find((r) => r.verifiedQuantity > (before.get(r.id) ?? 0));
+      setScanned({
+        ok: true,
+        at: Date.now(),
+        message: t("qa.scanned", {
+          name: row?.name ?? "",
+          verified: row?.verifiedQuantity ?? 0,
+          quantity: row?.quantity ?? 0,
+        }),
+      });
+      if (queryClient.isMutating({ mutationKey: writeKey }) > 1) return;
+      await queryClient.cancelQueries({ queryKey: viewKey });
+      queryClient.setQueryData<QaView>(viewKey, (v) => (v ? { ...v, ...result } : v));
+    },
+    onError: (error) => {
+      playScanSound(false);
+      setScanned({
+        ok: false,
+        at: Date.now(),
+        message: errorMessage(error),
+        amber:
+          (error as { data?: { messageKey?: string } }).data?.messageKey ===
+          "errors.qa.scanAlreadyVerified",
+      });
+    },
+  });
+  useScanner((code) => {
+    if (!focused) return;
+    scan.mutate({ pkg: focused, code, scanId: crypto.randomUUID() });
+  }, mayVerify);
+
+  // The cost guard's question; confirming resends with `confirmCost`.
+  const [costAsk, setCostAsk] = useState<{ labelCostCents: number; chargedCents: number } | null>(
+    null,
+  );
+  const complete = useMutation({
+    mutationFn: (confirmCost?: boolean) =>
+      client.orders.completeQa({ id: order.id, expectedVersion: order.version, confirmCost }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: viewKey }),
+    onError: (error) => {
+      const ask = costConfirmOf(error);
+      if (ask) {
+        setCostAsk(ask);
+        return;
+      }
+      toast.error(errorMessage(error));
+      void queryClient.invalidateQueries({ queryKey: viewKey });
+    },
+  });
+  const mayComplete =
+    canPurchase &&
+    order.status === "QA" &&
+    order.claim?.userId === userId &&
+    view.unmet.length === 0 &&
+    !purchasing;
+
+  const tap = useMutation({
+    mutationKey: writeKey,
+    // One at a time per order: a tap and its undo reach the server in the order they were made.
+    scope: { id: `qa:${order.id}` },
+    mutationFn: ({ row, verified }: { row: QaRow; verified: boolean }) =>
+      client.qa.setVerified({
+        packageItemId: row.id,
+        verified,
+        idempotencyKey: crypto.randomUUID(),
+      }),
+    onMutate: async ({ row, verified }) => {
+      await queryClient.cancelQueries({ queryKey: viewKey });
+      const previous = queryClient.getQueryData<QaView>(viewKey);
+      if (previous) queryClient.setQueryData(viewKey, applyTap(previous, row.id, verified));
+      return { previous };
+    },
+    onSuccess: async (result: QaResult) => {
+      // Later taps are already on screen; only the last answer may replace them.
+      if (queryClient.isMutating({ mutationKey: writeKey }) > 1) return;
+      await queryClient.cancelQueries({ queryKey: viewKey });
+      queryClient.setQueryData<QaView>(viewKey, (v) => (v ? { ...v, ...result } : v));
+    },
+    onError: (error, _tap, context) => {
+      if (context?.previous) queryClient.setQueryData(viewKey, context.previous);
+      toast.error(errorMessage(error));
+      void queryClient.invalidateQueries({ queryKey: viewKey });
+    },
+  });
+
+  return (
+    <section className="mx-auto max-w-6xl space-y-4 pb-28">
+      <CostConfirmDialog
+        ask={costAsk}
+        onCancel={() => setCostAsk(null)}
+        onConfirm={() => {
+          setCostAsk(null);
+          complete.mutate(true);
+        }}
+      />
+      {reporting && (
+        <ReportIssueFlow
+          key={reporting.orderItemId ?? reporting.packageId}
+          order={order}
+          canWriteCustomer={canWriteCustomer}
+          targets={view.packages.flatMap((pkg) => [
+            { packageId: pkg.id, label: t("issues.package", { number: pkg.number }) },
+            ...pkg.rows.map((row) => ({
+              orderItemId: row.orderItemId,
+              label: t("issues.line", { name: row.name }),
+            })),
+          ])}
+          initialTarget={reporting}
+          onClose={() => setReporting(null)}
+        />
+      )}
+      <QaHeader view={view} />
+      <QaBanner view={view} userId={userId} />
+      {view.customerNote && (
+        <div className="alert alert-info">
+          <span className="font-semibold">{t("order.customerNote")}:</span>
+          <span className="whitespace-pre-line">{view.customerNote}</span>
+        </div>
+      )}
+      {view.orderIssueIds.length > 0 && (
+        <div role="alert" className="alert alert-error" data-testid="qa-order-critical">
+          <span aria-hidden="true">⚠</span>
+          {t("qa.orderCritical", { count: view.orderIssueIds.length })}
+        </div>
+      )}
+      <PurchaseBanner view={view} />
+      <div className="flex justify-end">
+        <RefreshRatesButton
+          orderId={order.id}
+          disabled={!mayVerify || view.packages.every((p) => hasLiveLabel(p))}
+        />
+      </div>
+      {mayVerify && <ScanBanner outcome={scanned} linkTo={[]} linking={false} onLink={() => {}} />}
+
+      {view.packages.length === 0 ? (
+        <p className="alert">{t("qa.nothingToVerify")}</p>
+      ) : (
+        <ul
+          className="grid items-start gap-4 landscape:grid-cols-2 xl:grid-cols-2"
+          aria-label={t("qa.packages")}
+        >
+          {view.packages.map((pkg) => (
+            <PackageCard
+              key={pkg.id}
+              pkg={pkg}
+              orderId={order.id}
+              orderNumber={order.number}
+              canSettle={canSettle}
+              disabled={!mayVerify}
+              canVoid={canVoid && order.status === "QA"}
+              isFocused={pkg.id === focused?.id}
+              onFocus={() => setFocusedId(pkg.id)}
+              onReport={
+                mayReport ? (row) => setReporting({ orderItemId: row.orderItemId }) : undefined
+              }
+              onTap={(row) => {
+                setFocusedId(pkg.id);
+                tap.mutate({ row, verified: row.verifiedQuantity < row.quantity });
+              }}
+            />
+          ))}
+        </ul>
+      )}
+
+      <footer
+        data-toast-clearance
+        className="fixed inset-x-0 bottom-0 z-10 space-y-1 border-t border-base-300 bg-base-100 p-4"
+      >
+        {purchasing && (
+          <div className="flex items-center gap-3">
+            <p className="font-semibold" data-testid="qa-buying-footer">
+              {view.purchase.kind === "purchasing" &&
+                t("qa.buying", { bought: view.purchase.bought, total: view.purchase.total })}
+            </p>
+            <Link href="/queue/qa" className="btn btn-primary ms-auto" data-testid="qa-next-order">
+              {t("qa.nextOrder")}
+            </Link>
+          </div>
+        )}
+        {!purchasing && view.unmet.length === 0 ? (
+          <div className="flex items-center gap-3">
+            <p className="font-semibold" data-testid="qa-all-done">
+              {t("qa.allDone")}
+            </p>
+            {mayComplete && (
+              <Button
+                className="btn-primary ms-auto"
+                onPress={() => complete.mutate(undefined)}
+                isDisabled={complete.isPending}
+                data-testid="qa-complete"
+              >
+                {t("qa.complete")}
+              </Button>
+            )}
+          </div>
+        ) : !purchasing ? (
+          <>
+            <p className="font-semibold">{t("qa.stillNeeded")}</p>
+            <ul className="list-disc ps-6 text-sm" data-testid="qa-unmet">
+              {view.unmet.map((condition) => (
+                <li key={`${condition.messageKey}:${JSON.stringify(condition.params)}`}>
+                  {t.has(condition.messageKey as never)
+                    ? t(condition.messageKey as never, condition.params as never)
+                    : t("errors.internal")}
+                </li>
+              ))}
+            </ul>
+          </>
+        ) : null}
+      </footer>
+    </section>
+  );
+}
+
+function QaHeader({ view }: { view: QaView }) {
+  const t = useTranslations();
+  const { order } = view;
+  const level = Math.min(order.priority, 2) as 0 | 1 | 2;
+  return (
+    <header className="space-y-2">
+      <div className="flex flex-wrap items-center gap-3">
+        <h1 className="text-3xl font-bold">{t("qa.title", { number: order.number })}</h1>
+        <span className={`badge badge-lg ${priorityBadge[level] ?? "badge-ghost"}`}>
+          {t(`queue.priorityLevel.${level}`)}
+        </span>
+        <span className="ms-auto flex items-center gap-2">
+          <QaDrawer view={view} />
+          <Link href={`/orders/${order.id}`} className="btn btn-ghost btn-sm">
+            {t("pack.orderDetails")}
+          </Link>
+        </span>
+      </div>
+      <p className="text-lg">{order.customerName}</p>
+    </header>
+  );
+}
+
+/** Why the screen is locked, when it is: the order left QA, or the claim isn't the viewer's. */
+function QaBanner({ view, userId }: { view: QaView; userId: string | null }) {
+  const t = useTranslations();
+  const { order } = view;
+  let message: string | null = null;
+  if (order.status !== "QA") {
+    message = t("qa.notInQa", { status: t(`status.${order.status}`) });
+  } else if (!order.claim) {
+    message = t("qa.notClaimed");
+  } else if (order.claim.userId !== userId) {
+    message = t("pack.claimedByOther", { name: order.claim.userName });
+  }
+  if (!message) return null;
+  return (
+    <div role="status" className="alert alert-warning" data-testid="qa-banner">
+      <span className="grow">{message}</span>
+      <Link href={`/orders/${order.id}`} className="btn-sm">
+        {t("pack.orderDetails")}
+      </Link>
+    </div>
+  );
+}
+
+function PurchaseBanner({ view }: { view: QaView }) {
+  const t = useTranslations();
+  const { purchase } = view;
+  if (purchase.kind === "purchasing") {
+    return (
+      <div role="status" className="alert alert-info" data-testid="qa-buying">
+        {t("qa.buying", { bought: purchase.bought, total: purchase.total })}
+      </div>
+    );
+  }
+  return <FailedPackages view={view} />;
+}
+
+const labelKeys = {
+  PURCHASING: "qa.labelPurchasing",
+  ACTIVE: "qa.labelActive",
+  PURCHASE_FAILED: "qa.labelFailed",
+  VOID_REQUESTED: "qa.labelVoidRequested",
+  VOIDED: "qa.labelVoided",
+  VOID_REJECTED: "qa.labelVoidRejected",
+} as const;
+
+function PackageCard({
+  pkg,
+  orderId,
+  orderNumber,
+  canSettle,
+  disabled,
+  canVoid,
+  isFocused,
+  onFocus,
+  onTap,
+  onReport,
+}: {
+  pkg: QaPackage;
+  orderId: string;
+  orderNumber: string;
+  canSettle: boolean;
+  disabled: boolean;
+  canVoid: boolean;
+  isFocused: boolean;
+  onFocus: () => void;
+  onTap: (row: QaRow) => void;
+  onReport?: (row: QaRow) => void;
+}) {
+  const t = useTranslations();
+  const format = useFormatter();
+  const verified = pkg.rows.filter((r) => r.verifiedQuantity === r.quantity).length;
+  const { label } = pkg;
+  return (
+    <li
+      onPointerDown={onFocus}
+      className={`space-y-3 rounded-box bg-base-100 p-4 shadow-sm ${isFocused ? "ring-2 ring-primary" : ""}`}
+      data-testid="qa-package"
+      data-package={pkg.number}
+      data-focused={isFocused || undefined}
+    >
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h2 className="text-xl font-bold">
+          {t("qa.package", { number: pkg.number })}
+          {isFocused && <span className="badge badge-primary ms-2">{t("qa.scanningHere")}</span>}
+        </h2>
+        <span className="text-sm" data-testid="qa-package-count">
+          {t("qa.verifiedCount", { verified, total: pkg.rows.length })}
+        </span>
+      </div>
+      <p className="text-sm opacity-70">
+        {pkg.boxName ? t("qa.box", { name: pkg.boxName }) : t("qa.customBox")}
+      </p>
+      <ul className="grid gap-2">
+        {pkg.rows.map((row) => (
+          <RowButton
+            key={row.id}
+            row={row}
+            disabled={disabled}
+            onTap={() => onTap(row)}
+            onReport={onReport ? () => onReport(row) : undefined}
+          />
+        ))}
+      </ul>
+      <RatesTable orderId={orderId} pkg={pkg} disabled={disabled} />
+      {label && (
+        <div className="rounded-box bg-base-200 p-3 text-sm" data-testid="qa-label">
+          <div className="font-semibold">{t(labelKeys[label.status])}</div>
+          {label.trackingNumber && <div>{t("qa.tracking", { number: label.trackingNumber })}</div>}
+          {label.costCents !== null && label.quotedAmountCents !== null && (
+            <div>
+              {t("qa.cost", {
+                cost: money(format, label.costCents),
+                quoted: money(format, label.quotedAmountCents),
+              })}
+            </div>
+          )}
+          {label.error && t.has(label.error as never) && <div>{t(label.error as never)}</div>}
+          {canVoid && isVoidable(label) && <VoidLabelButton orderId={orderId} label={label} />}
+          {canSettle && isUnknownPurchase(pkg) && (
+            <MarkNotBought orderId={orderId} orderNumber={orderNumber} pkg={pkg} />
+          )}
+        </div>
+      )}
+    </li>
+  );
+}
+
+function RowButton({
+  row,
+  disabled,
+  onTap,
+  onReport,
+}: {
+  row: QaRow;
+  disabled: boolean;
+  onTap: () => void;
+  onReport?: () => void;
+}) {
+  const t = useTranslations();
+  const done = row.verifiedQuantity === row.quantity;
+  return (
+    <li>
+      <Button
+        isDisabled={disabled}
+        onPress={onTap}
+        aria-pressed={done}
+        aria-label={
+          done
+            ? t("qa.clearRow", { name: row.name })
+            : t("qa.verifyRow", { name: row.name, quantity: row.quantity })
+        }
+        data-testid="qa-row"
+        data-verified={done}
+        className={`flex min-h-16 w-full items-center gap-3 rounded-box border-2 p-3 text-start ${
+          done ? "border-success bg-success/10" : "border-base-300 bg-base-100"
+        } ${row.criticalIssueId ? "ring-2 ring-error" : ""}`}
+      >
+        {row.imageUrl ? (
+          // biome-ignore lint/performance/noImgElement: store-hosted thumbnail, sized by the card
+          <img src={row.imageUrl} alt="" className="size-12 shrink-0 rounded object-cover" />
+        ) : null}
+        <span className="grow">
+          <span className="block font-semibold">{row.name}</span>
+          {row.sku && (
+            <span className="block text-sm opacity-70">{t("qa.sku", { sku: row.sku })}</span>
+          )}
+          {row.attributes.length > 0 && (
+            <span className="block text-sm opacity-70">
+              {row.attributes.map((a) => `${a.name}: ${a.option}`).join(" · ")}
+            </span>
+          )}
+          {row.criticalIssueId && (
+            <span className="badge badge-error mt-1 gap-1" data-testid="qa-critical">
+              <span aria-hidden="true">⚠</span>
+              {t("qa.criticalIssue")}
+            </span>
+          )}
+        </span>
+        <span className="shrink-0 text-end">
+          <span className="block text-lg font-bold" data-testid="qa-row-progress">
+            {t("qa.unitsProgress", { verified: row.verifiedQuantity, quantity: row.quantity })}
+          </span>
+          <span className="block text-sm">
+            <span aria-hidden="true">{done ? "✓ " : ""}</span>
+            {done ? t("qa.rowVerified") : t("qa.rowNotVerified")}
+          </span>
+        </span>
+      </Button>
+      {onReport && (
+        <div className="flex justify-end pt-1">
+          <Button
+            className="btn-outline btn-warning btn-sm"
+            onPress={onReport}
+            aria-label={t("issues.reportRow", { name: row.name })}
+            data-testid="qa-report"
+          >
+            {t("issues.button")}
+          </Button>
+        </div>
+      )}
+    </li>
+  );
+}

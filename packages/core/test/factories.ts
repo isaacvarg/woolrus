@@ -252,6 +252,7 @@ async function createPackage(
         orderItemId: orderItem.id,
         quantity: it.quantity,
         qaVerifiedAt: it.verified ? new Date() : null,
+        qaVerifiedQuantity: it.verified ? it.quantity : 0,
       },
     });
   }

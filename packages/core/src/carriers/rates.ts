@@ -9,6 +9,7 @@ import {
 import {
   type Db,
   type DbTx,
+  type LabelStatus,
   Prisma,
   type RatesStatus,
   type ShipToStatus,
@@ -160,15 +161,27 @@ async function askProvider(
 const orderInclude = {
   packages: {
     orderBy: { number: "asc" },
-    include: { box: true, items: { include: { orderItem: true } } },
+    include: {
+      box: true,
+      items: { include: { orderItem: true } },
+      labels: { select: { status: true } },
+    },
   },
 } as const satisfies Prisma.OrderInclude;
+
+const isLive = (label: { status: LabelStatus }) => liveLabelStatuses.includes(label.status);
+
+const hasLiveLabel = async (tx: DbTx, packageId: string) =>
+  (await tx.shippingLabel.count({ where: { packageId, status: { in: [...liveLabelStatuses] } } })) >
+  0;
 
 type FetchOrder = Prisma.OrderGetPayload<{ include: typeof orderInclude }>;
 type FetchPackage = FetchOrder["packages"][number];
 
 /** The package's outer size and weight, or null when it can't be rated yet. */
-function parcel(pkg: FetchPackage): RateRequest["package"] | null {
+export function parcel(
+  pkg: Pick<FetchPackage, "lengthIn" | "widthIn" | "heightIn" | "weightOz" | "box">,
+): RateRequest["package"] | null {
   const dims = (
     own: Prisma.Decimal | null,
     outer?: Prisma.Decimal | null,
@@ -182,7 +195,15 @@ function parcel(pkg: FetchPackage): RateRequest["package"] | null {
   return { lengthIn, widthIn, heightIn, weightOz };
 }
 
-/** Sets every package of the order to `status`, with these errors when it's a failure. */
+/** A package with a label that exists or may exist at the carrier: its rates are no longer ours to change. */
+const withoutLiveLabel = {
+  labels: { none: { status: { in: [...liveLabelStatuses] } } },
+} as const satisfies Prisma.PackageWhereInput;
+
+/**
+ * Sets every package of the order without a live label to `status`, with these errors when it's a
+ * failure.
+ */
 async function markPackages(
   tx: DbTx,
   orderId: string,
@@ -191,7 +212,7 @@ async function markPackages(
   now: Date,
 ) {
   await tx.package.updateMany({
-    where: { orderId },
+    where: { orderId, ...withoutLiveLabel },
     data: {
       ratesStatus: status,
       ...(errors ? { rateErrors: errors, ratesFetchedAt: now } : {}),
@@ -320,7 +341,9 @@ export async function fetchRates(
           ? [{ provider: null, messageKey: "errors.carriers.noProviders" }]
           : null;
     // A failed fetch replaces earlier rates with none, as a successful one replaces them.
-    if (failure) await tx.shippingRate.deleteMany({ where: { package: { orderId } } });
+    if (failure) {
+      await tx.shippingRate.deleteMany({ where: { package: { orderId, ...withoutLiveLabel } } });
+    }
     await markPackages(tx, orderId, failure ? "FAILED" : "FETCHING", failure ?? undefined, now);
     await notifyOrderChanged(tx, { id: orderId, status });
     return failure ? "failed" : "fetching";
@@ -345,36 +368,40 @@ export async function fetchRates(
   };
 
   const asked = await Promise.all(
-    order.packages.map(async (pkg) => {
-      const size = parcel(pkg);
-      if (!size) {
-        const outcome: ProviderOutcome = {
-          provider: null,
-          ok: false,
-          messageKey: "errors.carriers.packageIncomplete",
-          permanent: true,
-        };
-        return { pkg, outcomes: [outcome] };
-      }
-      const request = (services: UsableService[]): RateRequest => ({
-        ...base,
-        package: size,
-        items: pkg.items.map((item) => ({
-          sku: item.orderItem.sku,
-          name: item.orderItem.name,
-          quantity: item.quantity,
-        })),
-        services: services.map((s) => ({
-          carrierExternalId: s.carrier.externalId,
-          code: s.code,
-          providerData: z.record(z.string(), z.unknown()).catch({}).parse(s.providerData),
-        })),
-      });
-      const outcomes = await Promise.all(
-        providers.map((provider, i) => askProvider(provider, request(usable[i] ?? []), timeoutMs)),
-      );
-      return { pkg, outcomes };
-    }),
+    order.packages
+      .filter((pkg) => !pkg.labels.some(isLive))
+      .map(async (pkg) => {
+        const size = parcel(pkg);
+        if (!size) {
+          const outcome: ProviderOutcome = {
+            provider: null,
+            ok: false,
+            messageKey: "errors.carriers.packageIncomplete",
+            permanent: true,
+          };
+          return { pkg, outcomes: [outcome] };
+        }
+        const request = (services: UsableService[]): RateRequest => ({
+          ...base,
+          package: size,
+          items: pkg.items.map((item) => ({
+            sku: item.orderItem.sku,
+            name: item.orderItem.name,
+            quantity: item.quantity,
+          })),
+          services: services.map((s) => ({
+            carrierExternalId: s.carrier.externalId,
+            code: s.code,
+            providerData: z.record(z.string(), z.unknown()).catch({}).parse(s.providerData),
+          })),
+        });
+        const outcomes = await Promise.all(
+          providers.map((provider, i) =>
+            askProvider(provider, request(usable[i] ?? []), timeoutMs),
+          ),
+        );
+        return { pkg, outcomes };
+      }),
   );
 
   const outcomes = asked.flatMap((a) => a.outcomes);
@@ -411,6 +438,8 @@ export async function fetchRates(
     const written = await db.$transaction(async (tx) => {
       const status = await isCurrent(tx, orderId, generation);
       if (!status) return false;
+      // A label bought since the fetch began keeps the rate it was bought with.
+      if (await hasLiveLabel(tx, pkg.id)) return true;
       await tx.shippingRate.deleteMany({ where: { packageId: pkg.id } });
       await tx.shippingRate.createMany({
         data: rates.map((rate, i) => ({
@@ -478,7 +507,7 @@ async function failFetch(db: Db, { orderId, generation }: RatesPayload) {
   await db.$transaction(async (tx) => {
     const status = await isCurrent(tx, orderId, generation);
     if (!status) return;
-    await tx.shippingRate.deleteMany({ where: { package: { orderId } } });
+    await tx.shippingRate.deleteMany({ where: { package: { orderId, ...withoutLiveLabel } } });
     await markPackages(
       tx,
       orderId,
@@ -490,20 +519,29 @@ async function failFetch(db: Db, { orderId, generation }: RatesPayload) {
   });
 }
 
-/** Locks an order QA may re-rate: in QA, with no live label. */
-export async function lockRerate(tx: DbTx, orderId: string) {
+/** Locks an order in QA. */
+async function lockInQa(tx: DbTx, orderId: string) {
   const order = await lockOrder(tx, orderId);
   if (order.status !== "QA") throw new AppError("CONFLICT", "errors.carriers.notInQa");
+  return order;
+}
+
+/**
+ * Locks an order whose address QA may change: in QA, with no live label (bought labels carry the
+ * old address).
+ */
+export async function lockRerate(tx: DbTx, orderId: string) {
+  const order = await lockInQa(tx, orderId);
   const live = await tx.shippingLabel.count({
     where: { package: { orderId }, status: { in: [...liveLabelStatuses] } },
   });
-  if (live > 0) throw new AppError("CONFLICT", "errors.carriers.liveLabel");
+  if (live > 0) throw new AppError("CONFLICT", "errors.qa.addressLockedByLabel");
   return order;
 }
 
 /**
  * A new generation with every package fetching. `dropRates` when the ship-to changed: rates for
- * the old address can't be bought.
+ * the old address can't be bought. Packages with a live label are left alone.
  */
 export async function refetch(
   tx: DbTx,
@@ -512,11 +550,18 @@ export async function refetch(
 ): Promise<number> {
   const generation = await requestRateFetch(tx, orderId);
   if (dropRates) await tx.shippingRate.deleteMany({ where: { package: { orderId } } });
-  await tx.package.updateMany({ where: { orderId }, data: { ratesStatus: "FETCHING" } });
+  await tx.package.updateMany({
+    where: { orderId, ...withoutLiveLabel },
+    data: { ratesStatus: "FETCHING" },
+  });
   return generation;
 }
 
-/** QA asks again: a new generation, every package fetching until the job answers. Audited. */
+/**
+ * QA asks again: a new generation, every package without a live label fetching until the job
+ * answers. A partly bought order can re-rate the failed package; refused while a label is being
+ * bought, or when every package has one. Audited.
+ */
 export async function refreshRates(
   db: Db,
   actor: Actor,
@@ -524,7 +569,18 @@ export async function refreshRates(
 ): Promise<OrderShipping> {
   assertCan(actor, "order.qa");
   await db.$transaction(async (tx) => {
-    const order = await lockRerate(tx, orderId);
+    const order = await lockInQa(tx, orderId);
+    const labels = await tx.shippingLabel.findMany({
+      where: { package: { orderId }, status: { in: [...liveLabelStatuses] } },
+      select: { status: true, packageId: true },
+    });
+    if (labels.some((l) => l.status === "PURCHASING")) {
+      throw new AppError("CONFLICT", "errors.qa.purchaseInProgress");
+    }
+    const packages = await tx.package.count({ where: { orderId } });
+    if (packages > 0 && new Set(labels.map((l) => l.packageId)).size === packages) {
+      throw new AppError("CONFLICT", "errors.qa.allPackagesLabelled");
+    }
     const generation = await refetch(tx, orderId);
     await recordAudit(tx, actor, {
       entityType: "Order",

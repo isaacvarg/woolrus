@@ -106,6 +106,10 @@ type DemoOrder = {
   issues?: DemoIssue[];
   /** The street line, when not the default; one with "Street" gets corrected by the fake ShipStation. */
   street?: string;
+  /** Ship-to line 2; `FAIL-BUY-<n>` makes the fake carrier refuse package n (SPEC-qa "Dev data"). */
+  address2?: string;
+  /** One package per physical line instead of a single package. */
+  splitPackages?: boolean;
 };
 
 type DemoIssue = {
@@ -148,6 +152,9 @@ const orders: DemoOrder[] = [
   { customer: "Rosa Delgado", status: "QA", lines: [["NDL-DPN-4", 2]], progress: "labeled", ageHours: 18, inStageMinutes: 15 },
   { customer: "Samuel Torres", status: "QA", lines: [["WOOL-MER-NAVY", 1], ["WOOL-MER-RED", 1]], progress: "labeled", ageHours: 19, inStageMinutes: 30 },
   { customer: "Teresa Flores", status: "QA", lines: [["KIT-BEANIE", 3]], progress: "packed", ageHours: 22, inStageMinutes: 45, street: "15 Elm Street" },
+  // QA to complete: a one-package order, and a two-package one whose second label the fake carrier refuses.
+  { customer: "Vicente Arias", status: "QA", lines: [["WOOL-MER-RED", 2]], progress: "packed", ageHours: 8, inStageMinutes: 10 },
+  { customer: "Wendy Bravo", status: "QA", lines: [["KIT-BEANIE", 1], ["NDL-CIRC-5", 1]], progress: "packed", ageHours: 9, inStageMinutes: 12, splitPackages: true, address2: "FAIL-BUY-2" },
   { customer: "Ulises Reyes", status: "QA", lines: [["BOOK-WINTER", 2]], progress: "packed", ageHours: 23, inStageMinutes: 90 },
   // Ready
   { customer: "Valeria Soto", status: "READY", lines: [["WOOL-ALP-CRM", 4]], progress: "labeled", ageHours: 26, inStageMinutes: 60 },
@@ -205,9 +212,14 @@ function priorityOf(order: DemoOrder): number {
   return 0;
 }
 
-const address = (name: string, street = "742 Evergreen Terrace"): Prisma.InputJsonObject => ({
+const address = (
+  name: string,
+  street = "742 Evergreen Terrace",
+  address2?: string,
+): Prisma.InputJsonObject => ({
   name,
   address1: street,
+  ...(address2 ? { address2 } : {}),
   city: "Austin",
   state: "TX",
   postalCode: "78701",
@@ -492,8 +504,8 @@ async function createDemoOrder(
       currency: "USD",
       customerName: spec.customer,
       customerEmail: `${spec.customer.split(" ")[0]?.toLowerCase()}@example.test`,
-      shippingAddress: address(spec.customer, spec.street),
-      billingAddress: address(spec.customer, spec.street),
+      shippingAddress: address(spec.customer, spec.street, spec.address2),
+      billingAddress: address(spec.customer, spec.street, spec.address2),
       totalCents: spec.lines.reduce((sum, [, qty]) => sum + qty * 1800, 0),
       shippingMethod: spec.method ?? "Flat rate",
       orderedAt,
@@ -591,79 +603,83 @@ async function createDemoOrder(
 
   if (spec.progress === "packed" || spec.progress === "verified" || spec.progress === "labeled") {
     const verified = spec.progress !== "packed";
-    const pkg = await tx.package.create({
-      // Without a box (none seeded), the override dimensions satisfy the packed gate instead.
-      data: {
-        orderId: order.id,
-        number: 1,
-        boxId,
-        weightOz: 24,
-        ...(boxId ? {} : { lengthIn: 10, widthIn: 8, heightIn: 4 }),
-      },
-    });
-    for (const line of physicalLines) {
-      await tx.packageItem.create({
+    const groups = spec.splitPackages ? physicalLines.map((line) => [line]) : [physicalLines];
+    for (const [groupIndex, group] of groups.entries()) {
+      const number = groupIndex + 1;
+      const pkg = await tx.package.create({
+        // Without a box (none seeded), the override dimensions satisfy the packed gate instead.
         data: {
-          packageId: pkg.id,
-          orderItemId: line.id,
-          quantity: line.active,
-          packedAt: enteredAt,
-          qaVerifiedAt: verified ? enteredAt : null,
+          orderId: order.id,
+          number,
+          boxId,
+          weightOz: 24,
+          ...(boxId ? {} : { lengthIn: 10, widthIn: 8, heightIn: 4 }),
         },
       });
-    }
-    // Packing → QA fetched rates for every package that got that far.
-    const rated = "fake" in shipping && ["QA", "READY", "COMPLETED"].includes(spec.status);
-    let bought = {
-      provider: "SHIPSTATION" as ShippingProviderId,
-      carrierCode: "usps",
-      serviceCode: "usps_ground_advantage",
-      costCents: 650,
-    };
-    if (rated && "fake" in shipping) {
-      const rates = fakeRates(shipping.fake, 24, `se-shp-demo-${index + 1}`, now);
-      await tx.shippingRate.createMany({ data: rates.map((r) => ({ ...r, packageId: pkg.id })) });
-      await tx.package.update({
-        where: { id: pkg.id },
-        data: { ratesStatus: "READY", ratesFetchedAt: now },
-      });
-      const [cheapest] = rates;
-      if (cheapest) bought = { ...cheapest, costCents: cheapest.amountCents };
-      await tx.order.update({
-        where: { id: order.id },
-        data: fakeShipTo(address(spec.customer, spec.street), now),
-      });
-    } else if (verified && "placeholder" in shipping) {
-      await tx.shippingRate.create({
-        data: {
-          packageId: pkg.id,
-          provider: "SHIPSTATION",
-          ...shipping.placeholder,
-          providerRateId: `demo-rate-${index + 1}`,
-          carrierCode: "usps",
-          serviceCode: "usps_ground_advantage",
-          serviceName: "USPS Ground Advantage",
-          amountCents: 650,
-          currency: "USD",
-          selected: true,
-        },
-      });
-    }
-    if (spec.progress === "labeled") {
-      await tx.shippingLabel.create({
-        data: {
-          packageId: pkg.id,
-          status: "ACTIVE",
-          provider: bought.provider,
-          idempotencyKey: `demo-label-${index + 1}`,
-          trackingNumber: `9400100000000000${String(index + 1).padStart(6, "0")}`,
-          carrierCode: bought.carrierCode,
-          serviceCode: bought.serviceCode,
-          costCents: bought.costCents,
-          currency: "USD",
-          purchasedAt: enteredAt,
-        },
-      });
+      for (const line of group) {
+        await tx.packageItem.create({
+          data: {
+            packageId: pkg.id,
+            orderItemId: line.id,
+            quantity: line.active,
+            packedAt: enteredAt,
+            qaVerifiedAt: verified ? enteredAt : null,
+          },
+        });
+      }
+      // Packing → QA fetched rates for every package that got that far.
+      const rated = "fake" in shipping && ["QA", "READY", "COMPLETED"].includes(spec.status);
+      let bought = {
+        provider: "SHIPSTATION" as ShippingProviderId,
+        carrierCode: "usps",
+        serviceCode: "usps_ground_advantage",
+        costCents: 650,
+      };
+      if (rated && "fake" in shipping) {
+        const rates = fakeRates(shipping.fake, 24, `se-shp-demo-${index + 1}-${number}`, now);
+        await tx.shippingRate.createMany({ data: rates.map((r) => ({ ...r, packageId: pkg.id })) });
+        await tx.package.update({
+          where: { id: pkg.id },
+          data: { ratesStatus: "READY", ratesFetchedAt: now },
+        });
+        const [cheapest] = rates;
+        if (cheapest) bought = { ...cheapest, costCents: cheapest.amountCents };
+        await tx.order.update({
+          where: { id: order.id },
+          data: fakeShipTo(address(spec.customer, spec.street, spec.address2), now),
+        });
+      } else if (verified && "placeholder" in shipping) {
+        await tx.shippingRate.create({
+          data: {
+            packageId: pkg.id,
+            provider: "SHIPSTATION",
+            ...shipping.placeholder,
+            providerRateId: `demo-rate-${index + 1}-${number}`,
+            carrierCode: "usps",
+            serviceCode: "usps_ground_advantage",
+            serviceName: "USPS Ground Advantage",
+            amountCents: 650,
+            currency: "USD",
+            selected: true,
+          },
+        });
+      }
+      if (spec.progress === "labeled") {
+        await tx.shippingLabel.create({
+          data: {
+            packageId: pkg.id,
+            status: "ACTIVE",
+            provider: bought.provider,
+            idempotencyKey: `demo-label-${index + 1}`,
+            trackingNumber: `9400100000000000${String(index + 1).padStart(6, "0")}`,
+            carrierCode: bought.carrierCode,
+            serviceCode: bought.serviceCode,
+            costCents: bought.costCents,
+            currency: "USD",
+            purchasedAt: enteredAt,
+          },
+        });
+      }
     }
   }
 

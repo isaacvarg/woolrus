@@ -88,6 +88,9 @@ const ClaimExpiryMinutes = z.number().int().min(5).max(480);
 export const PICK_BATCH_MAX_ORDERS_CEILING = 50;
 const PickBatchMaxOrders = z.number().int().min(2).max(PICK_BATCH_MAX_ORDERS_CEILING);
 /** Null keeps customer PII forever (NFR-SEC-06). */
+/** The cost guard's ratio (×) and free-shipping amount; null turns that check off (SPEC-qa). */
+const LabelCostConfirmRatio = z.number().min(0.1).max(9999.99).nullable();
+const LabelCostConfirmFreeCents = z.number().int().min(1).max(10_000_000).nullable();
 const PiiRetentionDays = z.number().int().min(30).max(3650).nullable();
 
 export const SecretName = z.enum([
@@ -117,6 +120,8 @@ export const AdminSettings = z.object({
   weightDisplay: WeightDisplay,
   piiRetentionDays: z.number().nullable(),
   qaMustDifferFromPacker: z.boolean(),
+  labelCostConfirmRatio: z.number().nullable(),
+  labelCostConfirmFreeCents: z.number().nullable(),
   secrets: z.record(SecretName, SecretStatus),
 });
 export type AdminSettings = z.infer<typeof AdminSettings>;
@@ -145,6 +150,8 @@ export const UpdateSettingsInput = z.object({
   weightDisplay: WeightDisplay.optional(),
   piiRetentionDays: PiiRetentionDays.optional(),
   qaMustDifferFromPacker: z.boolean().optional(),
+  labelCostConfirmRatio: LabelCostConfirmRatio.optional(),
+  labelCostConfirmFreeCents: LabelCostConfirmFreeCents.optional(),
 });
 export type UpdateSettingsInput = z.infer<typeof UpdateSettingsInput>;
 

@@ -37,6 +37,8 @@ describe("settings service", () => {
       weightDisplay: "LB_OZ",
       piiRetentionDays: null,
       qaMustDifferFromPacker: false,
+      labelCostConfirmRatio: 2,
+      labelCostConfirmFreeCents: 1500,
       secrets: {
         wooConsumerKey: { configured: false },
         wooConsumerSecret: { configured: false },

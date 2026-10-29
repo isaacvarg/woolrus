@@ -40,6 +40,7 @@ const snapshot = (overrides: Partial<GateSnapshot> = {}): GateSnapshot => ({
   status: "READY",
   lines: [line()],
   packages: [pkg()],
+  openCriticalIssues: 0,
   ...overrides,
 });
 
@@ -238,6 +239,12 @@ describe("verified gate", () => {
         { messageKey: "errors.workflow.gate.packageNoLabel", params: { package: 1 } },
       ]);
     }
+  });
+
+  it("reports an open critical issue with its count", () => {
+    expect(evaluateGate("verified", snapshot({ openCriticalIssues: 2 }))).toEqual([
+      { messageKey: "errors.workflow.gate.criticalIssueOpen", params: { count: 2 } },
+    ]);
   });
 
   // Otherwise "every package is verified" holds vacuously, and the order reaches Ready unshippable.

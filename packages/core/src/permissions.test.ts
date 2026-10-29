@@ -57,6 +57,14 @@ describe("permissions", () => {
     }
   });
 
+  it("lets QA and Admin void labels, but not Shipper or Packer", () => {
+    expect(can(actor(["QA"]), "label.void")).toBe(true);
+    expect(can(actor(["ADMIN"]), "label.void")).toBe(true);
+    for (const role of ["PICKER", "PACKER", "SHIPPER"] as const) {
+      expect(can(actor([role]), "label.void")).toBe(false);
+    }
+  });
+
   it("gives the system actor no user and no station", () => {
     expect(systemActor).toMatchObject({ userId: null, stationId: null, system: "store-sync" });
     expect(can(systemActor, "order.cancel")).toBe(true);
