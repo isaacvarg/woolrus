@@ -38,14 +38,12 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 function decodeCursor(cursor: string): Cursor {
   try {
     const [at, id] = JSON.parse(Buffer.from(cursor, "base64url").toString());
-    // The id is cast to uuid in SQL, so anything else would be a database error, not a 400.
-    if (
-      typeof at === "string" &&
-      typeof id === "string" &&
-      UUID.test(id) &&
-      !Number.isNaN(Date.parse(at))
-    )
-      return { at, id };
+    // Both are cast in SQL, so only the exact forms the server emits get through: anything else
+    // would be a database error, not a 400.
+    if (typeof at === "string" && typeof id === "string" && UUID.test(id)) {
+      const date = new Date(at);
+      if (!Number.isNaN(date.getTime()) && date.toISOString() === at) return { at, id };
+    }
   } catch {}
   throw new AppError("BAD_REQUEST", "errors.validation", { cursor: "errors.field.invalid" });
 }

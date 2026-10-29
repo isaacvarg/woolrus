@@ -189,9 +189,14 @@ await boss.schedule(queues.piiPurge, "0 3 * * *", {}, { tz: "America/Chicago" })
 await boss.work(
   queues.piiPurge,
   META,
-  runJob<JobPayloads[typeof queues.piiPurge]>(queues.piiPurge, async () => ({
-    ...(await purgePii(db)),
-  })),
+  runJob<JobPayloads[typeof queues.piiPurge]>(queues.piiPurge, async (_job, log) => {
+    const result = await purgePii(db);
+    log.info(result, "pii purge counts");
+    // The orders that failed are retried by the next attempt and the next run; failing the job here
+    // puts it on the failed-jobs page instead of hiding it in a log line.
+    if (result.failed > 0) throw new Error(`pii purge: ${result.failed} orders failed`);
+    return result;
+  }),
 );
 
 // Every minute, a job proves the worker consumes the queue: it upserts the heartbeat row and

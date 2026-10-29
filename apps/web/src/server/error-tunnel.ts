@@ -1,4 +1,8 @@
-export const TUNNEL_MAX_BYTES = 1024 * 1024;
+/** Browser error events are a few tens of KB; this leaves room for a long stack and breadcrumbs. */
+export const TUNNEL_MAX_BYTES = 100 * 1024;
+
+/** What a browser reports; attachments and session replays are never forwarded. */
+const ALLOWED_ITEMS = new Set(["event", "transaction", "session", "sessions", "client_report"]);
 
 /** Envelopes forwarded per minute, all callers together: a flood can't fill GlitchTip's quota. */
 export const TUNNEL_MAX_PER_MINUTE = 120;
@@ -41,6 +45,29 @@ async function readCapped(request: Request, max: number): Promise<Buffer | null>
   return Buffer.concat(chunks);
 }
 
+/** True when every item in the envelope is of an allowed type. Walks item headers by `length`. */
+function onlyAllowedItems(body: Buffer): boolean {
+  let at = body.indexOf(10) + 1; // past the envelope header line
+  if (at === 0) return false;
+  while (at < body.length) {
+    const headerEnd = body.indexOf(10, at);
+    const headerLine = body.subarray(at, headerEnd === -1 ? body.length : headerEnd);
+    const header = JSON.parse(headerLine.toString("utf8")) as { type?: unknown; length?: unknown };
+    if (typeof header.type !== "string" || !ALLOWED_ITEMS.has(header.type)) return false;
+    if (headerEnd === -1) return true;
+    const start = headerEnd + 1;
+    const lineEnd = body.indexOf(10, start);
+    const end =
+      typeof header.length === "number"
+        ? start + header.length
+        : lineEnd === -1
+          ? body.length
+          : lineEnd;
+    at = end + 1;
+  }
+  return true;
+}
+
 /**
  * The browser SDK's tunnel (SPEC-operations "Tunnel"). Forwards an envelope to GlitchTip only when
  * the DSN in its first line names the configured host and project, so it isn't an open relay, and
@@ -54,7 +81,7 @@ export async function forwardErrorEnvelope(
 ): Promise<boolean> {
   try {
     const configured = configuredDsn ? targetOf(configuredDsn) : null;
-    if (!configured || !withinLimit()) return false;
+    if (!configured) return false;
     const body = await readCapped(request, TUNNEL_MAX_BYTES);
     if (!body) return false;
     const firstLine = body.toString("utf8").split("\n", 1)[0] ?? "";
@@ -63,6 +90,8 @@ export async function forwardErrorEnvelope(
     if (!sent || sent.origin !== configured.origin || sent.projectId !== configured.projectId) {
       return false;
     }
+    // Only an envelope that names our project counts against the limit, so junk can't starve it.
+    if (!onlyAllowedItems(body) || !withinLimit()) return false;
     const response = await send(`${configured.origin}/api/${configured.projectId}/envelope/`, {
       method: "POST",
       headers: { "content-type": "application/x-sentry-envelope" },

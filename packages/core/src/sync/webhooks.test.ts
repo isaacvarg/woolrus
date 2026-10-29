@@ -2,6 +2,7 @@ import { createHmac } from "node:crypto";
 import type { Db } from "@woolrus/db";
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { resetDb, testDb } from "../../test/db";
+import { createOrder } from "../../test/factories";
 import { StoreError } from "../adapters/woocommerce/errors";
 import { FakeStoreAdapter } from "../adapters/woocommerce/fake";
 import { JOBS_SCHEMA, queues } from "../jobs";
@@ -191,6 +192,27 @@ describe("processWooWebhook", () => {
     );
     return db.inboundWebhook.findFirstOrThrow({ where: { deliveryId: "second" } });
   }
+
+  it("a redacted delivery retried after the purge is marked done and imports nothing", async () => {
+    // An anonymized order exists, so a payload without an id must not match it by accident.
+    const { order } = await createOrder(db, {});
+    await db.order.update({ where: { id: order.id }, data: { piiRedactedAt: new Date() } });
+    const row = await db.inboundWebhook.create({
+      data: {
+        source: "woocommerce",
+        deliveryId: "redacted-retry",
+        topic: "order.updated",
+        payload: { redacted: true },
+        receivedAt: new Date("2026-01-01"),
+      },
+    });
+    const store = new FakeStoreAdapter();
+    await processWooWebhook(db, store, row.id);
+    const after = await db.inboundWebhook.findUniqueOrThrow({ where: { id: row.id } });
+    expect(after.processedAt).not.toBeNull();
+    expect(after.error).toBeNull();
+    expect(store.calls).toEqual([]);
+  });
 
   it("imports the order from the store, not from the payload, and marks the row processed", async () => {
     const store = new FakeStoreAdapter();

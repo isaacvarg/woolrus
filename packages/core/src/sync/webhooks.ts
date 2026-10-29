@@ -85,7 +85,15 @@ export async function processWooWebhook(
   { now = new Date() }: { now?: Date } = {},
 ): Promise<void> {
   const row = await db.inboundWebhook.findUniqueOrThrow({ where: { id: inboundWebhookId } });
-  const orderId = (row.payload as { id: number }).id;
+  const orderId = (row.payload as { id?: number }).id;
+  if (typeof orderId !== "number") {
+    // Redacted already (a retry after the purge): nothing left to import.
+    await db.inboundWebhook.update({
+      where: { id: inboundWebhookId },
+      data: { processedAt: row.processedAt ?? now, error: null },
+    });
+    return;
+  }
   // An anonymized order is never imported again; the delivery is done and its payload goes too.
   const anonymized = await db.order.findFirst({
     where: { wooOrderId: orderId, piiRedactedAt: { not: null } },

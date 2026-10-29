@@ -1,8 +1,9 @@
-import { type Db, Prisma } from "@woolrus/db";
+import { type Db, Prisma, type ReturnStatus } from "@woolrus/db";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { resetDb, testDb } from "../../test/db";
 import { createOrder } from "../../test/factories";
-import { purgePii } from "./anonymize";
+import { lockWooOrder } from "../sync/order-lock";
+import { anonymizeOrder, purgePii } from "./anonymize";
 
 const db: Db = testDb();
 afterAll(() => db.$disconnect());
@@ -239,13 +240,14 @@ describe("purgePii (SPEC-operations 'PII anonymization')", () => {
     await key("new", daysAgo(6));
 
     const result = await purgePii(db, { now });
-    expect(result).toMatchObject({ webhooks: 1, idempotency: 1 });
+    expect(result).toMatchObject({ webhooks: 2, idempotency: 1 });
     expect((await db.inboundWebhook.findUniqueOrThrow({ where: { id: old.id } })).payload).toEqual({
       redacted: true,
     });
+    // Never processed, but it arrived over 30 days ago: it still holds the customer's data.
     expect(
       (await db.inboundWebhook.findUniqueOrThrow({ where: { id: unprocessed.id } })).payload,
-    ).toMatchObject({ id: 1 });
+    ).toEqual({ redacted: true });
     expect(
       (await db.inboundWebhook.findUniqueOrThrow({ where: { id: fresh.id } })).payload,
     ).toMatchObject({ id: 1 });
@@ -270,7 +272,7 @@ describe("purgePii (SPEC-operations 'PII anonymization')", () => {
     });
 
     const result = await purgePii(db, { now });
-    expect(result).toEqual({ orders: 0, webhooks: 0, idempotency: 1 });
+    expect(result).toEqual({ orders: 0, webhooks: 0, idempotency: 1, failed: 0 });
     expect((await reload(order.id)).piiRedactedAt).toBeNull();
     expect((await db.inboundWebhook.findUniqueOrThrow({ where: { id: hook.id } })).payload).toEqual(
       { id: 1 },
@@ -298,6 +300,7 @@ describe("purgePii (SPEC-operations 'PII anonymization')", () => {
       orders: 1,
       webhooks: 1,
       idempotency: 1,
+      failed: 0,
     });
     expect((await reload(order.id)).piiRedactedAt).toBeNull();
     expect(await db.idempotentRequest.count()).toBe(1);
@@ -317,4 +320,149 @@ describe("purgePii (SPEC-operations 'PII anonymization')", () => {
     expect(result.orders).toBe(206);
     expect(await db.order.count({ where: { piiRedactedAt: null } })).toBe(0);
   }, 60_000);
+});
+
+describe("purgePii edge cases", () => {
+  it("keeps an order at exactly the period and anonymizes one a millisecond past it", async () => {
+    const exact = await finished("COMPLETED", 0);
+    const past = await finished("COMPLETED", 0);
+    const cancelled = await finished("CANCELLED", 29);
+    const cutoff = daysAgo(30);
+    await db.order.update({ where: { id: exact.order.id }, data: { completedAt: cutoff } });
+    await db.order.update({
+      where: { id: past.order.id },
+      data: { completedAt: new Date(cutoff.getTime() - 1) },
+    });
+    const result = await purgePii(db, { now });
+    expect(result.orders).toBe(1);
+    expect((await reload(exact.order.id)).piiRedactedAt).toBeNull();
+    expect((await reload(past.order.id)).piiRedactedAt).not.toBeNull();
+    expect((await reload(cancelled.order.id)).piiRedactedAt).toBeNull();
+  });
+
+  it("never anonymizes a completed order without a completion time", async () => {
+    const { order } = await finished("COMPLETED", 90);
+    await db.order.update({ where: { id: order.id }, data: { completedAt: null } });
+    expect((await purgePii(db, { now })).orders).toBe(0);
+  });
+
+  it.each([
+    ["REQUESTED", true],
+    ["APPROVED", true],
+    ["LABEL_SENT", true],
+    ["RECEIVED", true],
+    ["INSPECTED", true],
+    ["CLOSED", false],
+    ["REJECTED", false],
+  ] as [ReturnStatus, boolean][])(
+    "a %s return blocks anonymization: %s",
+    async (status, blocks) => {
+      const { order } = await finished("COMPLETED", 40);
+      await db.returnRequest.create({
+        data: { orderId: order.id, rmaNumber: `RMA-${status}`, reason: "x", status },
+      });
+      expect((await purgePii(db, { now })).orders).toBe(blocks ? 0 : 1);
+    },
+  );
+
+  it("two overlapping runs anonymize an order once, with one audit marker", async () => {
+    const { order } = await finished("COMPLETED", 40);
+    const runs = await Promise.all([purgePii(db, { now }), purgePii(db, { now })]);
+    expect(runs.reduce((sum, r) => sum + r.orders, 0)).toBe(1);
+    expect(await db.auditEvent.count({ where: { action: "pii.anonymize" } })).toBe(1);
+    expect((await reload(order.id)).piiRedactedAt).toEqual(now);
+  });
+
+  it("anonymizeOrder on an already anonymized order does nothing", async () => {
+    const { order } = await finished("COMPLETED", 40);
+    expect(await db.$transaction((tx) => anonymizeOrder(tx, order.id, now))).toBe(true);
+    expect(await db.$transaction((tx) => anonymizeOrder(tx, order.id, new Date()))).toBe(false);
+    expect(await db.auditEvent.count({ where: { action: "pii.anonymize" } })).toBe(1);
+    expect((await reload(order.id)).piiRedactedAt).toEqual(now);
+  });
+
+  it("one order failing leaves the others anonymized and is counted", async () => {
+    const first = await finished("COMPLETED", 40);
+    const second = await finished("COMPLETED", 40);
+    const third = await finished("COMPLETED", 40);
+    let calls = 0;
+    const flaky = new Proxy(db, {
+      get(target, prop) {
+        const value = Reflect.get(target, prop);
+        if (prop === "$transaction") {
+          return (fn: never, options: never) =>
+            ++calls === 1
+              ? Promise.reject(new Error("boom"))
+              : (value as typeof db.$transaction).call(target, fn, options);
+        }
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+    const result = await purgePii(flaky, { now });
+    expect(result).toMatchObject({ orders: 2, failed: 1 });
+    const done = await db.order.findMany({
+      where: { piiRedactedAt: { not: null } },
+      select: { id: true },
+    });
+    expect(done).toHaveLength(2);
+    expect([first, second, third].length).toBe(3);
+    // The next run picks the failed one up.
+    expect((await purgePii(db, { now })).orders).toBe(1);
+  });
+
+  it("waits for the store import's lock on the order before anonymizing it", async () => {
+    const { order } = await finished("COMPLETED", 40);
+    const wooOrderId = (await db.order.findUniqueOrThrow({ where: { id: order.id } })).wooOrderId;
+    let release!: () => void;
+    const hold = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let locked!: () => void;
+    const isLocked = new Promise<void>((resolve) => {
+      locked = resolve;
+    });
+    const importing = db.$transaction(
+      async (tx) => {
+        await lockWooOrder(tx, wooOrderId);
+        locked();
+        await hold;
+      },
+      { timeout: 20_000 },
+    );
+    await isLocked;
+    const purge = purgePii(db, { now });
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    expect((await reload(order.id)).piiRedactedAt).toBeNull();
+    release();
+    await importing;
+    expect((await purge).orders).toBe(1);
+    expect((await reload(order.id)).piiRedactedAt).toEqual(now);
+  });
+
+  it("turns an unusable required address into {} instead of failing", async () => {
+    const { order } = await finished("COMPLETED", 40);
+    await db.order.update({
+      where: { id: order.id },
+      data: { shippingAddress: [], billingAddress: "text" },
+    });
+    expect(await purgePii(db, { now })).toMatchObject({ orders: 1, failed: 0 });
+    const o = await db.order.findUniqueOrThrow({ where: { id: order.id } });
+    expect(o.shippingAddress).toEqual({});
+    expect(o.billingAddress).toEqual({});
+  });
+
+  it("redacting webhooks twice changes nothing the second time", async () => {
+    await db.inboundWebhook.create({
+      data: {
+        source: "woocommerce",
+        deliveryId: "d",
+        topic: "order.updated",
+        payload: { id: 1, billing: personal },
+        receivedAt: daysAgo(40),
+        processedAt: daysAgo(40),
+      },
+    });
+    expect((await purgePii(db, { now })).webhooks).toBe(1);
+    expect((await purgePii(db, { now })).webhooks).toBe(0);
+  });
 });

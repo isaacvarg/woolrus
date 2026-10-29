@@ -27,7 +27,26 @@ sh "$here/backup.sh" >/dev/null
 count=$(ls "$work/out"/woolrus-*.dump | wc -l)
 [ "$count" -eq 14 ] || fail "expected 14 dumps, got $count"
 [ ! -e "$work/out/woolrus-20200101T000000Z.dump" ] || fail "oldest dump should be gone"
-ls "$work/out"/woolrus-2020*.dump | head -1 | grep -q 0000Z || fail "unexpected survivors"
+[ ! -e "$work/out/woolrus-20200102T000000Z.dump" ] || fail "second oldest should be gone"
+# 15 old + the new dump = 16; the two oldest go, so 03..15 and the new one survive.
+i=3
+while [ $i -le 15 ]; do
+  [ -e "$work/out/woolrus-2020010$(printf '%02d' $i)T000000Z.dump" ] || fail "dump $i should survive"
+  i=$((i + 1))
+done
+[ "$(ls "$work/out"/woolrus-2020*.dump | wc -l)" -eq 13 ] || fail "wrong survivors"
+newest=$(ls "$work/out"/woolrus-*.dump | sort -r | head -1)
+[ "$(stat -c %a "$newest")" = 600 ] || fail "dump should be mode 600"
+
+# Fewer than 14 dumps and files that aren't dumps: nothing is removed.
+echo keep > "$work/out/notes.txt"
+sh "$here/backup.sh" >/dev/null
+[ -e "$work/out/notes.txt" ] || fail "unrelated file removed"
+[ "$(ls "$work/out"/woolrus-*.dump | wc -l)" -eq 14 ] || fail "still 14 after another run"
+
+# A temp file left by a killed run doesn't break the next one.
+touch "$work/out/.woolrus-leftover.dump.tmp"
+sh "$here/backup.sh" >/dev/null || fail "leftover tmp broke the run"
 
 # Failing pg_dump: non-zero exit, no partial/temp file, dumps untouched.
 before=$(ls -A "$work/out" | sort)

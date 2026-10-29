@@ -9,6 +9,7 @@ import { reconcileKnownOrder } from "./apply";
 import { createLines } from "./lines";
 import { withSyncLock } from "./lock";
 import { type MappedOrder, mapOrder, type StoreUnits } from "./mapping";
+import { lockWooOrder } from "./order-lock";
 import { type FetchedCatalog, fetchOrderCatalog, upsertCatalog } from "./products-upsert";
 import { finishRun, recordRunError, runErrorKey, startRun } from "./runs";
 
@@ -31,9 +32,6 @@ export type SyncOrdersResult = {
   skipped: number;
   failed: number;
 };
-
-/** First argument of the two-key advisory lock taken per WooCommerce order id. */
-const ORDER_LOCK_NAMESPACE = 4_201_002;
 
 /** Stage-event reason for an import: a message key, translated where history is shown. */
 const IMPORTED_REASON = "sync.reason.imported";
@@ -223,10 +221,6 @@ function isNewVersion(
     fetchedAt.getTime() > known.syncedAt.getTime() &&
     !isDeepStrictEqual(order.rawPayload, known.rawPayload)
   );
-}
-
-async function lockWooOrder(tx: DbTx, wooOrderId: number): Promise<void> {
-  await tx.$executeRaw`SELECT pg_advisory_xact_lock(${ORDER_LOCK_NAMESPACE}::int, ${wooOrderId}::int)`;
 }
 
 function findKnown(db: Db | DbTx, wooOrderId: number) {

@@ -66,6 +66,29 @@ describe("error tunnel", () => {
   });
 });
 
+describe("item types and counting", () => {
+  it("drops an envelope carrying an attachment or a replay", async () => {
+    for (const type of ["attachment", "replay_event", "replay_recording"]) {
+      const body = `${JSON.stringify({ dsn })}\n{"type":"event"}\n{}\n{"type":"${type}","length":2}\nab`;
+      expect(await forwardErrorEnvelope(post(body), dsn)).toBe(false);
+    }
+    expect(posted).toEqual([]);
+  });
+
+  it("forwards an event followed by a client report", async () => {
+    const body = `${JSON.stringify({ dsn })}\n{"type":"event"}\n{"message":"x"}\n{"type":"client_report"}\n{}`;
+    expect(await forwardErrorEnvelope(post(body), dsn)).toBe(true);
+  });
+
+  it("does not count junk or foreign-DSN envelopes against the limit", async () => {
+    for (let i = 0; i < TUNNEL_MAX_PER_MINUTE + 5; i++) {
+      await forwardErrorEnvelope(post("not json"), dsn);
+      await forwardErrorEnvelope(post(envelope("https://key@evil.example/7")), dsn);
+    }
+    expect(await forwardErrorEnvelope(post(envelope(dsn)), dsn)).toBe(true);
+  });
+});
+
 describe("rate limit", () => {
   it("stops forwarding past the per-minute cap", async () => {
     for (let i = 0; i < TUNNEL_MAX_PER_MINUTE; i++)

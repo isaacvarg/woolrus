@@ -64,6 +64,8 @@ jobs:
       - name: Job queue tables
         run: pnpm jobs:install
       - run: pnpm test
+      - name: Backup script tests
+        run: pnpm test:backup
       - run: pnpm build
       - name: End-to-end smoke tests
         run: |

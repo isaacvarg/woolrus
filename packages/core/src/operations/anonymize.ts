@@ -2,11 +2,14 @@ import { type Db, type DbTx, Prisma, type ReturnStatus } from "@woolrus/db";
 import { PII_KEYS } from "@woolrus/logger";
 import { recordAudit } from "../audit";
 import { operationsActor } from "../permissions";
+import { lockWooOrder } from "../sync/order-lock";
 
 // PII anonymization (SPEC-operations "PII anonymization", NFR-SEC-06). Finished orders older than
 // `Settings.piiRetentionDays` lose the customer's identity but stay usable for metrics.
 
 export const PII_BATCH_SIZE = 200;
+/** One order's transaction: its audit history is rewritten row by row, which can pass Prisma's 5 s default. */
+const ORDER_TX_TIMEOUT_MS = 60_000;
 /** Idempotency records exist for replays within minutes; they hold response DTOs with customer data. */
 export const IDEMPOTENCY_KEEP_DAYS = 7;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -14,7 +17,13 @@ const REDACTED = "[redacted]";
 /** A return in any other status is still open. */
 const OPEN_RETURN = { notIn: ["CLOSED", "REJECTED"] satisfies ReturnStatus[] };
 
-export type PurgeResult = { orders: number; webhooks: number; idempotency: number };
+export type PurgeResult = {
+  orders: number;
+  webhooks: number;
+  idempotency: number;
+  /** Orders whose anonymization threw; the next run tries them again. */
+  failed: number;
+};
 
 /** Orders past the period that anonymization may touch: finished, not yet redacted, no open return. */
 function eligible(cutoff: Date): Prisma.OrderWhereInput {
@@ -44,21 +53,26 @@ export async function purgePii(
   });
   const days = settings?.piiRetentionDays ?? null;
   const idempotencyCutoff = new Date(now.getTime() - IDEMPOTENCY_KEEP_DAYS * DAY_MS);
-  const result: PurgeResult = { orders: 0, webhooks: 0, idempotency: 0 };
+  const result: PurgeResult = { orders: 0, webhooks: 0, idempotency: 0, failed: 0 };
 
   if (days !== null) {
     const cutoff = new Date(now.getTime() - days * DAY_MS);
+    // A delivery that never got processed still holds the order's personal data, so it ages out by
+    // the time it arrived.
     const webhooks = {
-      processedAt: { lt: cutoff },
+      OR: [{ processedAt: { lt: cutoff } }, { processedAt: null, receivedAt: { lt: cutoff } }],
       NOT: { payload: { equals: { redacted: true } } },
     };
     if (dryRun) {
       result.orders = await db.order.count({ where: eligible(cutoff) });
       result.webhooks = await db.inboundWebhook.count({ where: webhooks });
     } else {
+      // Anonymized orders leave `eligible`, so the loop ends; an order that fails stays eligible and is
+      // skipped for the rest of this run instead of being re-picked first every batch.
+      const failed = new Set<string>();
       for (;;) {
         const batch = await db.order.findMany({
-          where: eligible(cutoff),
+          where: { AND: [eligible(cutoff), { id: { notIn: [...failed] } }] },
           select: { id: true },
           orderBy: { id: "asc" },
           take: PII_BATCH_SIZE,
@@ -66,12 +80,22 @@ export async function purgePii(
         if (batch.length === 0) break;
         let done = 0;
         for (const { id } of batch) {
-          if (await db.$transaction((tx) => anonymizeOrder(tx, id, now))) done += 1;
+          try {
+            if (
+              await db.$transaction((tx) => anonymizeOrder(tx, id, now), {
+                timeout: ORDER_TX_TIMEOUT_MS,
+              })
+            )
+              done += 1;
+          } catch {
+            failed.add(id);
+          }
         }
         result.orders += done;
-        // Nothing in a batch changed: stop rather than loop on rows that can't be anonymized.
+        // Nothing in a batch changed (all done by another run, or all failed): stop.
         if (done === 0) break;
       }
+      result.failed = failed.size;
       result.webhooks = (
         await db.inboundWebhook.updateMany({
           where: webhooks,
@@ -89,10 +113,8 @@ export async function purgePii(
 }
 
 /** What survives of an address: where it is, not who is there. Keeps the key names it was stored with. */
-function reduceAddress(
-  value: Prisma.JsonValue | null,
-): Prisma.InputJsonValue | typeof Prisma.DbNull {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) return Prisma.DbNull;
+function reduceAddress(value: Prisma.JsonValue | null): Prisma.InputJsonValue | null {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
   const out: Record<string, Prisma.JsonValue> = {};
   for (const key of ["state", "postcode", "postalCode", "country"]) {
     const kept = value[key];
@@ -139,6 +161,11 @@ function keptPayload(raw: Prisma.JsonValue): Prisma.InputJsonObject {
  * happens when two runs overlap; the guarded update makes the second a no-op.
  */
 export async function anonymizeOrder(tx: DbTx, orderId: string, now: Date): Promise<boolean> {
+  // Same lock as the store import, taken before reading: an import in flight finishes first, and
+  // the next one sees the redaction and skips the order.
+  const known = await tx.order.findUnique({ where: { id: orderId }, select: { wooOrderId: true } });
+  if (!known) return false;
+  await lockWooOrder(tx, known.wooOrderId);
   const order = await tx.order.findUnique({
     where: { id: orderId },
     include: { packages: { select: { id: true, labels: { select: { id: true } } } } },
@@ -151,10 +178,11 @@ export async function anonymizeOrder(tx: DbTx, orderId: string, now: Date): Prom
       customerName: "",
       customerEmail: null,
       customerNote: null,
-      shippingAddress: reduceAddress(order.shippingAddress) as Prisma.InputJsonValue,
-      billingAddress: reduceAddress(order.billingAddress) as Prisma.InputJsonValue,
-      shipTo: reduceAddress(order.shipTo),
-      shipToOriginal: reduceAddress(order.shipToOriginal),
+      // The two required columns can't hold null, so an unusable value becomes `{}`.
+      shippingAddress: reduceAddress(order.shippingAddress) ?? {},
+      billingAddress: reduceAddress(order.billingAddress) ?? {},
+      shipTo: reduceAddress(order.shipTo) ?? Prisma.DbNull,
+      shipToOriginal: reduceAddress(order.shipToOriginal) ?? Prisma.DbNull,
       shipToMessages: [],
       externalChangeSummary: Prisma.DbNull,
       rawPayload: keptPayload(order.rawPayload),

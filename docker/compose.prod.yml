@@ -74,6 +74,7 @@ services:
       - sh
       - -c
       - |
+        umask 077
         export -p | grep ' PG' > /etc/backup.env
         echo '0 2 * * * . /etc/backup.env; sh /backup.sh > /proc/1/fd/1 2>&1' > /etc/crontabs/root
         exec crond -f -l 8

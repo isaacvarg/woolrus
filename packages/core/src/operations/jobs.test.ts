@@ -115,6 +115,16 @@ describe("listFailedJobs input", () => {
     });
   });
 
+  it("refuses a cursor whose timestamp Postgres would reject", async () => {
+    const id = crypto.randomUUID();
+    for (const at of ["1", "foo 1", "2026-01-01"]) {
+      const cursor = Buffer.from(JSON.stringify([at, id])).toString("base64url");
+      await expect(listFailedJobs(db, admin, { cursor })).rejects.toMatchObject({
+        kind: "BAD_REQUEST",
+      });
+    }
+  });
+
   it("masks email addresses in a stored error message", async () => {
     await failedJob(
       queues.ordersSync,
@@ -149,6 +159,50 @@ describe("dismissFailedJob", () => {
     expect(await jobState(id)).toBeNull();
     const audit = await db.auditEvent.findFirstOrThrow({ where: { entityType: "Job" } });
     expect(audit).toMatchObject({ entityId: id, action: "job.dismiss" });
+  });
+});
+
+describe("commands on a job that is not failed (stale page)", () => {
+  async function jobIn(state: string): Promise<string> {
+    const id = await failedJob(queues.ordersSync, { reason: "manual" });
+    await db.$executeRawUnsafe(
+      `UPDATE ${JOBS_SCHEMA}.job SET state = $1::${JOBS_SCHEMA}.job_state WHERE id = $2::uuid`,
+      state,
+      id,
+    );
+    return id;
+  }
+
+  it.each(["completed", "active", "retry", "created"])(
+    "refuses retry and dismiss of a %s job and changes nothing",
+    async (state) => {
+      const id = await jobIn(state);
+      const args = { queue: queues.ordersSync, id };
+      await expect(retryFailedJob(db, admin, args)).rejects.toMatchObject({ kind: "NOT_FOUND" });
+      await expect(dismissFailedJob(db, admin, args)).rejects.toMatchObject({ kind: "NOT_FOUND" });
+      expect(await jobState(id)).toBe(state);
+      expect(await db.auditEvent.count({ where: { entityType: "Job" } })).toBe(0);
+    },
+  );
+
+  it("refuses the right id under the wrong queue name", async () => {
+    const id = await failedJob(queues.ordersSync, { reason: "manual" });
+    await expect(
+      retryFailedJob(db, admin, { queue: queues.storageDelete, id }),
+    ).rejects.toMatchObject({ kind: "NOT_FOUND" });
+    expect(await jobState(id)).toBe("failed");
+  });
+
+  it("two retries of one job: one succeeds, one is NOT_FOUND, one audit row", async () => {
+    const id = await failedJob(queues.ordersSync, { reason: "manual" });
+    const args = { queue: queues.ordersSync, id };
+    const results = await Promise.allSettled([
+      retryFailedJob(db, admin, args),
+      retryFailedJob(db, admin, args),
+    ]);
+    expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+    expect(results.filter((r) => r.status === "rejected")).toHaveLength(1);
+    expect(await db.auditEvent.count({ where: { entityType: "Job" } })).toBe(1);
   });
 });
 

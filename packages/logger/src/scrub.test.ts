@@ -39,4 +39,26 @@ describe("scrubEvent", () => {
     ]);
     expect(event.exception?.values?.[0]?.value).toBe("bounce for [redacted]");
   });
+
+  it("strips search terms from URLs, the query string, breadcrumb URLs and the message", () => {
+    const event = scrubEvent({
+      message: "failed for ann@example.com",
+      transaction: "/orders?search=Jane+Doe",
+      request: {
+        url: "https://woolrus.test/orders?search=Jane+Doe#top",
+        query_string: "search=Jane+Doe",
+      },
+      breadcrumbs: [
+        { data: { url: "/rpc/orders/list?input=%7B%22search%22%3A%22Jane%22%7D", method: "GET" } },
+        { data: { from: "/orders?search=Jane", to: "/orders/o-1?search=Jane" } },
+      ],
+    });
+    expect(event.request).toEqual({ url: "https://woolrus.test/orders" });
+    expect(event.message).toBe("failed for [redacted]");
+    expect(event.transaction).toBe("/orders");
+    expect(event.breadcrumbs).toEqual([
+      { data: { url: "/rpc/orders/list", method: "GET" } },
+      { data: { from: "/orders", to: "/orders/o-1" } },
+    ]);
+  });
 });
