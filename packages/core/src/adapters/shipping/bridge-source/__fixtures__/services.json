@@ -1,0 +1,65 @@
+{
+  "services": [
+    {
+      "carrierCode": "CARRIER_A",
+      "carrierName": "Carrier A",
+      "serviceCode": "A_GROUND",
+      "serviceName": "A Ground",
+      "inbound": false,
+      "packageTypes": [
+        { "packageTypeCode": "A_ENVELOPE", "name": "Envelope", "custom": false },
+        { "packageTypeCode": "A_CUSTOM", "name": "Customer packaging", "custom": true }
+      ],
+      "supportedCountries": ["US"],
+      "unsupportedCountries": []
+    },
+    {
+      "carrierCode": "CARRIER_A",
+      "carrierName": "Carrier A",
+      "serviceCode": "A_EXPRESS_INTL",
+      "serviceName": "A Express International",
+      "inbound": false,
+      "packageTypes": [{ "packageTypeCode": "A_CUSTOM_INTL", "custom": true }],
+      "supportedCountries": ["US", "CA", "MX"],
+      "unsupportedCountries": []
+    },
+    {
+      "carrierCode": "CARRIER_A",
+      "carrierName": "Carrier A",
+      "serviceCode": "A_RETURN",
+      "serviceName": "A Return (inbound)",
+      "inbound": true,
+      "packageTypes": [{ "packageTypeCode": "A_CUSTOM", "custom": true }],
+      "supportedCountries": ["US"],
+      "unsupportedCountries": []
+    },
+    {
+      "carrierCode": "CARRIER_B",
+      "carrierName": "Carrier B",
+      "serviceCode": "B_WORLD",
+      "serviceName": "B World",
+      "inbound": false,
+      "packageTypes": [{ "packageTypeCode": "B_CUSTOM", "custom": true }],
+      "supportedCountries": [],
+      "unsupportedCountries": ["CU", "KP"]
+    },
+    {
+      "carrierCode": "CARRIER_B",
+      "serviceCode": "B_NO_CUSTOM",
+      "serviceName": "B Parcel",
+      "inbound": false,
+      "packageTypes": [{ "packageTypeCode": "B_PALLET", "custom": false }],
+      "supportedCountries": ["US"],
+      "unsupportedCountries": []
+    },
+    {
+      "carrierCode": "CARRIER_C",
+      "carrierName": "Carrier C",
+      "serviceCode": "C_RETURN",
+      "serviceName": "C Return (inbound)",
+      "inbound": true,
+      "packageTypes": [{ "packageTypeCode": "C_CUSTOM", "custom": true }],
+      "supportedCountries": ["US"]
+    }
+  ]
+}

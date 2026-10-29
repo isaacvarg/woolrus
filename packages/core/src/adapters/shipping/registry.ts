@@ -1,6 +1,7 @@
 import { providerCredentialSchemas } from "@woolrus/contracts";
 import type { Db } from "@woolrus/db";
 import { z } from "zod";
+import { BridgeSourceAdapter } from "./bridge-source/adapter";
 import { readProviderCredentials } from "./credentials";
 import { createFakeShippingProvider, type FakeLabel } from "./fake";
 import { type ProviderId, providerIds, type ShippingProvider } from "./provider";
@@ -26,6 +27,7 @@ export type AdapterFactories = {
 /** The real adapters in this build. A provider missing here can't be enabled. */
 export const shippingAdapters: AdapterFactories = {
   SHIPSTATION: (credentials) => new ShipStationAdapter(credentials),
+  BRIDGE_SOURCE: (credentials, config) => new BridgeSourceAdapter(credentials, config),
 };
 
 /**
