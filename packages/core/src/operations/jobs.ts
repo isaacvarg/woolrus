@@ -33,10 +33,18 @@ const encodeCursor = (row: JobRow): string =>
     JSON.stringify([(row.completed_on ?? row.created_on).toISOString(), row.id]),
   ).toString("base64url");
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 function decodeCursor(cursor: string): Cursor {
   try {
     const [at, id] = JSON.parse(Buffer.from(cursor, "base64url").toString());
-    if (typeof at === "string" && typeof id === "string" && !Number.isNaN(Date.parse(at)))
+    // The id is cast to uuid in SQL, so anything else would be a database error, not a 400.
+    if (
+      typeof at === "string" &&
+      typeof id === "string" &&
+      UUID.test(id) &&
+      !Number.isNaN(Date.parse(at))
+    )
       return { at, id };
   } catch {}
   throw new AppError("BAD_REQUEST", "errors.validation", { cursor: "errors.field.invalid" });
@@ -60,9 +68,12 @@ export function summarizePayload(data: unknown): FailedJobSummary {
   };
 }
 
-/** The error message a failed handler stored, never its stack. */
+const EMAIL = /[^\s@<>"']+@[\w-]+(?:\.[\w-]+)+/g;
+
+/** The error message a failed handler stored, never its stack, with email addresses masked. */
 function errorMessage(output: unknown): string | null {
-  return isRecord(output) ? text(output.message) : text(output);
+  const message = isRecord(output) ? text(output.message) : text(output);
+  return message === null ? null : message.replace(EMAIL, "[redacted]");
 }
 
 export async function listFailedJobs(

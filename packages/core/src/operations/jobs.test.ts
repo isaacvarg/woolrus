@@ -107,6 +107,25 @@ describe("listFailedJobs", () => {
   });
 });
 
+describe("listFailedJobs input", () => {
+  it("refuses a cursor whose id isn't a uuid", async () => {
+    const cursor = Buffer.from(JSON.stringify(["2026-01-01T00:00:00Z", "x"])).toString("base64url");
+    await expect(listFailedJobs(db, admin, { cursor })).rejects.toMatchObject({
+      kind: "BAD_REQUEST",
+    });
+  });
+
+  it("masks email addresses in a stored error message", async () => {
+    await failedJob(
+      queues.ordersSync,
+      { reason: "manual" },
+      { message: "550 rejected ann@example.com: no" },
+    );
+    const page = await listFailedJobs(db, admin, {});
+    expect(page.rows[0]?.error).toBe("550 rejected [redacted]: no");
+  });
+});
+
 describe("retryFailedJob", () => {
   it("puts the job back to retry and writes an audit row", async () => {
     const id = await failedJob(queues.ordersSync, { reason: "manual" });

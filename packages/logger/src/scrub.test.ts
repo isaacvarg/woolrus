@@ -26,4 +26,17 @@ describe("scrubEvent", () => {
     });
     expect(event.request).toEqual({ url: "/rpc/x", headers: { "x-request-id": "r1" } });
   });
+
+  it("redacts breadcrumb data and masks emails in breadcrumbs and exception messages", () => {
+    const event = scrubEvent({
+      breadcrumbs: [
+        { message: "sent to ann@example.com", data: { customerName: "Ann", url: "/x" } },
+      ],
+      exception: { values: [{ value: "bounce for bob@example.org" }] },
+    });
+    expect(event.breadcrumbs).toEqual([
+      { message: "sent to [redacted]", data: { customerName: "[redacted]", url: "/x" } },
+    ]);
+    expect(event.exception?.values?.[0]?.value).toBe("bounce for [redacted]");
+  });
 });

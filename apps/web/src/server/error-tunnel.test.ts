@@ -1,7 +1,12 @@
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { forwardErrorEnvelope, TUNNEL_MAX_BYTES } from "./error-tunnel";
+import {
+  forwardErrorEnvelope,
+  resetTunnelLimit,
+  TUNNEL_MAX_BYTES,
+  TUNNEL_MAX_PER_MINUTE,
+} from "./error-tunnel";
 
 let server: Server;
 let dsn: string;
@@ -21,6 +26,7 @@ beforeAll(async () => {
 });
 afterAll(() => server.close());
 beforeEach(() => {
+  resetTunnelLimit();
   posted.length = 0;
 });
 
@@ -57,5 +63,14 @@ describe("error tunnel", () => {
   it("does not throw when GlitchTip is down", async () => {
     const refused = () => Promise.reject(new Error("ECONNREFUSED"));
     expect(await forwardErrorEnvelope(post(envelope(dsn)), dsn, refused)).toBe(false);
+  });
+});
+
+describe("rate limit", () => {
+  it("stops forwarding past the per-minute cap", async () => {
+    for (let i = 0; i < TUNNEL_MAX_PER_MINUTE; i++)
+      expect(await forwardErrorEnvelope(post(envelope(dsn)), dsn)).toBe(true);
+    expect(await forwardErrorEnvelope(post(envelope(dsn)), dsn)).toBe(false);
+    expect(posted).toHaveLength(TUNNEL_MAX_PER_MINUTE);
   });
 });

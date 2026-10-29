@@ -15,12 +15,16 @@ export function requestIdOf(headers: Headers): string | undefined {
   return headers.get("x-request-id") ?? undefined;
 }
 
+/** A caller's id is kept only if it is short and plain; otherwise it could flood logs and audit rows. */
+const SAFE_REQUEST_ID = /^[\w.-]{1,128}$/;
+
 /**
  * The context for one API call. Its headers carry the request id (the caller's `x-request-id`, or a
  * new one), so `resolveActor` can put it on the Actor and audit rows record it.
  */
 export function requestContext(request: Request): RequestContext {
-  const requestId = request.headers.get("x-request-id") ?? crypto.randomUUID();
+  const sent = request.headers.get("x-request-id");
+  const requestId = sent && SAFE_REQUEST_ID.test(sent) ? sent : crypto.randomUUID();
   const headers = new Headers(request.headers);
   headers.set("x-request-id", requestId);
   return { headers, log: createLogger({ requestId }), trace: {} };

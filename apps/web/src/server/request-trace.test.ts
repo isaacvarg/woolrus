@@ -58,6 +58,21 @@ describe("traced", () => {
     expect(response.headers.get("x-request-id")).toBe("abc");
   });
 
+  it("replaces an incoming x-request-id that is too long or has odd characters", async () => {
+    for (const bad of ["x".repeat(129), 'a b"c']) {
+      const { log } = capture();
+      const response = await traced(
+        request({ "x-request-id": bad }),
+        "/rpc",
+        async () => new Response(null, { status: 204 }),
+        log,
+      );
+      const id = response.headers.get("x-request-id");
+      expect(id).not.toBe(bad);
+      expect(id).toMatch(/^[0-9a-f-]{36}$/);
+    }
+  });
+
   it("logs 4xx at info and 5xx at error", async () => {
     const { lines, log } = capture();
     await traced(request(), "/rpc", async () => new Response(null, { status: 403 }), log);

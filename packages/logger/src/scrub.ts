@@ -20,7 +20,12 @@ export type ScrubbableEvent = {
   request?: { data?: unknown; cookies?: unknown; headers?: Record<string, string> };
   extra?: Record<string, unknown>;
   contexts?: object;
+  breadcrumbs?: { message?: string; data?: Record<string, unknown> }[];
+  exception?: { values?: { value?: string }[] };
 };
+
+const EMAIL = /[^\s@<>"']+@[\w-]+(?:\.[\w-]+)+/g;
+const maskEmails = (text: string) => text.replace(EMAIL, "[redacted]");
 
 /**
  * The shared `beforeSend` for error reports (SPEC-operations "Error tracking"): drops request
@@ -39,5 +44,22 @@ export function scrubEvent<T extends ScrubbableEvent>(event: T): T {
   }
   if (event.extra) scrubbed.extra = redactDeep(event.extra) as T["extra"];
   if (event.contexts) scrubbed.contexts = redactDeep(event.contexts) as T["contexts"];
+  if (event.breadcrumbs) {
+    scrubbed.breadcrumbs = event.breadcrumbs.map((crumb) => ({
+      ...crumb,
+      ...(crumb.message === undefined ? {} : { message: maskEmails(crumb.message) }),
+      ...(crumb.data === undefined
+        ? {}
+        : { data: redactDeep(crumb.data) as Record<string, unknown> }),
+    }));
+  }
+  if (event.exception?.values) {
+    scrubbed.exception = {
+      ...event.exception,
+      values: event.exception.values.map((v) =>
+        v.value === undefined ? v : { ...v, value: maskEmails(v.value) },
+      ),
+    };
+  }
   return scrubbed;
 }

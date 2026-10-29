@@ -1,5 +1,20 @@
 export const TUNNEL_MAX_BYTES = 1024 * 1024;
 
+/** Envelopes forwarded per minute, all callers together: a flood can't fill GlitchTip's quota. */
+export const TUNNEL_MAX_PER_MINUTE = 120;
+let window = { startedAt: 0, count: 0 };
+
+/** Forget the rate window (tests). */
+export function resetTunnelLimit(): void {
+  window = { startedAt: 0, count: 0 };
+}
+
+function withinLimit(now = Date.now()): boolean {
+  if (now - window.startedAt >= 60_000) window = { startedAt: now, count: 0 };
+  window.count += 1;
+  return window.count <= TUNNEL_MAX_PER_MINUTE;
+}
+
 type IngestTarget = { origin: string; projectId: string };
 
 function targetOf(dsn: string): IngestTarget | null {
@@ -28,7 +43,8 @@ async function readCapped(request: Request, max: number): Promise<Buffer | null>
 
 /**
  * The browser SDK's tunnel (SPEC-operations "Tunnel"). Forwards an envelope to GlitchTip only when
- * the DSN in its first line names the configured host and project, so it isn't an open relay.
+ * the DSN in its first line names the configured host and project, so it isn't an open relay, and
+ * at most `TUNNEL_MAX_PER_MINUTE` a minute.
  * Never throws and never says why: the caller answers 204 whatever happens here.
  */
 export async function forwardErrorEnvelope(
@@ -38,7 +54,7 @@ export async function forwardErrorEnvelope(
 ): Promise<boolean> {
   try {
     const configured = configuredDsn ? targetOf(configuredDsn) : null;
-    if (!configured) return false;
+    if (!configured || !withinLimit()) return false;
     const body = await readCapped(request, TUNNEL_MAX_BYTES);
     if (!body) return false;
     const firstLine = body.toString("utf8").split("\n", 1)[0] ?? "";

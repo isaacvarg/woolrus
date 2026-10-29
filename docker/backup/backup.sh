@@ -3,6 +3,8 @@
 # Dumps are written under a temp name and renamed on success, so a failure never leaves a partial dump and
 # never touches earlier ones. Connection settings come from the standard PG* variables.
 set -eu
+# Dumps hold customer data and encrypted secrets: owner-only.
+umask 077
 
 dir=${BACKUP_DIR:-/backups}
 keep=${BACKUP_KEEP:-14}
