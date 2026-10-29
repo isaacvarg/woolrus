@@ -8,6 +8,12 @@
     "dismiss": "Cerrar",
     "notifications": "Notificaciones"
   },
+  "errorScreen": {
+    "title": "Algo salió mal",
+    "body": "Woolrus tuvo un problema inesperado. Inténtalo de nuevo; si sigue pasando, avisa a quien administra el servidor.",
+    "retry": "Reintentar",
+    "reference": "Referencia:"
+  },
   "nav": {
     "boxes": "Cajas",
     "settings": "Configuración",

@@ -75,3 +75,5 @@ jobs:
           E2E_BASE_URL: http://localhost:3000
           # The production build Playwright runs honours SHIPPING_PROVIDERS=fake only with this.
           WOOLRUS_E2E: "1"
+          # The browser error test runs a fake ingest on this port; server and tests both read it.
+          SENTRY_DSN: http://key@127.0.0.1:38999/1
