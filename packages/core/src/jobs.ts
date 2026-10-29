@@ -23,6 +23,8 @@ export const queues = {
   storageSweep: "storage.sweep",
   /** Ask every enabled shipping provider for each package's rates (FR-PACK-07, SPEC-carriers "Rate fetch"). */
   ratesFetch: "rates.fetch",
+  /** Every minute: record that the worker is consuming jobs (SPEC-operations "Worker heartbeat"). */
+  opsHeartbeat: "ops.heartbeat",
 } as const;
 export type QueueName = (typeof queues)[keyof typeof queues];
 
@@ -44,6 +46,7 @@ export type JobPayloads = {
   [queues.storageSweep]: Record<string, never>;
   /** `generation` is the order's `rateGeneration` when enqueued; a job for an older one writes nothing. */
   [queues.ratesFetch]: { orderId: string; generation: number };
+  [queues.opsHeartbeat]: Record<string, never>;
 };
 
 /** Finished jobs stay 30 days, so a failure over a long weekend is still there on Monday. */
