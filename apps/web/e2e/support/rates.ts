@@ -11,7 +11,8 @@ const adapters = {
   SHIPSTATION: (credentials: Record<string, string>) =>
     createFakeShippingProvider("SHIPSTATION", { credentials }),
   BRIDGE_SOURCE: (credentials: Record<string, string>) =>
-    createFakeShippingProvider("BRIDGE_SOURCE", { credentials }),
+    // Quote-only, as the real adapter is until an account turns booking on.
+    createFakeShippingProvider("BRIDGE_SOURCE", { credentials, quoteOnly: true }),
 };
 
 /**

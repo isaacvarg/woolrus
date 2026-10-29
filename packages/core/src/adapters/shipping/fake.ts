@@ -26,6 +26,8 @@ export type FakeProviderOptions = {
   latencyMs?: number;
   /** Bought labels, by idempotency key. Pass one to share labels between instances. */
   labels?: Map<string, FakeLabel>;
+  /** The Bridge-Source-shaped fake can quote but not buy (stage 1); the other ignores it. */
+  quoteOnly?: boolean;
 };
 
 export type FakeLabel = PurchasedLabel & { idempotencyKey: string; voided: boolean };
@@ -206,6 +208,7 @@ export class FakeShipStationProvider extends FakeProvider {
     labelLookup: true,
     void: true,
     manifests: true,
+    purchase: true,
   };
 
   constructor(options: FakeProviderOptions = {}) {
@@ -335,12 +338,7 @@ export class FakeShipStationProvider extends FakeProvider {
 /** Shaped like Bridge Source's REST and CORE APIs. */
 export class FakeBridgeSourceProvider extends FakeProvider {
   readonly id = "BRIDGE_SOURCE" as const;
-  readonly capabilities = {
-    addressValidation: false,
-    labelLookup: false,
-    void: true,
-    manifests: true,
-  };
+  readonly capabilities: ProviderCapabilities;
 
   constructor(options: FakeProviderOptions = {}) {
     super(
@@ -366,6 +364,13 @@ export class FakeBridgeSourceProvider extends FakeProvider {
       ],
       options,
     );
+    this.capabilities = {
+      addressValidation: false,
+      labelLookup: false,
+      void: true,
+      manifests: true,
+      purchase: options.quoteOnly !== true,
+    };
   }
 
   protected override providerData(): Record<string, unknown> {
@@ -409,6 +414,9 @@ export class FakeBridgeSourceProvider extends FakeProvider {
 
   /** Books from the full shipment; the label PDF comes back as bytes. */
   async purchaseLabel(input: PurchaseInput): Promise<PurchasedLabel> {
+    if (!this.capabilities.purchase) {
+      throw new ShippingError("rejected", "bookingDisabled");
+    }
     await this.request({ operation: "purchaseLabel" });
     const slow = this.purchaseTrigger(input);
     const match = this.service(

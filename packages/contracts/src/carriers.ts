@@ -196,6 +196,8 @@ export const ShippingRateView = z.object({
   expiresAt: z.date().nullable(),
   expired: z.boolean(),
   selected: z.boolean(),
+  /** The provider can quote this rate but not buy it, so it can't be selected. */
+  quoteOnly: z.boolean(),
 });
 export type ShippingRateView = z.infer<typeof ShippingRateView>;
 

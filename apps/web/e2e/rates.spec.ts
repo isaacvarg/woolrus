@@ -94,15 +94,16 @@ test("packing → QA fetches merged rates from both providers; a refresh skips a
         await qa.goto(`/orders/${order.id}`);
         const shipping = qa.getByRole("region", { name: "Shipping" });
         await expect(shipping.getByTestId("ship-to")).toContainText("1 Main St");
-        // 9 oz: Bridge Source's Demo Ground at $5.47 beats ShipStation's at $5.58.
+        // 9 oz: Bridge Source's Demo Ground at $5.47 beats ShipStation's at $5.58, but it only
+        // quotes, so ShipStation's is the one selected.
         const rows = rateRows(qa);
         await expect(rows).toHaveCount(2);
         await expect(rows.nth(0)).toContainText("Bridge Source");
         await expect(rows.nth(0)).toContainText("$5.47");
-        await expect(rows.nth(0)).toContainText("Selected");
+        await expect(rows.nth(0)).not.toContainText("Selected");
         await expect(rows.nth(1)).toContainText("ShipStation");
         await expect(rows.nth(1)).toContainText("$5.58");
-        await expect(rows.nth(1)).not.toContainText("Selected");
+        await expect(rows.nth(1)).toContainText("Selected");
 
         await ok(
           admin.request.post(`${api}/providers/BRIDGE_SOURCE/enabled`, {
@@ -200,4 +201,46 @@ test("a Picker sees an order's rates but can't refresh them or change the ship-t
   }
   const read = await page.request.get(`/api/v1/orders/${order.id}/shipping`);
   expect(read.ok()).toBe(true);
+});
+
+test("a quote-only rate is badged and can't be selected; the cheapest buyable one is selected", async ({
+  page,
+  browser,
+}) => {
+  test.setTimeout(120_000);
+  const admin = await (await browser.newContext()).newPage();
+  const qa = await (await browser.newContext()).newPage();
+  try {
+    await signInAs(admin, ["ADMIN"]);
+    await signInAs(qa, ["QA"]);
+    await withSettingsLock(async () => {
+      try {
+        await ensureShipFrom();
+        await enableOnly(admin, "SHIPSTATION", "Demo Ground", "demo_ground");
+        await enableOnly(admin, "BRIDGE_SOURCE", "Demo Ground", "GND");
+
+        const name = `E2E ${crypto.randomUUID()}`;
+        const order = await createOrder({ customerName: name, quantity: 1, status: "PACKING" });
+        await packAndFinish(page, order, name);
+        // Bridge Source's account has no bookingEnabled, so it only quotes.
+        expect(await runRateFetch(order.id)).toEqual({ status: "done" });
+
+        await qa.goto(`/orders/${order.id}`);
+        // 9 oz: Bridge Source's $5.47 beats ShipStation's $5.58, but can't be bought.
+        const rows = rateRows(qa);
+        await expect(rows).toHaveCount(2);
+        await expect(rows.nth(0)).toContainText("Bridge Source");
+        await expect(rows.nth(0)).toContainText("Quote only");
+        await expect(rows.nth(0)).not.toContainText("Selected");
+        await expect(rows.nth(1)).toContainText("ShipStation");
+        await expect(rows.nth(1)).toContainText("Selected");
+        await expect(rows.nth(1)).not.toContainText("Quote only");
+      } finally {
+        await resetProviders(admin);
+      }
+    });
+  } finally {
+    await admin.context().close();
+    await qa.context().close();
+  }
 });

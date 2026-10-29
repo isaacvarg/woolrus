@@ -983,6 +983,71 @@ describe("disabled provider (SC 10)", () => {
   });
 });
 
+describe("quote-only providers", () => {
+  const quoteOnlyBridge = () => createFakeShippingProvider("BRIDGE_SOURCE", { quoteOnly: true });
+
+  it("stores a quote-only rate but never selects it, even when cheapest", async () => {
+    await catalog("SHIPSTATION", ["demo_ground"]);
+    await catalog("BRIDGE_SOURCE", ["GND"]);
+    const bridge = quoteOnlyBridge();
+    const getRates = bridge.getRates.bind(bridge);
+    bridge.getRates = async (request) =>
+      (await getRates(request)).map((r) => ({ ...r, amountCents: 100 }));
+    const { packages, payload } = await inQa();
+
+    await fetchRates(db, [createFakeShippingProvider("SHIPSTATION"), bridge], payload);
+
+    expect(
+      (await ratesOf(packages[0]?.id as string)).map((r) => [
+        r.provider,
+        r.amountCents,
+        r.selected,
+      ]),
+    ).toEqual([
+      ["BRIDGE_SOURCE", 100, false],
+      ["SHIPSTATION", 450 + 12 * 20, true],
+    ]);
+  });
+
+  it("selects nothing when every rate is quote-only", async () => {
+    await catalog("BRIDGE_SOURCE", ["GND"]);
+    const { packages, payload } = await inQa();
+
+    await fetchRates(db, [quoteOnlyBridge()], payload);
+
+    const rates = await ratesOf(packages[0]?.id as string);
+    expect(rates).toHaveLength(1);
+    expect(rates.some((r) => r.selected)).toBe(false);
+    expect(await pkgRow(packages[0]?.id as string)).toMatchObject({ ratesStatus: "READY" });
+  });
+
+  it("getOrderShipping flags a rate quoteOnly from its account, until booking is enabled", async () => {
+    await catalog("SHIPSTATION", ["demo_ground"]);
+    await catalog("BRIDGE_SOURCE", ["GND"]);
+    const { payload } = await inQa();
+    await fetchRates(db, [createFakeShippingProvider("SHIPSTATION"), quoteOnlyBridge()], payload);
+    const qa = await createActor(db, ["QA"]);
+    const flags = async () =>
+      (await getOrderShipping(db, qa, { orderId: payload.orderId })).packages[0]?.rates.map((r) => [
+        r.provider,
+        r.quoteOnly,
+      ]);
+
+    expect(await flags()).toEqual([
+      ["SHIPSTATION", false],
+      ["BRIDGE_SOURCE", true],
+    ]);
+
+    await db.shippingProviderAccount.create({
+      data: { provider: "BRIDGE_SOURCE", config: { bookingEnabled: true } },
+    });
+    expect(await flags()).toEqual([
+      ["SHIPSTATION", false],
+      ["BRIDGE_SOURCE", false],
+    ]);
+  });
+});
+
 describe("getOrderShipping", () => {
   it("allowed for any role: ship-to and per package the rates, cheapest first", async () => {
     await catalog("SHIPSTATION", ["demo_ground", "demo_ground_saver"]);

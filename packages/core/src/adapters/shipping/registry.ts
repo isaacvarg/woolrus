@@ -3,7 +3,12 @@ import type { Db } from "@woolrus/db";
 import { z } from "zod";
 import { readProviderCredentials } from "./credentials";
 import { createFakeShippingProvider, type FakeLabel } from "./fake";
-import { type ProviderId, providerIds, type ShippingProvider } from "./provider";
+import {
+  type ProviderId,
+  providerCanPurchase,
+  providerIds,
+  type ShippingProvider,
+} from "./provider";
 import { ShipStationAdapter } from "./shipstation/adapter";
 
 // Builds the adapters core calls (SPEC-carriers "Registry"). Services take the list as an
@@ -75,6 +80,7 @@ export function buildShippingProvider(
     return createFakeShippingProvider(id, {
       credentials: parsed.data,
       labels: fakeLabelsFor(id),
+      quoteOnly: !providerCanPurchase(id, config),
     });
   }
   const factory = adapters[id] as

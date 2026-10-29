@@ -23,6 +23,7 @@ import {
   PROVIDER_TIMEOUT_MS,
   type ProviderId,
   type ProviderRate,
+  providerCanPurchase,
   providerIds,
   type RateRequest,
   type ShipAddress,
@@ -415,6 +416,7 @@ export async function fetchRates(
     ]),
   );
   const expiry = new Date(now.getTime() + RATE_TTL_HOURS * 3_600_000);
+  const canPurchase = new Map(providers.map((p) => [p.id, p.capabilities.purchase]));
   for (const { pkg, outcomes } of asked) {
     // Extras the provider returned for services that aren't on are dropped, and so is a negative
     // price: a malformed quote that would sort first and be selected.
@@ -432,6 +434,9 @@ export async function fetchRates(
           : [],
       )
       .sort(compareRates);
+    // Cheapest first, so the first rate a provider can buy is the one to select; quote-only rates
+    // are kept for comparison and never selected.
+    const selectedIndex = rates.findIndex((rate) => canPurchase.get(rate.provider) === true);
     const errors: RateError[] = outcomes.flatMap((o) =>
       o.ok ? [] : [{ provider: o.provider, messageKey: o.messageKey }],
     );
@@ -458,7 +463,7 @@ export async function fetchRates(
           estimatedDeliveryAt: rate.estimatedDeliveryAt ?? null,
           guaranteed: rate.guaranteed,
           trackable: rate.trackable,
-          selected: i === 0,
+          selected: i === selectedIndex,
           fetchedAt: now,
           expiresAt: rate.expiresAt ?? expiry,
         })),
@@ -633,6 +638,7 @@ export async function getOrderShipping(
     },
   });
   if (!order) throw notFound();
+  const quoteOnly = await quoteOnlyProviders(db);
   return {
     orderId: order.id,
     refreshable: order.status === "QA" && order.packages.every((p) => p.labels.length === 0),
@@ -662,7 +668,24 @@ export async function getOrderShipping(
         expiresAt: rate.expiresAt,
         expired: rate.expiresAt !== null && rate.expiresAt <= now,
         selected: rate.selected,
+        quoteOnly: quoteOnly.has(rate.provider),
       })),
     })),
   };
+}
+
+/**
+ * The providers whose rates can be quoted but not bought, from their accounts (a provider with no
+ * account is treated as its default). Derived at read time so nothing is stored per rate.
+ */
+export async function quoteOnlyProviders(db: Db | DbTx): Promise<Set<ProviderId>> {
+  const accounts = await db.shippingProviderAccount.findMany({
+    select: { provider: true, config: true },
+  });
+  return new Set(
+    providerIds.filter((id) => {
+      const account = accounts.find((a) => a.provider === id);
+      return !providerCanPurchase(id, account?.config);
+    }),
+  );
 }

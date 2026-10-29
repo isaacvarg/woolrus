@@ -474,6 +474,7 @@
     },
     "deliveryDays": "{count, plural, one {# día} other {# días}}",
     "guaranteed": "Garantizada",
+    "quoteOnly": "Solo cotización",
     "selected": "Seleccionada",
     "expired": "Vencida",
     "refresh": "Actualizar tarifas",
@@ -610,6 +611,7 @@
     "noRates": "Aún no hay tarifas.",
     "refreshRates": "Actualizar tarifas",
     "rateExpired": "Vencida",
+    "rateQuoteOnly": "Solo cotización",
     "rateDays": "{days, plural, one {# día} other {# días}}",
     "buying": "Comprando etiquetas… {bought} de {total}",
     "failedPackages": "Fallaron las etiquetas de: {packages}",
@@ -1235,6 +1237,7 @@
     "qa": {
       "notQa": "Este pedido no está en control de calidad, así que no se puede verificar.",
       "rateExpired": "Esa tarifa venció. Actualiza las tarifas y elige otra.",
+      "rateQuoteOnly": "Esa tarifa es solo una cotización y no se puede comprar. Elige otra.",
       "packageHasLabel": "Este paquete ya tiene etiqueta. Anúlala antes de elegir otra tarifa.",
       "addressLockedByLabel": "Un paquete ya tiene etiqueta con la dirección anterior. Anula las etiquetas antes de cambiar la dirección.",
       "allPackagesLabelled": "Todos los paquetes ya tienen etiqueta, así que no hay tarifas que actualizar.",

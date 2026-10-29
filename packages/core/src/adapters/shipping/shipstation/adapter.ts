@@ -131,6 +131,7 @@ export class ShipStationAdapter implements ShippingProvider {
     labelLookup: true,
     void: true,
     manifests: true,
+    purchase: true,
   };
 
   private readonly doFetch: typeof fetch;

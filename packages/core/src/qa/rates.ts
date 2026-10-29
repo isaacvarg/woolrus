@@ -1,6 +1,7 @@
 import type { QaResult, SelectRateInput } from "@woolrus/contracts";
 import type { Db } from "@woolrus/db";
 import { recordAudit } from "../audit";
+import { quoteOnlyProviders } from "../carriers/rates";
 import { AppError, notFound } from "../errors";
 import { type Actor, assertCan } from "../permissions";
 import { touchClaim } from "../workflow/claims";
@@ -19,7 +20,7 @@ const snapshot = (rate: { id: string; amountCents: number; serviceName: string }
 
 /**
  * Selects `rateId` for the package, leaving exactly one selected. Refused for an expired rate, a
- * rate of another package, or a package with a live label; choosing the selected rate again
+ * quote-only rate, a rate of another package, or a package with a live label; choosing the selected rate again
  * changes and audits nothing.
  */
 export async function selectRate(
@@ -47,6 +48,9 @@ export async function selectRate(
     if (live > 0) throw new AppError("CONFLICT", "errors.qa.packageHasLabel");
     if (rate.expiresAt && rate.expiresAt <= now) {
       throw new AppError("CONFLICT", "errors.qa.rateExpired");
+    }
+    if ((await quoteOnlyProviders(tx)).has(rate.provider)) {
+      throw new AppError("CONFLICT", "errors.qa.rateQuoteOnly");
     }
 
     if (!rate.selected) {

@@ -82,6 +82,70 @@ test("the order drawer shows picker, packer, rate and notes", async ({ page }) =
   await expect(drawer.getByTestId("qa-drawer-row")).toContainText("QA: 0 of 2 verified");
 });
 
+test("a quote-only rate shows a Quote only badge and can't be selected", async ({ page }) => {
+  const order = await qaOrder(`E2E ${crypto.randomUUID()}`, 1);
+  const qa = await signInAs(page, ["QA"]);
+  await db.order.update({
+    where: { id: order.id },
+    data: { claimedById: qa.id, claimedAt: new Date() },
+  });
+  const pkg = await db.package.findFirstOrThrow({ where: { orderId: order.id } });
+  const externalId = `e2e-quote-${crypto.randomUUID()}`;
+  const carrier = await db.shippingCarrier.create({
+    data: {
+      provider: "BRIDGE_SOURCE",
+      externalId,
+      code: externalId,
+      name: "Quote Co",
+      enabled: true,
+    },
+  });
+  const service = await db.carrierService.create({
+    data: {
+      carrierId: carrier.id,
+      code: "Q",
+      name: "Quote Ground",
+      domestic: true,
+      international: false,
+    },
+  });
+  const rate = {
+    packageId: pkg.id,
+    carrierId: carrier.id,
+    serviceId: service.id,
+    carrierCode: "q",
+    serviceCode: "Q",
+    currency: "USD",
+    expiresAt: new Date(Date.now() + 3_600_000),
+  };
+  try {
+    await db.shippingRate.create({
+      data: { ...rate, provider: "BRIDGE_SOURCE", serviceName: "Quote Ground", amountCents: 300 },
+    });
+    await db.shippingRate.create({
+      data: {
+        ...rate,
+        provider: "SHIPSTATION",
+        serviceName: "Buyable Ground",
+        amountCents: 500,
+        selected: true,
+      },
+    });
+    await page.goto(`/qa/${order.id}`);
+    const rows = page.getByTestId("qa-rate");
+    await expect(rows).toHaveCount(2);
+    await expect(rows.nth(0)).toContainText("Quote Ground");
+    await expect(rows.nth(0)).toContainText("Quote only");
+    await expect(rows.nth(0)).toBeDisabled();
+    await expect(rows.nth(1)).toBeEnabled();
+    await expect(rows.nth(1)).toHaveAttribute("data-selected", "true");
+  } finally {
+    await db.shippingRate.deleteMany({ where: { packageId: pkg.id } });
+    await db.carrierService.deleteMany({ where: { carrierId: carrier.id } });
+    await db.shippingCarrier.delete({ where: { id: carrier.id } });
+  }
+});
+
 test("a Packer can read the screen but not tap", async ({ page }) => {
   const order = await qaOrder(`E2E ${crypto.randomUUID()}`, 1);
   await signInAs(page, ["PACKER"]);

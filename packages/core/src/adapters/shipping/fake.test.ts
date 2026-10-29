@@ -195,7 +195,18 @@ describe("FakeBridgeSourceProvider", () => {
       labelLookup: false,
       void: true,
       manifests: true,
+      purchase: true,
     });
+  });
+
+  it("can be quote-only: purchase is false and buying is refused", async () => {
+    const provider = new FakeBridgeSourceProvider({ quoteOnly: true });
+    expect(provider.capabilities.purchase).toBe(false);
+    await expect(provider.purchaseLabel({} as never)).rejects.toMatchObject({
+      kind: "rejected",
+      detail: "bookingDisabled",
+    });
+    expect(provider.requests).toEqual([]);
   });
 
   it("keeps its custom package type in each service's providerData", async () => {

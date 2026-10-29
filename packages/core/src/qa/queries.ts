@@ -1,5 +1,6 @@
 import type { QaLabel, QaPackage, QaPurchase, QaResult, QaView } from "@woolrus/contracts";
 import type { DbTx, Prisma } from "@woolrus/db";
+import { quoteOnlyProviders } from "../carriers/rates";
 import { notFound } from "../errors";
 import { openCriticalIssues } from "../exceptions/queries";
 import { lineAndPackageNoteCounts } from "../notes/targets";
@@ -70,7 +71,7 @@ export async function qaResult(
   orderId: string,
   { now = new Date() }: QaOptions = {},
 ): Promise<QaResult> {
-  const [packages, issues, notes, gate] = await Promise.all([
+  const [packages, issues, notes, gate, quoteOnly] = await Promise.all([
     tx.package.findMany({
       where: { orderId },
       include: packageInclude,
@@ -79,6 +80,7 @@ export async function qaResult(
     openCriticalIssues(tx, orderId),
     lineAndPackageNoteCounts(tx, orderId),
     loadGateSnapshot(tx, orderId),
+    quoteOnlyProviders(tx),
   ]);
 
   const issueFor = (pkgId: string, orderItemId: string) =>
@@ -116,6 +118,7 @@ export async function qaResult(
         deliveryDays: r.deliveryDays,
         selected: r.selected,
         expired: r.expiresAt !== null && r.expiresAt <= now,
+        quoteOnly: quoteOnly.has(r.provider),
       })),
       selectedRate: rate
         ? {

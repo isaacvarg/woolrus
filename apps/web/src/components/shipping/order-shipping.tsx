@@ -292,6 +292,11 @@ export function PackageRates({ pkg }: { pkg: PackageShipping }) {
                       </>
                     )}
                     {rate.serviceName}
+                    {rate.quoteOnly && (
+                      <span className="badge badge-outline ms-2">
+                        {t("orderShipping.quoteOnly")}
+                      </span>
+                    )}
                     {rate.guaranteed && (
                       <span className="badge badge-ghost ms-2">
                         {t("orderShipping.guaranteed")}
