@@ -13,6 +13,7 @@ import {
   purgePii,
   queues,
   recomputePriorities,
+  recordWorkerHeartbeat,
   runEmailJob,
   runRatesFetchJob,
   runStorageDeleteJob,
@@ -191,6 +192,18 @@ await boss.work(
   runJob<JobPayloads[typeof queues.piiPurge]>(queues.piiPurge, async () => ({
     ...(await purgePii(db)),
   })),
+);
+
+// Every minute, a job proves the worker consumes the queue: it upserts the heartbeat row and
+// touches the file the container HEALTHCHECK watches. Quiet in the log: it runs 1440 times a day.
+await boss.schedule(queues.opsHeartbeat, "* * * * *", {});
+await boss.work(
+  queues.opsHeartbeat,
+  META,
+  runJob<JobPayloads[typeof queues.opsHeartbeat]>(queues.opsHeartbeat, async () => {
+    await recordWorkerHeartbeat(db, { version: process.env.WOOLRUS_VERSION });
+    return null;
+  }),
 );
 
 log.info({ queues: Object.values(queues) }, "worker started");

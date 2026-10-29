@@ -4,6 +4,7 @@ import {
   fakeShippingProviders,
   shippingProviderHealth,
   woocommerceHealth,
+  workerHealth,
 } from "@woolrus/core";
 import { db } from "@woolrus/db";
 import { storage } from "@/server/storage";
@@ -55,8 +56,16 @@ export async function GET() {
     woocommerce = "fail";
   }
   degraded ||= woocommerce === "fail";
+  // A stopped or stuck worker degrades health too: the floor works without it, for a while.
+  let worker: "ok" | "stale" = "stale";
+  try {
+    if (checks.database === "ok") worker = await workerHealth(db);
+  } catch {
+    worker = "stale";
+  }
+  degraded ||= worker === "stale";
   return Response.json(
-    { ok, degraded, checks: { ...checks, email, woocommerce } },
+    { ok, degraded, checks: { ...checks, email, woocommerce, worker } },
     { status: ok ? 200 : 503 },
   );
 }

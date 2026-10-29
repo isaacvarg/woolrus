@@ -43,6 +43,7 @@ export * from "./notes/files";
 export * from "./notes/push";
 export * from "./notes/service";
 export * from "./operations/anonymize";
+export * from "./operations/heartbeat";
 export * from "./operations/jobs";
 export * from "./packing/complete";
 export * from "./packing/queries";

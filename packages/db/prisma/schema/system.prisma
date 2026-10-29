@@ -140,3 +140,12 @@ model IdempotentRequest {
   @@index([createdAt])
   @@map("idempotent_requests")
 }
+
+/// Last beat of a background service (SPEC-operations "Worker heartbeat"); one row per service name.
+model ServiceHeartbeat {
+  name    String   @id
+  beatAt  DateTime @map("beat_at") @db.Timestamptz(3)
+  version String?
+
+  @@map("service_heartbeats")
+}

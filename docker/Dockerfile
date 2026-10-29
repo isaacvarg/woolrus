@@ -47,6 +47,8 @@ ENV NODE_ENV=production SERVICE_NAME=worker
 COPY --from=build --chown=node:node /out/worker ./
 COPY --from=build --chown=node:node /repo/apps/worker/dist ./dist
 USER node
+# The heartbeat job touches this file every minute; a worker that stops consuming jobs goes stale.
+HEALTHCHECK --interval=60s CMD find /tmp/worker-heartbeat -mmin -3 | grep -q .
 CMD ["node", "dist/main.mjs"]
 
 # --- Migrations (runs once per deploy, before web and worker start) -----------

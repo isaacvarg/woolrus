@@ -25,6 +25,8 @@ export const queues = {
   ratesFetch: "rates.fetch",
   /** Daily: anonymize old orders, redact old webhook payloads, drop old idempotency records (SPEC-operations "PII anonymization"). */
   piiPurge: "ops.piiPurge",
+  /** Every minute: record that the worker is consuming jobs (SPEC-operations "Worker heartbeat"). */
+  opsHeartbeat: "ops.heartbeat",
 } as const;
 export type QueueName = (typeof queues)[keyof typeof queues];
 
@@ -47,6 +49,7 @@ export type JobPayloads = {
   /** `generation` is the order's `rateGeneration` when enqueued; a job for an older one writes nothing. */
   [queues.ratesFetch]: { orderId: string; generation: number };
   [queues.piiPurge]: Record<string, never>;
+  [queues.opsHeartbeat]: Record<string, never>;
 };
 
 /** Finished jobs stay 30 days, so a failure over a long weekend is still there on Monday. */
