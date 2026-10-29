@@ -1,5 +1,5 @@
 import { type Db, type DbTx, Prisma, type ReturnStatus } from "@woolrus/db";
-import { isPiiKey } from "@woolrus/logger";
+import { createLogger, isPiiKey, isPiiMetaPair, PAIR_VALUES } from "@woolrus/logger";
 import { recordAudit } from "../audit";
 import { operationsActor } from "../permissions";
 import { lockWooOrder } from "../sync/order-lock";
@@ -12,6 +12,7 @@ export const PII_BATCH_SIZE = 200;
 const ORDER_TX_TIMEOUT_MS = 60_000;
 /** Idempotency records exist for replays within minutes; they hold response DTOs with customer data. */
 export const IDEMPOTENCY_KEEP_DAYS = 7;
+const log = createLogger({ module: "pii-purge" });
 const DAY_MS = 24 * 60 * 60 * 1000;
 const REDACTED = "[redacted]";
 /** A return in any other status is still open. */
@@ -87,7 +88,11 @@ export async function purgePii(
               })
             )
               done += 1;
-          } catch {
+          } catch (err) {
+            log.warn(
+              { orderId: id, errorName: err instanceof Error ? err.name : "unknown" },
+              "pii purge: order failed",
+            );
             failed.add(id);
           }
         }
@@ -127,10 +132,16 @@ function reduceAddress(value: Prisma.JsonValue | null): Prisma.InputJsonValue | 
 export function scrubPii(value: Prisma.JsonValue): Prisma.JsonValue {
   if (Array.isArray(value)) return value.map(scrubPii);
   if (typeof value !== "object" || value === null) return value;
+  // WooCommerce meta is a list of `{ key, value }` pairs: the key names the field, not the value.
+  const pair = isPiiMetaPair(value);
   return Object.fromEntries(
     Object.entries(value).map(([key, inner]) => [
       key,
-      isPiiKey(key) ? REDACTED : inner === undefined ? inner : scrubPii(inner),
+      isPiiKey(key) || (pair && PAIR_VALUES.has(key))
+        ? REDACTED
+        : inner === undefined
+          ? inner
+          : scrubPii(inner),
     ]),
   ) as Prisma.JsonObject;
 }
@@ -179,7 +190,7 @@ export async function anonymizeOrder(
   if (!order || order.piiRedactedAt) return false;
 
   const claimed = await tx.order.updateMany({
-    where: { id: orderId, piiRedactedAt: null },
+    where: { id: orderId, ...eligible(cutoff) },
     data: {
       customerName: "",
       customerEmail: null,

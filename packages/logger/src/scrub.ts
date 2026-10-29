@@ -1,4 +1,4 @@
-import { isPiiKey, maskEmails } from "./pii";
+import { isPiiKey, isPiiMetaPair, maskEmails, PAIR_VALUES } from "./pii";
 
 const MAX_DEPTH = 8;
 const REDACTED = "[redacted]";
@@ -24,10 +24,11 @@ function redactDeep(value: unknown, depth = 0): unknown {
   if (value === null || typeof value !== "object") return value;
   if (depth >= MAX_DEPTH) return REDACTED;
   if (Array.isArray(value)) return value.map((item) => redactDeep(item, depth + 1));
+  const pair = isPiiMetaPair(value);
   return Object.fromEntries(
     Object.entries(value).map(([key, item]) => [
       key,
-      isPiiKey(key) ? REDACTED : redactDeep(item, depth + 1),
+      isPiiKey(key) || (pair && PAIR_VALUES.has(key)) ? REDACTED : redactDeep(item, depth + 1),
     ]),
   );
 }
@@ -71,7 +72,9 @@ export function scrubEvent<T extends ScrubbableEvent>(event: T): T {
       ...request
     } = event.request;
     const kept = Object.fromEntries(
-      Object.entries(headers ?? {}).filter(([name]) => KEPT_HEADERS.has(name.toLowerCase())),
+      Object.entries(headers ?? {})
+        .filter(([name]) => KEPT_HEADERS.has(name.toLowerCase()))
+        .map(([name, header]) => [name, scrubText(header)]),
     );
     scrubbed.request = {
       ...request,
@@ -80,7 +83,7 @@ export function scrubEvent<T extends ScrubbableEvent>(event: T): T {
     } as T["request"];
   }
   if (event.message !== undefined) scrubbed.message = scrubText(event.message);
-  if (event.transaction !== undefined) scrubbed.transaction = stripUrl(event.transaction);
+  if (event.transaction !== undefined) scrubbed.transaction = scrubText(event.transaction);
   if (event.extra) scrubbed.extra = redactDeep(event.extra) as T["extra"];
   if (event.contexts) scrubbed.contexts = redactDeep(event.contexts) as T["contexts"];
   if (event.tags) scrubbed.tags = redactDeep(event.tags) as T["tags"];
@@ -97,7 +100,7 @@ export function scrubEvent<T extends ScrubbableEvent>(event: T): T {
     scrubbed.exception = {
       ...event.exception,
       values: event.exception.values.map((v) =>
-        v.value === undefined ? v : { ...v, value: maskEmails(v.value) },
+        v.value === undefined ? v : { ...v, value: scrubText(v.value) },
       ),
     };
   }

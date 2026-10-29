@@ -108,6 +108,30 @@ describe("listFailedJobs", () => {
 });
 
 describe("listFailedJobs input", () => {
+  it("refuses a cursor with junk around the uuid or a year outside 1970-2100", async () => {
+    const uuid = crypto.randomUUID();
+    const cases: [string, string][] = [
+      ["2026-01-01T00:00:00.000000Z", ` ${uuid}`],
+      ["2026-01-01T00:00:00.000000Z", `${uuid}; drop table x`],
+      ["2101-01-01T00:00:00.000000Z", uuid],
+      ["1969-12-31T23:59:59.999999Z", uuid],
+    ];
+    for (const [at, id] of cases) {
+      const cursor = Buffer.from(JSON.stringify([at, id])).toString("base64url");
+      await expect(listFailedJobs(db, admin, { cursor })).rejects.toMatchObject({
+        kind: "BAD_REQUEST",
+      });
+    }
+  });
+
+  it("accepts a cursor at the 1970 and 2100 bounds", async () => {
+    const uuid = crypto.randomUUID();
+    for (const at of ["1970-01-01T00:00:00.000000Z", "2100-12-31T23:59:59.999999Z"]) {
+      const cursor = Buffer.from(JSON.stringify([at, uuid])).toString("base64url");
+      await expect(listFailedJobs(db, admin, { cursor })).resolves.toBeDefined();
+    }
+  });
+
   it("refuses a cursor whose id isn't a uuid", async () => {
     const at = "2026-01-01T00:00:00.000000Z";
     for (const id of ["x", "not-a-uuid", "0000"]) {

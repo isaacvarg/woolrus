@@ -24,6 +24,12 @@ export const PII_KEYS = [
   "city",
   "billing",
   "shipping",
+  "billing_phone",
+  "billing_email",
+  "shipping_phone",
+  "full_name",
+  "ip_address",
+  "username",
 ] as const;
 
 /** Case, `_` and `-` don't matter: `Customer_Email`, `customerEmail` and `customer-email` are one key. */
@@ -44,4 +50,13 @@ const EMAIL = /[^\s@<>"']{1,64}@[\w-]{1,63}(?:\.[\w-]{1,63})+/g;
 export function maskEmails(text: string): string {
   const head = text.length > MAX_TEXT ? `${text.slice(0, MAX_TEXT)}…` : text;
   return head.replace(EMAIL, "[redacted]");
+}
+
+/** The value fields of a `{ key, value }` meta pair. */
+export const PAIR_VALUES: ReadonlySet<string> = new Set(["value", "display_value"]);
+
+/** Whether `object` is a meta pair whose `key` (or `display_key`) names customer PII. */
+export function isPiiMetaPair(object: object): boolean {
+  const { key, display_key: displayKey } = object as { key?: unknown; display_key?: unknown };
+  return [key, displayKey].some((name) => typeof name === "string" && isPiiKey(name));
 }

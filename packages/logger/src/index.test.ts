@@ -25,6 +25,31 @@ describe("redaction", () => {
     expect(lines[1]?.ok).toBe(1);
   });
 
+  it("redacts the usual spellings of a key, and the new WooCommerce keys", () => {
+    const { lines, log } = capture();
+    log.info(
+      {
+        Customer_Email: "a@b.c",
+        CUSTOMER_NAME: "Ann",
+        billing_phone: "1",
+        username: "u",
+        ip_address: "1.1.1.1",
+        full_name: "A B",
+      },
+      "x",
+    );
+    for (const key of [
+      "Customer_Email",
+      "CUSTOMER_NAME",
+      "billing_phone",
+      "username",
+      "ip_address",
+      "full_name",
+    ]) {
+      expect(lines[0]?.[key]).toBe("[redacted]");
+    }
+  });
+
   it("still redacts secrets", () => {
     const { lines, log } = capture();
     log.info({ auth: { token: "t" } }, "x");

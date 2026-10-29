@@ -132,6 +132,36 @@ describe("scrubEvent", () => {
     });
   });
 
+  it("redacts the value of a { key, value } meta pair whose key is PII", () => {
+    const event = scrubEvent({
+      extra: {
+        meta: [
+          { key: "billing_phone", value: "555" },
+          { key: "gift", value: "ok" },
+        ],
+      },
+    });
+    expect(event.extra).toEqual({
+      meta: [
+        { key: "billing_phone", value: "[redacted]" },
+        { key: "gift", value: "ok" },
+      ],
+    });
+  });
+
+  it("masks emails in the transaction, exception values and kept header values", () => {
+    const event = scrubEvent({
+      transaction: "GET ann@example.com",
+      exception: {
+        values: [{ value: "/orders?search=Jane failed" }, { value: "x ann@example.com" }],
+      },
+      request: { headers: { "user-agent": "ua ann@example.com" } },
+    });
+    expect(event.transaction).toBe("GET [redacted]");
+    expect(event.exception?.values?.[1]?.value).toBe("x [redacted]");
+    expect(event.request?.headers).toEqual({ "user-agent": "ua [redacted]" });
+  });
+
   it("fails closed past the depth limit, and survives a cycle", () => {
     let deep: Record<string, unknown> = { customerName: "Ann" };
     for (let i = 0; i < 12; i++) deep = { inner: deep };

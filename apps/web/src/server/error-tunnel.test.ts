@@ -1,6 +1,6 @@
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   forwardErrorEnvelope,
   resetTunnelLimit,
@@ -152,5 +152,23 @@ describe("rate limit", () => {
       expect(await forwardErrorEnvelope(post(envelope(dsn)), dsn)).toBe(true);
     expect(await forwardErrorEnvelope(post(envelope(dsn)), dsn)).toBe(false);
     expect(posted).toHaveLength(TUNNEL_MAX_PER_MINUTE);
+  });
+
+  it("starts a new window after a minute", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      for (let i = 0; i < TUNNEL_MAX_PER_MINUTE; i++)
+        await forwardErrorEnvelope(post(envelope(dsn)), dsn);
+      expect(await forwardErrorEnvelope(post(envelope(dsn)), dsn)).toBe(false);
+      vi.setSystemTime(Date.now() + 61_000);
+      expect(await forwardErrorEnvelope(post(envelope(dsn)), dsn)).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("reports false when GlitchTip answers 500", async () => {
+    const failing = (async () => new Response("no", { status: 500 })) as unknown as typeof fetch;
+    expect(await forwardErrorEnvelope(post(envelope(dsn)), dsn, failing)).toBe(false);
   });
 });

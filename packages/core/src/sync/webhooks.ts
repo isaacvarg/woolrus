@@ -95,7 +95,13 @@ export async function processWooWebhook(
     return;
   }
   const orderId = payload.id;
-  if (typeof orderId !== "number") throw new Error("webhook payload has no order id");
+  if (typeof orderId !== "number") {
+    await db.inboundWebhook.update({
+      where: { id: inboundWebhookId },
+      data: { error: "errors.sync.importFailed" },
+    });
+    throw new Error("webhook payload has no order id");
+  }
   // An anonymized order is never imported again; the delivery is done and its payload goes too.
   const anonymized = await db.order.findFirst({
     where: { wooOrderId: orderId, piiRedactedAt: { not: null } },
