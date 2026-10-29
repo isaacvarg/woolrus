@@ -422,6 +422,31 @@ describe("syncOrders: later polls (SC 2, SC 3 retry)", () => {
     expect(after.updatedAt).toEqual(before.updatedAt);
   });
 
+  it("leaves an anonymized order anonymized, with no external-change flag, when the store edits it", async () => {
+    const woo = store.addOrder();
+    await poll(store.now());
+    const known = await db.order.findUniqueOrThrow({ where: { wooOrderId: woo.id } });
+    await db.order.update({
+      where: { id: known.id },
+      data: { customerName: "", customerEmail: null, piiRedactedAt: new Date() },
+    });
+    store.editOrder(woo.id, { customer_note: "Back door", status: "completed" });
+
+    const polled = await poll(later(HOUR));
+    const single = await run({ type: "ORDERS_WEBHOOK", orderIds: [woo.id], now: later(HOUR) });
+
+    expect(polled).toMatchObject({ updated: 0, skipped: 1 });
+    expect(single).toMatchObject({ updated: 0, skipped: 1 });
+    const after = await db.order.findUniqueOrThrow({ where: { id: known.id } });
+    expect(after).toMatchObject({
+      customerName: "",
+      customerEmail: null,
+      customerNote: null,
+      externalChangeDetectedAt: null,
+      wooStatus: known.wooStatus,
+    });
+  });
+
   it("catches an edit made in the same second as the version it last imported", async () => {
     // WooCommerce's modified time has one-second resolution: equal times can still differ in content.
     const woo = store.addOrder();

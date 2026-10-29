@@ -184,6 +184,14 @@ describe("processWooWebhook", () => {
     return db.inboundWebhook.findFirstOrThrow();
   }
 
+  async function received2(id: number) {
+    await receiveWooWebhook(
+      db,
+      delivery({ id, billing: { first_name: "Ada" } }, { deliveryId: "second" }),
+    );
+    return db.inboundWebhook.findFirstOrThrow({ where: { deliveryId: "second" } });
+  }
+
   it("imports the order from the store, not from the payload, and marks the row processed", async () => {
     const store = new FakeStoreAdapter();
     const woo = store.addOrder({ customer_note: "From the store" });
@@ -201,6 +209,31 @@ describe("processWooWebhook", () => {
     expect(await db.syncRun.findFirstOrThrow()).toMatchObject({
       type: "ORDERS_WEBHOOK",
       status: "SUCCEEDED",
+    });
+  });
+
+  it("marks a delivery for an anonymized order processed and redacts its payload without fetching", async () => {
+    const store = new FakeStoreAdapter();
+    const woo = store.addOrder();
+    const row = await received({ id: woo.id });
+    await processWooWebhook(db, store, row.id, { now: store.now() });
+    await db.order.update({
+      where: { wooOrderId: woo.id },
+      data: { customerName: "", piiRedactedAt: new Date() },
+    });
+    store.calls.length = 0;
+    const again = await received2(woo.id);
+
+    await processWooWebhook(db, store, again.id, { now: store.now() });
+
+    expect(store.calls.filter((c) => c.method === "getOrder")).toEqual([]);
+    expect(await db.inboundWebhook.findUniqueOrThrow({ where: { id: again.id } })).toMatchObject({
+      payload: { redacted: true },
+      processedAt: store.now(),
+      error: null,
+    });
+    expect(await db.order.findUniqueOrThrow({ where: { wooOrderId: woo.id } })).toMatchObject({
+      customerName: "",
     });
   });
 

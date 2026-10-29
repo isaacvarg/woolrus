@@ -262,7 +262,13 @@ export function OrdersTable() {
                     )}
                     <NoteCount count={row.noteCount} className="ms-2" />
                   </td>
-                  <td>{row.customerName}</td>
+                  <td>
+                    {row.piiRedacted ? (
+                      <span className="italic opacity-70">{t("order.customerRemoved")}</span>
+                    ) : (
+                      row.customerName
+                    )}
+                  </td>
                   <td>{t(`status.${row.status}`)}</td>
                   <td>
                     {row.priority > 0 && (

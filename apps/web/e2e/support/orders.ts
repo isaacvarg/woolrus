@@ -134,6 +134,20 @@ export async function changeOrderQuietly(id: string, data: { priority: number })
   await db.order.update({ where: { id }, data });
 }
 
+/** Marks an order anonymized the way the PII purge leaves it: no name, only the coarse address kept. */
+export async function markAnonymized(id: string) {
+  await db.order.update({
+    where: { id },
+    data: {
+      customerName: "",
+      customerEmail: null,
+      customerNote: null,
+      shippingAddress: { state: "TX", postalCode: "78701", country: "US" },
+      piiRedactedAt: new Date(),
+    },
+  });
+}
+
 const RUSH_ORDER_WOO_ID = 999_999_999;
 
 /** One shared non-physical product, kept between runs (orders using it are deleted, it isn't). */

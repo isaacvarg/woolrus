@@ -183,6 +183,8 @@ async function importOrder(
 ): Promise<"imported" | "updated" | "skipped"> {
   const order = mapOrder(woo);
   const known = await findKnown(db, order.wooOrderId);
+  // An anonymized order never gets its PII back: no update, no external-change flag.
+  if (known?.piiRedactedAt) return "skipped";
   // Only paid orders ready to fulfil come in; others wait until the store moves them to processing.
   if (known ? !isNewVersion(order, fetchedAt, known) : order.wooStatus !== "processing") {
     return "skipped";
@@ -197,7 +199,7 @@ async function importOrder(
       await createOrder(tx, order, catalog, now, fetchedAt);
       return "imported";
     }
-    if (!isNewVersion(order, fetchedAt, current)) return "skipped";
+    if (current.piiRedactedAt || !isNewVersion(order, fetchedAt, current)) return "skipped";
     await upsertCatalog(tx, catalog, now);
     await reconcileKnownOrder(tx, current.id, order, now, fetchedAt);
     return "updated";
@@ -230,7 +232,13 @@ async function lockWooOrder(tx: DbTx, wooOrderId: number): Promise<void> {
 function findKnown(db: Db | DbTx, wooOrderId: number) {
   return db.order.findUnique({
     where: { wooOrderId },
-    select: { id: true, wooModifiedAt: true, rawPayload: true, syncedAt: true },
+    select: {
+      id: true,
+      wooModifiedAt: true,
+      rawPayload: true,
+      syncedAt: true,
+      piiRedactedAt: true,
+    },
   });
 }
 
