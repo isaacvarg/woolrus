@@ -1,6 +1,7 @@
 import { isFinalAttempt } from "@woolrus/core";
 import { createLogger, type Logger } from "@woolrus/logger";
 import type { JobWithMetadata } from "pg-boss";
+import { captureJobError } from "./error-reporting";
 
 /** Extra fields for the outcome line; `null` means nothing happened worth an `info` line. */
 type JobResult = Record<string, unknown> | null | undefined;
@@ -9,7 +10,7 @@ type JobResult = Record<string, unknown> | null | undefined;
  * The one wrapper for every `boss.work` handler (NFR-OPS-01): binds `queue`, `jobId`, `attempt`
  * and `orderId` (when the payload has one) to a child logger, logs the outcome with its duration,
  * and rethrows so pg-boss retries. A failure is `warn` while a retry remains and `error` on the
- * final attempt. Register the queue with `includeMetadata: true`: the attempt comes from it.
+ * final attempt, which is also sent to GlitchTip. Register the queue with `includeMetadata: true`: the attempt comes from it.
  */
 export function runJob<T extends object>(
   queue: string,
@@ -34,8 +35,16 @@ export function runJob<T extends object>(
       if (result === null) log.debug(fields, "job done");
       else log.info(fields, "job done");
     } catch (err) {
-      const level = isFinalAttempt(job) ? "error" : "warn";
-      log[level]({ err, durationMs: durationMs() }, "job failed");
+      const final = isFinalAttempt(job);
+      log[final ? "error" : "warn"]({ err, durationMs: durationMs() }, "job failed");
+      // Only the final attempt reaches GlitchTip, so a retry that succeeds makes no noise.
+      if (final) {
+        captureJobError(err, {
+          queue,
+          jobId: job.id,
+          ...(typeof orderId === "string" ? { orderId } : {}),
+        });
+      }
       throw err;
     }
   };

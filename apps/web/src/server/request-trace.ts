@@ -1,7 +1,8 @@
 import { createLogger, type Logger } from "@woolrus/logger";
+import { captureServerError } from "./error-reporting";
 
 /** Filled in as the call learns more; read when it finishes. */
-export type RequestTrace = { userId?: string };
+export type RequestTrace = { userId?: string; stationId?: string };
 
 export type RequestContext = {
   headers: Headers;
@@ -44,6 +45,11 @@ export async function traced(
     response = await run(context);
   } catch (err) {
     failure = err;
+    captureServerError(err, {
+      requestId,
+      userId: context.trace.userId,
+      stationId: context.trace.stationId,
+    });
     response = new Response(null, { status: 500 });
   }
   const status = response.status;

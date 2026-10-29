@@ -44,6 +44,8 @@ services:
   web:
     <<: *app-env
     image: ghcr.io/isaacvarg/woolrus-web:${WOOLRUS_VERSION:-latest}
+    environment:
+      WOOLRUS_VERSION: ${WOOLRUS_VERSION:-}
     ports:
       - "${WEB_PORT:-3000}:3000"
     depends_on:
@@ -53,6 +55,8 @@ services:
   worker:
     <<: *app-env
     image: ghcr.io/isaacvarg/woolrus-worker:${WOOLRUS_VERSION:-latest}
+    environment:
+      WOOLRUS_VERSION: ${WOOLRUS_VERSION:-}
     depends_on:
       migrate:
         condition: service_completed_successfully
