@@ -2,6 +2,7 @@ import { createHmac } from "node:crypto";
 import type { Db } from "@woolrus/db";
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { resetDb, testDb } from "../../test/db";
+import { createOrder } from "../../test/factories";
 import { StoreError } from "../adapters/woocommerce/errors";
 import { FakeStoreAdapter } from "../adapters/woocommerce/fake";
 import { JOBS_SCHEMA, queues } from "../jobs";
@@ -184,6 +185,66 @@ describe("processWooWebhook", () => {
     return db.inboundWebhook.findFirstOrThrow();
   }
 
+  async function received2(id: number) {
+    await receiveWooWebhook(
+      db,
+      delivery({ id, billing: { first_name: "Ada" } }, { deliveryId: "second" }),
+    );
+    return db.inboundWebhook.findFirstOrThrow({ where: { deliveryId: "second" } });
+  }
+
+  it("a redacted delivery with no anonymized order in the database is marked done and calls the store zero times", async () => {
+    const row = await db.inboundWebhook.create({
+      data: {
+        source: "woocommerce",
+        deliveryId: "redacted-alone",
+        topic: "order.updated",
+        payload: { redacted: true },
+      },
+    });
+    const store = new FakeStoreAdapter();
+    await processWooWebhook(db, store, row.id);
+    expect(
+      (await db.inboundWebhook.findUniqueOrThrow({ where: { id: row.id } })).processedAt,
+    ).not.toBeNull();
+    expect(store.calls).toEqual([]);
+  });
+
+  it("a payload with neither an order id nor the redaction marker fails instead of completing", async () => {
+    const row = await db.inboundWebhook.create({
+      data: {
+        source: "woocommerce",
+        deliveryId: "no-id",
+        topic: "order.updated",
+        payload: { id: "7" },
+      },
+    });
+    await expect(processWooWebhook(db, new FakeStoreAdapter(), row.id)).rejects.toThrow(
+      /no order id/,
+    );
+  });
+
+  it("a redacted delivery retried after the purge, with an anonymized order present, is marked done too", async () => {
+    // The anonymized order must not be matched through an undefined id.
+    const { order } = await createOrder(db, {});
+    await db.order.update({ where: { id: order.id }, data: { piiRedactedAt: new Date() } });
+    const row = await db.inboundWebhook.create({
+      data: {
+        source: "woocommerce",
+        deliveryId: "redacted-retry",
+        topic: "order.updated",
+        payload: { redacted: true },
+        receivedAt: new Date("2026-01-01"),
+      },
+    });
+    const store = new FakeStoreAdapter();
+    await processWooWebhook(db, store, row.id);
+    const after = await db.inboundWebhook.findUniqueOrThrow({ where: { id: row.id } });
+    expect(after.processedAt).not.toBeNull();
+    expect(after.error).toBeNull();
+    expect(store.calls).toEqual([]);
+  });
+
   it("imports the order from the store, not from the payload, and marks the row processed", async () => {
     const store = new FakeStoreAdapter();
     const woo = store.addOrder({ customer_note: "From the store" });
@@ -201,6 +262,31 @@ describe("processWooWebhook", () => {
     expect(await db.syncRun.findFirstOrThrow()).toMatchObject({
       type: "ORDERS_WEBHOOK",
       status: "SUCCEEDED",
+    });
+  });
+
+  it("marks a delivery for an anonymized order processed and redacts its payload without fetching", async () => {
+    const store = new FakeStoreAdapter();
+    const woo = store.addOrder();
+    const row = await received({ id: woo.id });
+    await processWooWebhook(db, store, row.id, { now: store.now() });
+    await db.order.update({
+      where: { wooOrderId: woo.id },
+      data: { customerName: "", piiRedactedAt: new Date() },
+    });
+    store.calls.length = 0;
+    const again = await received2(woo.id);
+
+    await processWooWebhook(db, store, again.id, { now: store.now() });
+
+    expect(store.calls.filter((c) => c.method === "getOrder")).toEqual([]);
+    expect(await db.inboundWebhook.findUniqueOrThrow({ where: { id: again.id } })).toMatchObject({
+      payload: { redacted: true },
+      processedAt: store.now(),
+      error: null,
+    });
+    expect(await db.order.findUniqueOrThrow({ where: { wooOrderId: woo.id } })).toMatchObject({
+      customerName: "",
     });
   });
 

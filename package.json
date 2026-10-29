@@ -21,6 +21,8 @@
     "sync:products": "pnpm --filter @woolrus/worker sync:products",
     "stack:up": "docker compose -f docker/compose.dev.yml up -d",
     "stack:down": "docker compose -f docker/compose.dev.yml down",
+    "pii:purge": "pnpm --filter @woolrus/worker pii:purge",
+    "test:backup": "sh docker/backup/backup.test.sh",
     "jobs:install": "pnpm --filter @woolrus/worker jobs:install"
   },
   "devDependencies": {

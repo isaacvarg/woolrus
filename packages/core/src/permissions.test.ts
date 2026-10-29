@@ -50,6 +50,13 @@ describe("permissions", () => {
     }
   });
 
+  it("lets only admins see and act on failed jobs", () => {
+    expect(can(actor(["ADMIN"]), "ops.jobs")).toBe(true);
+    for (const role of ["PICKER", "PACKER", "QA", "SHIPPER"] as const) {
+      expect(can(actor([role]), "ops.jobs")).toBe(false);
+    }
+  });
+
   it("lets QA and Admin void labels, but not Shipper or Packer", () => {
     expect(can(actor(["QA"]), "label.void")).toBe(true);
     expect(can(actor(["ADMIN"]), "label.void")).toBe(true);

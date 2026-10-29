@@ -8,6 +8,12 @@
     "dismiss": "Cerrar",
     "notifications": "Notificaciones"
   },
+  "errorScreen": {
+    "title": "Algo salió mal",
+    "body": "Woolrus tuvo un problema inesperado. Inténtalo de nuevo; si sigue pasando, avisa a quien administra el servidor.",
+    "retry": "Reintentar",
+    "reference": "Referencia:"
+  },
   "nav": {
     "boxes": "Cajas",
     "settings": "Configuración",
@@ -28,6 +34,7 @@
     "openMenu": "Abrir menú",
     "closeMenu": "Cerrar menú",
     "voids": "Anulaciones",
+    "failedJobs": "Trabajos fallidos",
     "issues": "Incidencias"
   },
   "navFooter": {
@@ -118,7 +125,7 @@
     },
     "piiRetention": {
       "label": "Conservar datos de clientes (días)",
-      "hint": "Déjalo vacío para conservarlos siempre. Entre 30 y 3650 días."
+      "hint": "Los pedidos completados y cancelados pierden el nombre, correo, dirección y notas del cliente después de estos días; el pedido, sus artículos y etiquetas se conservan para reportes. Déjalo vacío para no eliminarlos nunca. Entre 30 y 3650 días."
     },
     "qaMustDifferFromPacker": "El control de calidad debe hacerlo alguien distinto de quien empacó",
     "integrations": {
@@ -328,6 +335,7 @@
     "status": "Estado",
     "priority": "Prioridad",
     "customer": "Cliente",
+    "customerRemoved": "Datos del cliente eliminados",
     "orderedAt": "Fecha del pedido",
     "shippingMethod": "Envío",
     "shipTo": "Enviar a",
@@ -1394,5 +1402,26 @@
     "emailMe": "Enviarme un enlace",
     "checkEmail": "Revisa tu correo: te enviamos un enlace para iniciar sesión.",
     "useAnother": "Usar otro correo"
+  },
+  "jobs": {
+    "title": "Trabajos fallidos",
+    "intro": "Trabajos en segundo plano que agotaron sus reintentos. Reintentar lo ejecuta de nuevo; Descartar lo elimina. Los trabajos terminados se conservan 30 días.",
+    "queue": "Cola",
+    "allQueues": "Todas las colas",
+    "failedAt": "Falló",
+    "attempts": "Intentos",
+    "error": "Error",
+    "about": "Sobre",
+    "actions": "Acciones",
+    "retry": "Reintentar",
+    "dismiss": "Descartar",
+    "retried": "Trabajo en cola para ejecutarse de nuevo.",
+    "dismissed": "Trabajo descartado.",
+    "template": "Correo: {name}",
+    "empty": "No hay trabajos fallidos.",
+    "loadMore": "Cargar más",
+    "retryLabel": "Reintentar trabajo {queue}",
+    "dismissLabel": "Descartar trabajo {queue}",
+    "order": "Pedido"
   }
 }

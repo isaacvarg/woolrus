@@ -28,6 +28,8 @@ export const OrderDetail = z.object({
   id: Id,
   number: z.string(),
   customerName: z.string(),
+  /** Customer details were anonymized: `customerName` is empty and the UI says so. */
+  piiRedacted: z.boolean(),
   orderedAt: z.date(),
   shippingMethod: z.string().nullable(),
   status: WorkflowStatus,
@@ -118,6 +120,8 @@ export const QueueRow = z.object({
   id: Id,
   number: z.string(),
   customerName: z.string(),
+  /** Customer details were anonymized: `customerName` is empty and the UI says so. */
+  piiRedacted: z.boolean(),
   /** Active units of physical lines (voids and non-physical lines like Rush Order excluded). */
   itemCount: z.number().int(),
   priority: z.number().int(),
@@ -408,6 +412,8 @@ export const OrderListRow = z.object({
   id: Id,
   number: z.string(),
   customerName: z.string(),
+  /** Customer details were anonymized: `customerName` is empty and the UI says so. */
+  piiRedacted: z.boolean(),
   status: WorkflowStatus,
   priority: z.number().int(),
   orderedAt: z.date(),

@@ -192,7 +192,9 @@ function OrderHeader({ order }: { order: Order }) {
         </div>
         <div>
           <dt className="text-sm opacity-70">{t("order.customer")}</dt>
-          <dd className="font-semibold">{order.customerName}</dd>
+          <dd className="font-semibold" data-testid="order-customer">
+            {order.piiRedacted ? t("order.customerRemoved") : order.customerName}
+          </dd>
           {order.customerEmail && <dd className="text-sm break-all">{order.customerEmail}</dd>}
         </div>
         <div>
@@ -203,10 +205,12 @@ function OrderHeader({ order }: { order: Order }) {
           <dt className="text-sm opacity-70">{t("order.shippingMethod")}</dt>
           <dd>{order.shippingMethod ?? "—"}</dd>
         </div>
-        <div className="col-span-2 md:col-span-3">
-          <dt className="text-sm opacity-70">{t("order.shipTo")}</dt>
-          <dd>{formatAddress(order.shippingAddress)}</dd>
-        </div>
+        {!order.piiRedacted && (
+          <div className="col-span-2 md:col-span-3">
+            <dt className="text-sm opacity-70">{t("order.shipTo")}</dt>
+            <dd>{formatAddress(order.shippingAddress)}</dd>
+          </div>
+        )}
         {order.customerNote && (
           <div className="col-span-2 md:col-span-4">
             <dt className="text-sm opacity-70">{t("order.customerNote")}</dt>

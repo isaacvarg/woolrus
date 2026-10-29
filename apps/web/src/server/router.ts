@@ -19,6 +19,7 @@ import {
   deleteNote,
   deletePackage,
   deletePriorityRule,
+  dismissFailedJob,
   finishBatch,
   getBatch,
   getEmailSender,
@@ -38,6 +39,7 @@ import {
   keepOriginalAddress,
   linkBarcode,
   listBoxes,
+  listFailedJobs,
   listInvitations,
   listIssues,
   listNotes,
@@ -75,6 +77,7 @@ import {
   resolveIssue,
   resolveVoids,
   restoreBox,
+  retryFailedJob,
   revokeBadge,
   revokeInvitation,
   revokeStation,
@@ -516,6 +519,21 @@ export const router = implementer.router({
     keepOriginalAddress: api.carriers.keepOriginalAddress.handler(({ input, context }) =>
       keepOriginalAddress(db, context.actor, input),
     ),
+  },
+  operations: {
+    jobs: {
+      failed: {
+        list: api.operations.jobs.failed.list.handler(({ input, context }) =>
+          listFailedJobs(db, context.actor, input),
+        ),
+        retry: api.operations.jobs.failed.retry.handler(({ input, context }) =>
+          retryFailedJob(db, context.actor, input),
+        ),
+        dismiss: api.operations.jobs.failed.dismiss.handler(({ input, context }) =>
+          dismissFailedJob(db, context.actor, input),
+        ),
+      },
+    },
   },
 });
 

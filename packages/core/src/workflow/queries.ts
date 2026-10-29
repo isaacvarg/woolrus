@@ -84,6 +84,7 @@ type QueueSqlRow = {
   id: string;
   number: string;
   customerName: string;
+  piiRedacted: boolean;
   itemCount: number;
   priority: number;
   orderedAt: Date;
@@ -123,7 +124,7 @@ export async function listQueue(
   const sla = stage !== "ON_HOLD" && slas.success ? slas.data[stage] : undefined;
 
   const rows = await db.$queryRaw<QueueSqlRow[]>`
-    SELECT o.id, o.number, o.customer_name AS "customerName", o.priority,
+    SELECT o.id, o.number, o.customer_name AS "customerName", o.pii_redacted_at IS NOT NULL AS "piiRedacted", o.priority,
       o.ordered_at AS "orderedAt", o.status_changed_at AS "stageEnteredAt",
       o.claimed_by_id AS "claimedById", o.claimed_at AS "claimedAt", u.name AS "claimerName", u.email AS "claimerEmail",
       o.external_change_detected_at IS NOT NULL AS "externalChange",
@@ -191,6 +192,7 @@ export async function listQueue(
       id: r.id,
       number: r.number,
       customerName: r.customerName,
+      piiRedacted: r.piiRedacted,
       itemCount: r.itemCount,
       priority: r.priority,
       orderedAt: r.orderedAt,
@@ -488,6 +490,7 @@ type OrderListSqlRow = {
   id: string;
   number: string;
   customerName: string;
+  piiRedacted: boolean;
   status: WorkflowStatus;
   priority: number;
   orderedAt: Date;
@@ -511,7 +514,7 @@ export async function listOrders(
 
   const [rows, [count]] = await Promise.all([
     db.$queryRaw<OrderListSqlRow[]>`
-      SELECT o.id, o.number, o.customer_name AS "customerName", o.status::text AS status,
+      SELECT o.id, o.number, o.customer_name AS "customerName", o.pii_redacted_at IS NOT NULL AS "piiRedacted", o.status::text AS status,
         o.priority, o.ordered_at AS "orderedAt", o.status_changed_at AS "statusChangedAt",
         o.external_change_detected_at IS NOT NULL AS "externalChange"
       FROM orders o

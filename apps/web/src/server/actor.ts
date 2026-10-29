@@ -3,6 +3,7 @@ import { db, type Station, type User } from "@woolrus/db";
 import { headers } from "next/headers";
 import { cache } from "react";
 import { auth } from "./auth";
+import { requestIdOf } from "./request-trace";
 import { stationToken } from "./station-cookie";
 
 export type Resolved = {
@@ -22,6 +23,7 @@ export type Resolved = {
  * 3. else nobody. Always a UserActor: a request can never act as the system actor.
  */
 export async function resolveActor(requestHeaders: Headers): Promise<Resolved | null> {
+  const requestId = requestIdOf(requestHeaders);
   const session = await auth().api.getSession({ headers: requestHeaders });
   if (session) {
     // A personal session wins even on a station device (an admin signed in there on purpose).
@@ -29,7 +31,7 @@ export async function resolveActor(requestHeaders: Headers): Promise<Resolved | 
     if (user?.active) {
       return {
         user,
-        actor: { userId: user.id, roles: user.roles, stationId: null },
+        actor: { userId: user.id, roles: user.roles, stationId: null, requestId },
         station: null,
         idleLockAt: null,
       };
@@ -38,7 +40,9 @@ export async function resolveActor(requestHeaders: Headers): Promise<Resolved | 
   const device = await resolveStationDevice(requestHeaders);
   if (device.kind !== "station") return null;
   const unlocked = await stationActor(db, device.station);
-  return unlocked && { ...unlocked, station: device.station };
+  return (
+    unlocked && { ...unlocked, actor: { ...unlocked.actor, requestId }, station: device.station }
+  );
 }
 
 /**

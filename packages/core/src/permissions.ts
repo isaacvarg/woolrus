@@ -9,6 +9,8 @@ export type UserActor = {
   userId: string;
   roles: readonly Role[];
   stationId: string | null;
+  /** The API call this actor was resolved for; audit rows record it. Absent outside a request. */
+  requestId?: string;
   system?: undefined;
 };
 
@@ -17,7 +19,8 @@ export type SystemActor = {
   userId: null;
   roles: readonly Role[];
   stationId: null;
-  system: "store-sync";
+  requestId?: undefined;
+  system: "store-sync" | "operations";
 };
 
 export type Actor = UserActor | SystemActor;
@@ -31,6 +34,14 @@ export const systemActor: SystemActor = Object.freeze({
   roles: Object.freeze(["ADMIN"] as const),
   stationId: null,
   system: "store-sync",
+});
+
+/** The PII purge's actor: its audit rows show no user and the name "operations". */
+export const operationsActor: SystemActor = Object.freeze({
+  userId: null,
+  roles: Object.freeze(["ADMIN"] as const),
+  stationId: null,
+  system: "operations",
 });
 
 export const permissions = [
@@ -63,6 +74,8 @@ export const permissions = [
   "report.read",
   /** Catalog data the warehouse owns, e.g. linking a scanned barcode to a product. */
   "product.manage",
+  /** The failed-jobs page: see, retry and dismiss background jobs that gave up. */
+  "ops.jobs",
 ] as const;
 export type Permission = (typeof permissions)[number];
 

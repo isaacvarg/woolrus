@@ -8,6 +8,12 @@
     "dismiss": "Dismiss",
     "notifications": "Notifications"
   },
+  "errorScreen": {
+    "title": "Something went wrong",
+    "body": "Woolrus hit an unexpected problem. Try again; if it keeps happening, tell whoever runs the server.",
+    "retry": "Try again",
+    "reference": "Reference:"
+  },
   "nav": {
     "boxes": "Boxes",
     "settings": "Settings",
@@ -28,6 +34,7 @@
     "openMenu": "Open menu",
     "closeMenu": "Close menu",
     "voids": "Voids",
+    "failedJobs": "Failed jobs",
     "issues": "Issues"
   },
   "navFooter": {
@@ -118,7 +125,7 @@
     },
     "piiRetention": {
       "label": "Keep customer details (days)",
-      "hint": "Leave empty to keep them forever. Between 30 and 3650 days."
+      "hint": "Completed and cancelled orders lose the customer's name, email, address and notes this many days after they finish; the order, its items and labels stay for reporting. Leave empty to never remove them. Between 30 and 3650 days."
     },
     "qaMustDifferFromPacker": "QA must be done by someone other than the packer",
     "integrations": {
@@ -328,6 +335,7 @@
     "status": "Status",
     "priority": "Priority",
     "customer": "Customer",
+    "customerRemoved": "Customer details removed",
     "orderedAt": "Ordered",
     "shippingMethod": "Shipping",
     "shipTo": "Ship to",
@@ -1394,5 +1402,26 @@
     "emailMe": "Email me a link",
     "checkEmail": "Check your email for a sign-in link.",
     "useAnother": "Use another email"
+  },
+  "jobs": {
+    "title": "Failed jobs",
+    "intro": "Background jobs that used up their retries. Retry runs one again; Dismiss removes it. Finished jobs are kept for 30 days.",
+    "queue": "Queue",
+    "allQueues": "All queues",
+    "failedAt": "Failed",
+    "attempts": "Attempts",
+    "error": "Error",
+    "about": "About",
+    "actions": "Actions",
+    "retry": "Retry",
+    "dismiss": "Dismiss",
+    "retried": "Job queued to run again.",
+    "dismissed": "Job dismissed.",
+    "template": "Email: {name}",
+    "empty": "No failed jobs.",
+    "loadMore": "Load more",
+    "retryLabel": "Retry job {queue}",
+    "dismissLabel": "Dismiss job {queue}",
+    "order": "Order"
   }
 }

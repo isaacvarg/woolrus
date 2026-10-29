@@ -292,7 +292,13 @@ export function QueueTable({
                       </span>
                     )}
                   </td>
-                  <td>{row.customerName}</td>
+                  <td>
+                    {row.piiRedacted ? (
+                      <span className="italic opacity-70">{t("order.customerRemoved")}</span>
+                    ) : (
+                      row.customerName
+                    )}
+                  </td>
                   <td className="text-end tabular-nums">{row.itemCount}</td>
                   <td>
                     {row.priority > 0 && (

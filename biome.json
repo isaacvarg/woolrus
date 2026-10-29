@@ -18,9 +18,21 @@
   "linter": {
     "enabled": true,
     "rules": {
-      "preset": "recommended"
+      "preset": "recommended",
+      "suspicious": { "noConsole": "error" }
     }
   },
+  "overrides": [
+    {
+      "includes": [
+        "apps/worker/src/cli.ts",
+        "packages/db/prisma/seed.ts",
+        "apps/web/e2e/**",
+        "scripts/**"
+      ],
+      "linter": { "rules": { "suspicious": { "noConsole": "off" } } }
+    }
+  ],
   "javascript": {
     "formatter": {
       "quoteStyle": "double"

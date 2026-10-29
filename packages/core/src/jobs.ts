@@ -23,6 +23,10 @@ export const queues = {
   storageSweep: "storage.sweep",
   /** Ask every enabled shipping provider for each package's rates (FR-PACK-07, SPEC-carriers "Rate fetch"). */
   ratesFetch: "rates.fetch",
+  /** Daily: anonymize old orders, redact old webhook payloads, drop old idempotency records (SPEC-operations "PII anonymization"). */
+  piiPurge: "ops.piiPurge",
+  /** Every minute: record that the worker is consuming jobs (SPEC-operations "Worker heartbeat"). */
+  opsHeartbeat: "ops.heartbeat",
   /** Buy an order's labels in the background after Complete QA (SPEC-qa "Complete QA"). */
   labelsPurchase: "labels.purchase",
   /** Settle labels left PURCHASING by a lost provider response (SPEC-qa). */
@@ -48,28 +52,45 @@ export type JobPayloads = {
   [queues.storageSweep]: Record<string, never>;
   /** `generation` is the order's `rateGeneration` when enqueued; a job for an older one writes nothing. */
   [queues.ratesFetch]: { orderId: string; generation: number };
+  [queues.piiPurge]: Record<string, never>;
+  [queues.opsHeartbeat]: Record<string, never>;
   /** `requestedById` pressed Complete QA; the job moves the order to Ready as them. */
   [queues.labelsPurchase]: { orderId: string; requestedById: string };
   [queues.labelsReconcile]: Record<string, never>;
 };
 
+/** Finished jobs stay 30 days, so a failure over a long weekend is still there on Monday. */
+export const JOB_RETENTION_SECONDS = 30 * 24 * 60 * 60;
+
+const keep = { deleteAfterSeconds: JOB_RETENTION_SECONDS };
+
+type QueueSettings = {
+  deleteAfterSeconds: number;
+  retryLimit?: number;
+  retryDelay?: number;
+  retryBackoff?: boolean;
+};
+
 /**
- * Per-queue retry policy, set when the queue is created; every job sent to it inherits it.
- * Queues not listed keep pg-boss's defaults.
+ * Per-queue policy, set when the queue is created; every job sent to it inherits it. Every queue
+ * keeps finished jobs for `JOB_RETENTION_SECONDS`; the retry settings are for queues that retry.
+ * The rest keep pg-boss's retry defaults.
  */
-export const queueOptions: Partial<
-  Record<QueueName, { retryLimit: number; retryDelay: number; retryBackoff: boolean }>
-> = {
+export const queueOptions: Record<QueueName, QueueSettings> = {
+  ...(Object.fromEntries(Object.values(queues).map((name) => [name, keep])) as Record<
+    QueueName,
+    QueueSettings
+  >),
   // 3 attempts: a 429 or 5xx from Resend throws and is retried after ~30 s, then ~60 s. The
   // idempotency key makes a retry after a lost response harmless.
-  [queues.emailSend]: { retryLimit: 2, retryDelay: 30, retryBackoff: true },
+  [queues.emailSend]: { ...keep, retryLimit: 2, retryDelay: 30, retryBackoff: true },
   // Storage down for a while shouldn't lose a delete: 6 attempts over roughly half an hour. A job
   // that still fails leaves orphans, which the daily sweep collects.
-  [queues.storageDelete]: { retryLimit: 5, retryDelay: 60, retryBackoff: true },
+  [queues.storageDelete]: { ...keep, retryLimit: 5, retryDelay: 60, retryBackoff: true },
   // Only a fetch where every provider failed transiently throws; a partial one is QA's to refresh.
-  [queues.ratesFetch]: { retryLimit: 2, retryDelay: 20, retryBackoff: true },
+  [queues.ratesFetch]: { ...keep, retryLimit: 2, retryDelay: 20, retryBackoff: true },
   // Provider outages while buying: 5 attempts over a few minutes (SPEC-qa "The labels.purchase job").
-  [queues.labelsPurchase]: { retryLimit: 4, retryDelay: 15, retryBackoff: true },
+  [queues.labelsPurchase]: { ...keep, retryLimit: 4, retryDelay: 15, retryBackoff: true },
 };
 
 /** pg-boss keeps its tables in their own schema, separate from Prisma's. */

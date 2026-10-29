@@ -9,6 +9,7 @@ import { reconcileKnownOrder } from "./apply";
 import { createLines } from "./lines";
 import { withSyncLock } from "./lock";
 import { type MappedOrder, mapOrder, type StoreUnits } from "./mapping";
+import { lockWooOrder } from "./order-lock";
 import { type FetchedCatalog, fetchOrderCatalog, upsertCatalog } from "./products-upsert";
 import { finishRun, recordRunError, runErrorKey, startRun } from "./runs";
 
@@ -31,9 +32,6 @@ export type SyncOrdersResult = {
   skipped: number;
   failed: number;
 };
-
-/** First argument of the two-key advisory lock taken per WooCommerce order id. */
-const ORDER_LOCK_NAMESPACE = 4_201_002;
 
 /** Stage-event reason for an import: a message key, translated where history is shown. */
 const IMPORTED_REASON = "sync.reason.imported";
@@ -183,6 +181,8 @@ async function importOrder(
 ): Promise<"imported" | "updated" | "skipped"> {
   const order = mapOrder(woo);
   const known = await findKnown(db, order.wooOrderId);
+  // An anonymized order never gets its PII back: no update, no external-change flag.
+  if (known?.piiRedactedAt) return "skipped";
   // Only paid orders ready to fulfil come in; others wait until the store moves them to processing.
   if (known ? !isNewVersion(order, fetchedAt, known) : order.wooStatus !== "processing") {
     return "skipped";
@@ -190,18 +190,22 @@ async function importOrder(
 
   // The order's products (an edit's added lines too), so the transaction needs no HTTP.
   const catalog = await fetchOrderCatalog(db, store, units, order, now);
-  return db.$transaction(async (tx) => {
-    await lockWooOrder(tx, order.wooOrderId);
-    const current = await findKnown(tx, order.wooOrderId);
-    if (!current) {
-      await createOrder(tx, order, catalog, now, fetchedAt);
-      return "imported";
-    }
-    if (!isNewVersion(order, fetchedAt, current)) return "skipped";
-    await upsertCatalog(tx, catalog, now);
-    await reconcileKnownOrder(tx, current.id, order, now, fetchedAt);
-    return "updated";
-  });
+  return db.$transaction(
+    async (tx) => {
+      await lockWooOrder(tx, order.wooOrderId);
+      const current = await findKnown(tx, order.wooOrderId);
+      if (!current) {
+        await createOrder(tx, order, catalog, now, fetchedAt);
+        return "imported";
+      }
+      if (current.piiRedactedAt || !isNewVersion(order, fetchedAt, current)) return "skipped";
+      await upsertCatalog(tx, catalog, now);
+      await reconcileKnownOrder(tx, current.id, order, now, fetchedAt);
+      return "updated";
+    },
+    // The order lock can wait on a PII purge rewriting this order's audit history (up to 60 s).
+    { timeout: 90_000 },
+  );
 }
 
 /**
@@ -223,14 +227,16 @@ function isNewVersion(
   );
 }
 
-async function lockWooOrder(tx: DbTx, wooOrderId: number): Promise<void> {
-  await tx.$executeRaw`SELECT pg_advisory_xact_lock(${ORDER_LOCK_NAMESPACE}::int, ${wooOrderId}::int)`;
-}
-
 function findKnown(db: Db | DbTx, wooOrderId: number) {
   return db.order.findUnique({
     where: { wooOrderId },
-    select: { id: true, wooModifiedAt: true, rawPayload: true, syncedAt: true },
+    select: {
+      id: true,
+      wooModifiedAt: true,
+      rawPayload: true,
+      syncedAt: true,
+      piiRedactedAt: true,
+    },
   });
 }
 

@@ -85,7 +85,29 @@ export async function processWooWebhook(
   { now = new Date() }: { now?: Date } = {},
 ): Promise<void> {
   const row = await db.inboundWebhook.findUniqueOrThrow({ where: { id: inboundWebhookId } });
-  const orderId = (row.payload as { id: number }).id;
+  const payload = row.payload as { id?: unknown; redacted?: unknown };
+  if (payload.redacted === true) {
+    // Redacted by the purge: nothing is left to import, and the delivery is done.
+    await db.inboundWebhook.update({
+      where: { id: inboundWebhookId },
+      data: { processedAt: row.processedAt ?? now, error: null },
+    });
+    return;
+  }
+  const orderId = payload.id;
+  if (typeof orderId !== "number") throw new Error("webhook payload has no order id");
+  // An anonymized order is never imported again; the delivery is done and its payload goes too.
+  const anonymized = await db.order.findFirst({
+    where: { wooOrderId: orderId, piiRedactedAt: { not: null } },
+    select: { id: true },
+  });
+  if (anonymized) {
+    await db.inboundWebhook.update({
+      where: { id: inboundWebhookId },
+      data: { payload: { redacted: true }, processedAt: now, error: null },
+    });
+    return;
+  }
   const run = await syncOrders(db, store, {
     type: "ORDERS_WEBHOOK",
     orderIds: [orderId],
