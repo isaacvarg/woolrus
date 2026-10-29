@@ -125,7 +125,7 @@
     },
     "piiRetention": {
       "label": "Conservar datos de clientes (días)",
-      "hint": "Déjalo vacío para conservarlos siempre. Entre 30 y 3650 días."
+      "hint": "Los pedidos completados y cancelados pierden el nombre, correo, dirección y notas del cliente después de estos días; el pedido, sus artículos y etiquetas se conservan para reportes. Déjalo vacío para no eliminarlos nunca. Entre 30 y 3650 días."
     },
     "qaMustDifferFromPacker": "El control de calidad debe hacerlo alguien distinto de quien empacó",
     "integrations": {
@@ -318,6 +318,7 @@
     "status": "Estado",
     "priority": "Prioridad",
     "customer": "Cliente",
+    "customerRemoved": "Datos del cliente eliminados",
     "orderedAt": "Fecha del pedido",
     "shippingMethod": "Envío",
     "shipTo": "Enviar a",

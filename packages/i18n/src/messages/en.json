@@ -125,7 +125,7 @@
     },
     "piiRetention": {
       "label": "Keep customer details (days)",
-      "hint": "Leave empty to keep them forever. Between 30 and 3650 days."
+      "hint": "Completed and cancelled orders lose the customer's name, email, address and notes this many days after they finish; the order, its items and labels stay for reporting. Leave empty to never remove them. Between 30 and 3650 days."
     },
     "qaMustDifferFromPacker": "QA must be done by someone other than the packer",
     "integrations": {
@@ -318,6 +318,7 @@
     "status": "Status",
     "priority": "Priority",
     "customer": "Customer",
+    "customerRemoved": "Customer details removed",
     "orderedAt": "Ordered",
     "shippingMethod": "Shipping",
     "shipTo": "Ship to",

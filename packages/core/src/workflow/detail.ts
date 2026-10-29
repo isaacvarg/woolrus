@@ -77,6 +77,7 @@ export async function toOrderDetails(
       id: o.id,
       number: o.number,
       customerName: o.customerName,
+      piiRedacted: o.piiRedactedAt !== null,
       orderedAt: o.orderedAt,
       shippingMethod: o.shippingMethod,
       status: o.status,
