@@ -136,7 +136,7 @@ describe("voidLabel", () => {
 
   it("refuses an order that isn't in QA", async () => {
     const { run, order, label } = await labelled();
-    await db.order.update({ where: { id: order.id }, data: { status: "READY" } });
+    await db.order.update({ where: { id: order.id }, data: { status: "PACKING" } });
     await expect(run()).rejects.toMatchObject({ messageKey: "errors.qa.notQa" });
     expect((await row(label.id)).status).toBe("ACTIVE");
   });
