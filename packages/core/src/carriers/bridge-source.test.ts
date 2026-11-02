@@ -12,6 +12,7 @@ import {
   listProviders,
   setProviderCredentials,
   setProviderEnabled,
+  shippingProviderHealth,
   updateProviderConfig,
 } from "./providers";
 
@@ -164,6 +165,21 @@ describe("Bridge Source behind the carriers service", () => {
     });
     [, account] = await listProviders(db, actor);
     expect(account?.credentials.apiKey?.configured).toBe(false);
+  });
+
+  it("marks health degraded when an enabled Bridge Source stops answering", async () => {
+    const actor = await admin();
+    await configured(actor);
+    await setProviderEnabled(
+      db,
+      actor,
+      { provider: "BRIDGE_SOURCE", enabled: true },
+      adapters().factories,
+    );
+    const down = adapters(500).factories;
+    const health = await shippingProviderHealth(db, down, new Date(Date.now() + 10 * 60_000));
+    expect(health.providers.BRIDGE_SOURCE).toBe("fail");
+    expect(health.degraded).toBe(true);
   });
 
   it("keeps the key out of responses and audit rows", async () => {

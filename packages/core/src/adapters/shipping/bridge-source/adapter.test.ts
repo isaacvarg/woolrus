@@ -2,6 +2,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { describeShippingProvider, type SimulatedFailure } from "../contract";
 import { ShippingError } from "../errors";
+import type { RateRequest } from "../provider";
 import { buildShippingProvider, shippingAdapterAvailable } from "../registry";
 import error401 from "./__fixtures__/error-401.json" with { type: "json" };
 import error403 from "./__fixtures__/error-403.json" with { type: "json" };
@@ -21,11 +22,52 @@ const json = (body: unknown, status = 200) =>
 
 const errorBodies = { 400: error422, 401: error401, 429: error500, 500: error500 };
 
+/** `POST …/quote` answers by service code; anything else gets a default. */
+const quotes: Record<string, unknown> = {
+  A_GROUND: { totalAmount: 8.5 },
+  A_EXPRESS_INTL: { totalAmount: 41.995 },
+  R1: { totalAmount: 1.005 },
+  R2: { totalAmount: 0.285 },
+  R3: { totalAmount: 19.999 },
+};
+const quoteRoute = `POST /restapi/v1/customers/${customerId}/quote`;
+
+const address = {
+  name: "Quote Customer",
+  address1: "1 Quote Street",
+  city: "Springfield",
+  state: "OR",
+  postalCode: "97477",
+  country: "US",
+};
+
+function rateRequest(services: RateRequest["services"], weightOz = 22.5): RateRequest {
+  return {
+    orderNumber: "Q-1",
+    shipFrom: { ...address, name: "Warehouse" },
+    shipTo: address,
+    residential: true,
+    package: { lengthIn: 10, widthIn: 8, heightIn: 4, weightOz },
+    items: [{ sku: "SKU-1", name: "Thing", quantity: 1 }],
+    services,
+  };
+}
+
+const service = (code: string, carrier = "CARRIER_A", packageTypeCode: string | null = "PKG") => ({
+  carrierExternalId: carrier,
+  code,
+  providerData: {
+    serviceName: code === "A_GROUND" ? "A Ground" : `Service ${code}`,
+    ...(packageTypeCode && { packageTypeCode }),
+  },
+});
+
 type Call = { method: string; url: URL; headers: Headers };
 
 /** Bridge Source's REST API played back from the fixtures. */
 function fixtureApi(overrides: Record<string, () => Response> = {}) {
   const calls: Call[] = [];
+  const bodies: Record<string, unknown>[] = [];
   const failures: SimulatedFailure[] = [];
   const fetch: typeof globalThis.fetch = async (input, init = {}) => {
     const url = new URL(String(input));
@@ -41,9 +83,14 @@ function fixtureApi(overrides: Record<string, () => Response> = {}) {
     if (method === "GET" && url.pathname.endsWith(`/restapi/v1/customers/${customerId}/services`)) {
       return json(services);
     }
+    if (method === "POST" && url.pathname.endsWith(`/restapi/v1/customers/${customerId}/quote`)) {
+      const body = JSON.parse(String(init.body)) as { serviceCode: string };
+      bodies.push(body);
+      return json(quotes[body.serviceCode] ?? { totalAmount: 12.34 });
+    }
     return json({ error: "not found" }, 404);
   };
-  return { fetch, calls, failNext: (f: SimulatedFailure) => failures.push(f) };
+  return { fetch, calls, bodies, failNext: (f: SimulatedFailure) => failures.push(f) };
 }
 
 function setup(overrides?: Record<string, () => Response>, config: Record<string, unknown> = {}) {
@@ -73,7 +120,7 @@ describeShippingProvider(
     const { provider, failNext } = setup();
     return { provider, failNext, secrets: [apiKey, customerId] };
   },
-  { quotes: false },
+  { buys: false },
 );
 
 describe("BridgeSourceAdapter", () => {
@@ -115,11 +162,13 @@ describe("BridgeSourceAdapter", () => {
     it("keeps the custom-packaging package type and the country lists as provider data", async () => {
       const [a, b] = await setup().provider.listCarriers();
       expect(a?.services[0]?.providerData).toEqual({
+        serviceName: "A Ground",
         packageTypeCode: "A_CUSTOM",
         supportedCountries: ["US"],
         unsupportedCountries: [],
       });
       expect(b?.services[0]?.providerData).toMatchObject({
+        serviceName: "B World",
         packageTypeCode: "B_CUSTOM",
         unsupportedCountries: ["CU", "KP"],
       });
@@ -199,6 +248,137 @@ describe("BridgeSourceAdapter", () => {
       });
       expect((await rejection(free.provider.ping())).detail).toBe("ping 422");
     });
+  });
+
+  describe("getRates", () => {
+    it("quotes each requested service with the custom package, converting units at the boundary", async () => {
+      const { provider, bodies, calls } = setup();
+      const rates = await provider.getRates(
+        rateRequest([service("A_GROUND", "CARRIER_A", "A_CUSTOM"), service("A_EXPRESS_INTL")]),
+      );
+      expect(rates).toEqual([
+        {
+          carrierExternalId: "CARRIER_A",
+          serviceCode: "A_GROUND",
+          serviceName: "A Ground",
+          amountCents: 850,
+          currency: "USD",
+          guaranteed: false,
+          trackable: true,
+        },
+        expect.objectContaining({ serviceCode: "A_EXPRESS_INTL", amountCents: 4200 }),
+      ]);
+      expect(rates[0]).not.toHaveProperty("providerRateId");
+      expect(rates[0]).not.toHaveProperty("expiresAt");
+      expect(calls.every((c) => c.headers.get("authorization") === `RSIS ${apiKey}`)).toBe(true);
+      expect(bodies[0]).toMatchObject({
+        carrierCode: "CARRIER_A",
+        serviceCode: "A_GROUND",
+        packageTypeCode: "A_CUSTOM",
+        residential: true,
+        weight: { pounds: 1, ounces: 6.5 },
+        dimensions: { length: 10, width: 8, height: 4 },
+      });
+    });
+
+    it("rounds money half up to whole cents", async () => {
+      const rates = await setup().provider.getRates(
+        rateRequest(["R1", "R2", "R3"].map((c) => service(c))),
+      );
+      expect(rates.map((r) => r.amountCents)).toEqual([101, 29, 2000]);
+    });
+
+    it("skips a service with no custom package type, without a request", async () => {
+      const { provider, bodies } = setup();
+      const rates = await provider.getRates(
+        rateRequest([service("A_GROUND"), service("B_NO_CUSTOM", "CARRIER_B", null)]),
+      );
+      expect(rates.map((r) => r.serviceCode)).toEqual(["A_GROUND"]);
+      expect(bodies).toHaveLength(1);
+    });
+
+    it("drops a service Bridge Source refuses and keeps the rest", async () => {
+      let n = 0;
+      const { provider } = setup({
+        [quoteRoute]: () => (++n === 2 ? json(error422NotOffered, 422) : json({ totalAmount: 5 })),
+      });
+      const rates = await provider.getRates(
+        rateRequest([service("S1"), service("S2"), service("S3")]),
+      );
+      expect(rates).toHaveLength(2);
+    });
+
+    it("fails with the refusal when every service is refused", async () => {
+      const { provider } = setup({ [quoteRoute]: () => json(error422NotOffered, 422) });
+      const error = await rejection(provider.getRates(rateRequest([service("S1"), service("S2")])));
+      expect(error).toMatchObject({ kind: "notOffered", status: 422 });
+    });
+
+    it("fails the whole call on any other failure", async () => {
+      let n = 0;
+      const { provider } = setup({
+        [quoteRoute]: () => (++n === 2 ? json(error500, 500) : json({ totalAmount: 5 })),
+      });
+      const error = await rejection(provider.getRates(rateRequest([service("S1"), service("S2")])));
+      expect(error.kind).toBe("unavailable");
+    });
+
+    it("treats a quote body that doesn't parse as unavailable", async () => {
+      const { provider } = setup({ [quoteRoute]: () => json({ nope: 1 }) });
+      expect(await rejection(provider.getRates(rateRequest([service("S1")])))).toMatchObject({
+        kind: "unavailable",
+        detail: "getRates malformed",
+      });
+    });
+
+    it("refuses without a base URL, making no request", async () => {
+      const { provider, calls } = setup(undefined, { baseUrl: undefined });
+      expect((await rejection(provider.getRates(rateRequest([service("S1")])))).kind).toBe(
+        "rejected",
+      );
+      expect(calls).toHaveLength(0);
+    });
+
+    it("makes at most 4 calls at once and finishes inside the budget", async () => {
+      let active = 0;
+      let peak = 0;
+      const fetch: typeof globalThis.fetch = async () => {
+        active++;
+        peak = Math.max(peak, active);
+        await new Promise((r) => setTimeout(r, 20));
+        active--;
+        return json({ totalAmount: 3 });
+      };
+      const provider = new BridgeSourceAdapter({ apiKey, customerId }, { baseUrl }, { fetch });
+      const codes = Array.from({ length: 10 }, (_, i) => `S${i}`);
+      const started = Date.now();
+      const rates = await provider.getRates(rateRequest(codes.map((c) => service(c))));
+      expect(rates.map((r) => r.serviceCode)).toEqual(codes);
+      expect(peak).toBe(4);
+      expect(Date.now() - started).toBeLessThan(1000);
+    });
+
+    it("times the whole set against one budget", async () => {
+      const fetch: typeof globalThis.fetch = (_url, init) =>
+        new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => reject(init.signal?.reason));
+        });
+      const provider = new BridgeSourceAdapter(
+        { apiKey, customerId },
+        { baseUrl },
+        { fetch, timeoutMs: 50 },
+      );
+      const codes = Array.from({ length: 10 }, (_, i) => `S${i}`);
+      const started = Date.now();
+      const error = await rejection(provider.getRates(rateRequest(codes.map((c) => service(c)))));
+      expect(error.kind).toBe("timeout");
+      expect(Date.now() - started).toBeLessThan(500);
+    });
+  });
+
+  it("buys only when booking is enabled, and still not here (stage 1)", async () => {
+    expect(setup(undefined, { bookingEnabled: true }).provider.capabilities.purchase).toBe(true);
+    expect(setup(undefined, { bookingEnabled: "yes" }).provider.capabilities.purchase).toBe(false);
   });
 
   it("refuses to buy, without any request", async () => {

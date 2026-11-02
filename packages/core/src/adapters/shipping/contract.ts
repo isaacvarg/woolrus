@@ -47,14 +47,16 @@ const expectedFailures: [SimulatedFailure, ShippingErrorKind, boolean][] = [
 ];
 
 export type ContractOptions = {
-  /** False while an adapter has no `getRates` or `purchaseLabel` yet: those tests are skipped. */
+  /** False while an adapter has no `getRates` yet: those tests are skipped. */
   quotes?: boolean;
+  /** False for a quote-only provider (no `purchaseLabel`, `findLabel` or `voidLabel`): those tests are skipped. */
+  buys?: boolean;
 };
 
 export function describeShippingProvider(
   name: string,
   setup: () => ProviderFixture | Promise<ProviderFixture>,
-  { quotes = true }: ContractOptions = {},
+  { quotes = true, buys = true }: ContractOptions = {},
 ) {
   describe(`${name} (ShippingProvider)`, () => {
     let fixture: ProviderFixture;
@@ -176,7 +178,7 @@ export function describeShippingProvider(
       if (check.residential !== undefined) expect(typeof check.residential).toBe("boolean");
     });
 
-    it.skipIf(!quotes)(
+    it.skipIf(!quotes || !buys)(
       "buys a label for a quoted rate, from the rate and the shipment",
       async () => {
         const request = await domesticRequest();
@@ -195,28 +197,34 @@ export function describeShippingProvider(
       },
     );
 
-    it.skipIf(!quotes)("finds a bought label by its idempotency key when it can", async (ctx) => {
-      if (!provider.findLabel) return ctx.skip();
-      const request = await domesticRequest();
-      const [rate] = await provider.getRates(request);
-      if (!rate) throw new Error("no rate to buy");
-      const key = `contract-${crypto.randomUUID()}`;
-      const label = await purchase(request, rate, key);
-      const found = await provider.findLabel(key);
-      expect(found?.providerLabelId).toBe(label.providerLabelId);
-      expect(found?.trackingNumber).toBe(label.trackingNumber);
-      expect(await provider.findLabel(`contract-${crypto.randomUUID()}`)).toBeNull();
-    });
+    it.skipIf(!quotes || !buys)(
+      "finds a bought label by its idempotency key when it can",
+      async (ctx) => {
+        if (!provider.findLabel) return ctx.skip();
+        const request = await domesticRequest();
+        const [rate] = await provider.getRates(request);
+        if (!rate) throw new Error("no rate to buy");
+        const key = `contract-${crypto.randomUUID()}`;
+        const label = await purchase(request, rate, key);
+        const found = await provider.findLabel(key);
+        expect(found?.providerLabelId).toBe(label.providerLabelId);
+        expect(found?.trackingNumber).toBe(label.trackingNumber);
+        expect(await provider.findLabel(`contract-${crypto.randomUUID()}`)).toBeNull();
+      },
+    );
 
-    it.skipIf(!quotes)("voids a label, answering whether the provider approved", async (ctx) => {
-      if (!provider.voidLabel) return ctx.skip();
-      const request = await domesticRequest();
-      const [rate] = await provider.getRates(request);
-      if (!rate) throw new Error("no rate to buy");
-      const label = await purchase(request, rate, `contract-${crypto.randomUUID()}`);
-      const result = await provider.voidLabel(label.providerLabelId);
-      expect(typeof result.approved).toBe("boolean");
-    });
+    it.skipIf(!quotes || !buys)(
+      "voids a label, answering whether the provider approved",
+      async (ctx) => {
+        if (!provider.voidLabel) return ctx.skip();
+        const request = await domesticRequest();
+        const [rate] = await provider.getRates(request);
+        if (!rate) throw new Error("no rate to buy");
+        const label = await purchase(request, rate, `contract-${crypto.randomUUID()}`);
+        const result = await provider.voidLabel(label.providerLabelId);
+        expect(typeof result.approved).toBe("boolean");
+      },
+    );
 
     describe.each(expectedFailures)("a %s failure", (failure, kind, permanent) => {
       it(`is a ${permanent ? "permanent" : "transient"} ${kind} ShippingError with a clean detail`, async () => {

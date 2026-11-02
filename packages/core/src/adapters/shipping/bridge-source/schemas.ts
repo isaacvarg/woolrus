@@ -33,6 +33,9 @@ export const servicesResponse = z.union([
   z.object({ services: z.array(serviceSchema) }).transform((body) => body.services),
 ]);
 
+/** `POST …/quote`: the all-in price (surcharges included) in dollars. Other fields are dropped. */
+export const quoteResponse = z.object({ totalAmount: z.number().finite().nonnegative() });
+
 /** Only the structured fields: `error` is free text that can echo the request, so it's never read. */
 export const errorResponse = z.object({ errorCategory: z.string().nullish() });
 export type ApiError = z.output<typeof errorResponse>;
