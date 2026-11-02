@@ -634,26 +634,29 @@ describe("forceStatus", () => {
 
 describe("repack and ship (caller's transaction)", () => {
   it("repack returns a Ready order to Packing", async () => {
-    const packer = await createActor(db, ["PACKER"]);
+    const shipper = await createActor(db, ["SHIPPER"]);
     const { order } = await readyOrder("VOIDED");
 
     const repacked = await db.$transaction((tx) =>
-      repack(tx, packer, { orderId: order.id, expectedVersion: 1, reason: "Wrong box" }),
+      repack(tx, shipper, { orderId: order.id, expectedVersion: 1, reason: "Wrong box" }),
     );
 
     expect(repacked).toMatchObject({ status: "PACKING", version: 2 });
   });
 
   it("repack is refused with a live label, without a reason, and to a Picker", async () => {
-    const [packer, picker] = [await createActor(db, ["PACKER"]), await createActor(db, ["PICKER"])];
+    const [shipper, picker] = [
+      await createActor(db, ["SHIPPER"]),
+      await createActor(db, ["PICKER"]),
+    ];
     const { order } = await readyOrder("ACTIVE");
-    const run = (actor: typeof packer, reason: string) =>
+    const run = (actor: typeof shipper, reason: string) =>
       db.$transaction((tx) => repack(tx, actor, { orderId: order.id, expectedVersion: 1, reason }));
 
-    await expect(run(packer, "Wrong box")).rejects.toMatchObject({
+    await expect(run(shipper, "Wrong box")).rejects.toMatchObject({
       messageKey: "errors.workflow.gateFailed",
     });
-    await expect(run(packer, "")).rejects.toMatchObject({ kind: "BAD_REQUEST" });
+    await expect(run(shipper, "")).rejects.toMatchObject({ kind: "BAD_REQUEST" });
     await expect(run(picker, "Wrong box")).rejects.toMatchObject({ kind: "FORBIDDEN" });
   });
 
