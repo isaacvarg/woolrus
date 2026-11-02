@@ -150,6 +150,33 @@ describe("FakeShipStationProvider", () => {
     expect(await provider.voidLabel(label.providerLabelId)).toMatchObject({ approved: false });
   });
 
+  it("rejects the void of package n when the ship-to line 2 says VOID-REJECT-n", async () => {
+    const provider = new FakeShipStationProvider();
+    const req = await request(provider);
+    req.shipTo.address2 = "Unit 4 VOID-REJECT-2";
+    const [rate] = await provider.getRates(req);
+    const buy = (packageNumber: number) =>
+      provider.purchaseLabel({
+        rate: {
+          providerRateId: rate?.providerRateId,
+          carrierExternalId: "",
+          serviceCode: "",
+          providerData: {},
+        },
+        shipment: req,
+        idempotencyKey: `reject-key-${packageNumber}`,
+        packageNumber,
+        reference: "1001",
+        format: "pdf",
+        size: "4x6",
+      });
+    const one = await buy(1);
+    const two = await buy(2);
+    expect(await provider.voidLabel(two.providerLabelId)).toMatchObject({ approved: false });
+    expect(await provider.voidLabel(two.providerLabelId)).toMatchObject({ approved: false });
+    expect(await provider.voidLabel(one.providerLabelId)).toEqual({ approved: true });
+  });
+
   it("corrects an address line containing Street, verifies others, and fails 00000", async () => {
     const provider = new FakeShipStationProvider();
     const corrected = await provider.validateAddress({

@@ -204,6 +204,42 @@ export type RepackOrderResult = z.infer<typeof RepackOrderResult>;
 export const RepackResult = z.object({ orders: z.array(RepackOrderResult) });
 export type RepackResult = z.infer<typeof RepackResult>;
 
+export const RetryVoidInput = z.object({ labelId: Id });
+export type RetryVoidInput = z.infer<typeof RetryVoidInput>;
+
+export const WriteOffLabelInput = z.object({
+  labelId: Id,
+  reason: z.string().trim().min(1).max(500),
+});
+export type WriteOffLabelInput = z.infer<typeof WriteOffLabelInput>;
+
+/** Where a stuck label ended up after a retry or a write-off. */
+export const LabelVoidStep = z.object({
+  orderId: Id,
+  status: z.enum(["VOIDED", "VOID_REJECTED", "WRITTEN_OFF"]),
+});
+export type LabelVoidStep = z.infer<typeof LabelVoidStep>;
+
+/** A label whose void was rejected or never answered, waiting for a retry or a write-off. */
+export const StuckLabel = z.object({
+  id: Id,
+  packageNumber: z.number().int(),
+  status: z.enum(["VOID_REJECTED", "VOID_REQUESTED"]),
+  /** An error code (`errors.…`) the client translates. */
+  error: z.string().nullable(),
+  voidReason: z.string().nullable(),
+});
+export type StuckLabel = z.infer<typeof StuckLabel>;
+
+export const StuckLabels = z.object({
+  labels: z.array(StuckLabel),
+  /** The caller holds `label.writeOff`, so the screen offers it. */
+  canWriteOff: z.boolean(),
+});
+export type StuckLabels = z.infer<typeof StuckLabels>;
+
+export const StuckLabelsInput = z.object({ orderId: Id });
+
 export const shipping = {
   createLabelPrint: base
     .route({
@@ -253,6 +289,36 @@ export const shipping = {
     })
     .input(RepackInput)
     .output(RepackResult),
+
+  retryVoid: base
+    .route({
+      method: "POST",
+      path: "/labels/{labelId}/retry-void",
+      tags,
+      summary: "Ask the provider again to void a label stuck in Ready",
+    })
+    .input(RetryVoidInput)
+    .output(LabelVoidStep),
+
+  writeOffLabel: base
+    .route({
+      method: "POST",
+      path: "/labels/{labelId}/write-off",
+      tags,
+      summary: "Write off a label the provider won't void (admin, after checking the carrier)",
+    })
+    .input(WriteOffLabelInput)
+    .output(LabelVoidStep),
+
+  stuckLabels: base
+    .route({
+      method: "GET",
+      path: "/orders/{orderId}/stuck-labels",
+      tags,
+      summary: "An order's labels waiting for a retry or a write-off",
+    })
+    .input(StuckLabelsInput)
+    .output(StuckLabels),
 
   customsProducts: base
     .route({
