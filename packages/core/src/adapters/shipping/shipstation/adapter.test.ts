@@ -89,7 +89,11 @@ function fixtureApi(overrides: Record<string, () => Response> = {}) {
     if (method === "PUT" && url.pathname.endsWith("/void")) return json(voidApproved);
     if (route === "POST /v2/manifests") {
       const { label_ids, carrier_id } = body as { label_ids: string[]; carrier_id: string };
-      const made = { ...manifestCreated.manifests[0], label_ids, carrier_id };
+      const made = {
+        ...(manifestCreated.manifests[0] as (typeof manifestCreated.manifests)[number]),
+        label_ids,
+        carrier_id,
+      };
       manifests.push(made);
       return json({ ...manifestCreated, manifests: [made] });
     }

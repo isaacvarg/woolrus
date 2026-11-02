@@ -81,7 +81,6 @@ export function ManifestsScreen() {
                     <p>{t("manifests.unmanifested", { count: carrier.unmanifested })}</p>
                   </div>
                   <Button
-                    variant="primary"
                     isDisabled={carrier.unmanifested === 0 || create.isPending}
                     onPress={() => create.mutate({ carrierId: carrier.carrierId, date: shipDate })}
                   >
