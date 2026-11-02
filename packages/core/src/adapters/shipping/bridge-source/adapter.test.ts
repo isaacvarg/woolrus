@@ -1,5 +1,5 @@
 import { readdirSync, readFileSync } from "node:fs";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { describeShippingProvider, type SimulatedFailure } from "../contract";
 import { ShippingError } from "../errors";
 import type { RateRequest } from "../provider";
@@ -402,6 +402,10 @@ describe("BridgeSourceAdapter", () => {
   });
 
   describe("registry", () => {
+    // CI exports SHIPPING_PROVIDERS=fake for Playwright; this test is about the real factory.
+    beforeEach(() => vi.stubEnv("SHIPPING_PROVIDERS", ""));
+    afterEach(() => vi.unstubAllEnvs());
+
     it("is available, and built from credentials and the base URL", async () => {
       expect(shippingAdapterAvailable("BRIDGE_SOURCE")).toBe(true);
       const provider = buildShippingProvider("BRIDGE_SOURCE", { apiKey, customerId }, { baseUrl });
