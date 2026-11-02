@@ -11,6 +11,7 @@ import {
   createBatch,
   createBox,
   createInvitation,
+  createLabelPrint,
   createNote,
   createPriorityRule,
   customsProducts,
@@ -59,6 +60,7 @@ import {
   markOutOfStock,
   myPicks,
   orderMutations,
+  orderPrintableLabels,
   packRemaining,
   packUnits,
   permissionsFor,
@@ -181,6 +183,12 @@ export const router = implementer.router({
     delete: api.boxes.delete.handler(({ input, context }) => deleteBox(db, context.actor, input)),
   },
   shipping: {
+    createLabelPrint: api.shipping.createLabelPrint.handler(({ input, context }) =>
+      createLabelPrint(db, context.actor, input),
+    ),
+    orderPrintableLabels: api.shipping.orderPrintableLabels.handler(({ input, context }) =>
+      orderPrintableLabels(db, context.actor, input),
+    ),
     customsProducts: api.shipping.customsProducts.handler(({ input, context }) =>
       customsProducts(db, context.actor, input),
     ),

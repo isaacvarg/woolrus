@@ -329,7 +329,18 @@
     "startPacking": "Start packing",
     "startedPacking": "Order {number} is yours to pack.",
     "startQa": "Start QA",
-    "startedQa": "Order {number} is yours to check."
+    "startedQa": "Order {number} is yours to check.",
+    "printLabels": "Print labels",
+    "printing": "Printing…",
+    "printSelected": "Print labels ({count})",
+    "packages": "{count, plural, one {# package} other {# packages}}",
+    "printState": {
+      "none": "Not printed",
+      "partial": "Partly printed",
+      "printed": "Printed {times}×"
+    },
+    "packagesColumn": "Packages",
+    "printColumn": "Labels"
   },
   "order": {
     "title": "Order #{number}",
@@ -1176,7 +1187,8 @@
       "unavailable": "The shipping provider couldn't be reached. Try again in a minute.",
       "timeout": "The shipping provider took too long to answer. Try again in a minute.",
       "hsCodeInvalid": "Use 6 to 10 digits; dots are fine, e.g. 3401.11.",
-      "countryInvalid": "Use the 2-letter country code, e.g. US."
+      "countryInvalid": "Use the 2-letter country code, e.g. US.",
+      "notPrintable": "Only active labels on Ready or Completed orders can be printed."
     },
     "carriers": {
       "credentialsMissing": "Add the provider's credentials first.",
@@ -1460,5 +1472,14 @@
     "empty": "No products match this filter.",
     "loadMore": "Load more",
     "none": "Not set"
+  },
+  "print": {
+    "reprint": "Reprint",
+    "reprintOrder": "Reprint all labels",
+    "title": "Labels",
+    "package": "Package {number}",
+    "printedTimes": "Printed {count}×",
+    "notPrinted": "Not printed",
+    "popupBlocked": "The print was recorded, but the browser blocked the new tab. Allow pop-ups and press Reprint."
   }
 }

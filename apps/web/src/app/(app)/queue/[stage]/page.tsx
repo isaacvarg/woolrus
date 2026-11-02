@@ -21,6 +21,7 @@ export default async function QueuePage({ params }: { params: Promise<{ stage: s
         canBeginPicking={!!actor && can(actor, ruleFor("beginPicking").permission)}
         canPack={!!actor && can(actor, "order.pack")}
         canQa={!!actor && can(actor, "order.qa")}
+        canPrint={!!actor && can(actor, "label.print")}
       />
     </section>
   );

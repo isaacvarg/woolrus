@@ -329,7 +329,18 @@
     "startPacking": "Empezar a empacar",
     "startedPacking": "Empacarás el pedido {number}.",
     "startQa": "Iniciar control de calidad",
-    "startedQa": "El pedido {number} es tuyo para revisar."
+    "startedQa": "El pedido {number} es tuyo para revisar.",
+    "printLabels": "Imprimir etiquetas",
+    "printing": "Imprimiendo…",
+    "printSelected": "Imprimir etiquetas ({count})",
+    "packages": "{count, plural, one {# paquete} other {# paquetes}}",
+    "printState": {
+      "none": "Sin imprimir",
+      "partial": "Impresa en parte",
+      "printed": "Impresa {times}×"
+    },
+    "packagesColumn": "Paquetes",
+    "printColumn": "Etiquetas"
   },
   "order": {
     "title": "Pedido #{number}",
@@ -1176,7 +1187,8 @@
       "unavailable": "No se pudo conectar con el proveedor de envíos. Inténtalo de nuevo en un minuto.",
       "timeout": "El proveedor de envíos tardó demasiado en responder. Inténtalo de nuevo en un minuto.",
       "hsCodeInvalid": "Usa de 6 a 10 dígitos; los puntos están bien, p. ej. 3401.11.",
-      "countryInvalid": "Usa el código de país de 2 letras, p. ej. US."
+      "countryInvalid": "Usa el código de país de 2 letras, p. ej. US.",
+      "notPrintable": "Solo se pueden imprimir etiquetas activas de pedidos Listos o Completados."
     },
     "carriers": {
       "credentialsMissing": "Primero agrega las credenciales del proveedor.",
@@ -1460,5 +1472,14 @@
     "empty": "Ningún producto coincide con este filtro.",
     "loadMore": "Cargar más",
     "none": "Sin definir"
+  },
+  "print": {
+    "reprint": "Reimprimir",
+    "reprintOrder": "Reimprimir todas las etiquetas",
+    "title": "Etiquetas",
+    "package": "Paquete {number}",
+    "printedTimes": "Impresa {count}×",
+    "notPrinted": "Sin imprimir",
+    "popupBlocked": "La impresión quedó registrada, pero el navegador bloqueó la pestaña nueva. Permite las ventanas emergentes y pulsa Reimprimir."
   }
 }
