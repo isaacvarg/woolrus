@@ -12,8 +12,10 @@ import {
   createBox,
   createInvitation,
   createLabelPrint,
+  createManifest,
   createNote,
   createPriorityRule,
+  createShippingProviders,
   customsProducts,
   deactivateUser,
   deleteBox,
@@ -56,6 +58,7 @@ import {
   listUsers,
   listVoids,
   lockStation,
+  manifestCandidates,
   markLabelNotBought,
   markOutOfStock,
   myPicks,
@@ -194,6 +197,12 @@ export const router = implementer.router({
     ),
     updateProductCustoms: api.shipping.updateProductCustoms.handler(({ input, context }) =>
       updateProductCustoms(db, context.actor, input),
+    ),
+    manifestCandidates: api.shipping.manifestCandidates.handler(async ({ input, context }) =>
+      manifestCandidates(db, context.actor, await createShippingProviders(db), input),
+    ),
+    createManifest: api.shipping.createManifest.handler(async ({ input, context }) =>
+      createManifest(db, context.actor, await createShippingProviders(db), storage(), input),
     ),
   },
   settings: {

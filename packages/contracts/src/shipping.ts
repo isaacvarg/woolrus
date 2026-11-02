@@ -93,6 +93,47 @@ export const PrintableLabel = z.object({
 export type PrintableLabel = z.infer<typeof PrintableLabel>;
 
 export const OrderPrintableLabelsInput = z.object({ orderId: Id });
+/** The warehouse's calendar day, YYYY-MM-DD. */
+export const ShipDate = z.iso.date();
+
+export const ManifestCandidatesInput = z.object({ shipDate: ShipDate });
+export type ManifestCandidatesInput = z.infer<typeof ManifestCandidatesInput>;
+
+export const ManifestSummary = z.object({
+  id: Id,
+  createdAt: z.date(),
+  labelCount: z.number().int(),
+});
+export type ManifestSummary = z.infer<typeof ManifestSummary>;
+
+export const ManifestCarrier = z.object({
+  carrierId: Id,
+  /** The carrier account as people know it: its label in Settings, else the provider's name. */
+  name: z.string(),
+  /** Shipped labels of the day that no manifest covers yet. */
+  unmanifested: z.number().int(),
+  manifests: z.array(ManifestSummary),
+});
+export type ManifestCarrier = z.infer<typeof ManifestCarrier>;
+
+export const ManifestCandidates = z.object({
+  shipDate: ShipDate,
+  carriers: z.array(ManifestCarrier),
+});
+export type ManifestCandidates = z.infer<typeof ManifestCandidates>;
+
+export const CreateManifestInput = z.object({
+  carrierId: Id,
+  shipDate: ShipDate,
+  idempotencyKey: IdempotencyKey,
+});
+export type CreateManifestInput = z.infer<typeof CreateManifestInput>;
+
+export const CreateManifestResult = z.object({
+  manifestId: Id,
+  labelCount: z.number().int(),
+});
+export type CreateManifestResult = z.infer<typeof CreateManifestResult>;
 
 export const shipping = {
   createLabelPrint: base
@@ -134,4 +175,24 @@ export const shipping = {
     })
     .input(UpdateProductCustomsInput)
     .output(CustomsProduct),
+
+  manifestCandidates: base
+    .route({
+      method: "GET",
+      path: "/manifests/candidates",
+      tags,
+      summary: "Per carrier account, the day's shipped labels without a manifest",
+    })
+    .input(ManifestCandidatesInput)
+    .output(ManifestCandidates),
+
+  createManifest: base
+    .route({
+      method: "POST",
+      path: "/manifests",
+      tags,
+      summary: "Manifest a carrier account's shipped labels for a day",
+    })
+    .input(CreateManifestInput)
+    .output(CreateManifestResult),
 };

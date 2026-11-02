@@ -194,7 +194,7 @@ describe("FakeBridgeSourceProvider", () => {
       addressValidation: false,
       labelLookup: false,
       void: true,
-      manifests: true,
+      manifests: false,
       purchase: true,
     });
   });
