@@ -7,6 +7,7 @@ import {
   type GateLine,
   type GatePackage,
   type GateSnapshot,
+  liveLabelStatuses,
   loadGateSnapshot,
 } from "./gates";
 
@@ -453,5 +454,14 @@ describe("all-voided rule", () => {
   it("leaves hold, cancel and force gates alone", () => {
     expect(evaluateGate("noLiveLabels", allVoided())).toEqual([]);
     expect(evaluateGate("shippable", allVoided({ status: "READY" }))).not.toContainEqual(unmetKey);
+  });
+});
+
+describe("liveLabelStatuses", () => {
+  it("is the four statuses that may exist at the carrier, never a written-off label", () => {
+    expect([...liveLabelStatuses].sort()).toEqual(
+      ["ACTIVE", "PURCHASING", "VOID_REJECTED", "VOID_REQUESTED"].sort(),
+    );
+    expect(liveLabelStatuses).not.toContain("WRITTEN_OFF");
   });
 });

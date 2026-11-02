@@ -112,7 +112,7 @@ describe("workflow machine", () => {
 
   it("describes the corrections", () => {
     expect(transitionFor("READY", "PACKING", "repack")).toMatchObject({
-      permission: "order.pack",
+      permission: "order.repack",
       claim: "none",
       gate: "noLiveLabels",
       reasonRequired: true,

@@ -35,6 +35,8 @@ model Settings {
   stageSlaMinutes        Json          @default("{}") @map("stage_sla_minutes")
   /// Days after completion before customer PII is purged (NFR-SEC-06). Null = keep.
   piiRetentionDays       Int?          @map("pii_retention_days")
+  /// Push tracking items to WooCommerce through the AST plugin. Off until IT has installed it.
+  wooTrackingEnabled     Boolean       @default(false) @map("woo_tracking_enabled")
 
   /// Complete QA asks to confirm when the labels cost more than this multiple of the shipping charged. Null = off.
   labelCostConfirmRatio     Decimal? @default(2.0) @map("label_cost_confirm_ratio") @db.Decimal(6, 2)

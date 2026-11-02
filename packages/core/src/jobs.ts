@@ -31,6 +31,8 @@ export const queues = {
   labelsPurchase: "labels.purchase",
   /** Settle labels left PURCHASING by a lost provider response (SPEC-qa). */
   labelsReconcile: "labels.reconcile",
+  /** Push a shipped order's tracking and Completed status to WooCommerce (SPEC-shipping "Woo push"). */
+  wooPush: "woo.push",
 } as const;
 export type QueueName = (typeof queues)[keyof typeof queues];
 
@@ -57,6 +59,7 @@ export type JobPayloads = {
   /** `requestedById` pressed Complete QA; the job moves the order to Ready as them. */
   [queues.labelsPurchase]: { orderId: string; requestedById: string };
   [queues.labelsReconcile]: Record<string, never>;
+  [queues.wooPush]: { orderId: string };
 };
 
 /** Finished jobs stay 30 days, so a failure over a long weekend is still there on Monday. */
@@ -91,6 +94,8 @@ export const queueOptions: Record<QueueName, QueueSettings> = {
   [queues.ratesFetch]: { ...keep, retryLimit: 2, retryDelay: 20, retryBackoff: true },
   // Provider outages while buying: 5 attempts over a few minutes (SPEC-qa "The labels.purchase job").
   [queues.labelsPurchase]: { ...keep, retryLimit: 4, retryDelay: 15, retryBackoff: true },
+  // WooCommerce down or rate-limiting: 9 attempts over several hours; then the order shows a push error.
+  [queues.wooPush]: { ...keep, retryLimit: 8, retryDelay: 60, retryBackoff: true },
 };
 
 /** pg-boss keeps its tables in their own schema, separate from Prisma's. */

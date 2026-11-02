@@ -20,7 +20,7 @@ export type SystemActor = {
   roles: readonly Role[];
   stationId: null;
   requestId?: undefined;
-  system: "store-sync" | "operations";
+  system: "store-sync" | "operations" | "shipping";
 };
 
 export type Actor = UserActor | SystemActor;
@@ -44,12 +44,22 @@ export const operationsActor: SystemActor = Object.freeze({
   system: "operations",
 });
 
+/** Shipping's actor for the Woo push and other background shipping work: audit rows show "shipping". */
+export const shippingActor: SystemActor = Object.freeze({
+  userId: null,
+  roles: Object.freeze(["ADMIN"] as const),
+  stationId: null,
+  system: "shipping",
+});
+
 export const permissions = [
   "box.read",
   "box.manage",
   "order.read",
   "order.pick",
   "order.pack",
+  /** Send a Ready order back to packing; its labels are voided first. */
+  "order.repack",
   "order.qa",
   "order.hold",
   "order.cancel",
@@ -58,6 +68,8 @@ export const permissions = [
   "label.purchase",
   "label.print",
   "label.void",
+  /** Give up on a label whose void is stuck, leaving it out of the live set. */
+  "label.writeOff",
   "order.ship",
   "note.write",
   /** Write to the customer: create a customer-visible note or switch one to it. */
@@ -92,8 +104,16 @@ export const rolePermissions: Record<Role, readonly Permission[]> = {
   ADMIN: permissions,
   PICKER: [...everyone, "order.pick"],
   PACKER: [...everyone, "order.pack"],
-  QA: [...everyone, "order.qa", "label.purchase", "label.void", "label.print", "note.customer"],
-  SHIPPER: [...everyone, "label.print", "order.ship", "note.customer"],
+  QA: [
+    ...everyone,
+    "order.qa",
+    "order.repack",
+    "label.purchase",
+    "label.void",
+    "label.print",
+    "note.customer",
+  ],
+  SHIPPER: [...everyone, "label.print", "order.ship", "order.repack", "note.customer"],
 };
 
 export function permissionsFor(roles: readonly Role[]): Permission[] {

@@ -599,6 +599,7 @@
     "labelVoidRequested": "Void requested",
     "labelVoided": "Label voided",
     "labelVoidRejected": "Void refused",
+    "labelWrittenOff": "Written off",
     "voidLabel": "Void label",
     "voidRetry": "Void label again",
     "voidTitle": "Void this label?",

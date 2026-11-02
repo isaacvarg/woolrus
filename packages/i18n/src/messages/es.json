@@ -599,6 +599,7 @@
     "labelVoidRequested": "Anulación solicitada",
     "labelVoided": "Etiqueta anulada",
     "labelVoidRejected": "Anulación rechazada",
+    "labelWrittenOff": "Dada de baja",
     "voidLabel": "Anular etiqueta",
     "voidRetry": "Anular etiqueta otra vez",
     "voidTitle": "¿Anular esta etiqueta?",
