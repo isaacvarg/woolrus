@@ -69,7 +69,7 @@ States: `not started` → `spec draft` → `spec approved` → `planned` → `in
 | `packing` | M2 | [SPEC-packing](docs/specs/SPEC-packing.md) | [#24](https://github.com/isaacvarg/woolrus/issues/24) | done |
 | `exceptions` | M3 | [SPEC-exceptions](docs/specs/SPEC-exceptions.md) | [#25](https://github.com/isaacvarg/woolrus/issues/25) | done |
 | `carriers` | M4 | [SPEC-carriers](docs/specs/SPEC-carriers.md) | [#26](https://github.com/isaacvarg/woolrus/issues/26) | done |
-| `bridge-source` | M4 | [SPEC-bridge-source](docs/specs/SPEC-bridge-source.md) | [#83](https://github.com/isaacvarg/woolrus/issues/83) | planned |
+| `bridge-source` | M4 | [SPEC-bridge-source](docs/specs/SPEC-bridge-source.md) | [#83](https://github.com/isaacvarg/woolrus/issues/83) | in progress |
 | `qa` | M4 | [SPEC-qa](docs/specs/SPEC-qa.md) | [#27](https://github.com/isaacvarg/woolrus/issues/27) | done |
 | `shipping` | M4 | — | [#28](https://github.com/isaacvarg/woolrus/issues/28) | not started |
 | `operations` | M4 | [SPEC-operations](docs/specs/SPEC-operations.md) | [#29](https://github.com/isaacvarg/woolrus/issues/29) | done |
