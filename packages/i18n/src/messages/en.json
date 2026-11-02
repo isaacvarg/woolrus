@@ -372,6 +372,7 @@
     "notPhysical": "Not handled on the floor",
     "packages": "Packages",
     "package": "Package {number}",
+    "packageDiscarded": "Package {number} (discarded)",
     "noBox": "No box yet",
     "units": "{count, plural, one {# unit} other {# units}}",
     "liveLabel": "Label",

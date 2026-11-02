@@ -403,6 +403,7 @@ export async function getOrder(
         quantity: it.quantity,
       })),
       liveLabel: p.labels.length > 0,
+      discarded: p.discardedAt !== null,
       noteCount: notes.packages.get(p.id) ?? 0,
     })),
     voids: voids.map(toVoidView),

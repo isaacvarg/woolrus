@@ -20,6 +20,7 @@ import { matchingLines, notOnOrder } from "../picking/scan";
 import { activeQuantity, isWorkLine, type LineRow, lineInclude } from "../picking/service";
 import { toNumber } from "../units";
 import { claimExpiryMinutes, holdsClaim, isClaimLive, touchClaim } from "../workflow/claims";
+import { liveLabelStatuses } from "../workflow/gates";
 import { type LockedOrder, lockOrder } from "../workflow/lock";
 import { notifyOrderChanged } from "../workflow/notify";
 import {
@@ -93,7 +94,7 @@ async function lockPackage(tx: DbTx, actor: Actor, packageId: string, now: Date)
   const order = await lockForPacking(tx, actor, ref.orderId, now);
   // Read after the lock, so a concurrent delete or renumber can't slip in between.
   const pkg = await tx.package.findUnique({ where: { id: packageId }, include: packageInclude });
-  if (!pkg) throw notFound();
+  if (!pkg || pkg.discardedAt) throw notFound();
   return { order, pkg };
 }
 
@@ -142,7 +143,7 @@ async function finish(
     packageId,
     before,
     deleted = false,
-  }: { packageId: string; before?: PackageRow; deleted?: boolean },
+  }: { packageId: string; before?: PackageRow; deleted?: boolean; discarded?: boolean },
   now: Date,
 ): Promise<PackResult> {
   const after = deleted ? undefined : await reload(tx, packageId);
@@ -193,12 +194,10 @@ export async function addPackage(
       "packing.addPackage",
       actor,
       async () => {
-        const { _count, _max } = await tx.package.aggregate({
-          where: { orderId },
-          _count: { _all: true },
-          _max: { number: true },
-        });
-        if (_count._all >= MAX_PACKAGES_PER_ORDER) {
+        // Discarded packages keep their numbers, so the next one is numbered after them too.
+        const { _max } = await tx.package.aggregate({ where: { orderId }, _max: { number: true } });
+        const live = await tx.package.count({ where: { orderId, discardedAt: null } });
+        if (live >= MAX_PACKAGES_PER_ORDER) {
           throw new AppError("CONFLICT", "errors.packing.tooManyPackages", undefined, {
             params: { max: MAX_PACKAGES_PER_ORDER },
           });
@@ -252,7 +251,9 @@ export async function setPackageBox(
 
 /**
  * Deletes a package; its units return to Unassigned and later packages renumber so numbers stay
- * 1…n. A package any label references (even a voided one) can't go: empty it instead.
+ * 1…n. A package with a live label can't go. After a repack its labels are all voided or written
+ * off: it is then discarded instead (kept for the label history, out of every gate and screen),
+ * and numbers aren't reused.
  */
 export async function deletePackage(
   db: Db,
@@ -263,18 +264,35 @@ export async function deletePackage(
   assertCan(actor, "order.pack");
   return db.$transaction(async (tx) => {
     const { order, pkg } = await lockPackage(tx, actor, packageId, now);
-    if ((await tx.shippingLabel.count({ where: { packageId } })) > 0) {
+    const labels = await tx.shippingLabel.findMany({
+      where: { packageId },
+      select: { status: true },
+    });
+    if (labels.some((l) => liveLabelStatuses.includes(l.status))) {
       throw new AppError("CONFLICT", "errors.packing.packageHasLabels");
     }
+    if (labels.length > 0) {
+      await tx.packageItem.deleteMany({ where: { packageId } });
+      await tx.package.update({
+        where: { id: packageId },
+        data: { discardedAt: now, weightStale: false },
+      });
+      return finish(tx, actor, order, "delete", { packageId, before: pkg, discarded: true }, now);
+    }
     await tx.package.delete({ where: { id: packageId } });
-    // One at a time, lowest first: each takes the number just freed (the unique index is per row).
-    const later = await tx.package.findMany({
-      where: { orderId: order.id, number: { gt: pkg.number } },
-      orderBy: { number: "asc" },
-      select: { id: true, number: true },
-    });
-    for (const p of later) {
-      await tx.package.update({ where: { id: p.id }, data: { number: p.number - 1 } });
+    // A discarded package holds its number, so renumbering would collide with it.
+    if (
+      (await tx.package.count({ where: { orderId: order.id, discardedAt: { not: null } } })) === 0
+    ) {
+      // One at a time, lowest first: each takes the number just freed (the unique index is per row).
+      const later = await tx.package.findMany({
+        where: { orderId: order.id, number: { gt: pkg.number } },
+        orderBy: { number: "asc" },
+        select: { id: true, number: true },
+      });
+      for (const p of later) {
+        await tx.package.update({ where: { id: p.id }, data: { number: p.number - 1 } });
+      }
     }
     return finish(tx, actor, order, "delete", { packageId, before: pkg, deleted: true }, now);
   });

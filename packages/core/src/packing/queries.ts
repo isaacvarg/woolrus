@@ -95,7 +95,7 @@ async function readPack(
   const [rows, packages, notes, gate, boxRows] = await Promise.all([
     tx.orderItem.findMany({ where: { orderId }, include: lineInclude }),
     tx.package.findMany({
-      where: { orderId },
+      where: { orderId, discardedAt: null },
       include: packageInclude,
       orderBy: { number: "asc" },
     }),

@@ -372,6 +372,7 @@
     "notPhysical": "No se maneja en el almacén",
     "packages": "Paquetes",
     "package": "Paquete {number}",
+    "packageDiscarded": "Paquete {number} (descartado)",
     "noBox": "Sin caja todavía",
     "units": "{count, plural, one {# unidad} other {# unidades}}",
     "liveLabel": "Etiqueta",

@@ -33,9 +33,9 @@ export async function selectRate(
   return db.$transaction(async (tx) => {
     const pkg = await tx.package.findUnique({
       where: { id: packageId },
-      select: { orderId: true },
+      select: { orderId: true, discardedAt: true },
     });
-    if (!pkg) throw notFound();
+    if (!pkg || pkg.discardedAt) throw notFound();
     const { orderId } = pkg;
     const order = await lockForQa(tx, actor, orderId, now);
 

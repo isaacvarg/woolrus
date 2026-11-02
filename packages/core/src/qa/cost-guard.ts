@@ -31,7 +31,7 @@ export function needsCostConfirmation(
  */
 export async function labelCostCents(tx: DbTx, orderId: string): Promise<number> {
   const packages = await tx.package.findMany({
-    where: { orderId },
+    where: { orderId, discardedAt: null },
     select: {
       rates: { where: { selected: true }, select: { amountCents: true } },
       labels: {
