@@ -71,7 +71,7 @@ States: `not started` → `spec draft` → `spec approved` → `planned` → `in
 | `carriers` | M4 | [SPEC-carriers](docs/specs/SPEC-carriers.md) | [#26](https://github.com/isaacvarg/woolrus/issues/26) | done |
 | `bridge-source` | M4 | [SPEC-bridge-source](docs/specs/SPEC-bridge-source.md) | [#83](https://github.com/isaacvarg/woolrus/issues/83) | in progress |
 | `qa` | M4 | [SPEC-qa](docs/specs/SPEC-qa.md) | [#27](https://github.com/isaacvarg/woolrus/issues/27) | done |
-| `shipping` | M4 | — | [#28](https://github.com/isaacvarg/woolrus/issues/28) | not started |
+| `shipping` | M4 | [SPEC-shipping](docs/specs/SPEC-shipping.md) | [#28](https://github.com/isaacvarg/woolrus/issues/28) | spec approved |
 | `operations` | M4 | [SPEC-operations](docs/specs/SPEC-operations.md) | [#29](https://github.com/isaacvarg/woolrus/issues/29) | done |
 | `lumexia` | M5 | — | [#30](https://github.com/isaacvarg/woolrus/issues/30) | not started |
 | `returns` | M5 | — | [#31](https://github.com/isaacvarg/woolrus/issues/31) | not started |
@@ -88,6 +88,9 @@ States: `not started` → `spec draft` → `spec approved` → `planned` → `in
 - [ ] Health checks green for database, storage, WooCommerce and every enabled shipping provider; GlitchTip
       receiving errors.
 - [ ] Production stack deployed from GHCR images on the host; backup and restore of Postgres rehearsed.
+- [ ] Production WooCommerce REST key is Read/Write (`shipping` writes status, tracking and notes).
+- [ ] Orders no longer shipped from ShipStation's own screens; decided with IT whether the ShipStation for
+      WooCommerce plugin stays on (SPEC-shipping, open question 1).
 
 ## Tech stack
 
