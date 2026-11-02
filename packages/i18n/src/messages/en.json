@@ -442,6 +442,17 @@
     "openPickScreen": "Open pick screen",
     "openPackScreen": "Open pack screen"
   },
+  "wooPush": {
+    "title": "Woo update",
+    "status": {
+      "NOT_NEEDED": "Not needed",
+      "PENDING": "Woo update pending",
+      "SUCCEEDED": "Sent to Woo",
+      "FAILED": "Woo update failed"
+    },
+    "attempts": "{count, plural, one {# attempt} other {# attempts}}",
+    "pushedAt": "Sent {at}"
+  },
   "orderShipping": {
     "title": "Shipping",
     "shipTo": "Ship to",
@@ -1168,6 +1179,7 @@
       "notWooCommerce": "That URL doesn't look like a WooCommerce store (no REST API v3 found).",
       "rateLimited": "WooCommerce is limiting requests. Sync will try again shortly.",
       "badResponse": "WooCommerce sent a response Woolrus couldn't read.",
+      "rejected": "The store refused the update. It needs a person to look at it.",
       "notConfigured": "WooCommerce isn't set up yet. Add the store URL and keys in Settings → Integrations.",
       "importFailed": "The order couldn't be saved. Sync will try it again on the next run.",
       "notFlagged": "This order has no store change to review. It has been refreshed.",

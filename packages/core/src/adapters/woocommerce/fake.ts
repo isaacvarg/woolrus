@@ -1,8 +1,9 @@
 import { toCents } from "../../units";
 import type { DimensionUnit, ListOrdersQuery, StoreAdapter, WeightUnit } from "./adapter";
-import type { StoreError } from "./errors";
+import { StoreError } from "./errors";
 import {
   parseOrder,
+  parseOrderNote,
   parseProduct,
   parseVariation,
   type WooOrder,
@@ -48,8 +49,10 @@ export class FakeStoreAdapter implements StoreAdapter {
   #orders = new Map<number, Json>();
   #products = new Map<number, Json>();
   #variations = new Map<number, Json[]>();
+  #notes = new Map<number, Json[]>();
   #failures: { method: Method; error: StoreError }[] = [];
   #defaultProductId: number | null = null;
+  #loseNextNote: StoreError | null = null;
 
   constructor(options: { units?: { weight: WeightUnit; dimension: DimensionUnit } } = {}) {
     this.units = options.units ?? { weight: "lbs", dimension: "in" };
@@ -203,6 +206,16 @@ export class FakeStoreAdapter implements StoreAdapter {
     this.#variations.delete(id);
   }
 
+  /** Notes the store holds for the order, as raw REST JSON (what `woo.push` tests assert on). */
+  notesOf(orderId: number): { id: number; note: string; customer_note: boolean }[] {
+    return structuredClone((this.#notes.get(orderId) ?? []) as never);
+  }
+
+  /** The next `addOrderNote` call stores the note but throws `error` as if the response were lost. */
+  loseNextNoteResponse(error: StoreError): void {
+    this.#loseNextNote = error;
+  }
+
   // ---- StoreAdapter --------------------------------------------------------------------------
 
   async ping(): Promise<void> {
@@ -258,6 +271,29 @@ export class FakeStoreAdapter implements StoreAdapter {
     return (this.#variations.get(productId) ?? []).map((v) => parseVariation(structuredClone(v)));
   }
 
+  async listOrderNotes(orderId: number) {
+    this.#call("listOrderNotes", orderId);
+    this.#order(orderId, "notFound");
+    return (this.#notes.get(orderId) ?? []).map((n) => parseOrderNote(structuredClone(n)));
+  }
+
+  async addOrderNote(orderId: number, input: { note: string; customerNote: boolean }) {
+    this.#call("addOrderNote", orderId, input);
+    this.#order(orderId, "notFound");
+    const note = { id: this.#nextId++, note: input.note, customer_note: input.customerNote };
+    this.#notes.set(orderId, [...(this.#notes.get(orderId) ?? []), note]);
+    const lost = this.#loseNextNote;
+    this.#loseNextNote = null;
+    if (lost) throw lost;
+    return { noteId: note.id };
+  }
+
+  async completeOrder(orderId: number) {
+    this.#call("completeOrder", orderId);
+    this.#order(orderId, "notFound");
+    this.editOrder(orderId, { status: "completed" });
+  }
+
   // ---- Internals -----------------------------------------------------------------------------
 
   #call(method: Method, ...args: unknown[]): void {
@@ -272,8 +308,9 @@ export class FakeStoreAdapter implements StoreAdapter {
     return new Date(this.#clock).toISOString().slice(0, 19);
   }
 
-  #order(id: number): Json {
+  #order(id: number, missing: "throw" | "notFound" = "throw"): Json {
     const order = this.#orders.get(id);
+    if (!order && missing === "notFound") throw new StoreError("notFound", `order ${id}`, 404);
     if (!order) throw new Error(`FakeStoreAdapter: no order ${id}`);
     return order;
   }

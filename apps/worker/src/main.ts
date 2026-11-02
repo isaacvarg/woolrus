@@ -19,6 +19,7 @@ import {
   runLabelsPurchaseJob,
   runRatesFetchJob,
   runStorageDeleteJob,
+  runWooPushJob,
   s3ConfigFromEnv,
   sweepOrphanFiles,
   syncProducts,
@@ -235,6 +236,16 @@ await boss.work(
   })),
 );
 await boss.send(queues.labelsReconcile, {}, { singletonKey: "start" });
+
+// Completed + notes back to WooCommerce after Ship (SPEC-shipping "The job"). A store that is down
+// throws for a retry (9 attempts, backoff); a permanent refusal ends the push FAILED, not the job.
+await boss.work(
+  queues.wooPush,
+  { ...META, localConcurrency: 2 },
+  runJob<JobPayloads[typeof queues.wooPush]>(queues.wooPush, async (job) => ({
+    ...(await runWooPushJob(db, job.data, { finalAttempt: isFinalAttempt(job) })),
+  })),
+);
 
 log.info({ queues: Object.values(queues) }, "worker started");
 

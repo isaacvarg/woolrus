@@ -76,6 +76,8 @@ export * from "./shipping/manifests";
 export * from "./shipping/print";
 export * from "./shipping/repack";
 export * from "./shipping/ship";
+export * from "./shipping/tracking-provider";
+export * from "./shipping/woo-push";
 export * from "./sync/health";
 export * from "./sync/lock";
 export * from "./sync/orders";

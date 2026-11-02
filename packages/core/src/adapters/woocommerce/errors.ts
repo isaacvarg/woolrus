@@ -7,6 +7,7 @@ export const storeErrorKinds = [
   "notWooCommerce",
   "rateLimited",
   "badResponse",
+  "rejected",
 ] as const;
 
 export type StoreErrorKind = (typeof storeErrorKinds)[number];
