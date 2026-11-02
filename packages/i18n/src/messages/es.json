@@ -442,6 +442,17 @@
     "openPickScreen": "Abrir pantalla de surtido",
     "openPackScreen": "Abrir pantalla de empaque"
   },
+  "wooPush": {
+    "title": "Actualización en Woo",
+    "status": {
+      "NOT_NEEDED": "No hace falta",
+      "PENDING": "Actualización en Woo pendiente",
+      "SUCCEEDED": "Enviado a Woo",
+      "FAILED": "Falló la actualización en Woo"
+    },
+    "attempts": "{count, plural, one {# intento} other {# intentos}}",
+    "pushedAt": "Enviado {at}"
+  },
   "orderShipping": {
     "title": "Envío",
     "shipTo": "Enviar a",
@@ -1168,6 +1179,7 @@
       "notWooCommerce": "Esa URL no parece una tienda WooCommerce (no se encontró la API REST v3).",
       "rateLimited": "WooCommerce está limitando las solicitudes. La sincronización lo intentará de nuevo en breve.",
       "badResponse": "WooCommerce envió una respuesta que Woolrus no pudo leer.",
+      "rejected": "La tienda rechazó la actualización. Hace falta que una persona la revise.",
       "notConfigured": "WooCommerce aún no está configurado. Agrega la URL de la tienda y las claves en Configuración → Integraciones.",
       "importFailed": "No se pudo guardar el pedido. La sincronización lo intentará de nuevo en la próxima ejecución.",
       "notFlagged": "Este pedido no tiene cambios de la tienda por revisar. Se ha actualizado.",

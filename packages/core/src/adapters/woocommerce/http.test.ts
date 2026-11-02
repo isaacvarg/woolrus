@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import error401 from "./__fixtures__/error-401.json" with { type: "json" };
 import error404 from "./__fixtures__/error-404.json" with { type: "json" };
 import errorNoRoute from "./__fixtures__/error-no-route.json" with { type: "json" };
+import orderNoteCreated from "./__fixtures__/order-note-created.json" with { type: "json" };
+import orderNotes from "./__fixtures__/order-notes.json" with { type: "json" };
 import orders from "./__fixtures__/orders.json" with { type: "json" };
 import products from "./__fixtures__/products.json" with { type: "json" };
 import dimensionUnit from "./__fixtures__/setting-dimension-unit.json" with { type: "json" };
@@ -308,5 +310,48 @@ describe.skipIf(!process.env.WOO_LIVE)("WooCommerce HTTP adapter against the dev
     const page = await live.listOrders({ page: 1 });
     expect(page.totalPages).toBeGreaterThanOrEqual(1);
     expect(page.orders.length).toBeGreaterThan(0);
+  });
+});
+
+describe("order notes and completing (recorded fixtures)", () => {
+  it("lists every note of the order, parsed", async () => {
+    const { adapter, calls } = setup(json(orderNotes));
+    const notes = await adapter.listOrderNotes(17);
+    expect(calls[0]?.url.pathname).toBe("/wp-json/wc/v3/orders/17/notes");
+    expect(notes.length).toBe(orderNotes.length);
+    expect(notes[0]).toMatchObject({ id: expect.any(Number), customerNote: expect.any(Boolean) });
+  });
+
+  it("posts a note as JSON and returns its id", async () => {
+    const { adapter, calls } = setup(json(orderNoteCreated, 201));
+    await expect(
+      adapter.addOrderNote(17, { note: "Fixture note", customerNote: true }),
+    ).resolves.toEqual({ noteId: orderNoteCreated.id });
+    expect(calls[0]?.init.method).toBe("POST");
+    expect(JSON.parse(String(calls[0]?.init.body))).toEqual({
+      note: "Fixture note",
+      customer_note: true,
+    });
+  });
+
+  it("puts status completed", async () => {
+    const { adapter, calls } = setup(json({ id: 17, status: "completed" }));
+    await adapter.completeOrder(17);
+    expect(calls[0]?.init.method).toBe("PUT");
+    expect(JSON.parse(String(calls[0]?.init.body))).toEqual({ status: "completed" });
+  });
+
+  it("never retries a write: a 503 is one call and an unreachable error", async () => {
+    const { adapter, calls } = setup(json({ code: "x" }, 503));
+    expect(await kindOf(adapter.completeOrder(17))).toBe("unreachable");
+    expect(calls).toHaveLength(1);
+  });
+
+  it("maps 401 to unauthorized, 404 to notFound and another 4xx to rejected", async () => {
+    expect(await kindOf(setup(json(error401, 401)).adapter.completeOrder(1))).toBe("unauthorized");
+    expect(await kindOf(setup(json(error404, 404)).adapter.completeOrder(1))).toBe("notFound");
+    expect(await kindOf(setup(json({ code: "bad" }, 400)).adapter.completeOrder(1))).toBe(
+      "rejected",
+    );
   });
 });

@@ -10,6 +10,8 @@ Recorded from the dev store (`pnpm stack:up`, `http://localhost:8090`, the dev k
 | `products.json` | `curl -u $A "$U/products?per_page=100"` |
 | `variations-12.json` | `curl -u $A "$U/products/12/variations?per_page=100"` |
 | `setting-{weight,dimension}-unit.json` | `curl -u $A "$U/settings/products/woocommerce_{weight,dimension}_unit"` |
+| `order-note-created.json` | `curl -u $A -X POST -H content-type:application/json -d '{"note":"Fixture note","customer_note":true}' "$U/orders/17/notes"` (then delete the note) |
+| `order-notes.json` | `curl -u $A "$U/orders/17/notes?per_page=100"` |
 | `error-401.json` | `curl -u bad:bad "$U/orders"` |
 | `error-404.json` | `curl -u $A "$U/orders/99999"` |
 | `error-no-route.json` | `curl -u $A "$U/nope"` |

@@ -6,13 +6,13 @@ import {
   weightUnits,
 } from "./adapter";
 import { StoreError, type StoreErrorKind } from "./errors";
-import { parseOrder, parseProduct, parseVariation } from "./schemas";
+import { parseOrder, parseOrderNote, parseProduct, parseVariation } from "./schemas";
 
 export type StoreConfig = { url: string; consumerKey: string; consumerSecret: string };
 
 /** One HTTP attempt, for server logs. Deliberately has no room for headers, query or bodies. */
 export type StoreRequestLog = {
-  method: "GET";
+  method: "GET" | "POST" | "PUT";
   path: string;
   status: number | null;
   durationMs: number;
@@ -63,6 +63,24 @@ export function createStoreAdapter(
     params: Params = {},
     opts: { allowNotFound?: boolean } = {},
   ): Promise<Reply | null> {
+    return request("GET", route, params, undefined, opts);
+  }
+
+  /**
+   * A write is never retried inside the adapter: it may have landed, and `woo.push` matches a lost
+   * response against the order's own lists before it posts again. A 4xx the store gave for the
+   * body is `rejected`.
+   */
+  const write = (method: "POST" | "PUT", route: string, body: unknown): Promise<Reply> =>
+    request(method, route, {}, body, {}) as Promise<Reply>;
+
+  async function request(
+    method: "GET" | "POST" | "PUT",
+    route: string,
+    params: Params,
+    payload: unknown,
+    opts: { allowNotFound?: boolean },
+  ): Promise<Reply | null> {
     const path = `${apiPath}${route}`;
     const url = new URL(path, base);
     for (const [key, value] of Object.entries(params)) {
@@ -73,20 +91,26 @@ export function createStoreAdapter(
       const started = performance.now();
       const entry = (status: number | null, error?: StoreErrorKind) =>
         log({
-          method: "GET",
+          method,
           path,
           status,
           durationMs: Math.round(performance.now() - started),
           attempt,
           ...(error ? { error } : {}),
         });
-      const retry = attempt <= maxRetries;
+      const retry = method === "GET" && attempt <= maxRetries;
       const backoff = BASE_BACKOFF_MS * 2 ** (attempt - 1);
 
       let response: Response;
       try {
         response = await doFetch(url, {
-          headers: { authorization, accept: "application/json" },
+          method,
+          headers: {
+            authorization,
+            accept: "application/json",
+            ...(payload === undefined ? {} : { "content-type": "application/json" }),
+          },
+          body: payload === undefined ? undefined : JSON.stringify(payload),
           // Never follow: a redirect could lead off the https-only store URL (to an internal
           // address, say), and the store's REST API doesn't redirect.
           redirect: "manual",
@@ -100,7 +124,7 @@ export function createStoreAdapter(
         }
         const reason =
           error instanceof Error && error.name === "TimeoutError" ? "timeout" : "network error";
-        throw new StoreError("unreachable", `GET ${path}: ${reason}`);
+        throw new StoreError("unreachable", `${method} ${path}: ${reason}`);
       }
 
       const { status } = response;
@@ -113,12 +137,12 @@ export function createStoreAdapter(
           await sleep(retryAfterMs(response.headers.get("retry-after")) ?? backoff);
           continue;
         }
-        throw new StoreError(kind, `GET ${path}: ${status}`, status);
+        throw new StoreError(kind, `${method} ${path}: ${status}`, status);
       }
 
       const fail = (kind: StoreErrorKind): never => {
         entry(status, kind);
-        throw new StoreError(kind, `GET ${path}: ${status}`, status);
+        throw new StoreError(kind, `${method} ${path}: ${status}`, status);
       };
       if (status === 401 || status === 403) return fail("unauthorized");
       if (status >= 300 && status < 400) return fail("notWooCommerce");
@@ -137,7 +161,7 @@ export function createStoreAdapter(
         }
         return fail("notFound");
       }
-      if (status < 200 || status >= 300) return fail("badResponse");
+      if (status < 200 || status >= 300) return fail(method === "GET" ? "badResponse" : "rejected");
 
       entry(status);
       return { body, headers: response.headers };
@@ -208,6 +232,31 @@ export function createStoreAdapter(
         products: list(body, "products").map(parseProduct),
         totalPages: totalPages(headers),
       };
+    },
+
+    async listOrderNotes(orderId) {
+      const notes = [];
+      for (let page = 1, pages = 1; page <= pages; page++) {
+        const { body, headers } = await get(`/orders/${orderId}/notes`, {
+          per_page: PER_PAGE,
+          page,
+        });
+        notes.push(...list(body, "notes").map(parseOrderNote));
+        pages = totalPages(headers);
+      }
+      return notes;
+    },
+
+    async addOrderNote(orderId, { note, customerNote }) {
+      const { body } = await write("POST", `/orders/${orderId}/notes`, {
+        note,
+        customer_note: customerNote,
+      });
+      return { noteId: parseOrderNote(body).id };
+    },
+
+    async completeOrder(orderId) {
+      await write("PUT", `/orders/${orderId}`, { status: "completed" });
     },
 
     async listVariations(productId) {

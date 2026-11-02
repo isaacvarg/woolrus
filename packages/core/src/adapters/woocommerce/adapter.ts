@@ -1,5 +1,5 @@
 import type { DimensionUnit, WeightUnit } from "../../units";
-import type { WooOrder, WooProduct, WooVariation } from "./schemas";
+import type { WooOrder, WooOrderNote, WooProduct, WooVariation } from "./schemas";
 
 export { type DimensionUnit, dimensionUnits, type WeightUnit, weightUnits } from "../../units";
 
@@ -8,6 +8,7 @@ export type {
   WooLineItem,
   WooMeta,
   WooOrder,
+  WooOrderNote,
   WooProduct,
   WooVariation,
 } from "./schemas";
@@ -35,4 +36,13 @@ export interface StoreAdapter {
   listProducts(page: number): Promise<{ products: WooProduct[]; totalPages: number }>;
   /** Every variation of a variable product, all pages. */
   listVariations(productId: number): Promise<WooVariation[]>;
+  /** Every note of the order, all pages. Throws `notFound` for an order the store doesn't have. */
+  listOrderNotes(orderId: number): Promise<WooOrderNote[]>;
+  /** One order note. A customer note is emailed by WooCommerce; the text goes as plain text. */
+  addOrderNote(
+    orderId: number,
+    note: { note: string; customerNote: boolean },
+  ): Promise<{ noteId: number }>;
+  /** Sets the order Completed; WooCommerce treats a repeat as a no-op. */
+  completeOrder(orderId: number): Promise<void>;
 }

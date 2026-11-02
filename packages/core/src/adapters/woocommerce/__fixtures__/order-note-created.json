@@ -1,0 +1,28 @@
+{
+  "id": 377,
+  "author": "WooCommerce",
+  "date_created": "2026-11-02T20:51:03",
+  "date_created_gmt": "2026-11-02T20:51:03",
+  "note": "Fixture note",
+  "customer_note": true,
+  "_links": {
+    "self": [
+      {
+        "href": "https://localhost:8090/wp-json/wc/v3/orders/17/notes/377",
+        "targetHints": {
+          "allow": ["GET", "DELETE"]
+        }
+      }
+    ],
+    "collection": [
+      {
+        "href": "https://localhost:8090/wp-json/wc/v3/orders/17/notes"
+      }
+    ],
+    "up": [
+      {
+        "href": "https://localhost:8090/wp-json/wc/v3/orders/17"
+      }
+    ]
+  }
+}

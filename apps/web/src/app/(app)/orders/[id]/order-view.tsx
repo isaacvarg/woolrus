@@ -17,6 +17,7 @@ import { useTargetName } from "@/components/notes/note-list";
 import { NoteOnTarget, NotesPanel } from "@/components/notes/notes-panel";
 import { OrderLabels } from "@/components/shipping/order-labels";
 import { OrderShippingPanel } from "@/components/shipping/order-shipping";
+import { WooPushStatus } from "@/components/shipping/woo-push-status";
 import { Button } from "@/components/ui/fields";
 import { toast } from "@/components/ui/toast";
 import { useErrorMessage } from "@/lib/errors";
@@ -135,6 +136,7 @@ function OrderLayout({
         </Link>
       )}
       <OrderActions order={order} userId={userId} />
+      <WooPushStatus push={order.wooPush} />
       {canPrint && (order.status === "READY" || order.status === "COMPLETED") && (
         <OrderLabels orderId={order.id} />
       )}

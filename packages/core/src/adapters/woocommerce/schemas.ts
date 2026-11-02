@@ -213,6 +213,13 @@ const variationSchema = z
 export type WooAddress = z.output<typeof addressSchema>;
 export type WooMeta = z.output<typeof metaSchema>;
 export type WooLineItem = z.output<typeof lineItemSchema>;
+/** An order note: `note` is the text as stored, `customer_note` is whether the customer was emailed it. */
+const orderNoteSchema = z
+  .object({ id: z.number().int(), note: z.string(), customer_note: z.boolean() })
+  .transform((n) => ({ id: n.id, note: n.note, customerNote: n.customer_note }));
+
+export type WooOrderNote = z.output<typeof orderNoteSchema>;
+
 export type WooOrder = z.output<typeof orderSchema> & { raw: unknown };
 export type WooProduct = z.output<typeof productSchema> & { raw: unknown };
 export type WooVariation = z.output<typeof variationSchema> & { raw: unknown };
@@ -232,3 +239,4 @@ function parseWith<T>(schema: z.ZodType<T>, what: string) {
 export const parseOrder = parseWith(orderSchema, "order");
 export const parseProduct = parseWith(productSchema, "product");
 export const parseVariation = parseWith(variationSchema, "variation");
+export const parseOrderNote = parseWith(orderNoteSchema, "order note");

@@ -411,6 +411,12 @@ export async function getOrder(
     issues: issues
       .map(toIssueView)
       .sort((a, b) => Number(b.status === "OPEN") - Number(a.status === "OPEN")),
+    wooPush: {
+      status: order.wooPushStatus,
+      attempts: order.wooPushAttempts,
+      error: order.wooPushError,
+      pushedAt: order.wooPushedAt,
+    },
     allowedActions: allowedActions(actor, {
       status: order.status,
       heldFromStatus: order.heldFromStatus,

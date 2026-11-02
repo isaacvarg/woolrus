@@ -1,0 +1,170 @@
+[
+  {
+    "id": 378,
+    "author": "WooCommerce",
+    "date_created": "2026-11-02T20:51:03",
+    "date_created_gmt": "2026-11-02T20:51:03",
+    "note": "Email \"Customer note\" failed to send: Could not instantiate mail function..",
+    "customer_note": false,
+    "_links": {
+      "self": [
+        {
+          "href": "https://localhost:8090/wp-json/wc/v3/orders/17/notes/378",
+          "targetHints": {
+            "allow": ["GET", "DELETE"]
+          }
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://localhost:8090/wp-json/wc/v3/orders/17/notes"
+        }
+      ],
+      "up": [
+        {
+          "href": "https://localhost:8090/wp-json/wc/v3/orders/17"
+        }
+      ]
+    }
+  },
+  {
+    "id": 377,
+    "author": "WooCommerce",
+    "date_created": "2026-11-02T20:51:03",
+    "date_created_gmt": "2026-11-02T20:51:03",
+    "note": "Fixture note",
+    "customer_note": true,
+    "_links": {
+      "self": [
+        {
+          "href": "https://localhost:8090/wp-json/wc/v3/orders/17/notes/377",
+          "targetHints": {
+            "allow": ["GET", "DELETE"]
+          }
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://localhost:8090/wp-json/wc/v3/orders/17/notes"
+        }
+      ],
+      "up": [
+        {
+          "href": "https://localhost:8090/wp-json/wc/v3/orders/17"
+        }
+      ]
+    }
+  },
+  {
+    "id": 12,
+    "author": "WooCommerce",
+    "date_created": "2026-10-14T21:04:30",
+    "date_created_gmt": "2026-10-14T21:04:30",
+    "note": "Email \"Order on-hold\" failed to send: Could not instantiate mail function..",
+    "customer_note": false,
+    "_links": {
+      "self": [
+        {
+          "href": "https://localhost:8090/wp-json/wc/v3/orders/17/notes/12",
+          "targetHints": {
+            "allow": ["GET", "DELETE"]
+          }
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://localhost:8090/wp-json/wc/v3/orders/17/notes"
+        }
+      ],
+      "up": [
+        {
+          "href": "https://localhost:8090/wp-json/wc/v3/orders/17"
+        }
+      ]
+    }
+  },
+  {
+    "id": 11,
+    "author": "WooCommerce",
+    "date_created": "2026-10-14T21:04:30",
+    "date_created_gmt": "2026-10-14T21:04:30",
+    "note": "Email \"New order\" failed to send: Could not instantiate mail function..",
+    "customer_note": false,
+    "_links": {
+      "self": [
+        {
+          "href": "https://localhost:8090/wp-json/wc/v3/orders/17/notes/11",
+          "targetHints": {
+            "allow": ["GET", "DELETE"]
+          }
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://localhost:8090/wp-json/wc/v3/orders/17/notes"
+        }
+      ],
+      "up": [
+        {
+          "href": "https://localhost:8090/wp-json/wc/v3/orders/17"
+        }
+      ]
+    }
+  },
+  {
+    "id": 10,
+    "author": "WooCommerce",
+    "date_created": "2026-10-14T21:04:30",
+    "date_created_gmt": "2026-10-14T21:04:30",
+    "note": "Order status changed from Pending payment to On hold.",
+    "customer_note": false,
+    "_links": {
+      "self": [
+        {
+          "href": "https://localhost:8090/wp-json/wc/v3/orders/17/notes/10",
+          "targetHints": {
+            "allow": ["GET", "DELETE"]
+          }
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://localhost:8090/wp-json/wc/v3/orders/17/notes"
+        }
+      ],
+      "up": [
+        {
+          "href": "https://localhost:8090/wp-json/wc/v3/orders/17"
+        }
+      ]
+    }
+  },
+  {
+    "id": 9,
+    "author": "WooCommerce",
+    "date_created": "2026-10-14T21:04:30",
+    "date_created_gmt": "2026-10-14T21:04:30",
+    "note": "Stock levels reduced: Vitamin C Serum 1oz (39&rarr;37)",
+    "customer_note": false,
+    "_links": {
+      "self": [
+        {
+          "href": "https://localhost:8090/wp-json/wc/v3/orders/17/notes/9",
+          "targetHints": {
+            "allow": ["GET", "DELETE"]
+          }
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://localhost:8090/wp-json/wc/v3/orders/17/notes"
+        }
+      ],
+      "up": [
+        {
+          "href": "https://localhost:8090/wp-json/wc/v3/orders/17"
+        }
+      ]
+    }
+  }
+]
