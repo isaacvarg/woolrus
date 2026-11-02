@@ -229,3 +229,138 @@ describe("noteText", () => {
     );
   });
 });
+
+describe("pushToWoo tracking on (SPEC-shipping success criteria 3, 6 and 7)", () => {
+  const switchOn = () =>
+    db.settings.upsert({
+      where: { id: 1 },
+      create: { id: 1, wooTrackingEnabled: true },
+      update: { wooTrackingEnabled: true },
+    });
+
+  const carriers = async (orderId: string, codes: string[]) => {
+    const labels = await db.shippingLabel.findMany({
+      where: { package: { orderId } },
+      orderBy: { package: { number: "asc" } },
+    });
+    for (const [i, label] of labels.entries()) {
+      await db.shippingLabel.update({ where: { id: label.id }, data: { carrierCode: codes[i] } });
+    }
+  };
+
+  it("adds one item per label with the right provider, then notes, then completes", async () => {
+    const store = new FakeStoreAdapter();
+    const { order, wooId } = await shipped(store, ["9400111", "1Z999", "AF123"]);
+    await carriers(order.id, ["usps", "ups", "acme_freight"]);
+    const acme = await db.shippingCarrier.create({
+      data: {
+        provider: "SHIPSTATION",
+        externalId: "se-acme",
+        code: "acme_freight",
+        name: "acme",
+        label: "Acme Freight",
+        enabled: true,
+      },
+    });
+    await db.shippingLabel.updateMany({
+      where: { carrierCode: "acme_freight" },
+      data: { carrierId: acme.id },
+    });
+    await addNote(order.id, "Careful", "INTERNAL");
+    await switchOn();
+
+    await expect(pushToWoo(db, store, { orderId: order.id })).resolves.toEqual({
+      outcome: "succeeded",
+    });
+
+    expect(methods(store).filter((m) => m.startsWith("add") || m === "completeOrder")).toEqual([
+      "addShipmentTracking",
+      "addShipmentTracking",
+      "addShipmentTracking",
+      "addOrderNote",
+      "completeOrder",
+    ]);
+    const added = store.calls
+      .filter((c) => c.method === "addShipmentTracking")
+      .map((c) => c.args[1]);
+    expect(added).toEqual([
+      {
+        trackingNumber: "9400111",
+        dateShipped: expect.any(String),
+        provider: { name: "USPS", custom: false },
+      },
+      {
+        trackingNumber: "1Z999",
+        dateShipped: expect.any(String),
+        provider: { name: "UPS", custom: false },
+      },
+      {
+        trackingNumber: "AF123",
+        dateShipped: expect.any(String),
+        provider: { name: "Acme Freight", custom: true, link: null },
+      },
+    ]);
+    const names = added.map((a) => (a as { provider: { name: string } }).provider.name);
+    expect(names.join("|")).not.toMatch(/shipstation|,/i);
+    expect(store.trackingsOf(wooId).map((t) => t.tracking_number)).toEqual([
+      "9400111",
+      "1Z999",
+      "AF123",
+    ]);
+    // No tracking note while the plugin carries the numbers; the one note is the staff note.
+    expect(store.notesOf(wooId)).toHaveLength(1);
+    const labels = await db.shippingLabel.findMany({ orderBy: { createdAt: "asc" } });
+    expect(labels.every((l) => l.wooTrackingId !== null)).toBe(true);
+    expect(await state(order.id)).toMatchObject({
+      wooPushStatus: "SUCCEEDED",
+      wooTrackingNoteId: null,
+    });
+  });
+
+  it("adds nothing twice when the job dies after any call and runs again", async () => {
+    const store = new FakeStoreAdapter();
+    const { order, wooId } = await shipped(store, ["9400111", "1Z999"]);
+    await switchOn();
+    store.failNext("completeOrder", new StoreError("unreachable", "boom"));
+    await expect(pushToWoo(db, store, { orderId: order.id })).rejects.toBeInstanceOf(StoreError);
+    await pushToWoo(db, store, { orderId: order.id });
+
+    expect(store.trackingsOf(wooId)).toHaveLength(2);
+    expect(methods(store).filter((m) => m === "addShipmentTracking")).toHaveLength(2);
+    expect(await state(order.id)).toMatchObject({ wooPushStatus: "SUCCEEDED" });
+  });
+
+  it("matches an item whose response was lost by its tracking number", async () => {
+    const store = new FakeStoreAdapter();
+    const { order, wooId } = await shipped(store, ["9400111", "1Z999"]);
+    await switchOn();
+    store.loseNextTrackingResponse(new StoreError("unreachable", "response lost"));
+    await expect(pushToWoo(db, store, { orderId: order.id })).rejects.toBeInstanceOf(StoreError);
+    await pushToWoo(db, store, { orderId: order.id });
+
+    expect(store.trackingsOf(wooId).map((t) => t.tracking_number)).toEqual(["9400111", "1Z999"]);
+    const labels = await db.shippingLabel.findMany({ orderBy: { createdAt: "asc" } });
+    expect(labels.map((l) => l.wooTrackingId)).toEqual(
+      store.trackingsOf(wooId).map((t) => t.tracking_id),
+    );
+  });
+
+  it("fails the push permanently when the plugin was removed while the switch is on", async () => {
+    const store = new FakeStoreAdapter();
+    store.setShipmentTrackingPlugin(false);
+    const { order, wooId } = await shipped(store);
+    await switchOn();
+
+    await expect(pushToWoo(db, store, { orderId: order.id })).resolves.toEqual({
+      outcome: "failed",
+      messageKey: "errors.sync.trackingUnavailable",
+    });
+    expect(await state(order.id)).toMatchObject({
+      wooPushStatus: "FAILED",
+      wooPushError: "errors.sync.trackingUnavailable",
+    });
+    expect(store.notesOf(wooId)).toHaveLength(0);
+    expect((await store.getOrder(wooId))?.status).not.toBe("completed");
+    expect(await db.auditEvent.count({ where: { action: "woo.push.failed" } })).toBe(1);
+  });
+});

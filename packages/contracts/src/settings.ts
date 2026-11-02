@@ -122,6 +122,7 @@ export const AdminSettings = z.object({
   qaMustDifferFromPacker: z.boolean(),
   labelCostConfirmRatio: z.number().nullable(),
   labelCostConfirmFreeCents: z.number().nullable(),
+  wooTrackingEnabled: z.boolean(),
   secrets: z.record(SecretName, SecretStatus),
 });
 export type AdminSettings = z.infer<typeof AdminSettings>;
@@ -152,6 +153,8 @@ export const UpdateSettingsInput = z.object({
   qaMustDifferFromPacker: z.boolean().optional(),
   labelCostConfirmRatio: LabelCostConfirmRatio.optional(),
   labelCostConfirmFreeCents: LabelCostConfirmFreeCents.optional(),
+  /** On is refused while the store lacks the AST plugin's route (SPEC-shipping "Tracking switch"). */
+  wooTrackingEnabled: z.boolean().optional(),
 });
 export type UpdateSettingsInput = z.infer<typeof UpdateSettingsInput>;
 

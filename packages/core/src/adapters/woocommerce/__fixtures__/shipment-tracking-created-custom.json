@@ -1,0 +1,27 @@
+{
+  "tracking_id": "38e8bb19a0a99ee8643e225cf455344f",
+  "tracking_provider": "",
+  "tracking_link": "https://acme.test/track/AF123",
+  "tracking_number": "AF123",
+  "date_shipped": "2026-11-02",
+  "_links": {
+    "self": [
+      {
+        "href": "https://localhost:8090/wp-json/wc-shipment-tracking/v3/orders/17/shipment-trackings/38e8bb19a0a99ee8643e225cf455344f",
+        "targetHints": {
+          "allow": ["GET", "DELETE"]
+        }
+      }
+    ],
+    "collection": [
+      {
+        "href": "https://localhost:8090/wp-json/wc-shipment-tracking/v3/orders/17/shipment-trackings"
+      }
+    ],
+    "up": [
+      {
+        "href": "https://localhost:8090/wp-json/wc-shipment-tracking/v3/orders/17"
+      }
+    ]
+  }
+}

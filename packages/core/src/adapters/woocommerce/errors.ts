@@ -8,6 +8,7 @@ export const storeErrorKinds = [
   "rateLimited",
   "badResponse",
   "rejected",
+  "trackingUnavailable",
 ] as const;
 
 export type StoreErrorKind = (typeof storeErrorKinds)[number];

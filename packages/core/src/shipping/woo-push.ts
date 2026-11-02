@@ -5,6 +5,7 @@ import { StoreError, type StoreErrorKind } from "../adapters/woocommerce/errors"
 import { recordAudit } from "../audit";
 import { markNotePushed, type NoteToPush, notesToPush } from "../notes/push";
 import { shippingActor } from "../permissions";
+import { loadSettings } from "../settings/service";
 import { configuredStore } from "../sync/schedule";
 import { notifyOrderChanged } from "../workflow/notify";
 import { trackingProvider } from "./tracking-provider";
@@ -15,7 +16,9 @@ import { trackingProvider } from "./tracking-provider";
 // that died after any call, or lost a response, runs again without posting anything twice.
 // The local Completed is never undone by a failure here.
 
-// TODO(tracking-on): the AST tracking-item path (Settings.wooTrackingEnabled) is a later ticket.
+// Tracking switched on (Settings.wooTrackingEnabled): one AST tracking item per label instead of the
+// note, matched by tracking number so a retry adds nothing twice; the switch is read when the job
+// reaches that step.
 
 /** Kinds worth another try: the store may be back soon. Everything else needs a person. */
 const transientKinds: readonly StoreErrorKind[] = ["unreachable", "rateLimited", "badResponse"];
@@ -109,14 +112,15 @@ async function push(db: Db, store: StoreAdapter, orderId: string): Promise<void>
     return id;
   };
 
-  if (order.wooTrackingNoteId === null) {
+  if (order.wooTrackingNoteId !== null) claimed.add(order.wooTrackingNoteId);
+  if ((await loadSettings(db)).wooTrackingEnabled) {
+    await pushTrackingItems(db, store, orderId, wooId);
+  } else if (order.wooTrackingNoteId === null) {
     const text = await trackingNoteText(db, orderId);
     if (text) {
       const noteId = await post(text, true);
       await db.order.update({ where: { id: orderId }, data: { wooTrackingNoteId: noteId } });
     }
-  } else {
-    claimed.add(order.wooTrackingNoteId);
   }
 
   for (const note of await notesToPush(db, orderId)) {
@@ -145,9 +149,9 @@ export function noteText(note: NoteToPush): string {
   return `${head} ${plain(note.content)}${tail}`;
 }
 
-/** One line per active label, in package order; null when the order has no label with a number. */
-async function trackingNoteText(db: Db, orderId: string): Promise<string | null> {
-  const labels = await db.shippingLabel.findMany({
+/** The order's active labels that have a number, in package order. */
+function numberedLabels(db: Db, orderId: string) {
+  return db.shippingLabel.findMany({
     where: {
       status: "ACTIVE",
       trackingNumber: { not: null },
@@ -159,15 +163,57 @@ async function trackingNoteText(db: Db, orderId: string): Promise<string | null>
     },
     orderBy: [{ package: { number: "asc" } }, { createdAt: "asc" }],
   });
+}
+
+const providerOf = (label: Awaited<ReturnType<typeof numberedLabels>>[number]) =>
+  trackingProvider(
+    label.carrierCode,
+    label.carrier?.label ?? label.carrier?.name ?? null,
+    label.trackingNumber ?? "",
+  );
+
+/**
+ * One AST item per label that has none stored. The order's items are listed once, so a label whose
+ * add succeeded but whose response was lost is matched by its number instead of added again.
+ */
+async function pushTrackingItems(
+  db: Db,
+  store: StoreAdapter,
+  orderId: string,
+  wooId: number,
+): Promise<void> {
+  const pending = (await numberedLabels(db, orderId)).filter((l) => l.wooTrackingId === null);
+  if (pending.length === 0) return;
+  const items = await store.listShipmentTrackings(wooId);
+  const taken = new Set<string>();
+  for (const label of pending) {
+    const number = label.trackingNumber ?? "";
+    const match = items.find((i) => i.trackingNumber === number && !taken.has(i.trackingId));
+    let trackingId = match?.trackingId;
+    if (trackingId === undefined) {
+      const provider = providerOf(label);
+      trackingId = (
+        await store.addShipmentTracking(wooId, {
+          trackingNumber: number,
+          dateShipped: label.createdAt.toISOString().slice(0, 10),
+          provider: provider.custom
+            ? { name: provider.name, custom: true, link: provider.link }
+            : { name: provider.name, custom: false },
+        })
+      ).trackingId;
+    }
+    taken.add(trackingId);
+    await db.shippingLabel.update({ where: { id: label.id }, data: { wooTrackingId: trackingId } });
+  }
+}
+
+/** One line per active label, in package order; null when the order has no label with a number. */
+async function trackingNoteText(db: Db, orderId: string): Promise<string | null> {
+  const labels = await numberedLabels(db, orderId);
   if (labels.length === 0) return null;
   const lines = labels.map((label) => {
-    const number = label.trackingNumber ?? "";
-    const provider = trackingProvider(
-      label.carrierCode,
-      label.carrier?.label ?? label.carrier?.name ?? null,
-      number,
-    );
-    return `Package ${label.package?.number}: ${provider.name} ${number}${provider.link ? `, ${provider.link}` : ""}`;
+    const provider = providerOf(label);
+    return `Package ${label.package?.number}: ${provider.name} ${label.trackingNumber}${provider.link ? `, ${provider.link}` : ""}`;
   });
   return `Your order has shipped:\n${lines.join("\n")}`;
 }

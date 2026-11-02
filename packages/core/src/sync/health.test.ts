@@ -3,7 +3,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { StoreAdapter } from "../adapters/woocommerce/adapter";
 import { resetWooHealthCache, woocommerceHealth } from "./health";
 
-const db = {} as Db;
+// Just enough of the client for `loadSettings`: the tracking switch is off.
+const db = {
+  settings: { findUnique: async () => ({ wooTrackingEnabled: false }) },
+} as unknown as Db;
 const storeWith = (ping: () => Promise<void>) =>
   vi.fn(async () => ({ ping }) as unknown as StoreAdapter);
 
@@ -13,6 +16,36 @@ describe("woocommerceHealth", () => {
   it("reports ok when the store answers", async () => {
     const store = storeWith(async () => {});
     expect(await woocommerceHealth(db, { store })).toBe("ok");
+  });
+
+  describe("AST (SPEC-shipping success criterion 14)", () => {
+    const store = (installed: boolean) =>
+      vi.fn(
+        async () =>
+          ({
+            ping: async () => {},
+            hasShipmentTracking: async () => installed,
+          }) as unknown as StoreAdapter,
+      );
+
+    it("is degraded with trackingUnavailable when the switch is on and AST is missing", async () => {
+      expect(
+        await woocommerceHealth(db, { store: store(false), trackingEnabled: async () => true }),
+      ).toBe("trackingUnavailable");
+    });
+
+    it("is ok when the switch is on and AST is there", async () => {
+      expect(
+        await woocommerceHealth(db, { store: store(true), trackingEnabled: async () => true }),
+      ).toBe("ok");
+    });
+
+    it("is ok when the switch is off, AST or not, without asking the store", async () => {
+      const missing = store(false);
+      expect(
+        await woocommerceHealth(db, { store: missing, trackingEnabled: async () => false }),
+      ).toBe("ok");
+    });
   });
 
   it("reports fail when the store is down", async () => {

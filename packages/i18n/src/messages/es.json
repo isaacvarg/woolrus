@@ -161,6 +161,13 @@
       "urlMoveConfirm": "Guardar y eliminar claves",
       "savedKeysCleared": "Guardado. Se eliminaron las claves de la dirección anterior: agrégalas para la nueva.",
       "testConnection": "Probar conexión",
+      "trackingPluginFound": "Advanced Shipment Tracking está instalado en la tienda.",
+      "trackingPluginMissing": "Advanced Shipment Tracking no está instalado en la tienda. Los pedidos enviados llevarán una nota con los números de seguimiento hasta que lo esté.",
+      "tracking": {
+        "title": "Números de seguimiento",
+        "intro": "Añade los números de seguimiento al pedido en WooCommerce para que aparezcan en la página del pedido del cliente y en el correo de Completado. Requiere el plugin gratuito Advanced Shipment Tracking en la tienda; sin él, los números van en una nota para el cliente.",
+        "label": "Añadir seguimiento con Advanced Shipment Tracking"
+      },
       "testHint": "Comprueba la URL y las claves guardadas de la tienda.",
       "testOk": "Conectado. La tienda usa {weight} para el peso y {dimension} para las dimensiones.",
       "webhook": {
@@ -1119,7 +1126,8 @@
       "emailFrom": "Usa una dirección como no-reply@example.com o Woolrus '<'no-reply@example.com>."
     },
     "settings": {
-      "encryptionKeyMissing": "No se pueden guardar secretos: falta la clave de cifrado del servidor o no es válida. Pide a quien administra el servidor que configure SETTINGS_ENCRYPTION_KEY."
+      "encryptionKeyMissing": "No se pueden guardar secretos: falta la clave de cifrado del servidor o no es válida. Pide a quien administra el servidor que configure SETTINGS_ENCRYPTION_KEY.",
+      "trackingPluginMissing": "No se puede activar el seguimiento: la tienda no tiene el plugin Advanced Shipment Tracking. Pide a quien administra la tienda que lo instale y lo active, y vuelve a intentarlo."
     },
     "picking": {
       "notPicking": "Este pedido no está en surtido, así que sus líneas no pueden cambiar.",
@@ -1198,6 +1206,7 @@
       "rateLimited": "WooCommerce está limitando las solicitudes. La sincronización lo intentará de nuevo en breve.",
       "badResponse": "WooCommerce envió una respuesta que Woolrus no pudo leer.",
       "rejected": "La tienda rechazó la actualización. Hace falta que una persona la revise.",
+      "trackingUnavailable": "La tienda no tiene el plugin Advanced Shipment Tracking. No se pueden añadir números de seguimiento hasta instalarlo.",
       "notConfigured": "WooCommerce aún no está configurado. Agrega la URL de la tienda y las claves en Configuración → Integraciones.",
       "importFailed": "No se pudo guardar el pedido. La sincronización lo intentará de nuevo en la próxima ejecución.",
       "notFlagged": "Este pedido no tiene cambios de la tienda por revisar. Se ha actualizado.",
