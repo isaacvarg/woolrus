@@ -91,6 +91,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               </li>
             </>
           )}
+          {can(actor, "product.manage") && (
+            <li>
+              <Link href="/settings/customs">{t("nav.customs")}</Link>
+            </li>
+          )}
           {can(actor, "ops.jobs") && <FailedJobsNav />}
           {user && (
             <NavFooter

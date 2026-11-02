@@ -35,7 +35,8 @@
     "closeMenu": "Close menu",
     "voids": "Voids",
     "failedJobs": "Failed jobs",
-    "issues": "Issues"
+    "issues": "Issues",
+    "customs": "Customs"
   },
   "navFooter": {
     "preferences": "Preferences",
@@ -1173,7 +1174,9 @@
       "notOffered": "The carrier doesn't offer the services that are on for this shipment, from this ship-from address or to this address. Check which services are on in Settings → Shipping.",
       "addressRejected": "The carrier refused the ship-to or ship-from address. Check both addresses.",
       "unavailable": "The shipping provider couldn't be reached. Try again in a minute.",
-      "timeout": "The shipping provider took too long to answer. Try again in a minute."
+      "timeout": "The shipping provider took too long to answer. Try again in a minute.",
+      "hsCodeInvalid": "Use 6 to 10 digits; dots are fine, e.g. 3401.11.",
+      "countryInvalid": "Use the 2-letter country code, e.g. US."
     },
     "carriers": {
       "credentialsMissing": "Add the provider's credentials first.",
@@ -1427,5 +1430,35 @@
     "retryLabel": "Retry job {queue}",
     "dismissLabel": "Dismiss job {queue}",
     "order": "Order"
+  },
+  "customs": {
+    "title": "Customs",
+    "intro": "HS code, country of origin and a short description for the products on international parcels. Changes apply to the next rate fetch.",
+    "filter": "Show",
+    "filters": {
+      "all": "All products",
+      "missing": "Missing customs data",
+      "international": "On an international order now"
+    },
+    "product": "Product",
+    "sku": "SKU",
+    "hsCode": "HS code",
+    "hsCodeHint": "6 to 10 digits",
+    "countryOfOrigin": "Country of origin",
+    "countryHint": "2-letter code",
+    "description": "Customs description",
+    "descriptionHint": "Up to 100 characters",
+    "actions": "Actions",
+    "edit": "Edit",
+    "editProduct": "Edit customs data for {name}",
+    "save": "Save",
+    "cancel": "Cancel",
+    "saved": "Customs data saved for {name}.",
+    "missingBadge": "Missing data",
+    "complete": "Complete",
+    "international": "International order",
+    "empty": "No products match this filter.",
+    "loadMore": "Load more",
+    "none": "Not set"
   }
 }

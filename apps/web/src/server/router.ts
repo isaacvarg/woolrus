@@ -13,6 +13,7 @@ import {
   createInvitation,
   createNote,
   createPriorityRule,
+  customsProducts,
   deactivateUser,
   deleteBox,
   deleteIssue,
@@ -114,6 +115,7 @@ import {
   updateNote,
   updatePreferences,
   updatePriorityRule,
+  updateProductCustoms,
   updateProviderConfig,
   updateSettings,
   updateUserRoles,
@@ -177,6 +179,14 @@ export const router = implementer.router({
       restoreBox(db, context.actor, input),
     ),
     delete: api.boxes.delete.handler(({ input, context }) => deleteBox(db, context.actor, input)),
+  },
+  shipping: {
+    customsProducts: api.shipping.customsProducts.handler(({ input, context }) =>
+      customsProducts(db, context.actor, input),
+    ),
+    updateProductCustoms: api.shipping.updateProductCustoms.handler(({ input, context }) =>
+      updateProductCustoms(db, context.actor, input),
+    ),
   },
   settings: {
     get: api.settings.get.handler(({ context }) => getSettings(db, context.actor)),
