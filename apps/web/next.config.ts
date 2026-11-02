@@ -21,6 +21,10 @@ const config: NextConfig = {
   ],
   serverExternalPackages: ["pino", "pg", "@prisma/adapter-pg", "sharp"],
   typedRoutes: true,
+  // PDFs are addressed as `/api/label-prints/<id>.pdf`; the route segment itself is the bare id.
+  async rewrites() {
+    return [{ source: "/api/label-prints/:id.pdf", destination: "/api/label-prints/:id" }];
+  },
   // CLAUDE.md is the agent entry point; stop `next dev` from generating apps/web/AGENTS.md.
   agentRules: false,
 };

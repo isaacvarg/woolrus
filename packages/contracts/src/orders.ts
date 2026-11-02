@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { base, Id } from "./base";
+import { PrintState } from "./shipping";
 
 // Order workflow (SPEC-workflow "API"). Status moves and claims are server-owned: every mutation
 // carries the version the client saw, so a replay or a race fails with errors.workflow.stale.
@@ -143,6 +144,10 @@ export const QueueRow = z.object({
   unresolvedVoidCount: z.number().int(),
   /** Label purchase state for QA's badge; `none` outside QA and when nothing went wrong. */
   labelState: z.enum(["none", "purchasing", "failed", "unknown"]),
+  /** Ready queue only (zero/none elsewhere): packages, carrier and service, and printing. */
+  packageCount: z.number().int(),
+  shippingSummary: z.string().nullable(),
+  printState: PrintState,
 });
 export type QueueRow = z.infer<typeof QueueRow>;
 

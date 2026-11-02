@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { base, Id } from "./base";
+import { base, Id, IdempotencyKey } from "./base";
 
 const tags = ["Shipping"];
 
@@ -58,7 +58,63 @@ export const UpdateProductCustomsInput = z.object({
 });
 export type UpdateProductCustomsInput = z.infer<typeof UpdateProductCustomsInput>;
 
+/** Exactly one list: whole orders (every active label) or single labels (a reprint). */
+export const CreateLabelPrintInput = z
+  .object({
+    orderIds: z.array(Id).min(1).max(50).optional(),
+    labelIds: z.array(Id).min(1).max(20).optional(),
+    idempotencyKey: IdempotencyKey,
+  })
+  .refine((input) => (input.orderIds === undefined) !== (input.labelIds === undefined), {
+    message: "errors.validation",
+  });
+export type CreateLabelPrintInput = z.infer<typeof CreateLabelPrintInput>;
+
+export const LabelPrintResult = z.object({ printId: Id, labelCount: z.number().int() });
+export type LabelPrintResult = z.infer<typeof LabelPrintResult>;
+
+/** The Ready queue's print column. */
+export const PrintState = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("none") }),
+  z.object({ kind: z.literal("partial") }),
+  z.object({ kind: z.literal("printed"), times: z.number().int() }),
+]);
+export type PrintState = z.infer<typeof PrintState>;
+
+export const PrintableLabel = z.object({
+  id: Id,
+  packageNumber: z.number().int(),
+  carrierCode: z.string(),
+  serviceCode: z.string(),
+  trackingNumber: z.string().nullable(),
+  printCount: z.number().int(),
+  lastPrintedAt: z.date().nullable(),
+});
+export type PrintableLabel = z.infer<typeof PrintableLabel>;
+
+export const OrderPrintableLabelsInput = z.object({ orderId: Id });
+
 export const shipping = {
+  createLabelPrint: base
+    .route({
+      method: "POST",
+      path: "/label-prints",
+      tags,
+      summary: "Record a print of labels; the PDF is fetched from /api/label-prints/{id}.pdf",
+    })
+    .input(CreateLabelPrintInput)
+    .output(LabelPrintResult),
+
+  orderPrintableLabels: base
+    .route({
+      method: "GET",
+      path: "/orders/{orderId}/printable-labels",
+      tags,
+      summary: "An order's active labels with their print counts",
+    })
+    .input(OrderPrintableLabelsInput)
+    .output(z.array(PrintableLabel)),
+
   customsProducts: base
     .route({
       method: "GET",
