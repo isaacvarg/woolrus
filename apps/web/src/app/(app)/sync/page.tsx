@@ -1,6 +1,7 @@
 import { can } from "@woolrus/core";
 import { getTranslations } from "next-intl/server";
 import { currentActor } from "@/server/actor";
+import { PushErrors } from "./push-errors";
 import { SyncRuns } from "./sync-runs";
 
 export default async function SyncPage() {
@@ -14,6 +15,7 @@ export default async function SyncPage() {
         <>
           <p className="text-base-content/70">{t("sync.page.intro")}</p>
           <SyncRuns />
+          <PushErrors />
         </>
       ) : (
         <p role="alert" className="alert alert-error">

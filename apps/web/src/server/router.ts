@@ -69,6 +69,7 @@ import {
   packUnits,
   permissionsFor,
   pickLine,
+  pushErrors,
   queueCounts,
   reactivateUser,
   recheckAddress,
@@ -87,6 +88,7 @@ import {
   restoreBox,
   retryFailedJob,
   retryVoid,
+  retryWooPush,
   revokeBadge,
   revokeInvitation,
   revokeStation,
@@ -215,6 +217,10 @@ export const router = implementer.router({
     ),
     stuckLabels: api.shipping.stuckLabels.handler(({ input, context }) =>
       stuckLabels(db, context.actor, input),
+    ),
+    pushErrors: api.shipping.pushErrors.handler(({ context }) => pushErrors(db, context.actor)),
+    retryWooPush: api.shipping.retryWooPush.handler(({ input, context }) =>
+      retryWooPush(db, context.actor, input),
     ),
     customsProducts: api.shipping.customsProducts.handler(({ input, context }) =>
       customsProducts(db, context.actor, input),

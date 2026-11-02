@@ -19,6 +19,7 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
       canReport={actor ? can(actor, "issue.report") : false}
       canRefreshRates={actor ? can(actor, "order.qa") : false}
       canPrint={actor ? can(actor, "label.print") : false}
+      canRetryPush={actor ? can(actor, "settings.manage") : false}
     />
   );
 }

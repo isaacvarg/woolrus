@@ -68,6 +68,7 @@ export function OrderView({
   canReport,
   canRefreshRates,
   canPrint = false,
+  canRetryPush = false,
 }: {
   id: string;
   userId: string | null;
@@ -76,6 +77,7 @@ export function OrderView({
   canReport: boolean;
   canRefreshRates: boolean;
   canPrint?: boolean;
+  canRetryPush?: boolean;
 }) {
   const t = useTranslations();
   const errorMessage = useErrorMessage();
@@ -98,6 +100,7 @@ export function OrderView({
       canReport={canReport}
       canRefreshRates={canRefreshRates}
       canPrint={canPrint}
+      canRetryPush={canRetryPush}
     />
   );
 }
@@ -110,6 +113,7 @@ function OrderLayout({
   canReport,
   canRefreshRates,
   canPrint,
+  canRetryPush,
 }: {
   order: Order;
   userId: string | null;
@@ -118,6 +122,7 @@ function OrderLayout({
   canReport: boolean;
   canRefreshRates: boolean;
   canPrint: boolean;
+  canRetryPush: boolean;
 }) {
   const t = useTranslations();
   const targets = useNoteTargets(order);
@@ -137,7 +142,7 @@ function OrderLayout({
         </Link>
       )}
       <OrderActions order={order} userId={userId} />
-      <WooPushStatus push={order.wooPush} />
+      <WooPushStatus orderId={order.id} push={order.wooPush} canRetry={canRetryPush} />
       {canPrint && (order.status === "READY" || order.status === "COMPLETED") && (
         <OrderLabels orderId={order.id} />
       )}

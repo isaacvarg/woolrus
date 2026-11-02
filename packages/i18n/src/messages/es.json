@@ -442,6 +442,24 @@
     "openPickScreen": "Abrir pantalla de surtido",
     "openPackScreen": "Abrir pantalla de empaque"
   },
+  "pushErrors": {
+    "title": "Errores de envío a Woo",
+    "intro": "Pedidos enviados cuya actualización en WooCommerce falló o sigue esperando. Reintentar los envía de nuevo.",
+    "order": "Pedido",
+    "error": "Error",
+    "attempts": "Intentos",
+    "lastTry": "Último intento",
+    "status": {
+      "FAILED": "Falló",
+      "PENDING": "Pendiente demasiado tiempo"
+    },
+    "selectOrder": "Seleccionar pedido {number}",
+    "retry": "Reintentar",
+    "retrySelected": "Reintentar seleccionados",
+    "retried": "En cola para reintentar.",
+    "retriedCount": "{count, plural, one {# pedido} other {# pedidos}} en cola para reintentar.",
+    "none": "Ninguna actualización de WooCommerce necesita atención."
+  },
   "wooPush": {
     "title": "Actualización en Woo",
     "status": {
