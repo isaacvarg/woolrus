@@ -104,6 +104,22 @@ export type AddressCheck = {
   messages: string[];
 };
 
+/** A customs declaration for an international package (SPEC-shipping "Customs"), one item per package row. */
+export type CustomsDeclaration = {
+  contents: "merchandise";
+  nonDelivery: "return_to_sender";
+  items: {
+    sku: string | null;
+    description: string;
+    quantity: number;
+    valueCents: number;
+    currency: string;
+    hsCode: string;
+    countryOfOrigin: string;
+    weightOz?: number;
+  }[];
+};
+
 export type RateRequest = {
   orderNumber: string;
   shipFrom: ShipAddress;
@@ -111,6 +127,8 @@ export type RateRequest = {
   residential: boolean;
   package: { lengthIn: number; widthIn: number; heightIn: number; weightOz: number };
   items: { sku: string | null; name: string; quantity: number }[];
+  /** Set when the package ships abroad; the fakes refuse an international purchase without it. */
+  customs?: CustomsDeclaration;
   /** Only enabled carriers and services (FR-SHIP-02). */
   services: { carrierExternalId: string; code: string; providerData: ProviderData }[];
 };

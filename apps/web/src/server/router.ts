@@ -58,6 +58,7 @@ import {
   markLabelNotBought,
   markOutOfStock,
   myPicks,
+  orderCustoms,
   orderMutations,
   packRemaining,
   packUnits,
@@ -181,6 +182,9 @@ export const router = implementer.router({
     delete: api.boxes.delete.handler(({ input, context }) => deleteBox(db, context.actor, input)),
   },
   shipping: {
+    orderCustoms: api.shipping.orderCustoms.handler(({ input, context }) =>
+      orderCustoms(db, context.actor, input),
+    ),
     customsProducts: api.shipping.customsProducts.handler(({ input, context }) =>
       customsProducts(db, context.actor, input),
     ),

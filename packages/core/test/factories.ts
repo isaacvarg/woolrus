@@ -38,6 +38,9 @@ export type LineSpec = {
   barcode?: string;
   /** Gives the line a variation of its product, with these codes. */
   variation?: { sku?: string; barcode?: string } & Partial<LineSize>;
+  /** The product's customs data (FR-SHIP-13). */
+  customs?: { hsCode?: string; countryOfOrigin?: string; customsDescription?: string };
+  unitPriceCents?: number;
   /** The product's weight and dimensions (oz, in); unset fields stay null. */
   size?: Partial<LineSize>;
   imageUrl?: string;
@@ -162,6 +165,7 @@ async function createLine(db: Db, orderId: string, line: LineSpec): Promise<Orde
             binLocation: line.bin ?? null,
             barcode: line.barcode ?? null,
             ...line.size,
+            ...line.customs,
             rawPayload: {},
             syncedAt: new Date(),
           },
@@ -195,7 +199,7 @@ async function createLine(db: Db, orderId: string, line: LineSpec): Promise<Orde
       name,
       sku,
       quantity,
-      unitPriceCents: 1000,
+      unitPriceCents: line.unitPriceCents ?? 1000,
       imageUrl: line.imageUrl ?? null,
       pickStatus,
       pickedQuantity: line.pickedQuantity ?? (picked ? quantity : 0),

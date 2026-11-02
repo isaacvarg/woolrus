@@ -257,6 +257,51 @@ describe("ShipStation adapter", () => {
       });
     });
 
+    it("sends no customs block for a domestic shipment", async () => {
+      const { provider, calls } = setup();
+      await provider.getRates(request);
+      expect(JSON.stringify(calls.at(-1)?.body)).not.toContain("customs");
+    });
+
+    it("maps the declaration to the shipment's customs block", async () => {
+      const { provider, calls } = setup();
+      await provider.getRates({
+        ...request,
+        shipTo: { ...request.shipTo, country: "CA" },
+        customs: {
+          contents: "merchandise",
+          nonDelivery: "return_to_sender",
+          items: [
+            {
+              sku: "SOAP",
+              description: "Soap bar",
+              quantity: 2,
+              valueCents: 900,
+              currency: "USD",
+              hsCode: "340111",
+              countryOfOrigin: "US",
+              weightOz: 8,
+            },
+          ],
+        },
+      });
+      const body = calls.at(-1)?.body as { shipment: { customs: unknown } };
+      expect(body.shipment.customs).toEqual({
+        contents: "merchandise",
+        non_delivery: "return_to_sender",
+        customs_items: [
+          {
+            sku: "SOAP",
+            description: "Soap bar",
+            quantity: 2,
+            value: { currency: "usd", amount: 9 },
+            harmonized_tariff_code: "340111",
+            country_of_origin: "US",
+          },
+        ],
+      });
+    });
+
     it("maps rates to cents with surcharges, drops services not asked for and invalid rates", async () => {
       const { provider } = setup();
       const result = await provider.getRates(request);

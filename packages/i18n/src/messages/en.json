@@ -1176,7 +1176,8 @@
       "unavailable": "The shipping provider couldn't be reached. Try again in a minute.",
       "timeout": "The shipping provider took too long to answer. Try again in a minute.",
       "hsCodeInvalid": "Use 6 to 10 digits; dots are fine, e.g. 3401.11.",
-      "countryInvalid": "Use the 2-letter country code, e.g. US."
+      "countryInvalid": "Use the 2-letter country code, e.g. US.",
+      "customsIncomplete": "This international package can't be rated: add the HS code and country of origin for {products} in Settings → Customs."
     },
     "carriers": {
       "credentialsMissing": "Add the provider's credentials first.",
@@ -1247,6 +1248,7 @@
       "allPackagesLabelled": "Every package already has a label, so there are no rates to refresh.",
       "purchaseInProgress": "Labels are being bought for this order. Wait for that to finish.",
       "packageRateExpired": "Package {package}'s shipping rate has expired. Refresh the rates and pick another.",
+      "customsIncomplete": "Package {package} ships abroad and needs customs data (HS code and country of origin) for {products}. Add it in Settings → Customs, then refresh the rates.",
       "packageProviderOff": "The shipping provider for package {package} is turned off. An admin turns it on in Settings → Shipping.",
       "providerUnavailable": "A provider isn't available to buy this label. Check Settings → Shipping.",
       "purchaseUnknown": "We couldn't confirm whether this label was bought. Check the provider for a label with this order's number.",
@@ -1430,6 +1432,12 @@
     "retryLabel": "Retry job {queue}",
     "dismissLabel": "Dismiss job {queue}",
     "order": "Order"
+  },
+  "customsNotice": {
+    "international": "International",
+    "missing": "This international order is missing customs data:",
+    "package": "Package {number}: {products}",
+    "openEditor": "Add it in Settings → Customs"
   },
   "customs": {
     "title": "Customs",

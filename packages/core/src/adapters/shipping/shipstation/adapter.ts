@@ -2,6 +2,7 @@ import type { z } from "zod";
 import { ShippingError, shippingErrorFromCause, shippingErrorFromStatus } from "../errors";
 import {
   type AddressCheck,
+  type CustomsDeclaration,
   PROVIDER_TIMEOUT_MS,
   type ProviderCarrier,
   type ProviderRate,
@@ -78,6 +79,27 @@ function toShipStation(address: ShipAddress, residential: Residential) {
     postal_code: address.postalCode,
     country_code: address.country,
     address_residential_indicator: residential,
+  };
+}
+
+const money = (valueCents: number, currency: string) => ({
+  currency: currency.toLowerCase(),
+  amount: valueCents / 100,
+});
+
+/** The declaration in ShipStation's `customs` block (ShipEngine v2: `customs_items` with tariff code and origin). */
+function toCustoms(customs: CustomsDeclaration) {
+  return {
+    contents: customs.contents,
+    non_delivery: customs.nonDelivery,
+    customs_items: customs.items.map((item) => ({
+      ...(item.sku && { sku: item.sku }),
+      description: item.description,
+      quantity: item.quantity,
+      value: money(item.valueCents, item.currency),
+      harmonized_tariff_code: item.hsCode,
+      country_of_origin: item.countryOfOrigin,
+    })),
   };
 }
 
@@ -248,6 +270,7 @@ export class ShipStationAdapter implements ShippingProvider {
           quantity: item.quantity,
           ...(item.sku && { sku: item.sku }),
         })),
+        ...(request.customs && { customs: toCustoms(request.customs) }),
         packages: [
           {
             package_code: "package",

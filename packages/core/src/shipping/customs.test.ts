@@ -5,7 +5,14 @@ import { createActor, resetDb, testDb } from "../../test/db";
 import { createOrder } from "../../test/factories";
 import { FakeStoreAdapter } from "../adapters/woocommerce/fake";
 import { syncProducts } from "../sync/products";
-import { customsProducts, updateProductCustoms } from "./customs";
+import {
+  buildCustoms,
+  type CustomsLine,
+  type CustomsLineProduct,
+  customsProducts,
+  orderCustoms,
+  updateProductCustoms,
+} from "./customs";
 
 // The customs editor (SPEC-shipping "Customs", FR-SHIP-13).
 
@@ -214,5 +221,134 @@ describe("customsProducts", () => {
     );
     expect(third.items.map((i) => i.name)).toEqual(["P4"]);
     expect(third.nextCursor).toBeNull();
+  });
+});
+
+describe("buildCustoms", () => {
+  const product = (over: Partial<CustomsLineProduct> = {}): CustomsLineProduct => ({
+    id: "p1",
+    name: "Soap bar",
+    physical: true,
+    hsCode: "340111",
+    countryOfOrigin: "US",
+    customsDescription: null,
+    weightOz: 4,
+    ...over,
+  });
+  const line = (over: Partial<CustomsLine> = {}): CustomsLine => ({
+    sku: "SOAP",
+    name: "Soap bar",
+    quantity: 3,
+    unitPriceCents: 450,
+    product: product(),
+    ...over,
+  });
+
+  it("makes one item per row: value = unit price × units, product data, description fallback", () => {
+    const result = buildCustoms([
+      line(),
+      line({
+        sku: "B",
+        quantity: 1,
+        product: product({
+          id: "p2",
+          customsDescription: "Bath bomb",
+          hsCode: "3307.90".replace(".", ""),
+          weightOz: null,
+        }),
+      }),
+    ]);
+    expect(result).toEqual({
+      complete: true,
+      customs: {
+        contents: "merchandise",
+        nonDelivery: "return_to_sender",
+        items: [
+          {
+            sku: "SOAP",
+            description: "Soap bar",
+            quantity: 3,
+            valueCents: 1350,
+            currency: "USD",
+            hsCode: "340111",
+            countryOfOrigin: "US",
+            weightOz: 12,
+          },
+          {
+            sku: "B",
+            description: "Bath bomb",
+            quantity: 1,
+            valueCents: 450,
+            currency: "USD",
+            hsCode: "330790",
+            countryOfOrigin: "US",
+          },
+        ],
+      },
+    });
+  });
+
+  it("skips lines whose product isn't physical", () => {
+    const result = buildCustoms([
+      line(),
+      line({ product: product({ id: "rush", physical: false, hsCode: null }) }),
+    ]);
+    expect(result.complete && result.customs.items).toHaveLength(1);
+  });
+
+  it("names the products missing an HS code or origin, once each", () => {
+    const bare = product({ id: "p9", name: "Mystery", hsCode: null });
+    const result = buildCustoms([line(), line({ product: bare }), line({ product: bare })]);
+    expect(result).toEqual({ complete: false, missing: ["Mystery"] });
+  });
+
+  it("treats a line with no product as missing", () => {
+    expect(buildCustoms([line({ name: "Gone", product: null })])).toEqual({
+      complete: false,
+      missing: ["Gone"],
+    });
+  });
+});
+
+describe("orderCustoms", () => {
+  const abroad = {
+    name: "C",
+    address1: "1 Rue",
+    city: "Toronto",
+    postalCode: "M5V",
+    country: "CA",
+  };
+
+  it("says an order is domestic, or international with the products missing data per package", async () => {
+    const reader = await createActor(db, ["PACKER"]);
+    const domestic = await createOrder(db, { status: "PACKING" });
+    expect(await orderCustoms(db, reader, { orderId: domestic.order.id })).toEqual({
+      international: false,
+      missing: [],
+    });
+
+    const built = await createOrder(db, {
+      status: "PACKING",
+      lines: [
+        { name: "Soap" },
+        { name: "Balm", customs: { hsCode: "340111", countryOfOrigin: "US" } },
+      ],
+      packages: [
+        {
+          items: [
+            { line: 0, quantity: 1 },
+            { line: 1, quantity: 1 },
+          ],
+        },
+      ],
+    });
+    await db.order.update({
+      where: { id: built.order.id },
+      data: { shippingAddress: abroad },
+    });
+    expect(await orderCustoms(db, reader, { orderId: built.order.id })).toEqual({
+      international: true,
+      missing: [{ package: 1, products: ["Soap"] }],
+    });
   });
 });

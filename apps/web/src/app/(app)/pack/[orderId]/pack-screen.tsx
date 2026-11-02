@@ -17,6 +17,7 @@ import { useState } from "react";
 import { AllVoidedBanner } from "@/components/exceptions/all-voided-banner";
 import { ReportIssueFlow } from "@/components/exceptions/report-issue-flow";
 import { VoidDialog } from "@/components/exceptions/void-dialog";
+import { CustomsNotice } from "@/components/shipping/customs-notice";
 import { Dialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/fields";
 import { Menu, MenuItem } from "@/components/ui/menu";
@@ -580,6 +581,7 @@ function PackHeader({ view }: { view: PackView }) {
         </span>
       </div>
       <p className="text-lg">{order.customerName}</p>
+      <CustomsNotice orderId={order.id} />
     </header>
   );
 }

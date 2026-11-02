@@ -8,6 +8,7 @@ import { uuidv7 } from "../ids";
 import { queues } from "../jobs";
 import { type Actor, assertCan } from "../permissions";
 import { loadSettings } from "../settings/service";
+import { missingCustomsByPackage } from "../shipping/customs";
 import { toOrderDetails } from "../workflow/detail";
 import {
   evaluateGate,
@@ -28,6 +29,8 @@ export type PurchasePackage = {
   number: number;
   /** The selected rate, if there is one. */
   rate: { provider: string; expiresAt: Date | null } | null;
+  /** Products missing customs data when the package ships abroad. */
+  customsMissing?: readonly string[];
   /** Statuses of the package's live labels. */
   labels: readonly { status: LabelStatus; storageKey: string | null }[];
 };
@@ -63,6 +66,12 @@ export function purchasePreconditions({
   }
   for (const pkg of packages.filter(needsLabel)) {
     if (!pkg.rate) continue; // the gate already says so
+    if (pkg.customsMissing?.length) {
+      conditions.push({
+        messageKey: key("customsIncomplete"),
+        params: { package: pkg.number, products: pkg.customsMissing.join(", ") },
+      });
+    }
     if (pkg.rate.expiresAt && pkg.rate.expiresAt <= now) {
       conditions.push({ messageKey: key("packageRateExpired"), params: { package: pkg.number } });
     }
@@ -75,7 +84,7 @@ export function purchasePreconditions({
 
 /** The packages and providers `purchasePreconditions` reads. */
 async function loadPurchaseInputs(tx: DbTx, orderId: string) {
-  const [packages, accounts] = await Promise.all([
+  const [packages, accounts, customsMissing] = await Promise.all([
     tx.package.findMany({
       where: { orderId },
       orderBy: { number: "asc" },
@@ -89,11 +98,13 @@ async function loadPurchaseInputs(tx: DbTx, orderId: string) {
       },
     }),
     tx.shippingProviderAccount.findMany({ where: { enabled: true }, select: { provider: true } }),
+    missingCustomsByPackage(tx, orderId),
   ]);
   return {
     packages: packages.map((p) => ({
       number: p.number,
       rate: p.rates[0] ?? null,
+      customsMissing: customsMissing.get(p.number),
       labels: p.labels,
     })),
     enabledProviders: new Set<string>(accounts.map((a) => a.provider)),
