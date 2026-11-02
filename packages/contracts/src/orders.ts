@@ -309,6 +309,8 @@ export const OrderPackageSummary = z.object({
   items: z.array(z.object({ orderItemId: Id, name: z.string(), quantity: z.number().int() })),
   /** A label exists or may exist at the carrier. */
   liveLabel: z.boolean(),
+  /** Removed after a repack; kept for the label history. */
+  discarded: z.boolean(),
   /** Notes on this package. */
   noteCount: z.number().int(),
 });

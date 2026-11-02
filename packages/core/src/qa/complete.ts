@@ -77,7 +77,7 @@ export function purchasePreconditions({
 async function loadPurchaseInputs(tx: DbTx, orderId: string) {
   const [packages, accounts] = await Promise.all([
     tx.package.findMany({
-      where: { orderId },
+      where: { orderId, discardedAt: null },
       orderBy: { number: "asc" },
       select: {
         number: true,
@@ -144,7 +144,7 @@ export async function completeQaWithLabels(
     }
 
     const packages = await tx.package.findMany({
-      where: { orderId },
+      where: { orderId, discardedAt: null },
       orderBy: { number: "asc" },
       include: {
         rates: { where: { selected: true } },

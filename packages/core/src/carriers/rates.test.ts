@@ -175,6 +175,21 @@ describe("fetchRates fan-out (SC 8)", () => {
     });
   });
 
+  it("skips a discarded package: no request for it, no rates stored", async () => {
+    await catalog("SHIPSTATION", ["demo_ground"]);
+    const { shipStation } = fakes();
+    const { packages, payload } = await inQa({}, 2);
+    const discarded = packages[1]?.id as string;
+    await db.package.update({ where: { id: discarded }, data: { discardedAt: new Date() } });
+
+    const result = await fetchRates(db, [shipStation], payload);
+
+    expect(result).toEqual({ status: "done" });
+    expect((await ratesOf(packages[0]?.id as string)).length).toBeGreaterThan(0);
+    expect(await ratesOf(discarded)).toEqual([]);
+    expect(await pkgRow(discarded)).toMatchObject({ ratesStatus: "NONE" });
+  });
+
   it("sends only enabled services of enabled, still-listed carriers, matching domestic", async () => {
     await catalog("SHIPSTATION", ["demo_ground", "demo_express", "demo_express_intl"]);
     await catalog("BRIDGE_SOURCE", ["GND", "EXP"]);

@@ -27,9 +27,9 @@ export async function scanVerify(
   return db.$transaction(async (tx) => {
     const pkg = await tx.package.findUnique({
       where: { id: packageId },
-      select: { orderId: true },
+      select: { orderId: true, discardedAt: true },
     });
-    if (!pkg || pkg.orderId !== orderId) throw notFound();
+    if (!pkg || pkg.discardedAt || pkg.orderId !== orderId) throw notFound();
 
     // A replay answers before the checks, which may no longer pass (the order moved on).
     if (await storedResult(tx, scanId, "qa.scan", actor)) return qaResult(tx, orderId);

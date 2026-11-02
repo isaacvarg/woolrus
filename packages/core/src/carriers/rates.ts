@@ -161,6 +161,7 @@ async function askProvider(
 
 const orderInclude = {
   packages: {
+    where: { discardedAt: null },
     orderBy: { number: "asc" },
     include: {
       box: true,
@@ -196,8 +197,12 @@ export function parcel(
   return { lengthIn, widthIn, heightIn, weightOz };
 }
 
-/** A package with a label that exists or may exist at the carrier: its rates are no longer ours to change. */
+/**
+ * Packages whose rates are ours to change: not discarded, and without a label that exists or may
+ * exist at the carrier.
+ */
 const withoutLiveLabel = {
+  discardedAt: null,
   labels: { none: { status: { in: [...liveLabelStatuses] } } },
 } as const satisfies Prisma.PackageWhereInput;
 
@@ -582,7 +587,7 @@ export async function refreshRates(
     if (labels.some((l) => l.status === "PURCHASING")) {
       throw new AppError("CONFLICT", "errors.qa.purchaseInProgress");
     }
-    const packages = await tx.package.count({ where: { orderId } });
+    const packages = await tx.package.count({ where: { orderId, discardedAt: null } });
     if (packages > 0 && new Set(labels.map((l) => l.packageId)).size === packages) {
       throw new AppError("CONFLICT", "errors.qa.allPackagesLabelled");
     }
@@ -624,6 +629,7 @@ export async function getOrderShipping(
       shipToMessages: true,
       shipToCheckedAt: true,
       packages: {
+        where: { discardedAt: null },
         orderBy: { number: "asc" },
         select: {
           id: true,

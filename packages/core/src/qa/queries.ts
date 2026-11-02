@@ -73,7 +73,7 @@ export async function qaResult(
 ): Promise<QaResult> {
   const [packages, issues, notes, gate, quoteOnly] = await Promise.all([
     tx.package.findMany({
-      where: { orderId },
+      where: { orderId, discardedAt: null },
       include: packageInclude,
       orderBy: { number: "asc" },
     }),

@@ -417,7 +417,9 @@ function OrderPackages({ order, notes }: { order: Order; notes: NotesProps }) {
           >
             <div className="flex items-center justify-between gap-2">
               <div className="font-semibold">
-                {t("order.package", { number: pkg.number })}
+                {t(pkg.discarded ? "order.packageDiscarded" : "order.package", {
+                  number: pkg.number,
+                })}
                 {pkg.liveLabel && (
                   <span className="badge badge-info ms-2">{t("order.liveLabel")}</span>
                 )}
