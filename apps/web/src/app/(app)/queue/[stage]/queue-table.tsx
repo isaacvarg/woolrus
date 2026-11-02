@@ -8,6 +8,7 @@ import { useFormatter, useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
 import { Input, Label, SearchField } from "react-aria-components";
 import { NoteCount } from "@/components/notes/note-count";
+import { RepackButton } from "@/components/shipping/repack-button";
 import { ShipButton } from "@/components/shipping/ship-button";
 import { useLabelPrint } from "@/components/shipping/use-label-print";
 import { Button, Checkbox } from "@/components/ui/fields";
@@ -51,6 +52,7 @@ export function QueueTable({
   canQa,
   canPrint = false,
   canShip = false,
+  canRepack = false,
 }: {
   stage: QueueStage;
   userId: string | null;
@@ -59,6 +61,7 @@ export function QueueTable({
   canQa: boolean;
   canPrint?: boolean;
   canShip?: boolean;
+  canRepack?: boolean;
 }) {
   const t = useTranslations();
   const reasonText = useReasonText();
@@ -176,6 +179,13 @@ export function QueueTable({
 
       {showReady && canShip && (
         <ShipButton orderIds={[...selected.keys()]} onShipped={() => setSelected(new Map())} />
+      )}
+
+      {showReady && canRepack && (
+        <RepackButton
+          orderNumbers={new Map([...selected].map(([id, row]) => [id, row.number]))}
+          onRepacked={() => setSelected(new Map())}
+        />
       )}
 
       <div className="overflow-x-auto rounded-box bg-base-100 shadow-sm">

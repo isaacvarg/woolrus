@@ -15,7 +15,7 @@ const shipTo = {
 };
 
 /** The fake ShipStation's "Demo Ground" service, which is what its purchases accept. */
-async function demoService() {
+export async function demoService() {
   const existing = await db.shippingCarrier.findFirst({ where: { externalId: "se-demo-ground" } });
   const carrier =
     existing ??
@@ -55,8 +55,11 @@ export async function qaJourneyOrder({
   packages = 1,
   address2,
   shippingChargedCents = 1000,
+  existingOrderId,
 }: {
   qaUserId: string;
+  /** An order already in the database (e.g. imported from the dev store): it is moved to QA and kept on cleanup. */
+  existingOrderId?: string;
   packages?: number;
   address2?: string;
   shippingChargedCents?: number;
@@ -73,15 +76,13 @@ export async function qaJourneyOrder({
   const { carrier, service, created } = await demoService();
 
   const customerName = `E2E ${crypto.randomUUID()}`;
-  const order = await createOrder({
-    customerName,
-    status: "QA",
-    quantity: packages,
-    ownProduct: true,
-  });
+  const order = existingOrderId
+    ? await db.order.findUniqueOrThrow({ where: { id: existingOrderId } })
+    : await createOrder({ customerName, status: "QA", quantity: packages, ownProduct: true });
   await db.order.update({
     where: { id: order.id },
     data: {
+      ...(existingOrderId ? { status: "QA" as const, statusChangedAt: new Date() } : {}),
       claimedById: qaUserId,
       claimedAt: new Date(),
       shippingChargedCents,

@@ -23,6 +23,7 @@ export default async function QueuePage({ params }: { params: Promise<{ stage: s
         canQa={!!actor && can(actor, "order.qa")}
         canPrint={!!actor && can(actor, "label.print")}
         canShip={!!actor && can(actor, "order.ship")}
+        canRepack={!!actor && can(actor, "order.repack")}
       />
     </section>
   );

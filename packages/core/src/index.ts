@@ -12,6 +12,7 @@ export * from "./adapters/storage/s3";
 export * from "./adapters/storage/storage";
 export * from "./adapters/woocommerce/adapter";
 export * from "./adapters/woocommerce/errors";
+export { FakeStoreAdapter } from "./adapters/woocommerce/fake";
 export * from "./adapters/woocommerce/http";
 export * from "./audit";
 export * from "./boxes/service";
