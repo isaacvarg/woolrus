@@ -9,6 +9,16 @@ describe("queueOptions", () => {
   });
 });
 
+describe("woo.push", () => {
+  it("retries 8 times with backoff", () => {
+    expect(queueOptions[queues.wooPush]).toMatchObject({
+      retryLimit: 8,
+      retryDelay: 60,
+      retryBackoff: true,
+    });
+  });
+});
+
 describe("isFinalAttempt", () => {
   it("is false while retries remain and true on the last run", () => {
     const retryLimit = queueOptions[queues.ratesFetch].retryLimit ?? -1;

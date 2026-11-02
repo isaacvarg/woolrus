@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { type Actor, assertCan, can, permissionsFor, systemActor } from "./permissions";
+import {
+  type Actor,
+  assertCan,
+  can,
+  permissionsFor,
+  shippingActor,
+  systemActor,
+} from "./permissions";
 
 const actor = (roles: Actor["roles"]): Actor => ({ userId: "u", roles, stationId: null });
 
@@ -63,6 +70,20 @@ describe("permissions", () => {
     for (const role of ["PICKER", "PACKER", "SHIPPER"] as const) {
       expect(can(actor([role]), "label.void")).toBe(false);
     }
+  });
+
+  it("lets Shipper, QA and Admin repack, and only Admin write off labels", () => {
+    for (const role of ["SHIPPER", "QA", "ADMIN"] as const)
+      expect(can(actor([role]), "order.repack")).toBe(true);
+    for (const role of ["PICKER", "PACKER"] as const)
+      expect(can(actor([role]), "order.repack")).toBe(false);
+    expect(can(actor(["ADMIN"]), "label.writeOff")).toBe(true);
+    for (const role of ["PICKER", "PACKER", "QA", "SHIPPER"] as const)
+      expect(can(actor([role]), "label.writeOff")).toBe(false);
+  });
+
+  it("gives the shipping actor no user and no station", () => {
+    expect(shippingActor).toMatchObject({ userId: null, stationId: null, system: "shipping" });
   });
 
   it("gives the system actor no user and no station", () => {

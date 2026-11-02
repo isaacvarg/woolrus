@@ -56,24 +56,24 @@ enum ShipToStatus {
 }
 
 model Order {
-  id                   String   @id @default(uuid(7)) @db.Uuid
-  wooOrderId           Int      @unique @map("woo_order_id")
+  id                   String    @id @default(uuid(7)) @db.Uuid
+  wooOrderId           Int       @unique @map("woo_order_id")
   number               String
-  wooStatus            String   @map("woo_status")
-  currency             String   @db.Char(3)
-  customerName         String   @map("customer_name")
-  customerEmail        String?  @map("customer_email")
-  shippingAddress      Json     @map("shipping_address")
-  billingAddress       Json     @map("billing_address")
-  customerNote         String?  @map("customer_note")
-  paymentMethod        String?  @map("payment_method")
-  totalCents           Int      @map("total_cents")
-  shippingMethod       String?  @map("shipping_method")
-  shippingChargedCents Int      @default(0) @map("shipping_charged_cents")
-  orderedAt            DateTime @map("ordered_at") @db.Timestamptz(3)
-  wooModifiedAt        DateTime @map("woo_modified_at") @db.Timestamptz(3)
-  syncedAt             DateTime @map("synced_at") @db.Timestamptz(3)
-  rawPayload           Json     @map("raw_payload")
+  wooStatus            String    @map("woo_status")
+  currency             String    @db.Char(3)
+  customerName         String    @map("customer_name")
+  customerEmail        String?   @map("customer_email")
+  shippingAddress      Json      @map("shipping_address")
+  billingAddress       Json      @map("billing_address")
+  customerNote         String?   @map("customer_note")
+  paymentMethod        String?   @map("payment_method")
+  totalCents           Int       @map("total_cents")
+  shippingMethod       String?   @map("shipping_method")
+  shippingChargedCents Int       @default(0) @map("shipping_charged_cents")
+  orderedAt            DateTime  @map("ordered_at") @db.Timestamptz(3)
+  wooModifiedAt        DateTime  @map("woo_modified_at") @db.Timestamptz(3)
+  syncedAt             DateTime  @map("synced_at") @db.Timestamptz(3)
+  rawPayload           Json      @map("raw_payload")
   /// Set once the customer's identity was removed (NFR-SEC-06, SPEC-operations "PII anonymization").
   piiRedactedAt        DateTime? @map("pii_redacted_at") @db.Timestamptz(3)
 
@@ -104,10 +104,13 @@ model Order {
   rateGeneration    Int          @default(0) @map("rate_generation")
 
   // Push of Completed + tracking back to WooCommerce (FR-SHIP-06/07/10)
-  wooPushStatus   WooPushStatus @default(NOT_NEEDED) @map("woo_push_status")
-  wooPushAttempts Int           @default(0) @map("woo_push_attempts")
-  wooPushedAt     DateTime?     @map("woo_pushed_at") @db.Timestamptz(3)
-  wooPushError    String?       @map("woo_push_error")
+  wooPushStatus     WooPushStatus @default(NOT_NEEDED) @map("woo_push_status")
+  wooPushAttempts   Int           @default(0) @map("woo_push_attempts")
+  wooPushedAt       DateTime?     @map("woo_pushed_at") @db.Timestamptz(3)
+  /// A message key (errors.*), never literal text.
+  wooPushError      String?       @map("woo_push_error")
+  /// The fallback order note that carries tracking when the plugin is off.
+  wooTrackingNoteId Int?          @map("woo_tracking_note_id")
 
   /// Optimistic locking (NFR-REL-04): every workflow write increments this and checks the old value.
   version   Int      @default(1)

@@ -102,7 +102,7 @@ export const transitions: readonly Transition[] = [
     kind: "repack",
     from: ["READY"],
     to: ["PACKING"],
-    permission: "order.pack",
+    permission: "order.repack",
     claim: "none",
     gate: "noLiveLabels",
     reasonRequired: true,

@@ -458,6 +458,7 @@ const labelKeys = {
   VOID_REQUESTED: "qa.labelVoidRequested",
   VOIDED: "qa.labelVoided",
   VOID_REJECTED: "qa.labelVoidRejected",
+  WRITTEN_OFF: "qa.labelWrittenOff",
 } as const;
 
 function PackageCard({

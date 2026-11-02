@@ -83,7 +83,7 @@ Statuses (`WorkflowStatus`): `PENDING`, `PICKING`, `PACKING`, `QA`, `READY`, `CO
 | PACKING → QA | `completePacking` | `order.pack` | actor holds it | **packed** |
 | QA → READY | `completeQa` | `order.qa` | actor holds it | **verified** |
 | READY → COMPLETED | `ship` | `order.ship` | none (shipping works in batches) | **shippable** |
-| READY → PACKING | `repack` | `order.pack` | none | **no live labels**; reason required |
+| READY → PACKING | `repack` | `order.repack` | none | **no live labels**; reason required |
 | any non-terminal, not ON_HOLD → ON_HOLD | `hold` | `order.hold` | none | reason required |
 | ON_HOLD → `heldFromStatus` | `resume` | `order.hold` | none | — |
 | any non-terminal → CANCELLED | `cancel` | `order.cancel` | none | **no live labels**; reason required |

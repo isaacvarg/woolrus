@@ -76,6 +76,8 @@ model Package {
   ratesFetchedAt       DateTime?   @map("rates_fetched_at") @db.Timestamptz(3)
   /// Providers whose rate fetch failed: [{ provider, messageKey }].
   rateErrors           Json        @default("[]") @map("rate_errors")
+  /// Set when a repack throws the package away; numbers are not reused.
+  discardedAt          DateTime?   @map("discarded_at") @db.Timestamptz(3)
   createdAt            DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt            DateTime    @updatedAt @map("updated_at") @db.Timestamptz(3)
 
@@ -213,6 +215,8 @@ enum LabelStatus {
   VOID_REQUESTED
   VOIDED
   VOID_REJECTED
+  /// An admin gave up on a stuck void. Not live: the order may be cancelled or repacked.
+  WRITTEN_OFF
 
   @@map("label_status")
 }
@@ -230,6 +234,8 @@ model ShippingLabel {
   providerLabelId     String?            @map("provider_label_id")
   providerShipmentId  String?            @map("provider_shipment_id")
   trackingNumber      String?            @map("tracking_number")
+  /// AST's `tracking_id` for the tracking item pushed to WooCommerce.
+  wooTrackingId       String?            @map("woo_tracking_id")
   carrierCode         String             @map("carrier_code")
   serviceCode         String             @map("service_code")
   costCents           Int?               @map("cost_cents")
@@ -286,6 +292,8 @@ model Manifest {
   providerManifestId String             @map("provider_manifest_id")
   shipDate           DateTime           @map("ship_date") @db.Date
   formUrl            String?            @map("form_url")
+  /// Our copy of the manifest PDF.
+  storageKey         String?            @map("storage_key")
   createdById        String?            @map("created_by_id") @db.Uuid
   createdAt          DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
 
@@ -295,4 +303,17 @@ model Manifest {
 
   @@unique([provider, providerManifestId])
   @@map("manifests")
+}
+
+/// One press of Print labels: which labels, in print order. Purged after 30 days.
+model LabelPrint {
+  id          String   @id @default(uuid(7)) @db.Uuid
+  createdById String?  @map("created_by_id") @db.Uuid
+  labelIds    String[] @map("label_ids") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  createdBy User? @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@map("label_prints")
 }
