@@ -35,7 +35,8 @@
     "closeMenu": "Cerrar menú",
     "voids": "Anulaciones",
     "failedJobs": "Trabajos fallidos",
-    "issues": "Incidencias"
+    "issues": "Incidencias",
+    "customs": "Aduanas"
   },
   "navFooter": {
     "preferences": "Preferencias",
@@ -1172,7 +1173,9 @@
       "notOffered": "La paquetería no ofrece los servicios activados para este envío, desde esta dirección de origen o hacia esta dirección. Revisa qué servicios están activados en Ajustes → Envíos.",
       "addressRejected": "La paquetería rechazó la dirección de destino o de origen. Revisa ambas direcciones.",
       "unavailable": "No se pudo conectar con el proveedor de envíos. Inténtalo de nuevo en un minuto.",
-      "timeout": "El proveedor de envíos tardó demasiado en responder. Inténtalo de nuevo en un minuto."
+      "timeout": "El proveedor de envíos tardó demasiado en responder. Inténtalo de nuevo en un minuto.",
+      "hsCodeInvalid": "Usa de 6 a 10 dígitos; los puntos están bien, p. ej. 3401.11.",
+      "countryInvalid": "Usa el código de país de 2 letras, p. ej. US."
     },
     "carriers": {
       "credentialsMissing": "Primero agrega las credenciales del proveedor.",
@@ -1426,5 +1429,35 @@
     "retryLabel": "Reintentar trabajo {queue}",
     "dismissLabel": "Descartar trabajo {queue}",
     "order": "Pedido"
+  },
+  "customs": {
+    "title": "Aduanas",
+    "intro": "Código HS, país de origen y una descripción breve de los productos en envíos internacionales. Los cambios se aplican en la próxima consulta de tarifas.",
+    "filter": "Mostrar",
+    "filters": {
+      "all": "Todos los productos",
+      "missing": "Sin datos de aduanas",
+      "international": "En un pedido internacional ahora"
+    },
+    "product": "Producto",
+    "sku": "SKU",
+    "hsCode": "Código HS",
+    "hsCodeHint": "De 6 a 10 dígitos",
+    "countryOfOrigin": "País de origen",
+    "countryHint": "Código de 2 letras",
+    "description": "Descripción aduanera",
+    "descriptionHint": "Hasta 100 caracteres",
+    "actions": "Acciones",
+    "edit": "Editar",
+    "editProduct": "Editar datos de aduanas de {name}",
+    "save": "Guardar",
+    "cancel": "Cancelar",
+    "saved": "Datos de aduanas guardados para {name}.",
+    "missingBadge": "Faltan datos",
+    "complete": "Completo",
+    "international": "Pedido internacional",
+    "empty": "Ningún producto coincide con este filtro.",
+    "loadMore": "Cargar más",
+    "none": "Sin definir"
   }
 }

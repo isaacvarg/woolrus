@@ -11,6 +11,7 @@ import { pickBatches, picking } from "./picking";
 import { priorityRules } from "./priority-rules";
 import { qa } from "./qa";
 import { settings } from "./settings";
+import { shipping } from "./shipping";
 import { station, stations } from "./stations";
 import { sync } from "./sync";
 import { users } from "./users";
@@ -30,6 +31,7 @@ export * from "./picking";
 export * from "./priority-rules";
 export * from "./qa";
 export * from "./settings";
+export * from "./shipping";
 export * from "./stations";
 export * from "./sync";
 export * from "./users";
@@ -59,5 +61,6 @@ export const contract = {
   issues,
   carriers,
   operations,
+  shipping,
 };
 export type Contract = typeof contract;
