@@ -101,7 +101,8 @@ and amber for the third.
 ### Rate selection (`packages/core/src/qa/rates.ts`, FR-QA-02)
 
 `selectRate({ packageId, rateId })` (`order.qa`, claim held, order in QA): the rate must belong to the package and
-not be expired (`errors.qa.rateExpired`), and the package must have no live label (`errors.qa.packageHasLabel`).
+not be expired (`errors.qa.rateExpired`) or quote-only (`errors.qa.rateQuoteOnly`; the rates table shows a **Quote only**
+badge and disables the control), and the package must have no live label (`errors.qa.packageHasLabel`).
 Unselects the old rate and selects the new one in one statement order that keeps the one-selected-per-package index
 happy (unselect first). Audited `rate.select` with both rate ids and amounts.
 

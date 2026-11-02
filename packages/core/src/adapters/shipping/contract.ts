@@ -46,9 +46,17 @@ const expectedFailures: [SimulatedFailure, ShippingErrorKind, boolean][] = [
   ["timeout", "timeout", false],
 ];
 
+export type ContractOptions = {
+  /** False while an adapter has no `getRates` yet: those tests are skipped. */
+  quotes?: boolean;
+  /** False for a quote-only provider (no `purchaseLabel`, `findLabel` or `voidLabel`): those tests are skipped. */
+  buys?: boolean;
+};
+
 export function describeShippingProvider(
   name: string,
   setup: () => ProviderFixture | Promise<ProviderFixture>,
+  { quotes = true, buys = true }: ContractOptions = {},
 ) {
   describe(`${name} (ShippingProvider)`, () => {
     let fixture: ProviderFixture;
@@ -131,31 +139,35 @@ export function describeShippingProvider(
       }
     });
 
-    it("quotes requested services in cents, with days and dates in our types", async () => {
-      const request = await domesticRequest();
-      expect(request.services.length).toBeGreaterThan(0);
-      const rates = await provider.getRates(request);
-      expect(rates.length).toBeGreaterThan(0);
-      const requested = new Set(request.services.map((s) => `${s.carrierExternalId}/${s.code}`));
-      for (const rate of rates) {
-        expect(requested).toContain(`${rate.carrierExternalId}/${rate.serviceCode}`);
-        expect(Number.isInteger(rate.amountCents)).toBe(true);
-        expect(rate.amountCents).toBeGreaterThan(0);
-        expect(rate.currency).toMatch(/^[A-Z]{3}$/);
-        expect(rate.serviceName).not.toBe("");
-        expect(typeof rate.guaranteed).toBe("boolean");
-        expect(typeof rate.trackable).toBe("boolean");
-        if (rate.deliveryDays !== undefined) expect(Number.isInteger(rate.deliveryDays)).toBe(true);
-        if (rate.estimatedDeliveryAt !== undefined) {
-          expect(rate.estimatedDeliveryAt).toBeInstanceOf(Date);
-          expect(Number.isNaN(rate.estimatedDeliveryAt.getTime())).toBe(false);
+    it.skipIf(!quotes)(
+      "quotes requested services in cents, with days and dates in our types",
+      async () => {
+        const request = await domesticRequest();
+        expect(request.services.length).toBeGreaterThan(0);
+        const rates = await provider.getRates(request);
+        expect(rates.length).toBeGreaterThan(0);
+        const requested = new Set(request.services.map((s) => `${s.carrierExternalId}/${s.code}`));
+        for (const rate of rates) {
+          expect(requested).toContain(`${rate.carrierExternalId}/${rate.serviceCode}`);
+          expect(Number.isInteger(rate.amountCents)).toBe(true);
+          expect(rate.amountCents).toBeGreaterThan(0);
+          expect(rate.currency).toMatch(/^[A-Z]{3}$/);
+          expect(rate.serviceName).not.toBe("");
+          expect(typeof rate.guaranteed).toBe("boolean");
+          expect(typeof rate.trackable).toBe("boolean");
+          if (rate.deliveryDays !== undefined)
+            expect(Number.isInteger(rate.deliveryDays)).toBe(true);
+          if (rate.estimatedDeliveryAt !== undefined) {
+            expect(rate.estimatedDeliveryAt).toBeInstanceOf(Date);
+            expect(Number.isNaN(rate.estimatedDeliveryAt.getTime())).toBe(false);
+          }
+          if (rate.expiresAt !== undefined) {
+            expect(rate.expiresAt).toBeInstanceOf(Date);
+            expect(Number.isNaN(rate.expiresAt.getTime())).toBe(false);
+          }
         }
-        if (rate.expiresAt !== undefined) {
-          expect(rate.expiresAt).toBeInstanceOf(Date);
-          expect(Number.isNaN(rate.expiresAt.getTime())).toBe(false);
-        }
-      }
-    });
+      },
+    );
 
     it("validates an address when it can", async (ctx) => {
       if (!provider.validateAddress) return ctx.skip();
@@ -166,49 +178,61 @@ export function describeShippingProvider(
       if (check.residential !== undefined) expect(typeof check.residential).toBe("boolean");
     });
 
-    it("buys a label for a quoted rate, from the rate and the shipment", async () => {
-      const request = await domesticRequest();
-      const [rate] = await provider.getRates(request);
-      if (!rate) throw new Error("no rate to buy");
-      const label = await purchase(request, rate, `contract-${crypto.randomUUID()}`);
-      expect(label.providerLabelId).not.toBe("");
-      expect(label.trackingNumber).not.toBe("");
-      expect(label.serviceCode).not.toBe("");
-      expect(label.currency).toMatch(/^[A-Z]{3}$/);
-      if (label.costCents !== undefined) expect(Number.isInteger(label.costCents)).toBe(true);
-      expect(label.shipDate).toBeInstanceOf(Date);
-      if ("pdf" in label.document) expect(label.document.pdf.byteLength).toBeGreaterThan(0);
-      // A fake's URL is a data: URL, so `qa` can fetch it like a provider's.
-      else expect(label.document.url).toMatch(/^(https:\/\/|data:application\/pdf;base64,)/);
-    });
+    it.skipIf(!quotes || !buys)(
+      "buys a label for a quoted rate, from the rate and the shipment",
+      async () => {
+        const request = await domesticRequest();
+        const [rate] = await provider.getRates(request);
+        if (!rate) throw new Error("no rate to buy");
+        const label = await purchase(request, rate, `contract-${crypto.randomUUID()}`);
+        expect(label.providerLabelId).not.toBe("");
+        expect(label.trackingNumber).not.toBe("");
+        expect(label.serviceCode).not.toBe("");
+        expect(label.currency).toMatch(/^[A-Z]{3}$/);
+        if (label.costCents !== undefined) expect(Number.isInteger(label.costCents)).toBe(true);
+        expect(label.shipDate).toBeInstanceOf(Date);
+        if ("pdf" in label.document) expect(label.document.pdf.byteLength).toBeGreaterThan(0);
+        // A fake's URL is a data: URL, so `qa` can fetch it like a provider's.
+        else expect(label.document.url).toMatch(/^(https:\/\/|data:application\/pdf;base64,)/);
+      },
+    );
 
-    it("finds a bought label by its idempotency key when it can", async (ctx) => {
-      if (!provider.findLabel) return ctx.skip();
-      const request = await domesticRequest();
-      const [rate] = await provider.getRates(request);
-      if (!rate) throw new Error("no rate to buy");
-      const key = `contract-${crypto.randomUUID()}`;
-      const label = await purchase(request, rate, key);
-      const found = await provider.findLabel(key);
-      expect(found?.providerLabelId).toBe(label.providerLabelId);
-      expect(found?.trackingNumber).toBe(label.trackingNumber);
-      expect(await provider.findLabel(`contract-${crypto.randomUUID()}`)).toBeNull();
-    });
+    it.skipIf(!quotes || !buys)(
+      "finds a bought label by its idempotency key when it can",
+      async (ctx) => {
+        if (!provider.findLabel) return ctx.skip();
+        const request = await domesticRequest();
+        const [rate] = await provider.getRates(request);
+        if (!rate) throw new Error("no rate to buy");
+        const key = `contract-${crypto.randomUUID()}`;
+        const label = await purchase(request, rate, key);
+        const found = await provider.findLabel(key);
+        expect(found?.providerLabelId).toBe(label.providerLabelId);
+        expect(found?.trackingNumber).toBe(label.trackingNumber);
+        expect(await provider.findLabel(`contract-${crypto.randomUUID()}`)).toBeNull();
+      },
+    );
 
-    it("voids a label, answering whether the provider approved", async (ctx) => {
-      if (!provider.voidLabel) return ctx.skip();
-      const request = await domesticRequest();
-      const [rate] = await provider.getRates(request);
-      if (!rate) throw new Error("no rate to buy");
-      const label = await purchase(request, rate, `contract-${crypto.randomUUID()}`);
-      const result = await provider.voidLabel(label.providerLabelId);
-      expect(typeof result.approved).toBe("boolean");
-    });
+    it.skipIf(!quotes || !buys)(
+      "voids a label, answering whether the provider approved",
+      async (ctx) => {
+        if (!provider.voidLabel) return ctx.skip();
+        const request = await domesticRequest();
+        const [rate] = await provider.getRates(request);
+        if (!rate) throw new Error("no rate to buy");
+        const label = await purchase(request, rate, `contract-${crypto.randomUUID()}`);
+        const result = await provider.voidLabel(label.providerLabelId);
+        expect(typeof result.approved).toBe("boolean");
+      },
+    );
 
     describe.each(expectedFailures)("a %s failure", (failure, kind, permanent) => {
       it(`is a ${permanent ? "permanent" : "transient"} ${kind} ShippingError with a clean detail`, async () => {
         const request = await domesticRequest();
-        for (const call of [() => provider.ping(), () => provider.getRates(request)]) {
+        const calls = quotes
+          ? [() => provider.ping(), () => provider.getRates(request)]
+          : [() => provider.ping()];
+        for (const call of calls) {
           fixture.failNext(failure);
           const error = await call().then(
             () => null,

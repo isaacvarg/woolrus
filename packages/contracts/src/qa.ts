@@ -60,6 +60,8 @@ export const QaRate = z.object({
   deliveryDays: z.number().int().nullable(),
   selected: z.boolean(),
   expired: z.boolean(),
+  /** The provider can quote this rate but not buy it, so it can't be selected. */
+  quoteOnly: z.boolean(),
 });
 export type QaRate = z.infer<typeof QaRate>;
 

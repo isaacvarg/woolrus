@@ -89,6 +89,8 @@ export type ProviderCapabilities = {
   labelLookup: boolean;
   void: boolean;
   manifests: boolean;
+  /** Can buy a label. `false` = quote-only: its rates are stored and shown, never selected (SPEC-bridge-source). */
+  purchase: boolean;
 };
 
 export interface ShippingProvider {
@@ -243,7 +245,9 @@ are checked against it, so a refresh or a repack never gets overwritten by an ol
    carriers is skipped with `noCarriers`.
 4. In one transaction per package, if the generation still matches: delete its rates, insert the returned ones
    tagged with provider and carrier, set `expiresAt` = the provider's, else `fetchedAt + RATE_TTL_HOURS` (24, decision 6), drop rates for services not enabled (the provider may return extras), and
-   mark the cheapest **selected** (ties: fewer delivery days, then provider order, then service name).
+   mark the cheapest **selected** among rates whose provider has `purchase` (ties: fewer delivery days, then provider
+   order, then service name). Quote-only rates are stored and returned with `quoteOnly: true` (derived at read time
+   from the provider account, no column) but never selected; with only quote-only rates nothing is selected.
    `rateErrors` = `[{ provider, messageKey }]` for providers that failed; `ratesStatus` = `READY` when at least one
    rate exists, else `FAILED`.
 5. `notifyOrderChanged`, so the QA screen updates live.

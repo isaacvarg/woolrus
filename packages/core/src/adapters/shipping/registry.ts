@@ -1,9 +1,15 @@
 import { providerCredentialSchemas } from "@woolrus/contracts";
 import type { Db } from "@woolrus/db";
 import { z } from "zod";
+import { BridgeSourceAdapter } from "./bridge-source/adapter";
 import { readProviderCredentials } from "./credentials";
 import { createFakeShippingProvider, type FakeLabel } from "./fake";
-import { type ProviderId, providerIds, type ShippingProvider } from "./provider";
+import {
+  type ProviderId,
+  providerCanPurchase,
+  providerIds,
+  type ShippingProvider,
+} from "./provider";
 import { ShipStationAdapter } from "./shipstation/adapter";
 
 // Builds the adapters core calls (SPEC-carriers "Registry"). Services take the list as an
@@ -26,6 +32,7 @@ export type AdapterFactories = {
 /** The real adapters in this build. A provider missing here can't be enabled. */
 export const shippingAdapters: AdapterFactories = {
   SHIPSTATION: (credentials) => new ShipStationAdapter(credentials),
+  BRIDGE_SOURCE: (credentials, config) => new BridgeSourceAdapter(credentials, config),
 };
 
 /**
@@ -75,6 +82,7 @@ export function buildShippingProvider(
     return createFakeShippingProvider(id, {
       credentials: parsed.data,
       labels: fakeLabelsFor(id),
+      quoteOnly: !providerCanPurchase(id, config),
     });
   }
   const factory = adapters[id] as

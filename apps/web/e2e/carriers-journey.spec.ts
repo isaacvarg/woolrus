@@ -118,15 +118,16 @@ test("an admin sets up both providers, packing rates from both, the QA user re-r
         await expect(shipTo).toContainText("Corrected");
         await expect(shipTo.getByTestId("ship-to-original")).toContainText("1 Main Street");
         await expect(shipTo.getByTestId("ship-to-corrected")).toContainText("1 Main St ·");
-        // 9 oz: Bridge Source's Demo Ground at $5.47 beats ShipStation's at $5.58.
+        // 9 oz: Bridge Source's Demo Ground at $5.47 beats ShipStation's at $5.58, but only quotes.
         const rows = rateRows(qa);
         await expect(rows).toHaveCount(2);
         await expect(rows.nth(0)).toContainText("Bridge Source");
         await expect(rows.nth(0)).toContainText("$5.47");
-        await expect(rows.nth(0)).toContainText("Selected");
+        await expect(rows.nth(0)).toContainText("Quote only");
+        await expect(rows.nth(0)).not.toContainText("Selected");
         await expect(rows.nth(1)).toContainText("ShipStation");
         await expect(rows.nth(1)).toContainText("$5.58");
-        await expect(rows.nth(1)).not.toContainText("Selected");
+        await expect(rows.nth(1)).toContainText("Selected");
 
         await shipTo.getByRole("button", { name: "Use original address" }).click();
         await expect(
@@ -138,7 +139,7 @@ test("an admin sets up both providers, packing rates from both, the QA user re-r
         await expect(shipTo).toContainText("1 Main Street");
         await expect(shipTo.getByTestId("ship-to-original")).toHaveCount(0);
         await expect(rows).toHaveCount(2);
-        await expect(rows.nth(0)).toContainText("Selected");
+        await expect(rows.nth(1)).toContainText("Selected");
 
         await setSwitch(
           admin

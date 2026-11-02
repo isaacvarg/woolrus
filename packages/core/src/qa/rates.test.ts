@@ -56,6 +56,30 @@ describe("selectRate", () => {
     expect(await audits()).toBe(0);
   });
 
+  it("refuses a quote-only rate and changes nothing", async () => {
+    const { qa, p1, cheap } = await inQa();
+    const quote = await createRate(db, p1.id, { provider: "BRIDGE_SOURCE", amountCents: 100 });
+
+    await expect(selectRate(db, qa, { packageId: p1.id, rateId: quote.id })).rejects.toMatchObject({
+      kind: "CONFLICT",
+      messageKey: "errors.qa.rateQuoteOnly",
+    });
+    expect((await selected(p1.id)).map((r) => r.id)).toEqual([cheap.id]);
+    expect(await audits()).toBe(0);
+  });
+
+  it("allows a Bridge Source rate once its account has booking enabled", async () => {
+    const { qa, p1 } = await inQa();
+    const rate = await createRate(db, p1.id, { provider: "BRIDGE_SOURCE", amountCents: 100 });
+    await db.shippingProviderAccount.create({
+      data: { provider: "BRIDGE_SOURCE", config: { bookingEnabled: true } },
+    });
+
+    await selectRate(db, qa, { packageId: p1.id, rateId: rate.id });
+
+    expect((await selected(p1.id)).map((r) => r.id)).toEqual([rate.id]);
+  });
+
   it("refuses an expired rate", async () => {
     const { qa, p1, cheap, dear } = await inQa();
     await db.shippingRate.update({

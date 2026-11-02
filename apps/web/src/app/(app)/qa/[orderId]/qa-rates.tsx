@@ -53,7 +53,7 @@ export function RatesTable({
       {pkg.rates.map((rate) => (
         <li key={rate.id}>
           <Button
-            isDisabled={locked || rate.expired || select.isPending}
+            isDisabled={locked || rate.expired || rate.quoteOnly || select.isPending}
             onPress={() => !rate.selected && select.mutate(rate.id)}
             aria-pressed={rate.selected}
             data-testid="qa-rate"
@@ -68,6 +68,9 @@ export function RatesTable({
                 <span className="block text-sm opacity-70">
                   {t("qa.rateDays", { days: rate.deliveryDays })}
                 </span>
+              )}
+              {rate.quoteOnly && (
+                <span className="badge badge-outline ms-2">{t("qa.rateQuoteOnly")}</span>
               )}
               {rate.expired && (
                 <span className="badge badge-warning ms-2">{t("qa.rateExpired")}</span>

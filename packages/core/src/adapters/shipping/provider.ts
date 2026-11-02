@@ -35,7 +35,26 @@ export type ProviderCapabilities = {
   labelLookup: boolean;
   void: boolean;
   manifests: boolean;
+  /**
+   * Can buy a label. A provider that can only quote (Bridge Source before booking is on) has its
+   * rates stored and shown but never selected.
+   */
+  purchase: boolean;
 };
+
+/**
+ * Whether a provider account can buy labels, from what is stored about it: ShipStation always,
+ * Bridge Source once `config.bookingEnabled` is set. Reads derive `quoteOnly` from this, so no
+ * column carries it.
+ */
+export function providerCanPurchase(id: ProviderId, config: unknown): boolean {
+  if (id !== "BRIDGE_SOURCE") return true;
+  return (
+    typeof config === "object" &&
+    config !== null &&
+    (config as Record<string, unknown>).bookingEnabled === true
+  );
+}
 
 /** Adapter-only data stored with a service (`CarrierService.providerData`). */
 export type ProviderData = Record<string, unknown>;
