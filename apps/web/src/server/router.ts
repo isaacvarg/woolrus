@@ -105,6 +105,7 @@ import {
   setServiceEnabled,
   setVerified,
   setWeight,
+  shipOrders,
   stationStatus,
   substitute,
   syncCarriers,
@@ -187,6 +188,9 @@ export const router = implementer.router({
     delete: api.boxes.delete.handler(({ input, context }) => deleteBox(db, context.actor, input)),
   },
   shipping: {
+    shipOrders: api.shipping.shipOrders.handler(({ input, context }) =>
+      shipOrders(db, context.actor, input),
+    ),
     createLabelPrint: api.shipping.createLabelPrint.handler(({ input, context }) =>
       createLabelPrint(db, context.actor, input),
     ),

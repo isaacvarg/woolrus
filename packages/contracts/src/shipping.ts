@@ -145,6 +145,29 @@ export type OrderCustoms = z.infer<typeof OrderCustoms>;
 export const OrderCustomsInput = z.object({ orderId: Id });
 export type OrderCustomsInput = z.infer<typeof OrderCustomsInput>;
 
+export const ShipOrdersInput = z.object({
+  orderIds: z.array(Id).min(1).max(50),
+  /** Set after the UI asked about never-printed labels. */
+  confirmUnprinted: z.boolean().default(false),
+  idempotencyKey: IdempotencyKey,
+});
+export type ShipOrdersInput = z.infer<typeof ShipOrdersInput>;
+
+export const ShipOrderResult = z.discriminatedUnion("ok", [
+  z.object({ orderId: Id, orderNumber: z.string(), ok: z.literal(true) }),
+  z.object({
+    orderId: Id,
+    orderNumber: z.string(),
+    ok: z.literal(false),
+    messageKey: z.string(),
+    params: z.record(z.string(), z.union([z.string(), z.number()])),
+  }),
+]);
+export type ShipOrderResult = z.infer<typeof ShipOrderResult>;
+
+export const ShipOrdersResult = z.object({ results: z.array(ShipOrderResult) });
+export type ShipOrdersResult = z.infer<typeof ShipOrdersResult>;
+
 export const shipping = {
   createLabelPrint: base
     .route({
@@ -155,6 +178,16 @@ export const shipping = {
     })
     .input(CreateLabelPrintInput)
     .output(LabelPrintResult),
+
+  shipOrders: base
+    .route({
+      method: "POST",
+      path: "/orders/ship",
+      tags,
+      summary: "Ship Ready orders (Ready → Completed), each in its own transaction",
+    })
+    .input(ShipOrdersInput)
+    .output(ShipOrdersResult),
 
   orderPrintableLabels: base
     .route({
