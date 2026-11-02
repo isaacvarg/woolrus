@@ -19,6 +19,8 @@ import { useReasonText } from "@/lib/reasons";
 import { PickTogether } from "./pick-together";
 
 const SEARCH_DEBOUNCE_MS = 250;
+/** The most orders one print covers (`CreateLabelPrintInput`); past it the button is off rather than printing a prefix. */
+const MAX_PRINT_ORDERS = 50;
 
 /** Time in stage, coarsened for a glance: minutes, then hours, then days. */
 function ageParts(since: Date, now: number): { unit: "Minutes" | "Hours" | "Days"; count: number } {
@@ -167,9 +169,9 @@ export function QueueTable({
 
       {showPrint && (
         <Button
-          isDisabled={selected.size === 0}
+          isDisabled={selected.size === 0 || selected.size > MAX_PRINT_ORDERS}
           isPending={printLabels.isPending}
-          onPress={() => printLabels.mutate({ orderIds: [...selected.keys()].slice(0, 50) })}
+          onPress={() => printLabels.mutate({ orderIds: [...selected.keys()] })}
         >
           {selected.size > 0
             ? t("queue.printSelected", { count: selected.size })
