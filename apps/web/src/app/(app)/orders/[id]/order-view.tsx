@@ -17,6 +17,7 @@ import { useTargetName } from "@/components/notes/note-list";
 import { NoteOnTarget, NotesPanel } from "@/components/notes/notes-panel";
 import { OrderLabels } from "@/components/shipping/order-labels";
 import { OrderShippingPanel } from "@/components/shipping/order-shipping";
+import { StuckLabels } from "@/components/shipping/stuck-labels";
 import { Button } from "@/components/ui/fields";
 import { toast } from "@/components/ui/toast";
 import { useErrorMessage } from "@/lib/errors";
@@ -138,6 +139,7 @@ function OrderLayout({
       {canPrint && (order.status === "READY" || order.status === "COMPLETED") && (
         <OrderLabels orderId={order.id} />
       )}
+      {order.status === "READY" && <StuckLabels orderId={order.id} />}
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
           <OrderLines order={order} notes={notes} canVoid={canVoid} />

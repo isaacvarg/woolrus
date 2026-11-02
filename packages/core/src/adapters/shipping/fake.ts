@@ -36,7 +36,12 @@ export type FakeProviderOptions = {
 
 export type FakeManifest = ProviderManifest & { carrierExternalId: string; shipDate: string };
 
-export type FakeLabel = PurchasedLabel & { idempotencyKey: string; voided: boolean };
+export type FakeLabel = PurchasedLabel & {
+  idempotencyKey: string;
+  voided: boolean;
+  /** The provider declines to void it (`VOID-REJECT-<n>` in the ship-to line 2). */
+  voidRejected: boolean;
+};
 
 /** One request the fake made, as the real provider would see it. */
 export type FakeRequest = {
@@ -176,7 +181,8 @@ abstract class FakeProvider implements ShippingProvider {
   /**
    * Dev and e2e triggers in the ship-to's second line: `FAIL-BUY-<n>` refuses package `n` as
    * `notOffered`; `SLOW-BUY` buys the label but loses the first response (a timeout), so the
-   * retry has to find it by its idempotency key instead of buying again.
+   * retry has to find it by its idempotency key instead of buying again. `VOID-REJECT-<n>` makes the
+   * provider decline to void package `n`'s label (see `newLabel`).
    */
   protected purchaseTrigger(input: PurchaseInput): "slow" | undefined {
     const line = input.shipment.shipTo.address2 ?? "";
@@ -205,6 +211,12 @@ abstract class FakeProvider implements ShippingProvider {
     );
   }
 
+  /** Whether the provider will decline to void this package's label. */
+  protected voidRejects(input: PurchaseInput): boolean {
+    const rejected = /VOID-REJECT-(\d+)/.exec(input.shipment.shipTo.address2 ?? "")?.[1];
+    return rejected !== undefined && Number(rejected) === input.packageNumber;
+  }
+
   protected newLabel(
     input: PurchaseInput,
     fields: Pick<
@@ -223,12 +235,13 @@ abstract class FakeProvider implements ShippingProvider {
       shipDate: startOfDay(new Date()),
       idempotencyKey: input.idempotencyKey,
       voided: false,
+      voidRejected: this.voidRejects(input),
     };
     this.labels.set(input.idempotencyKey, label);
     return label;
   }
 
-  protected label({ idempotencyKey, voided, ...label }: FakeLabel): PurchasedLabel {
+  protected label({ idempotencyKey, voided, voidRejected, ...label }: FakeLabel): PurchasedLabel {
     return label;
   }
 }
@@ -364,6 +377,7 @@ export class FakeShipStationProvider extends FakeProvider {
     await this.request({ operation: "voidLabel" });
     const label = [...this.labels.values()].find((l) => l.providerLabelId === providerLabelId);
     if (label?.voided) return { approved: false, message: "Label already voided." };
+    if (label?.voidRejected) return { approved: false, message: "The carrier won't void it." };
     if (label) label.voided = true;
     return { approved: true };
   }
@@ -523,6 +537,7 @@ export class FakeBridgeSourceProvider extends FakeProvider {
   async voidLabel(providerLabelId: string): Promise<{ approved: boolean; message?: string }> {
     await this.request({ operation: "voidLabel" });
     const label = [...this.labels.values()].find((l) => l.providerLabelId === providerLabelId);
+    if (label?.voidRejected) return { approved: false, message: "The carrier won't void it." };
     if (label) label.voided = true;
     return { approved: true };
   }

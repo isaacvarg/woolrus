@@ -72,6 +72,7 @@ export * from "./settings/format";
 export * from "./settings/integration";
 export * from "./settings/service";
 export * from "./shipping/customs";
+export * from "./shipping/labels";
 export * from "./shipping/manifests";
 export * from "./shipping/print";
 export * from "./shipping/repack";

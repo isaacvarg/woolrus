@@ -1187,6 +1187,7 @@
       "notOffered": "La paquetería no ofrece los servicios activados para este envío, desde esta dirección de origen o hacia esta dirección. Revisa qué servicios están activados en Ajustes → Envíos.",
       "addressRejected": "La paquetería rechazó la dirección de destino o de origen. Revisa ambas direcciones.",
       "unavailable": "No se pudo conectar con el proveedor de envíos. Inténtalo de nuevo en un minuto.",
+      "labelNotStuck": "La anulación de la etiqueta no fue rechazada ni está pendiente, así que no hay nada que reintentar ni dar de baja.",
       "timeout": "El proveedor de envíos tardó demasiado en responder. Inténtalo de nuevo en un minuto.",
       "hsCodeInvalid": "Usa de 6 a 10 dígitos; los puntos están bien, p. ej. 3401.11.",
       "countryInvalid": "Usa el código de país de 2 letras, p. ej. US.",
@@ -1485,6 +1486,23 @@
     "empty": "Ningún producto coincide con este filtro.",
     "loadMore": "Cargar más",
     "none": "Sin definir"
+  },
+  "stuckLabels": {
+    "title": "Etiquetas que no se pudieron anular",
+    "intro": "El transportista no anuló estas etiquetas, así que el pedido aún no puede volver a Empaque.",
+    "package": "Paquete {number}",
+    "rejected": "Anulación rechazada",
+    "requested": "Anulación sin respuesta",
+    "retry": "Reintentar anulación",
+    "retried": "La etiqueta se anuló.",
+    "stillStuck": "El transportista todavía no anuló la etiqueta.",
+    "writeOff": "Dar de baja",
+    "writeOffTitle": "¿Dar de baja esta etiqueta?",
+    "writeOffBody": "Hazlo solo después de consultar al transportista: la etiqueta se envió, o el transportista la cobrará de todos modos. Su costo queda en los reportes y el pedido se puede reempacar.",
+    "reason": "Motivo",
+    "cancel": "Cancelar",
+    "confirm": "Dar de baja la etiqueta",
+    "writtenOff": "La etiqueta se dio de baja."
   },
   "print": {
     "reprint": "Reimprimir",

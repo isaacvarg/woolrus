@@ -1187,6 +1187,7 @@
       "notOffered": "The carrier doesn't offer the services that are on for this shipment, from this ship-from address or to this address. Check which services are on in Settings → Shipping.",
       "addressRejected": "The carrier refused the ship-to or ship-from address. Check both addresses.",
       "unavailable": "The shipping provider couldn't be reached. Try again in a minute.",
+      "labelNotStuck": "The label's void wasn't rejected or pending, so there is nothing to retry or write off.",
       "timeout": "The shipping provider took too long to answer. Try again in a minute.",
       "hsCodeInvalid": "Use 6 to 10 digits; dots are fine, e.g. 3401.11.",
       "countryInvalid": "Use the 2-letter country code, e.g. US.",
@@ -1485,6 +1486,23 @@
     "empty": "No products match this filter.",
     "loadMore": "Load more",
     "none": "Not set"
+  },
+  "stuckLabels": {
+    "title": "Labels that couldn't be voided",
+    "intro": "The carrier didn't void these labels, so the order can't go back to Packing yet.",
+    "package": "Package {number}",
+    "rejected": "Void rejected",
+    "requested": "Void not answered",
+    "retry": "Retry void",
+    "retried": "The label was voided.",
+    "stillStuck": "The carrier still hasn't voided the label.",
+    "writeOff": "Write off",
+    "writeOffTitle": "Write off this label?",
+    "writeOffBody": "Only do this after checking with the carrier: the label shipped, or the carrier will bill it anyway. Its cost stays in reports and the order can be repacked.",
+    "reason": "Reason",
+    "cancel": "Cancel",
+    "confirm": "Write off label",
+    "writtenOff": "The label was written off."
   },
   "print": {
     "reprint": "Reprint",

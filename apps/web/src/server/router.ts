@@ -86,6 +86,7 @@ import {
   resolveVoids,
   restoreBox,
   retryFailedJob,
+  retryVoid,
   revokeBadge,
   revokeInvitation,
   revokeStation,
@@ -108,6 +109,7 @@ import {
   setWeight,
   shipOrders,
   stationStatus,
+  stuckLabels,
   substitute,
   syncCarriers,
   testProvider,
@@ -130,6 +132,7 @@ import {
   voidCounts,
   voidItem,
   voidLabel,
+  writeOffLabel,
 } from "@woolrus/core";
 import { db } from "@woolrus/db";
 import { createLogger } from "@woolrus/logger";
@@ -203,6 +206,15 @@ export const router = implementer.router({
     ),
     repack: api.shipping.repack.handler(async ({ input, context }) =>
       repackOrders(db, context.actor, input, { providers: await createShippingProviders(db) }),
+    ),
+    retryVoid: api.shipping.retryVoid.handler(async ({ input, context }) =>
+      retryVoid(db, context.actor, input, { providers: await createShippingProviders(db) }),
+    ),
+    writeOffLabel: api.shipping.writeOffLabel.handler(({ input, context }) =>
+      writeOffLabel(db, context.actor, input),
+    ),
+    stuckLabels: api.shipping.stuckLabels.handler(({ input, context }) =>
+      stuckLabels(db, context.actor, input),
     ),
     customsProducts: api.shipping.customsProducts.handler(({ input, context }) =>
       customsProducts(db, context.actor, input),
