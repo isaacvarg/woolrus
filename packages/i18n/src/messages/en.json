@@ -161,6 +161,13 @@
       "urlMoveConfirm": "Save and remove keys",
       "savedKeysCleared": "Saved. The keys for the old address were removed: add them for the new one.",
       "testConnection": "Test connection",
+      "trackingPluginFound": "Advanced Shipment Tracking is installed on the store.",
+      "trackingPluginMissing": "Advanced Shipment Tracking is not installed on the store. Shipped orders will get a note with the tracking numbers until it is.",
+      "tracking": {
+        "title": "Tracking numbers",
+        "intro": "Add tracking numbers to the order in WooCommerce so they show on the customer's order page and in the Completed email. Needs the free Advanced Shipment Tracking plugin on the store; without it the numbers go in a customer note.",
+        "label": "Add tracking items with Advanced Shipment Tracking"
+      },
       "testHint": "Checks the saved store URL and keys.",
       "testOk": "Connected. The store uses {weight} for weight and {dimension} for dimensions.",
       "webhook": {
@@ -1101,7 +1108,8 @@
       "emailFrom": "Use an address like no-reply@example.com or Woolrus '<'no-reply@example.com>."
     },
     "settings": {
-      "encryptionKeyMissing": "Secrets can't be saved: the server's encryption key is missing or invalid. Ask whoever runs the server to set SETTINGS_ENCRYPTION_KEY."
+      "encryptionKeyMissing": "Secrets can't be saved: the server's encryption key is missing or invalid. Ask whoever runs the server to set SETTINGS_ENCRYPTION_KEY.",
+      "trackingPluginMissing": "Tracking can't be switched on: the store doesn't have the Advanced Shipment Tracking plugin. Ask whoever runs the store to install and activate it, then try again."
     },
     "picking": {
       "notPicking": "This order isn't being picked, so its lines can't change.",
@@ -1180,6 +1188,7 @@
       "rateLimited": "WooCommerce is limiting requests. Sync will try again shortly.",
       "badResponse": "WooCommerce sent a response Woolrus couldn't read.",
       "rejected": "The store refused the update. It needs a person to look at it.",
+      "trackingUnavailable": "The store has no Advanced Shipment Tracking plugin. Tracking numbers can't be added until it is installed.",
       "notConfigured": "WooCommerce isn't set up yet. Add the store URL and keys in Settings → Integrations.",
       "importFailed": "The order couldn't be saved. Sync will try it again on the next run.",
       "notFlagged": "This order has no store change to review. It has been refreshed.",

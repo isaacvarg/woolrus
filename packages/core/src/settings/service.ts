@@ -10,9 +10,12 @@ import {
   type UpdateSettingsResult,
 } from "@woolrus/contracts";
 import type { Db, DbTx, Prisma, Settings } from "@woolrus/db";
+import type { StoreAdapter } from "../adapters/woocommerce/adapter";
+import { StoreError } from "../adapters/woocommerce/errors";
 import { recordAudit } from "../audit";
 import { AppError } from "../errors";
 import { type Actor, assertCan } from "../permissions";
+import { configuredStore } from "../sync/schedule";
 import { encryptSecret } from "./crypto";
 import { encryptionKey } from "./env";
 
@@ -80,6 +83,7 @@ function toAdminSettings(row: Settings): AdminSettings {
     qaMustDifferFromPacker: row.qaMustDifferFromPacker,
     labelCostConfirmRatio: row.labelCostConfirmRatio?.toNumber() ?? null,
     labelCostConfirmFreeCents: row.labelCostConfirmFreeCents,
+    wooTrackingEnabled: row.wooTrackingEnabled,
     // Status comes from the column alone, so reads never decrypt and work without a key.
     secrets: Object.fromEntries(
       SecretName.options.map((name) => [name, { configured: row[secretColumns[name]] !== null }]),
@@ -119,8 +123,14 @@ export async function updateSettings(
   db: Db,
   actor: Actor,
   patch: UpdateSettingsInput,
+  connect: (db: Db) => Promise<StoreAdapter | null> = configuredStore,
 ): Promise<UpdateSettingsResult> {
   assertCan(actor, "settings.manage");
+  // Switching tracking on needs the store to have AST's route, so it can't be on before IT has
+  // installed the plugin. The call is made outside the transaction; off is always allowed.
+  if (patch.wooTrackingEnabled && !(await loadSettings(db)).wooTrackingEnabled) {
+    await assertShipmentTracking(db, connect);
+  }
   return db.$transaction(async (tx) => {
     const row = await loadSettings(tx);
     const current = toAdminSettings(row);
@@ -158,6 +168,21 @@ export async function updateSettings(
     }
     return { ...updated, clearedSecrets: cleared };
   });
+}
+
+async function assertShipmentTracking(
+  db: Db,
+  connect: (db: Db) => Promise<StoreAdapter | null>,
+): Promise<void> {
+  try {
+    const store = await connect(db);
+    if (store && (await store.hasShipmentTracking())) return;
+  } catch (error) {
+    // A store that can't be asked is the store's problem, shown with its own message.
+    if (error instanceof StoreError) throw new AppError("BAD_REQUEST", error.messageKey);
+    throw error;
+  }
+  throw new AppError("BAD_REQUEST", "errors.settings.trackingPluginMissing");
 }
 
 /** Encrypts and stores a secret. Audited by name only: never the value or anything derived from it. */

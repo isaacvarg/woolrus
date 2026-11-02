@@ -49,13 +49,13 @@ export async function GET() {
   }
   // A broken store degrades health, it doesn't take it down: the floor keeps working on the orders
   // already imported (SPEC-operations "Health"). Says only ok/fail, never why or which host.
-  let woocommerce: "ok" | "fail" | "unconfigured" = "fail";
+  let woocommerce: "ok" | "fail" | "unconfigured" | "trackingUnavailable" = "fail";
   try {
     if (checks.database === "ok") woocommerce = await woocommerceHealth(db);
   } catch {
     woocommerce = "fail";
   }
-  degraded ||= woocommerce === "fail";
+  degraded ||= woocommerce === "fail" || woocommerce === "trackingUnavailable";
   // A stopped or stuck worker degrades health too: the floor works without it, for a while.
   let worker: "ok" | "stale" = "stale";
   try {

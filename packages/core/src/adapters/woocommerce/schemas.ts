@@ -220,6 +220,28 @@ const orderNoteSchema = z
 
 export type WooOrderNote = z.output<typeof orderNoteSchema>;
 
+/**
+ * An AST tracking item (`wc-shipment-tracking/v3`). `tracking_provider` is "" when the provider
+ * isn't in AST's list (a custom one), so a retry matches items by tracking number alone.
+ */
+const shipmentTrackingSchema = z
+  .object({
+    tracking_id: z.string().min(1),
+    tracking_provider: z.string(),
+    tracking_link: z.string(),
+    tracking_number: z.string(),
+    date_shipped: z.string(),
+  })
+  .transform((t) => ({
+    trackingId: t.tracking_id,
+    provider: t.tracking_provider,
+    link: t.tracking_link,
+    trackingNumber: t.tracking_number,
+    dateShipped: t.date_shipped,
+  }));
+
+export type WooShipmentTracking = z.output<typeof shipmentTrackingSchema>;
+
 export type WooOrder = z.output<typeof orderSchema> & { raw: unknown };
 export type WooProduct = z.output<typeof productSchema> & { raw: unknown };
 export type WooVariation = z.output<typeof variationSchema> & { raw: unknown };
@@ -240,3 +262,4 @@ export const parseOrder = parseWith(orderSchema, "order");
 export const parseProduct = parseWith(productSchema, "product");
 export const parseVariation = parseWith(variationSchema, "variation");
 export const parseOrderNote = parseWith(orderNoteSchema, "order note");
+export const parseShipmentTracking = parseWith(shipmentTrackingSchema, "shipment tracking");

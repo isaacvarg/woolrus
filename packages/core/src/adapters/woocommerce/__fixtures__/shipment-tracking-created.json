@@ -1,0 +1,27 @@
+{
+  "tracking_id": "51746a81233ef8ef0005792774453950",
+  "tracking_provider": "USPS",
+  "tracking_link": "https://tools.usps.com/tracking/9400111899223344556677",
+  "tracking_number": "9400111899223344556677",
+  "date_shipped": "2026-11-02",
+  "_links": {
+    "self": [
+      {
+        "href": "https://localhost:8090/wp-json/wc-shipment-tracking/v3/orders/17/shipment-trackings/51746a81233ef8ef0005792774453950",
+        "targetHints": {
+          "allow": ["GET", "DELETE"]
+        }
+      }
+    ],
+    "collection": [
+      {
+        "href": "https://localhost:8090/wp-json/wc-shipment-tracking/v3/orders/17/shipment-trackings"
+      }
+    ],
+    "up": [
+      {
+        "href": "https://localhost:8090/wp-json/wc-shipment-tracking/v3/orders/17"
+      }
+    ]
+  }
+}

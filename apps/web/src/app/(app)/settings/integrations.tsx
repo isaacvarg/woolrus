@@ -6,7 +6,7 @@ import { useFormatter, useTranslations } from "next-intl";
 import { useEffect, useId, useRef, useState } from "react";
 import { Form } from "react-aria-components";
 import { Dialog } from "@/components/ui/dialog";
-import { Button, TextField } from "@/components/ui/fields";
+import { Button, Switch, TextField } from "@/components/ui/fields";
 import { useErrorMessage, useFieldErrors } from "@/lib/errors";
 import { orpc } from "@/lib/orpc";
 
@@ -63,7 +63,9 @@ export function IntegrationsSection() {
               />
             ))}
           </div>
-          {id === "woocommerce" && <StoreTools />}
+          {id === "woocommerce" && (
+            <StoreTools trackingEnabled={settings.data.wooTrackingEnabled} />
+          )}
           {id === "email" && <EmailTools />}
         </IntegrationCard>
       ))}
@@ -201,11 +203,14 @@ function SettingForm({
 }
 
 /** Test connection and the webhook setup, under the WooCommerce card's keys. */
-function StoreTools() {
+function StoreTools({ trackingEnabled }: { trackingEnabled: boolean }) {
   const t = useTranslations("settings.integrations");
   const errorMessage = useErrorMessage();
   const message = useTranslations();
   const test = useMutation(orpc.sync.testConnection.mutationOptions());
+  const applySettings = useApplySettings();
+  // Refused (with the reason shown) while the store lacks the AST plugin.
+  const tracking = useMutation(orpc.settings.update.mutationOptions({ onSuccess: applySettings }));
   const [copied, setCopied] = useState(false);
   // Rendered only on the client (the settings query isn't prefetched), so window is there.
   const webhookUrl = `${window.location.origin}/api/webhooks/woocommerce`;
@@ -226,6 +231,11 @@ function StoreTools() {
               })}
             </p>
           )}
+          {test.data?.ok === true && (
+            <p className={test.data.shipmentTracking ? "text-success" : "text-warning"}>
+              {t(test.data.shipmentTracking ? "trackingPluginFound" : "trackingPluginMissing")}
+            </p>
+          )}
           {test.data?.ok === false && (
             <p className="text-error">
               {message.has(test.data.messageKey)
@@ -235,6 +245,26 @@ function StoreTools() {
           )}
           {test.error && <p className="text-error">{errorMessage(test.error)}</p>}
         </div>
+      </div>
+
+      <div className="space-y-1">
+        <h4 className="font-semibold">{t("tracking.title")}</h4>
+        <p className="text-sm text-base-content/70">{t("tracking.intro")}</p>
+        <Switch
+          isSelected={trackingEnabled}
+          isDisabled={tracking.isPending}
+          onChange={(wooTrackingEnabled) => {
+            tracking.reset();
+            tracking.mutate({ wooTrackingEnabled });
+          }}
+        >
+          {t("tracking.label")}
+        </Switch>
+        {tracking.error && (
+          <p role="alert" className="text-error">
+            {errorMessage(tracking.error)}
+          </p>
+        )}
       </div>
 
       <div className="space-y-2">

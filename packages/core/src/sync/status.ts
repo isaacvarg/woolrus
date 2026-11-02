@@ -231,7 +231,8 @@ export async function testStoreConnection(
     const store = await connect(db);
     if (!store) return { ok: false, messageKey: "errors.sync.notConfigured" };
     await store.ping();
-    return { ok: true, units: await store.getUnits() };
+    const units = await store.getUnits();
+    return { ok: true, units, shipmentTracking: await store.hasShipmentTracking() };
   } catch (error) {
     // A saved secret that can't be decrypted is a settings problem worth showing here too.
     if (error instanceof StoreError || error instanceof AppError) {

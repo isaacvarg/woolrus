@@ -83,7 +83,8 @@ export const StoreUnits = z.object({
 });
 
 export const TestConnectionResult = z.discriminatedUnion("ok", [
-  z.object({ ok: z.literal(true), units: StoreUnits }),
+  /** `shipmentTracking`: whether the store has the AST plugin's route, whatever the tracking switch says. */
+  z.object({ ok: z.literal(true), units: StoreUnits, shipmentTracking: z.boolean() }),
   z.object({ ok: z.literal(false), messageKey: z.string() }),
 ]);
 export type TestConnectionResult = z.infer<typeof TestConnectionResult>;

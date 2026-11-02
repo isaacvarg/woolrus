@@ -1,5 +1,11 @@
 import type { DimensionUnit, WeightUnit } from "../../units";
-import type { WooOrder, WooOrderNote, WooProduct, WooVariation } from "./schemas";
+import type {
+  WooOrder,
+  WooOrderNote,
+  WooProduct,
+  WooShipmentTracking,
+  WooVariation,
+} from "./schemas";
 
 export { type DimensionUnit, dimensionUnits, type WeightUnit, weightUnits } from "../../units";
 
@@ -10,8 +16,20 @@ export type {
   WooOrder,
   WooOrderNote,
   WooProduct,
+  WooShipmentTracking,
   WooVariation,
 } from "./schemas";
+
+/**
+ * One AST tracking item. A carrier AST knows goes by its name (`tracking_provider`); any other is a
+ * custom provider, with the tracking link when there is one.
+ */
+export type ShipmentTrackingInput = {
+  trackingNumber: string;
+  /** `YYYY-MM-DD`. */
+  dateShipped: string;
+  provider: { name: string; custom: false } | { name: string; custom: true; link: string | null };
+};
 
 export type ListOrdersQuery = {
   status?: "processing";
@@ -43,6 +61,15 @@ export interface StoreAdapter {
     orderId: number,
     note: { note: string; customerNote: boolean },
   ): Promise<{ noteId: number }>;
+  /** True when the store has AST's `wc-shipment-tracking/v3` route, false when it doesn't. */
+  hasShipmentTracking(): Promise<boolean>;
+  /** Every tracking item of the order. Throws `trackingUnavailable` without AST, `notFound` for an unknown order. */
+  listShipmentTrackings(orderId: number): Promise<WooShipmentTracking[]>;
+  /** One tracking item; AST keeps one per call, so the caller matches by number first. */
+  addShipmentTracking(
+    orderId: number,
+    item: ShipmentTrackingInput,
+  ): Promise<{ trackingId: string }>;
   /** Sets the order Completed; WooCommerce treats a repeat as a no-op. */
   completeOrder(orderId: number): Promise<void>;
 }
