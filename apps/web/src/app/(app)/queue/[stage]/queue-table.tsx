@@ -8,6 +8,7 @@ import { useFormatter, useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
 import { Input, Label, SearchField } from "react-aria-components";
 import { NoteCount } from "@/components/notes/note-count";
+import { ShipButton } from "@/components/shipping/ship-button";
 import { useLabelPrint } from "@/components/shipping/use-label-print";
 import { Button, Checkbox } from "@/components/ui/fields";
 import { toast } from "@/components/ui/toast";
@@ -49,6 +50,7 @@ export function QueueTable({
   canPack,
   canQa,
   canPrint = false,
+  canShip = false,
 }: {
   stage: QueueStage;
   userId: string | null;
@@ -56,6 +58,7 @@ export function QueueTable({
   canPack: boolean;
   canQa: boolean;
   canPrint?: boolean;
+  canShip?: boolean;
 }) {
   const t = useTranslations();
   const reasonText = useReasonText();
@@ -169,6 +172,10 @@ export function QueueTable({
             ? t("queue.printSelected", { count: selected.size })
             : t("queue.printLabels")}
         </Button>
+      )}
+
+      {showReady && canShip && (
+        <ShipButton orderIds={[...selected.keys()]} onShipped={() => setSelected(new Map())} />
       )}
 
       <div className="overflow-x-auto rounded-box bg-base-100 shadow-sm">

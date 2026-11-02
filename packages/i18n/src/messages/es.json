@@ -1191,6 +1191,7 @@
       "hsCodeInvalid": "Usa de 6 a 10 dígitos; los puntos están bien, p. ej. 3401.11.",
       "countryInvalid": "Usa el código de país de 2 letras, p. ej. US.",
       "notPrintable": "Solo se pueden imprimir etiquetas activas de pedidos Listos o Completados.",
+      "unprintedLabels": "Estos pedidos tienen etiquetas que nunca se imprimieron: {orderNumbers}.",
       "noLabelsToManifest": "No quedan etiquetas enviadas por incluir en el manifiesto de este transportista y día.",
       "manifestsUnsupported": "Esta cuenta de transportista no admite manifiestos.",
       "customsIncomplete": "Este paquete internacional no se puede cotizar: agrega el código HS y el país de origen de {products} en Configuración → Aduanas."
@@ -1493,6 +1494,16 @@
     "printedTimes": "Impresa {count}×",
     "notPrinted": "Sin imprimir",
     "popupBlocked": "La impresión quedó registrada, pero el navegador bloqueó la pestaña nueva. Permite las ventanas emergentes y pulsa Reimprimir."
+  },
+  "ship": {
+    "ship": "Enviar",
+    "shipSelected": "Enviar ({count})",
+    "shipped": "{count, plural, one {# pedido enviado.} other {# pedidos enviados.}}",
+    "failed": "El pedido {number} no se pudo enviar: {reason}",
+    "unprintedTitle": "Etiquetas sin imprimir",
+    "unprintedBody": "Las etiquetas de estos pedidos nunca se imprimieron: {orders}. ¿Enviar de todos modos?",
+    "cancel": "Cancelar",
+    "shipAnyway": "Enviar de todos modos"
   },
   "manifests": {
     "title": "Manifiestos",

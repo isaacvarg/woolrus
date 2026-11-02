@@ -1191,6 +1191,7 @@
       "hsCodeInvalid": "Use 6 to 10 digits; dots are fine, e.g. 3401.11.",
       "countryInvalid": "Use the 2-letter country code, e.g. US.",
       "notPrintable": "Only active labels on Ready or Completed orders can be printed.",
+      "unprintedLabels": "These orders have labels that were never printed: {orderNumbers}.",
       "noLabelsToManifest": "There are no shipped labels left to manifest for this carrier and day.",
       "manifestsUnsupported": "This carrier account can't be manifested.",
       "customsIncomplete": "This international package can't be rated: add the HS code and country of origin for {products} in Settings → Customs."
@@ -1493,6 +1494,16 @@
     "printedTimes": "Printed {count}×",
     "notPrinted": "Not printed",
     "popupBlocked": "The print was recorded, but the browser blocked the new tab. Allow pop-ups and press Reprint."
+  },
+  "ship": {
+    "ship": "Ship",
+    "shipSelected": "Ship ({count})",
+    "shipped": "{count, plural, one {# order shipped.} other {# orders shipped.}}",
+    "failed": "Order {number} couldn't ship: {reason}",
+    "unprintedTitle": "Labels never printed",
+    "unprintedBody": "These orders' labels were never printed: {orders}. Ship anyway?",
+    "cancel": "Cancel",
+    "shipAnyway": "Ship anyway"
   },
   "manifests": {
     "title": "Manifests",
