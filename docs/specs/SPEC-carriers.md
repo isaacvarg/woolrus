@@ -122,11 +122,14 @@ So a rate never has to have an id, and a purchase always carries the shipment:
   `providerData` (jsonb on `CarrierService`) is what only the adapter reads, e.g. Bridge Source's custom-packaging
   `packageTypeCode` and its supported countries.
 - **`RateRequest`:** `{ orderNumber, shipFrom, shipTo, residential, package: { lengthIn, widthIn, heightIn,
-  weightOz }, items: { sku, name, quantity }[], services: { carrierExternalId, code, providerData }[] }`. Only
+  weightOz }, items: { sku, name, quantity }[], customs?, services: { carrierExternalId, code, providerData }[] }`. Only
   enabled carriers and services are sent (FR-SHIP-02). Order number and items let the provider link the shipment
   to the sale (FR-SHIP-01). `residential` comes from the address check when the provider says (stored as
   `Order.shipToResidential`, so later fetches of the stored ship-to price it the same), else "no company name on the
-  ship-to".
+  ship-to". `customs` is the declaration of an international package (SPEC-shipping "Customs"); the ShipStation
+  adapter maps it to the shipment's `customs` block and the fakes refuse an international purchase without it. A
+  package whose declaration lacks an HS code or origin isn't rated: its `rateErrors` get `errors.shipping.customsIncomplete
+  { products }` and no provider is called.
 - **`ProviderRate`:** `{ providerRateId?, providerShipmentId?, carrierExternalId, serviceCode, serviceName,
   amountCents, currency, deliveryDays?, estimatedDeliveryAt?, guaranteed, trackable, expiresAt? }`.
 - **`PurchaseInput`:** `{ rate: { providerRateId?, providerShipmentId?, carrierExternalId, serviceCode,

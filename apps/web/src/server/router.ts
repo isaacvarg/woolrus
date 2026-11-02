@@ -62,6 +62,7 @@ import {
   markLabelNotBought,
   markOutOfStock,
   myPicks,
+  orderCustoms,
   orderMutations,
   orderPrintableLabels,
   packRemaining,
@@ -191,6 +192,9 @@ export const router = implementer.router({
     ),
     orderPrintableLabels: api.shipping.orderPrintableLabels.handler(({ input, context }) =>
       orderPrintableLabels(db, context.actor, input),
+    ),
+    orderCustoms: api.shipping.orderCustoms.handler(({ input, context }) =>
+      orderCustoms(db, context.actor, input),
     ),
     customsProducts: api.shipping.customsProducts.handler(({ input, context }) =>
       customsProducts(db, context.actor, input),

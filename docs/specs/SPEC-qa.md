@@ -132,7 +132,8 @@ order lock:
 1. Order in QA, version matches (`errors.workflow.stale`), actor holds a live claim.
 2. **Preconditions** (`purchasePreconditions`, pure, also shown on the screen): the **verified** gate minus its
    `packageNoLabel` condition, plus: no label `PURCHASING` (`errors.qa.purchaseInProgress`), every selected rate
-   unexpired (`rateExpired { package }`), every package's provider enabled (`providerOff { package }`). Unmet →
+   unexpired (`rateExpired { package }`), every package's provider enabled (`providerOff { package }`), every international package's products carrying
+   an HS code and origin (`customsIncomplete { package, products }`). Unmet →
    `CONFLICT errors.workflow.gateFailed` with the list, as transitions do.
 3. If every package already has an `ACTIVE` label with a stored PDF, run the QA → Ready transition now and return
    (the retry after a failed final move).

@@ -170,6 +170,33 @@ describe("completeQaWithLabels", () => {
       await untouched();
     });
 
+    it("an international package lacks customs data, naming the product", async () => {
+      const { request, order, items } = await ready();
+      await db.order.update({
+        where: { id: order.id },
+        data: {
+          shipTo: {
+            name: "Clara",
+            address1: "1 Rue Main",
+            city: "Toronto",
+            state: "ON",
+            postalCode: "M5V 2T6",
+            country: "CA",
+          },
+        },
+      });
+      const error = (await request().catch((e: unknown) => e)) as {
+        unmet?: { messageKey: string; params: Record<string, unknown> }[];
+      };
+      const unmet = error.unmet?.find((u) => u.messageKey === "errors.qa.customsIncomplete");
+      expect(unmet?.params).toMatchObject({ package: 1 });
+      const product = await db.product.findUniqueOrThrow({
+        where: { id: items[0]?.productId ?? "" },
+      });
+      expect(unmet?.params.products).toBe(product.name);
+      await untouched();
+    });
+
     it("an open critical issue exists", async () => {
       const { request, order } = await ready();
       await db.qualityIssue.create({

@@ -37,6 +37,7 @@ import { AppError, notFound } from "../errors";
 import { type JobPayloads, queues } from "../jobs";
 import { type Actor, assertCan } from "../permissions";
 import { loadSettings } from "../settings/service";
+import { buildCustoms, customsLines } from "../shipping/customs";
 import { toNumber } from "../units";
 import { liveLabelStatuses } from "../workflow/gates";
 import { lockOrder } from "../workflow/lock";
@@ -101,7 +102,13 @@ type UsableService = Awaited<ReturnType<typeof listUsableServices>>[number];
 
 type ProviderOutcome =
   | { provider: ProviderId; ok: true; rates: ProviderRate[] }
-  | { provider: ProviderId | null; ok: false; messageKey: ErrorCode; permanent: boolean };
+  | {
+      provider: ProviderId | null;
+      ok: false;
+      messageKey: ErrorCode;
+      permanent: boolean;
+      params?: Record<string, string | number>;
+    };
 
 const serviceKey = (carrierExternalId: string, code: string) => `${carrierExternalId}\n${code}`;
 
@@ -164,7 +171,7 @@ const orderInclude = {
     orderBy: { number: "asc" },
     include: {
       box: true,
-      items: { include: { orderItem: true } },
+      items: { include: { orderItem: { include: { product: true } } } },
       labels: { select: { status: true } },
     },
   },
@@ -382,9 +389,21 @@ export async function fetchRates(
           };
           return { pkg, outcomes: [outcome] };
         }
+        const declaration = domestic ? null : buildCustoms(customsLines(pkg.items));
+        if (declaration && !declaration.complete) {
+          const outcome: ProviderOutcome = {
+            provider: null,
+            ok: false,
+            messageKey: "errors.shipping.customsIncomplete",
+            permanent: true,
+            params: { products: declaration.missing.join(", ") },
+          };
+          return { pkg, outcomes: [outcome] };
+        }
         const request = (services: UsableService[]): RateRequest => ({
           ...base,
           package: size,
+          ...(declaration && { customs: declaration.customs }),
           items: pkg.items.map((item) => ({
             sku: item.orderItem.sku,
             name: item.orderItem.name,
@@ -438,7 +457,15 @@ export async function fetchRates(
     // are kept for comparison and never selected.
     const selectedIndex = rates.findIndex((rate) => canPurchase.get(rate.provider) === true);
     const errors: RateError[] = outcomes.flatMap((o) =>
-      o.ok ? [] : [{ provider: o.provider, messageKey: o.messageKey }],
+      o.ok
+        ? []
+        : [
+            {
+              provider: o.provider,
+              messageKey: o.messageKey,
+              ...(o.params && { params: o.params }),
+            },
+          ],
     );
     const written = await db.$transaction(async (tx) => {
       const status = await isCurrent(tx, orderId, generation);

@@ -2,6 +2,7 @@ import type { SimulatedFailure } from "./contract";
 import { ShippingError, shippingErrorFromCause, shippingErrorFromStatus } from "./errors";
 import type {
   AddressCheck,
+  CustomsDeclaration,
   ProviderCapabilities,
   ProviderCarrier,
   ProviderId,
@@ -38,7 +39,13 @@ export type FakeManifest = ProviderManifest & { carrierExternalId: string; shipD
 export type FakeLabel = PurchasedLabel & { idempotencyKey: string; voided: boolean };
 
 /** One request the fake made, as the real provider would see it. */
-export type FakeRequest = { operation: string; carrierExternalId?: string; serviceCode?: string };
+export type FakeRequest = {
+  operation: string;
+  carrierExternalId?: string;
+  serviceCode?: string;
+  /** The declaration the request carried. */
+  customs?: CustomsDeclaration;
+};
 
 type CatalogService = {
   code: string;
@@ -182,6 +189,13 @@ abstract class FakeProvider implements ShippingProvider {
       : undefined;
   }
 
+  /** A provider can't book an international shipment without a declaration. */
+  protected requireCustoms({ shipment }: PurchaseInput): void {
+    if (shipment.shipTo.country !== shipment.shipFrom.country && !shipment.customs) {
+      throw new ShippingError("rejected", "purchaseLabel 422 customs_required", 422);
+    }
+  }
+
   /** Throws the lost response after the label was bought, once per key. */
   protected loseResponse(input: PurchaseInput): never {
     this.#slowed.add(input.idempotencyKey);
@@ -290,7 +304,7 @@ export class FakeShipStationProvider extends FakeProvider {
 
   /** Every requested service in one call, each with a rate id. */
   async getRates(request: RateRequest): Promise<ProviderRate[]> {
-    await this.request({ operation: "getRates" });
+    await this.request({ operation: "getRates", customs: request.customs });
     const shipmentId = `se-shp-${crypto.randomUUID()}`;
     return request.services.flatMap(({ carrierExternalId, code }) => {
       const match = this.service(request, carrierExternalId, code);
@@ -316,7 +330,8 @@ export class FakeShipStationProvider extends FakeProvider {
 
   /** Buys from the rate id; the same idempotency key returns the label already bought. */
   async purchaseLabel(input: PurchaseInput): Promise<PurchasedLabel> {
-    await this.request({ operation: "purchaseLabel" });
+    await this.request({ operation: "purchaseLabel", customs: input.shipment.customs });
+    this.requireCustoms(input);
     const existing = this.labels.get(input.idempotencyKey);
     if (existing) return this.label(existing);
     const slow = this.purchaseTrigger(input);
@@ -457,7 +472,12 @@ export class FakeBridgeSourceProvider extends FakeProvider {
     request: RateRequest,
     { carrierExternalId, code, providerData }: RateRequest["services"][number],
   ): Promise<ProviderRate | null> {
-    await this.request({ operation: "getRates", carrierExternalId, serviceCode: code });
+    await this.request({
+      operation: "getRates",
+      carrierExternalId,
+      serviceCode: code,
+      customs: request.customs,
+    });
     if (!providerData.packageTypeCode) {
       throw shippingErrorFromStatus("getRates", 422, "PACKAGE_TYPE_REQUIRED");
     }
@@ -479,7 +499,8 @@ export class FakeBridgeSourceProvider extends FakeProvider {
     if (!this.capabilities.purchase) {
       throw new ShippingError("rejected", "bookingDisabled");
     }
-    await this.request({ operation: "purchaseLabel" });
+    await this.request({ operation: "purchaseLabel", customs: input.shipment.customs });
+    this.requireCustoms(input);
     const slow = this.purchaseTrigger(input);
     const match = this.service(
       input.shipment,

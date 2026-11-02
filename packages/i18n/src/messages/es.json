@@ -1191,7 +1191,8 @@
       "countryInvalid": "Usa el código de país de 2 letras, p. ej. US.",
       "notPrintable": "Solo se pueden imprimir etiquetas activas de pedidos Listos o Completados.",
       "noLabelsToManifest": "No quedan etiquetas enviadas por incluir en el manifiesto de este transportista y día.",
-      "manifestsUnsupported": "Esta cuenta de transportista no admite manifiestos."
+      "manifestsUnsupported": "Esta cuenta de transportista no admite manifiestos.",
+      "customsIncomplete": "Este paquete internacional no se puede cotizar: agrega el código HS y el país de origen de {products} en Configuración → Aduanas."
     },
     "carriers": {
       "credentialsMissing": "Primero agrega las credenciales del proveedor.",
@@ -1262,6 +1263,7 @@
       "allPackagesLabelled": "Todos los paquetes ya tienen etiqueta, así que no hay tarifas que actualizar.",
       "purchaseInProgress": "Se están comprando las etiquetas de este pedido. Espera a que termine.",
       "packageRateExpired": "La tarifa de envío del paquete {package} venció. Actualiza las tarifas y elige otra.",
+      "customsIncomplete": "El paquete {package} sale del país y necesita datos de aduana (código HS y país de origen) de {products}. Agrégalos en Configuración → Aduanas y actualiza las tarifas.",
       "packageProviderOff": "El proveedor de envíos del paquete {package} está desactivado. Un administrador lo activa en Ajustes → Envíos.",
       "providerUnavailable": "No hay un proveedor disponible para comprar esta etiqueta. Revisa Ajustes → Envíos.",
       "purchaseUnknown": "No pudimos confirmar si esta etiqueta se compró. Busca en el proveedor una etiqueta con el número de este pedido.",
@@ -1445,6 +1447,12 @@
     "retryLabel": "Reintentar trabajo {queue}",
     "dismissLabel": "Descartar trabajo {queue}",
     "order": "Pedido"
+  },
+  "customsNotice": {
+    "international": "Internacional",
+    "missing": "A este pedido internacional le faltan datos de aduana:",
+    "package": "Paquete {number}: {products}",
+    "openEditor": "Agrégalos en Configuración → Aduanas"
   },
   "customs": {
     "title": "Aduanas",

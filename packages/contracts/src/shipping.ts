@@ -155,6 +155,26 @@ export const shipping = {
     })
     .input(OrderPrintableLabelsInput)
     .output(z.array(PrintableLabel)),
+/** Whether an order ships abroad and which products its packages lack customs data for. */
+export const OrderCustoms = z.object({
+  international: z.boolean(),
+  missing: z.array(z.object({ package: z.number().int(), products: z.array(z.string()) })),
+});
+export type OrderCustoms = z.infer<typeof OrderCustoms>;
+
+export const OrderCustomsInput = z.object({ orderId: Id });
+export type OrderCustomsInput = z.infer<typeof OrderCustomsInput>;
+
+export const shipping = {
+  orderCustoms: base
+    .route({
+      method: "GET",
+      path: "/orders/{orderId}/customs",
+      tags,
+      summary: "Whether an order is international and what customs data its packages lack",
+    })
+    .input(OrderCustomsInput)
+    .output(OrderCustoms),
 
   customsProducts: base
     .route({
