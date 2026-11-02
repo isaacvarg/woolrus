@@ -1,5 +1,5 @@
 import type { Db } from "@woolrus/db";
-import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { createActor, resetDb, testDb } from "../../test/db";
 import { createOrder } from "../../test/factories";
 import { StoreError } from "../adapters/woocommerce/errors";
@@ -202,6 +202,23 @@ describe("pushToWoo failures (FR-SHIP-07)", () => {
       pushToWoo(db, store, { orderId: order.id }, { finalAttempt: true }),
     ).resolves.toMatchObject({ outcome: "failed" });
     expect((await state(order.id)).wooPushStatus).toBe("FAILED");
+  });
+
+  it("retries an unexpected error, and ends FAILED with a generic reason on the last attempt", async () => {
+    const store = new FakeStoreAdapter();
+    const { order } = await shipped(store);
+    vi.spyOn(store, "listOrderNotes").mockRejectedValueOnce(new TypeError("boom"));
+    await expect(pushToWoo(db, store, { orderId: order.id })).rejects.toBeInstanceOf(TypeError);
+    expect((await state(order.id)).wooPushStatus).toBe("PENDING");
+
+    vi.spyOn(store, "listOrderNotes").mockRejectedValueOnce(new TypeError("boom"));
+    await expect(
+      pushToWoo(db, store, { orderId: order.id }, { finalAttempt: true }),
+    ).resolves.toEqual({ outcome: "failed", messageKey: "errors.internal" });
+    expect(await state(order.id)).toMatchObject({
+      wooPushStatus: "FAILED",
+      wooPushError: "errors.internal",
+    });
   });
 
   it("fails permanently when WooCommerce isn't configured", async () => {

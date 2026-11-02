@@ -44,14 +44,17 @@ function countryOf(address: Prisma.JsonValue | null): string | null {
 }
 
 /** Products on a line of an open order whose ship-to (else Woo shipping address) is abroad. */
-async function internationalProductIds(db: Db): Promise<Set<string>> {
+async function internationalProductIds(db: Db, only?: string): Promise<Set<string>> {
   const settings = await db.settings.findUnique({
     where: { id: 1 },
     select: { shipFromAddress: true },
   });
   const shipFrom = countryOf(settings?.shipFromAddress ?? null) ?? DEFAULT_SHIP_FROM_COUNTRY;
   const orders = await db.order.findMany({
-    where: { status: { notIn: [...FINISHED] } },
+    where: {
+      status: { notIn: [...FINISHED] },
+      ...(only && { items: { some: { productId: only } } }),
+    },
     select: { shipTo: true, shippingAddress: true, items: { select: { productId: true } } },
   });
   const ids = new Set<string>();
@@ -114,7 +117,7 @@ export async function updateProductCustoms(
     });
     return after;
   });
-  const international = await internationalProductIds(db);
+  const international = await internationalProductIds(db, productId);
   return toDto(product, international.has(productId));
 }
 

@@ -11,6 +11,9 @@ import { toast } from "@/components/ui/toast";
 import { useErrorMessage } from "@/lib/errors";
 import { client, orpc } from "@/lib/orpc";
 
+/** The most orders one call ships (`ShipOrdersInput`); past it the button is off rather than shipping a prefix. */
+const MAX_SHIP_ORDERS = 50;
+
 const isUnprinted = (error: unknown) =>
   error instanceof ORPCError &&
   (error.data as { messageKey?: unknown } | undefined)?.messageKey ===
@@ -37,7 +40,7 @@ export function ShipButton({
   const ship = useMutation({
     mutationFn: (confirmUnprinted: boolean) =>
       client.shipping.shipOrders({
-        orderIds: orderIds.slice(0, 50),
+        orderIds,
         confirmUnprinted,
         idempotencyKey: attempt,
       }),
@@ -78,7 +81,7 @@ export function ShipButton({
   return (
     <>
       <Button
-        isDisabled={orderIds.length === 0}
+        isDisabled={orderIds.length === 0 || orderIds.length > MAX_SHIP_ORDERS}
         isPending={ship.isPending}
         onPress={() => ship.mutate(false)}
       >

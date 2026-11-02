@@ -255,6 +255,35 @@ describe("createManifest", () => {
     ).toBeNull();
   });
 
+  it("won't fetch a provider's form over plain http", async () => {
+    const usps = await carrier();
+    await label(usps.id);
+    const { provider, providers, storage } = deps();
+    provider.createManifest = async ({ providerLabelIds }) => ({
+      providerManifestId: "se-manifest-http",
+      providerLabelIds,
+      document: { url: "http://example.com/form.pdf" },
+    });
+    let fetched = false;
+    await expect(
+      createManifest(
+        db,
+        await shipper(),
+        providers,
+        storage,
+        { carrierId: usps.id, shipDate: DAY, idempotencyKey: key() },
+        {
+          fetch: async () => {
+            fetched = true;
+            return new Response("%PDF");
+          },
+        },
+      ),
+    ).rejects.toMatchObject({ messageKey: "errors.shipping.unavailable" });
+    expect(fetched).toBe(false);
+    expect(await db.manifest.count()).toBe(0);
+  });
+
   it("refuses a provider without the capability and a user without order.ship", async () => {
     const bridge = await carrier("BS-1", "BRIDGE_SOURCE");
     await label(bridge.id);

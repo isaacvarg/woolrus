@@ -93,6 +93,10 @@ async function documentBytes(
   doFetch: typeof fetch,
 ): Promise<Uint8Array> {
   if ("pdf" in document) return document.pdf;
+  // The URL comes from the provider's response: only ever fetch it over https.
+  if (!URL.canParse(document.url) || new URL(document.url).protocol !== "https:") {
+    throw new AppError("BAD_REQUEST", "errors.shipping.unavailable");
+  }
   let response: Response;
   try {
     response = await doFetch(document.url, { signal: AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS) });

@@ -52,9 +52,13 @@ export async function pushToWoo(
     if (!store) throw new StoreError("unauthorized", "WooCommerce isn't configured");
     await push(db, store, orderId);
   } catch (error) {
-    if (!(error instanceof StoreError)) throw error;
-    const messageKey = error.messageKey;
-    if (transientKinds.includes(error.kind) && !finalAttempt) {
+    // Anything but a store failure is a bug or a database error: retry it, and on the last
+    // attempt end FAILED so the order shows up in Push errors with a reason.
+    if (!(error instanceof StoreError) && !finalAttempt) throw error;
+    const messageKey: ErrorCode =
+      error instanceof StoreError ? error.messageKey : "errors.internal";
+    const kind = error instanceof StoreError ? error.kind : "internal";
+    if (error instanceof StoreError && transientKinds.includes(error.kind) && !finalAttempt) {
       await db.order.update({ where: { id: orderId }, data: { wooPushError: messageKey } });
       throw error;
     }
@@ -67,7 +71,7 @@ export async function pushToWoo(
         entityType: "order",
         entityId: orderId,
         action: "woo.push.failed",
-        after: { error: messageKey, kind: error.kind },
+        after: { error: messageKey, kind },
       });
       await notifyOrderChanged(tx, { id: orderId, status: "COMPLETED" });
     });
