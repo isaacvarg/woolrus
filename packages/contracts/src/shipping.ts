@@ -240,6 +240,27 @@ export type StuckLabels = z.infer<typeof StuckLabels>;
 
 export const StuckLabelsInput = z.object({ orderId: Id });
 
+/** An order whose WooCommerce update failed, or has been pending for too long. */
+export const PushErrorRow = z.object({
+  orderId: Id,
+  orderNumber: z.string(),
+  status: z.enum(["FAILED", "PENDING"]),
+  /** An error code (`errors.…`) the client translates. */
+  error: z.string().nullable(),
+  attempts: z.number().int(),
+  lastTryAt: z.date(),
+});
+export type PushErrorRow = z.infer<typeof PushErrorRow>;
+
+export const PushErrors = z.object({ rows: z.array(PushErrorRow) });
+export type PushErrors = z.infer<typeof PushErrors>;
+
+export const RetryWooPushInput = z.object({ orderIds: z.array(Id).min(1).max(50) });
+export type RetryWooPushInput = z.infer<typeof RetryWooPushInput>;
+
+export const RetryWooPushResult = z.object({ retried: z.number().int() });
+export type RetryWooPushResult = z.infer<typeof RetryWooPushResult>;
+
 export const shipping = {
   createLabelPrint: base
     .route({
@@ -319,6 +340,25 @@ export const shipping = {
     })
     .input(StuckLabelsInput)
     .output(StuckLabels),
+
+  pushErrors: base
+    .route({
+      method: "GET",
+      path: "/woo-push-errors",
+      tags,
+      summary: "Orders whose WooCommerce update failed or is stuck pending",
+    })
+    .output(PushErrors),
+
+  retryWooPush: base
+    .route({
+      method: "POST",
+      path: "/woo-push-errors/retry",
+      tags,
+      summary: "Set failed WooCommerce updates pending and queue them again",
+    })
+    .input(RetryWooPushInput)
+    .output(RetryWooPushResult),
 
   customsProducts: base
     .route({

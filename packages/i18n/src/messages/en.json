@@ -442,6 +442,24 @@
     "openPickScreen": "Open pick screen",
     "openPackScreen": "Open pack screen"
   },
+  "pushErrors": {
+    "title": "Push errors",
+    "intro": "Shipped orders whose WooCommerce update failed or is still waiting. Retry sends them again.",
+    "order": "Order",
+    "error": "Error",
+    "attempts": "Attempts",
+    "lastTry": "Last try",
+    "status": {
+      "FAILED": "Failed",
+      "PENDING": "Pending too long"
+    },
+    "selectOrder": "Select order {number}",
+    "retry": "Retry",
+    "retrySelected": "Retry selected",
+    "retried": "Queued to retry.",
+    "retriedCount": "{count, plural, one {# order} other {# orders}} queued to retry.",
+    "none": "No WooCommerce updates need attention."
+  },
   "wooPush": {
     "title": "Woo update",
     "status": {

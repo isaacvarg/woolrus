@@ -1,7 +1,12 @@
 "use client";
 
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { WooPushView } from "@woolrus/contracts";
 import { useFormatter, useTranslations } from "next-intl";
+import { Button } from "@/components/ui/fields";
+import { toast } from "@/components/ui/toast";
+import { useErrorMessage } from "@/lib/errors";
+import { client, orpc } from "@/lib/orpc";
 
 // Where the WooCommerce update of a shipped order stands (SPEC-shipping "WooCommerce push").
 
@@ -12,9 +17,28 @@ const badge: Record<WooPushView["status"], string> = {
   FAILED: "badge-error",
 };
 
-export function WooPushStatus({ push }: { push: WooPushView }) {
+export function WooPushStatus({
+  orderId,
+  push,
+  canRetry = false,
+}: {
+  orderId: string;
+  push: WooPushView;
+  canRetry?: boolean;
+}) {
   const t = useTranslations();
   const format = useFormatter();
+  const errorMessage = useErrorMessage();
+  const queryClient = useQueryClient();
+  const retry = useMutation({
+    mutationFn: () => client.shipping.retryWooPush({ orderIds: [orderId] }),
+    onSuccess: () => toast.success(t("pushErrors.retried")),
+    onError: (error) => toast.error(errorMessage(error)),
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: orpc.orders.key() });
+      queryClient.invalidateQueries({ queryKey: orpc.shipping.key() });
+    },
+  });
   if (push.status === "NOT_NEEDED") return null;
   return (
     <section aria-labelledby="woo-push-heading" className="space-y-2">
@@ -36,6 +60,11 @@ export function WooPushStatus({ push }: { push: WooPushView }) {
         <p role={push.status === "FAILED" ? "alert" : undefined} className="text-sm">
           {t.has(push.error) ? t(push.error) : t("errors.internal")}
         </p>
+      )}
+      {canRetry && push.status === "FAILED" && (
+        <Button className="btn-outline" isPending={retry.isPending} onPress={() => retry.mutate()}>
+          {t("pushErrors.retry")}
+        </Button>
       )}
     </section>
   );
