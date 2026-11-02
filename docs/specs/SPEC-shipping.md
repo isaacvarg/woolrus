@@ -6,7 +6,7 @@ storage; `voidLabel`), `store-sync` (the WooCommerce adapter, which this module 
 (`ship`, `repack`, the **shippable** gate), `notes` (`notesToPush`, `markNotePushed`), `exceptions`
 (`linkIssueToRepack`), `packing` (packages) · **Used by:** `returns` (shipped orders, the label print path),
 `reporting` (shipped orders, label spend, manifests), `operations` (WooCommerce health gains the tracking check) ·
-**Issue:** [#28](https://github.com/isaacvarg/woolrus/issues/28) · **State:** spec approved
+**Issue:** [#28](https://github.com/isaacvarg/woolrus/issues/28) · **State:** planned
 
 Project-wide commands, structure, code style, testing levels and boundaries are in [`../../SPEC.md`](../../SPEC.md);
 this spec only adds what is specific to `shipping`.

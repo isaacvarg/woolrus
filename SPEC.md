@@ -71,7 +71,7 @@ States: `not started` → `spec draft` → `spec approved` → `planned` → `in
 | `carriers` | M4 | [SPEC-carriers](docs/specs/SPEC-carriers.md) | [#26](https://github.com/isaacvarg/woolrus/issues/26) | done |
 | `bridge-source` | M4 | [SPEC-bridge-source](docs/specs/SPEC-bridge-source.md) | [#83](https://github.com/isaacvarg/woolrus/issues/83) | in progress |
 | `qa` | M4 | [SPEC-qa](docs/specs/SPEC-qa.md) | [#27](https://github.com/isaacvarg/woolrus/issues/27) | done |
-| `shipping` | M4 | [SPEC-shipping](docs/specs/SPEC-shipping.md) | [#28](https://github.com/isaacvarg/woolrus/issues/28) | spec approved |
+| `shipping` | M4 | [SPEC-shipping](docs/specs/SPEC-shipping.md) | [#28](https://github.com/isaacvarg/woolrus/issues/28) | planned |
 | `operations` | M4 | [SPEC-operations](docs/specs/SPEC-operations.md) | [#29](https://github.com/isaacvarg/woolrus/issues/29) | done |
 | `lumexia` | M5 | — | [#30](https://github.com/isaacvarg/woolrus/issues/30) | not started |
 | `returns` | M5 | — | [#31](https://github.com/isaacvarg/woolrus/issues/31) | not started |
