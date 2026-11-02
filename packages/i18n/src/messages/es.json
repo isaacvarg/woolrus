@@ -36,7 +36,8 @@
     "voids": "Anulaciones",
     "failedJobs": "Trabajos fallidos",
     "issues": "Incidencias",
-    "customs": "Aduanas"
+    "customs": "Aduanas",
+    "manifests": "Manifiestos"
   },
   "navFooter": {
     "preferences": "Preferencias",
@@ -1176,7 +1177,9 @@
       "unavailable": "No se pudo conectar con el proveedor de envíos. Inténtalo de nuevo en un minuto.",
       "timeout": "El proveedor de envíos tardó demasiado en responder. Inténtalo de nuevo en un minuto.",
       "hsCodeInvalid": "Usa de 6 a 10 dígitos; los puntos están bien, p. ej. 3401.11.",
-      "countryInvalid": "Usa el código de país de 2 letras, p. ej. US."
+      "countryInvalid": "Usa el código de país de 2 letras, p. ej. US.",
+      "noLabelsToManifest": "No quedan etiquetas enviadas por incluir en el manifiesto de este transportista y día.",
+      "manifestsUnsupported": "Esta cuenta de transportista no admite manifiestos."
     },
     "carriers": {
       "credentialsMissing": "Primero agrega las credenciales del proveedor.",
@@ -1460,5 +1463,16 @@
     "empty": "Ningún producto coincide con este filtro.",
     "loadMore": "Cargar más",
     "none": "Sin definir"
+  },
+  "manifests": {
+    "title": "Manifiestos",
+    "intro": "Al final del día, incluye en un manifiesto las etiquetas enviadas e imprime el formulario para el transportista.",
+    "date": "Fecha de envío",
+    "empty": "No hay etiquetas enviadas ni manifiestos de este día.",
+    "unmanifested": "{count, plural, =0 {Sin etiquetas pendientes de manifiesto} one {# etiqueta sin manifiesto} other {# etiquetas sin manifiesto}}",
+    "create": "Crear manifiesto",
+    "created": "Manifiesto creado para {count, plural, one {# etiqueta} other {# etiquetas}}.",
+    "made": "Manifiesto de las {time} · {count, plural, one {# etiqueta} other {# etiquetas}}",
+    "print": "Imprimir"
   }
 }

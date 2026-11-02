@@ -36,7 +36,8 @@
     "voids": "Voids",
     "failedJobs": "Failed jobs",
     "issues": "Issues",
-    "customs": "Customs"
+    "customs": "Customs",
+    "manifests": "Manifests"
   },
   "navFooter": {
     "preferences": "Preferences",
@@ -1176,7 +1177,9 @@
       "unavailable": "The shipping provider couldn't be reached. Try again in a minute.",
       "timeout": "The shipping provider took too long to answer. Try again in a minute.",
       "hsCodeInvalid": "Use 6 to 10 digits; dots are fine, e.g. 3401.11.",
-      "countryInvalid": "Use the 2-letter country code, e.g. US."
+      "countryInvalid": "Use the 2-letter country code, e.g. US.",
+      "noLabelsToManifest": "There are no shipped labels left to manifest for this carrier and day.",
+      "manifestsUnsupported": "This carrier account can't be manifested."
     },
     "carriers": {
       "credentialsMissing": "Add the provider's credentials first.",
@@ -1460,5 +1463,16 @@
     "empty": "No products match this filter.",
     "loadMore": "Load more",
     "none": "Not set"
+  },
+  "manifests": {
+    "title": "Manifests",
+    "intro": "At the end of the day, manifest the labels that shipped and print the form for the carrier.",
+    "date": "Ship date",
+    "empty": "No shipped labels or manifests for this day.",
+    "unmanifested": "{count, plural, =0 {No labels not manifested} one {# label not manifested} other {# labels not manifested}}",
+    "create": "Create manifest",
+    "created": "Manifest created for {count, plural, one {# label} other {# labels}}.",
+    "made": "Manifest at {time} · {count, plural, one {# label} other {# labels}}",
+    "print": "Print"
   }
 }

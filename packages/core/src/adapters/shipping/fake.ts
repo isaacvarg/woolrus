@@ -5,6 +5,7 @@ import type {
   ProviderCapabilities,
   ProviderCarrier,
   ProviderId,
+  ProviderManifest,
   ProviderRate,
   PurchasedLabel,
   PurchaseInput,
@@ -26,9 +27,13 @@ export type FakeProviderOptions = {
   latencyMs?: number;
   /** Bought labels, by idempotency key. Pass one to share labels between instances. */
   labels?: Map<string, FakeLabel>;
+  /** Made manifests. Pass one to share them between instances. */
+  manifests?: FakeManifest[];
   /** The Bridge-Source-shaped fake can quote but not buy (stage 1); the other ignores it. */
   quoteOnly?: boolean;
 };
+
+export type FakeManifest = ProviderManifest & { carrierExternalId: string; shipDate: string };
 
 export type FakeLabel = PurchasedLabel & { idempotencyKey: string; voided: boolean };
 
@@ -61,6 +66,8 @@ abstract class FakeProvider implements ShippingProvider {
   readonly requests: FakeRequest[] = [];
 
   protected readonly labels: Map<string, FakeLabel>;
+  protected readonly manifests: FakeManifest[];
+  #loseManifest = false;
   readonly #credentials: Record<string, string>;
   readonly #latencyMs: number;
   #failures: SimulatedFailure[] = [];
@@ -72,6 +79,18 @@ abstract class FakeProvider implements ShippingProvider {
     this.#credentials = options.credentials ?? {};
     this.#latencyMs = options.latencyMs ?? 0;
     this.labels = options.labels ?? new Map();
+    this.manifests = options.manifests ?? [];
+  }
+
+  /** The next manifest is made but its response is lost (a timeout), so the retry has to look it up. */
+  loseNextManifestResponse(): void {
+    this.#loseManifest = true;
+  }
+
+  protected takeManifestLoss(): boolean {
+    const lost = this.#loseManifest;
+    this.#loseManifest = false;
+    return lost;
   }
 
   /** Makes the next `times` requests fail the way the provider's transport would. */
@@ -333,6 +352,49 @@ export class FakeShipStationProvider extends FakeProvider {
     if (label) label.voided = true;
     return { approved: true };
   }
+
+  async createManifest(input: {
+    carrierExternalId: string;
+    shipDate: string;
+    providerLabelIds: string[];
+  }): Promise<ProviderManifest> {
+    await this.request({ operation: "createManifest", carrierExternalId: input.carrierExternalId });
+    if (input.providerLabelIds.length === 0) {
+      throw shippingErrorFromStatus("createManifest", 400, "field_value_required");
+    }
+    const id = `se-manifest-${crypto.randomUUID()}`;
+    const manifest: FakeManifest = {
+      providerManifestId: id,
+      providerLabelIds: [...input.providerLabelIds],
+      document: { pdf: new TextEncoder().encode(fakeLabelPdf(id).replace("LABEL", "MANIFEST")) },
+      carrierExternalId: input.carrierExternalId,
+      shipDate: input.shipDate,
+    };
+    this.manifests.push(manifest);
+    if (this.takeManifestLoss()) {
+      throw shippingErrorFromCause(
+        "createManifest",
+        new DOMException("The operation timed out", "TimeoutError"),
+      );
+    }
+    return this.manifest(manifest);
+  }
+
+  async findManifests(input: {
+    carrierExternalId: string;
+    shipDate: string;
+  }): Promise<ProviderManifest[]> {
+    await this.request({ operation: "findManifests", carrierExternalId: input.carrierExternalId });
+    return this.manifests
+      .filter(
+        (m) => m.carrierExternalId === input.carrierExternalId && m.shipDate === input.shipDate,
+      )
+      .map((m) => this.manifest(m));
+  }
+
+  private manifest({ carrierExternalId, shipDate, ...manifest }: FakeManifest): ProviderManifest {
+    return manifest;
+  }
 }
 
 /** Shaped like Bridge Source's REST and CORE APIs. */
@@ -368,7 +430,7 @@ export class FakeBridgeSourceProvider extends FakeProvider {
       addressValidation: false,
       labelLookup: false,
       void: true,
-      manifests: true,
+      manifests: false,
       purchase: options.quoteOnly !== true,
     };
   }

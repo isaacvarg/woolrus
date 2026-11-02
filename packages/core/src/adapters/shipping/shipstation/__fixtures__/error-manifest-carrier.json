@@ -1,0 +1,11 @@
+{
+  "request_id": "aa3d8e8e-462b-4476-9618-72db7f7b7009",
+  "errors": [
+    {
+      "error_source": "ShipStation",
+      "error_type": "business_rules",
+      "error_code": "carrier_not_supported",
+      "message": "Manifests are not supported for this carrier."
+    }
+  ]
+}

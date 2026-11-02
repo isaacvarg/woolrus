@@ -104,6 +104,10 @@ export interface ShippingProvider {
   purchaseLabel(input: PurchaseInput): Promise<PurchasedLabel>;
   findLabel?(idempotencyKey: string): Promise<PurchasedLabel | null>;
   voidLabel?(providerLabelId: string): Promise<{ approved: boolean; message?: string }>;
+  // `manifests` capability only (SPEC-shipping "Manifests"); `shipDate` is YYYY-MM-DD.
+  createManifest?(input: { carrierExternalId: string; shipDate: string; providerLabelIds: string[] }):
+    Promise<ProviderManifest>;                                          // { providerManifestId, providerLabelIds, document }
+  findManifests?(input: { carrierExternalId: string; shipDate: string }): Promise<ProviderManifest[]>;
 }
 ```
 
@@ -168,6 +172,8 @@ built (source-driven; record the fixtures from the real API with a test key, the
 | `purchaseLabel` | `POST /v2/labels/rates/{rate_id}`, `label_format: pdf`, `label_layout: 4x6`, our key as the label's external reference |
 | `findLabel` | `GET /v2/labels` filtered by that reference |
 | `voidLabel` | `PUT /v2/labels/{label_id}/void`; `approved: false` is returned, not thrown (SRS §7.1 #6) |
+| `createManifest` | `POST /v2/manifests` with `carrier_id`, `ship_date`, `label_ids`; an `in_progress` answer is `unavailable` (looked up later), `carrier_not_supported` is `notOffered`; the document is the first manifest's `manifest_download.href` (ShipStation hosts only) |
+| `findManifests` | `GET /v2/manifests` filtered by `carrier_id` and `ship_date_start`/`ship_date_end` (the day) |
 
 Capabilities: all four `true`. UPS appears as one of ShipStation's carriers; nothing in Woolrus is UPS-specific.
 

@@ -3,7 +3,7 @@ import type { Db } from "@woolrus/db";
 import { z } from "zod";
 import { BridgeSourceAdapter } from "./bridge-source/adapter";
 import { readProviderCredentials } from "./credentials";
-import { createFakeShippingProvider, type FakeLabel } from "./fake";
+import { createFakeShippingProvider, type FakeLabel, type FakeManifest } from "./fake";
 import {
   type ProviderId,
   providerCanPurchase,
@@ -52,6 +52,14 @@ export function fakeShippingProviders(): boolean {
 /** Labels the fakes bought in this process, so one request can find another's. */
 const fakeLabels = new Map<ProviderId, Map<string, FakeLabel>>();
 
+const fakeManifests = new Map<ProviderId, FakeManifest[]>();
+
+function fakeManifestsFor(id: ProviderId): FakeManifest[] {
+  const manifests = fakeManifests.get(id) ?? [];
+  fakeManifests.set(id, manifests);
+  return manifests;
+}
+
 function fakeLabelsFor(id: ProviderId): Map<string, FakeLabel> {
   const labels = fakeLabels.get(id) ?? new Map<string, FakeLabel>();
   fakeLabels.set(id, labels);
@@ -82,6 +90,7 @@ export function buildShippingProvider(
     return createFakeShippingProvider(id, {
       credentials: parsed.data,
       labels: fakeLabelsFor(id),
+      manifests: fakeManifestsFor(id),
       quoteOnly: !providerCanPurchase(id, config),
     });
   }

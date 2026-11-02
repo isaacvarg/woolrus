@@ -162,6 +162,13 @@ export type PurchasedLabel = {
   shipDate: Date;
 };
 
+/** A provider's end-of-day manifest (SCAN form) for one carrier account and ship date. */
+export type ProviderManifest = {
+  providerManifestId: string;
+  providerLabelIds: string[];
+  document: { url: string } | { pdf: Uint8Array };
+};
+
 export interface ShippingProvider {
   readonly id: ProviderId;
   readonly capabilities: ProviderCapabilities;
@@ -174,4 +181,15 @@ export interface ShippingProvider {
   findLabel?(idempotencyKey: string): Promise<PurchasedLabel | null>;
   /** `approved: false` is the provider declining, returned rather than thrown. */
   voidLabel?(providerLabelId: string): Promise<{ approved: boolean; message?: string }>;
+  /** Manifests these labels; only providers with the `manifests` capability. `shipDate` is YYYY-MM-DD. */
+  createManifest?(input: {
+    carrierExternalId: string;
+    shipDate: string;
+    providerLabelIds: string[];
+  }): Promise<ProviderManifest>;
+  /** The manifests already made for this account and day, so a lost response is never repeated. */
+  findManifests?(input: {
+    carrierExternalId: string;
+    shipDate: string;
+  }): Promise<ProviderManifest[]>;
 }
