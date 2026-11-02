@@ -78,6 +78,7 @@ import {
   renameStation,
   reopenIssue,
   reorderPriorityRules,
+  repackOrders,
   reportIssue,
   requestSync,
   resendInvitation,
@@ -195,6 +196,9 @@ export const router = implementer.router({
     ),
     orderCustoms: api.shipping.orderCustoms.handler(({ input, context }) =>
       orderCustoms(db, context.actor, input),
+    ),
+    repack: api.shipping.repack.handler(async ({ input, context }) =>
+      repackOrders(db, context.actor, input, { providers: await createShippingProviders(db) }),
     ),
     customsProducts: api.shipping.customsProducts.handler(({ input, context }) =>
       customsProducts(db, context.actor, input),

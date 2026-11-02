@@ -145,6 +145,42 @@ export type OrderCustoms = z.infer<typeof OrderCustoms>;
 export const OrderCustomsInput = z.object({ orderId: Id });
 export type OrderCustomsInput = z.infer<typeof OrderCustomsInput>;
 
+/** A label of an order that could not be voided, with why. */
+export const RepackBlockedLabel = z.object({
+  labelId: Id,
+  packageNumber: z.number().int(),
+  status: z.string(),
+  /** An error code (`errors.…`) the client translates. */
+  error: z.string().nullable(),
+});
+export type RepackBlockedLabel = z.infer<typeof RepackBlockedLabel>;
+
+export const RepackInput = z
+  .object({
+    orderIds: z.array(Id).min(1).max(10),
+    reason: z.string().trim().min(1).max(500),
+    issueId: Id.optional(),
+    idempotencyKey: IdempotencyKey,
+  })
+  .refine((input) => input.issueId === undefined || input.orderIds.length === 1, {
+    message: "errors.validation",
+  });
+export type RepackInput = z.infer<typeof RepackInput>;
+
+export const RepackOrderResult = z.object({
+  orderId: Id,
+  /** The order is back in Packing. */
+  repacked: z.boolean(),
+  /** Why the order was refused outright (`errors.…`), when it was. */
+  error: z.string().nullable(),
+  /** Labels still live at their provider when the repack stopped. */
+  blocked: z.array(RepackBlockedLabel),
+});
+export type RepackOrderResult = z.infer<typeof RepackOrderResult>;
+
+export const RepackResult = z.object({ orders: z.array(RepackOrderResult) });
+export type RepackResult = z.infer<typeof RepackResult>;
+
 export const shipping = {
   createLabelPrint: base
     .route({
@@ -174,6 +210,16 @@ export const shipping = {
     })
     .input(OrderCustomsInput)
     .output(OrderCustoms),
+
+  repack: base
+    .route({
+      method: "POST",
+      path: "/orders/repack",
+      tags,
+      summary: "Void the labels of Ready orders and send them back to Packing",
+    })
+    .input(RepackInput)
+    .output(RepackResult),
 
   customsProducts: base
     .route({
