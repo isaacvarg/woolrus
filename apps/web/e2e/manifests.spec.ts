@@ -29,7 +29,9 @@ test("a picker has no Manifests link, no page and no PDF", async ({ page }, test
   );
 
   await page.goto("/manifests");
-  await expect(page.getByRole("alert")).toContainText("You don't have permission to do that.");
+  await expect(
+    page.getByRole("alert").filter({ hasText: "You don't have permission to do that." }),
+  ).toBeVisible();
   expect((await page.request.get(`/api/manifests/${NO_SUCH_MANIFEST}.pdf`)).status()).toBe(403);
 });
 

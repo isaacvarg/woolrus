@@ -1562,6 +1562,18 @@
     "cancel": "Cancel",
     "shipAnyway": "Ship anyway"
   },
+  "repack": {
+    "repack": "Repack",
+    "repackSelected": "Repack ({count})",
+    "title": "Repack orders",
+    "warning": "The labels of {count, plural, one {this order} other {these # orders}} will be voided at the carrier and the {count, plural, one {order goes} other {orders go}} back to Packing.",
+    "reason": "Reason",
+    "cancel": "Cancel",
+    "confirm": "Void labels and repack",
+    "repacked": "{count, plural, one {# order is} other {# orders are}} back in Packing.",
+    "failed": "Order {number} couldn't be repacked: {reason}",
+    "blocked": "Package {package}: {reason}"
+  },
   "manifests": {
     "title": "Manifests",
     "intro": "At the end of the day, manifest the labels that shipped and print the form for the carrier.",

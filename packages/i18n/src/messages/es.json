@@ -1562,6 +1562,18 @@
     "cancel": "Cancelar",
     "shipAnyway": "Enviar de todos modos"
   },
+  "repack": {
+    "repack": "Reempacar",
+    "repackSelected": "Reempacar ({count})",
+    "title": "Reempacar pedidos",
+    "warning": "Las etiquetas de {count, plural, one {este pedido} other {estos # pedidos}} se anularán en el transportista y {count, plural, one {el pedido vuelve} other {los pedidos vuelven}} a Empaque.",
+    "reason": "Motivo",
+    "cancel": "Cancelar",
+    "confirm": "Anular etiquetas y reempacar",
+    "repacked": "{count, plural, one {# pedido vuelve} other {# pedidos vuelven}} a Empaque.",
+    "failed": "El pedido {number} no se pudo reempacar: {reason}",
+    "blocked": "Paquete {package}: {reason}"
+  },
   "manifests": {
     "title": "Manifiestos",
     "intro": "Al final del día, incluye en un manifiesto las etiquetas enviadas e imprime el formulario para el transportista.",
