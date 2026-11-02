@@ -1,0 +1,27 @@
+{
+  "manifests": [
+    {
+      "manifest_id": "se-6000001",
+      "form_id": "se-6100001",
+      "created_at": "2026-11-02T21:00:00.000Z",
+      "ship_date": "2026-11-02T00:00:00.000Z",
+      "shipments": 2,
+      "label_ids": ["se-5000001", "se-5000002"],
+      "warehouse_id": "se-8000001",
+      "submission_id": "9475711899564878915476",
+      "carrier_id": "se-1000002",
+      "manifest_download": {
+        "href": "https://api.shipstation.com/v2/downloads/10/fixture/manifest-6000001.pdf"
+      }
+    }
+  ],
+  "total": 1,
+  "page": 1,
+  "pages": 1,
+  "links": {
+    "first": { "href": "https://api.shipstation.com/v2/manifests?page=1&page_size=25" },
+    "last": { "href": "https://api.shipstation.com/v2/manifests?page=1&page_size=25" },
+    "prev": {},
+    "next": {}
+  }
+}

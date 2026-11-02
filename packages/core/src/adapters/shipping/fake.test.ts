@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { contractShipFrom, contractShipTo, describeShippingProvider } from "./contract";
 import { FakeBridgeSourceProvider, FakeShipStationProvider } from "./fake";
-import type { RateRequest, ShippingProvider } from "./provider";
+import type { CustomsDeclaration, RateRequest, ShippingProvider } from "./provider";
 
 describeShippingProvider("FakeShipStationProvider", () => {
   const provider = new FakeShipStationProvider({ credentials: { apiKey: "fake-ss-key-123" } });
@@ -150,6 +150,33 @@ describe("FakeShipStationProvider", () => {
     expect(await provider.voidLabel(label.providerLabelId)).toMatchObject({ approved: false });
   });
 
+  it("rejects the void of package n when the ship-to line 2 says VOID-REJECT-n", async () => {
+    const provider = new FakeShipStationProvider();
+    const req = await request(provider);
+    req.shipTo.address2 = "Unit 4 VOID-REJECT-2";
+    const [rate] = await provider.getRates(req);
+    const buy = (packageNumber: number) =>
+      provider.purchaseLabel({
+        rate: {
+          providerRateId: rate?.providerRateId,
+          carrierExternalId: "",
+          serviceCode: "",
+          providerData: {},
+        },
+        shipment: req,
+        idempotencyKey: `reject-key-${packageNumber}`,
+        packageNumber,
+        reference: "1001",
+        format: "pdf",
+        size: "4x6",
+      });
+    const one = await buy(1);
+    const two = await buy(2);
+    expect(await provider.voidLabel(two.providerLabelId)).toMatchObject({ approved: false });
+    expect(await provider.voidLabel(two.providerLabelId)).toMatchObject({ approved: false });
+    expect(await provider.voidLabel(one.providerLabelId)).toEqual({ approved: true });
+  });
+
   it("corrects an address line containing Street, verifies others, and fails 00000", async () => {
     const provider = new FakeShipStationProvider();
     const corrected = await provider.validateAddress({
@@ -194,7 +221,7 @@ describe("FakeBridgeSourceProvider", () => {
       addressValidation: false,
       labelLookup: false,
       void: true,
-      manifests: true,
+      manifests: false,
       purchase: true,
     });
   });
@@ -321,5 +348,62 @@ describe("fake purchase triggers", () => {
     expect(await provider.findLabel("k-slow")).not.toBeNull();
     expect((await buy(provider, "SLOW-BUY", "k-slow")).providerLabelId).toBeTruthy();
     expect(provider.requests.filter((r) => r.operation === "purchaseLabel")).toHaveLength(2);
+  });
+});
+
+const declaration: CustomsDeclaration = {
+  contents: "merchandise",
+  nonDelivery: "return_to_sender",
+  items: [
+    {
+      sku: "SKU-1",
+      description: "Soap",
+      quantity: 1,
+      valueCents: 1000,
+      currency: "USD",
+      hsCode: "340111",
+      countryOfOrigin: "US",
+    },
+  ],
+};
+
+describe.each([
+  ["FakeShipStationProvider", () => new FakeShipStationProvider()],
+  ["FakeBridgeSourceProvider", () => new FakeBridgeSourceProvider()],
+])("%s customs", (_, make) => {
+  const buy = async (provider: ShippingProvider, shipment: RateRequest) => {
+    const [rate] = await provider.getRates(shipment);
+    const service = shipment.services.find((s) => s.code === rate?.serviceCode);
+    return provider.purchaseLabel({
+      rate: {
+        providerRateId: rate?.providerRateId,
+        carrierExternalId: rate?.carrierExternalId ?? "",
+        serviceCode: rate?.serviceCode ?? "",
+        providerData: service?.providerData ?? {},
+      },
+      shipment,
+      idempotencyKey: crypto.randomUUID(),
+      reference: "1001",
+      format: "pdf",
+      size: "4x6",
+    });
+  };
+
+  it("echoes the declaration it was sent with a rate request", async () => {
+    const provider = make();
+    await provider.getRates({ ...(await request(provider, "CA")), customs: declaration });
+    expect(provider.requests.find((r) => r.operation === "getRates")?.customs).toEqual(declaration);
+  });
+
+  it("refuses an international purchase without customs, and buys with it", async () => {
+    const provider = make();
+    const abroad = await request(provider, "CA");
+    await expect(buy(provider, abroad)).rejects.toMatchObject({ kind: "rejected" });
+    await expect(buy(provider, { ...abroad, customs: declaration })).resolves.toBeDefined();
+  });
+
+  it("buys a domestic shipment without customs", async () => {
+    const provider = make();
+    await expect(buy(provider, await request(provider, "US"))).resolves.toBeDefined();
   });
 });

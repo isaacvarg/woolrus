@@ -108,6 +108,20 @@ export const labelSchema = z.object({
 
 export const labelsResponse = z.object({ labels: z.array(labelSchema) });
 
+const manifestSchema = z.object({
+  manifest_id: z.string(),
+  label_ids: z.array(z.string()).nullish(),
+  carrier_id: z.string().nullish(),
+  manifest_download: z.object({ href: z.string().nullish() }).nullish(),
+});
+
+export const createManifestResponse = z.object({
+  status: z.enum(["in_progress", "completed"]).nullish(),
+  manifests: z.array(manifestSchema).nullish(),
+});
+
+export const manifestsResponse = z.object({ manifests: z.array(manifestSchema) });
+
 export const voidResponse = z.object({
   approved: z.boolean(),
   message: z.string().nullish(),

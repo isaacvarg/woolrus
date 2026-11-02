@@ -169,4 +169,27 @@ describe("seedDemoOrders", () => {
     expect(customer.order.status).toBe("COMPLETED");
     expect(await db.qualityIssue.count({ where: { status: "RESOLVED" } })).toBeGreaterThan(0);
   });
+  it("adds the shipping dev data: a Ready order whose package 2 void is rejected, and two Canadian orders", async () => {
+    await seedDemoOrders(db);
+
+    const rejects = await db.order.findFirstOrThrow({
+      where: { status: "READY", shippingAddress: { path: ["address2"], equals: "VOID-REJECT-2" } },
+      include: { packages: { include: { labels: true } } },
+    });
+    expect(rejects.packages.map((p) => p.labels.length)).toEqual([1, 1]);
+    expect((await evaluateGate("shippable", await loadGateSnapshot(db, rejects.id))).length).toBe(
+      0,
+    );
+
+    const canadian = await db.order.findMany({
+      where: { status: "READY", shippingAddress: { path: ["country"], equals: "CA" } },
+      include: { items: { include: { product: true } } },
+    });
+    expect(canadian).toHaveLength(2);
+    const complete = (o: (typeof canadian)[number]) =>
+      o.items.every((i) => i.product?.hsCode && i.product.countryOfOrigin);
+    expect(canadian.filter(complete)).toHaveLength(1);
+
+    expect((await db.settings.findFirst())?.wooTrackingEnabled ?? false).toBe(false);
+  });
 });

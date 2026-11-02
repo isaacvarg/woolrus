@@ -104,6 +104,22 @@ export type AddressCheck = {
   messages: string[];
 };
 
+/** A customs declaration for an international package (SPEC-shipping "Customs"), one item per package row. */
+export type CustomsDeclaration = {
+  contents: "merchandise";
+  nonDelivery: "return_to_sender";
+  items: {
+    sku: string | null;
+    description: string;
+    quantity: number;
+    valueCents: number;
+    currency: string;
+    hsCode: string;
+    countryOfOrigin: string;
+    weightOz?: number;
+  }[];
+};
+
 export type RateRequest = {
   orderNumber: string;
   shipFrom: ShipAddress;
@@ -111,6 +127,8 @@ export type RateRequest = {
   residential: boolean;
   package: { lengthIn: number; widthIn: number; heightIn: number; weightOz: number };
   items: { sku: string | null; name: string; quantity: number }[];
+  /** Set when the package ships abroad; the fakes refuse an international purchase without it. */
+  customs?: CustomsDeclaration;
   /** Only enabled carriers and services (FR-SHIP-02). */
   services: { carrierExternalId: string; code: string; providerData: ProviderData }[];
 };
@@ -162,6 +180,13 @@ export type PurchasedLabel = {
   shipDate: Date;
 };
 
+/** A provider's end-of-day manifest (SCAN form) for one carrier account and ship date. */
+export type ProviderManifest = {
+  providerManifestId: string;
+  providerLabelIds: string[];
+  document: { url: string } | { pdf: Uint8Array };
+};
+
 export interface ShippingProvider {
   readonly id: ProviderId;
   readonly capabilities: ProviderCapabilities;
@@ -174,4 +199,15 @@ export interface ShippingProvider {
   findLabel?(idempotencyKey: string): Promise<PurchasedLabel | null>;
   /** `approved: false` is the provider declining, returned rather than thrown. */
   voidLabel?(providerLabelId: string): Promise<{ approved: boolean; message?: string }>;
+  /** Manifests these labels; only providers with the `manifests` capability. `shipDate` is YYYY-MM-DD. */
+  createManifest?(input: {
+    carrierExternalId: string;
+    shipDate: string;
+    providerLabelIds: string[];
+  }): Promise<ProviderManifest>;
+  /** The manifests already made for this account and day, so a lost response is never repeated. */
+  findManifests?(input: {
+    carrierExternalId: string;
+    shipDate: string;
+  }): Promise<ProviderManifest[]>;
 }

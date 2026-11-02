@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useFormatter, useTranslations } from "next-intl";
 import { useState } from "react";
 import { ReportIssueFlow } from "@/components/exceptions/report-issue-flow";
+import { CustomsNotice } from "@/components/shipping/customs-notice";
 import { Dialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/fields";
 import { toast } from "@/components/ui/toast";
@@ -411,6 +412,7 @@ function QaHeader({ view }: { view: QaView }) {
         </span>
       </div>
       <p className="text-lg">{order.customerName}</p>
+      <CustomsNotice orderId={order.id} />
     </header>
   );
 }
@@ -458,6 +460,7 @@ const labelKeys = {
   VOID_REQUESTED: "qa.labelVoidRequested",
   VOIDED: "qa.labelVoided",
   VOID_REJECTED: "qa.labelVoidRejected",
+  WRITTEN_OFF: "qa.labelWrittenOff",
 } as const;
 
 function PackageCard({

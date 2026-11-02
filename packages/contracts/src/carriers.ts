@@ -180,6 +180,8 @@ export type RatesStatus = z.infer<typeof RatesStatus>;
 export const RateError = z.object({
   provider: ShippingProviderId.nullable(),
   messageKey: z.string(),
+  /** Values the message names, e.g. the products missing customs data. */
+  params: z.record(z.string(), z.union([z.string(), z.number()])).optional(),
 });
 export type RateError = z.infer<typeof RateError>;
 

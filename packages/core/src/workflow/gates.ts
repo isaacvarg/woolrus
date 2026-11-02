@@ -185,6 +185,7 @@ export async function loadGateSnapshot(tx: DbTx, orderId: string): Promise<GateS
         },
       },
       packages: {
+        where: { discardedAt: null },
         orderBy: { number: "asc" },
         select: {
           id: true,

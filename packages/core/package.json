@@ -18,6 +18,7 @@
     "@woolrus/i18n": "workspace:*",
     "@woolrus/logger": "workspace:*",
     "aws4fetch": "1.0.20",
+    "pdf-lib": "1.17.1",
     "pg-boss": "12.38.0",
     "sharp": "0.35.5",
     "zod": "4.6.7"

@@ -2,10 +2,20 @@ import { describe, expect, it } from "vitest";
 import error401 from "./__fixtures__/error-401.json" with { type: "json" };
 import error404 from "./__fixtures__/error-404.json" with { type: "json" };
 import errorNoRoute from "./__fixtures__/error-no-route.json" with { type: "json" };
+import orderNoteCreated from "./__fixtures__/order-note-created.json" with { type: "json" };
+import orderNotes from "./__fixtures__/order-notes.json" with { type: "json" };
 import orders from "./__fixtures__/orders.json" with { type: "json" };
 import products from "./__fixtures__/products.json" with { type: "json" };
 import dimensionUnit from "./__fixtures__/setting-dimension-unit.json" with { type: "json" };
 import weightUnit from "./__fixtures__/setting-weight-unit.json" with { type: "json" };
+import shipmentCreated from "./__fixtures__/shipment-tracking-created.json" with { type: "json" };
+import shipmentCreatedCustom from "./__fixtures__/shipment-tracking-created-custom.json" with {
+  type: "json",
+};
+import shipmentIndex from "./__fixtures__/shipment-tracking-index.json" with { type: "json" };
+import shipmentRejected from "./__fixtures__/shipment-tracking-rejected.json" with { type: "json" };
+import shipments from "./__fixtures__/shipment-trackings.json" with { type: "json" };
+import shipmentNoOrder from "./__fixtures__/shipment-trackings-no-order.json" with { type: "json" };
 import variations from "./__fixtures__/variations-12.json" with { type: "json" };
 import { StoreError, type StoreErrorKind, storeErrorMessageKey } from "./errors";
 import { createStoreAdapter, type StoreHttpOptions, type StoreRequestLog } from "./http";
@@ -308,5 +318,178 @@ describe.skipIf(!process.env.WOO_LIVE)("WooCommerce HTTP adapter against the dev
     const page = await live.listOrders({ page: 1 });
     expect(page.totalPages).toBeGreaterThanOrEqual(1);
     expect(page.orders.length).toBeGreaterThan(0);
+  });
+
+  it("adds a tracking item through AST, reads it back and matches the real fixture's shape", async () => {
+    expect(await live.hasShipmentTracking()).toBe(true);
+    const number = `LIVE${Date.now()}`;
+    const { trackingId } = await live.addShipmentTracking(17, {
+      trackingNumber: number,
+      dateShipped: "2026-11-02",
+      provider: { name: "USPS", custom: false },
+    });
+    const items = await live.listShipmentTrackings(17);
+    expect(items.find((i) => i.trackingId === trackingId)).toMatchObject({
+      provider: "USPS",
+      trackingNumber: number,
+    });
+    // The adapter has no delete: AST's own route cleans up.
+    const url = `${process.env.WOO_URL || "http://localhost:8090"}/wp-json/wc-shipment-tracking/v3/orders/17/shipment-trackings/${trackingId}`;
+    await fetch(url, {
+      method: "DELETE",
+      headers: {
+        authorization: `Basic ${Buffer.from("ck_woolrus_dev_key:cs_woolrus_dev_secret").toString("base64")}`,
+      },
+    });
+  });
+});
+
+describe("order notes and completing (recorded fixtures)", () => {
+  it("lists every note of the order, parsed", async () => {
+    const { adapter, calls } = setup(json(orderNotes));
+    const notes = await adapter.listOrderNotes(17);
+    expect(calls[0]?.url.pathname).toBe("/wp-json/wc/v3/orders/17/notes");
+    expect(notes.length).toBe(orderNotes.length);
+    expect(notes[0]).toMatchObject({ id: expect.any(Number), customerNote: expect.any(Boolean) });
+  });
+
+  it("posts a note as JSON and returns its id", async () => {
+    const { adapter, calls } = setup(json(orderNoteCreated, 201));
+    await expect(
+      adapter.addOrderNote(17, { note: "Fixture note", customerNote: true }),
+    ).resolves.toEqual({ noteId: orderNoteCreated.id });
+    expect(calls[0]?.init.method).toBe("POST");
+    expect(JSON.parse(String(calls[0]?.init.body))).toEqual({
+      note: "Fixture note",
+      customer_note: true,
+    });
+  });
+
+  it("puts status completed", async () => {
+    const { adapter, calls } = setup(json({ id: 17, status: "completed" }));
+    await adapter.completeOrder(17);
+    expect(calls[0]?.init.method).toBe("PUT");
+    expect(JSON.parse(String(calls[0]?.init.body))).toEqual({ status: "completed" });
+  });
+
+  it("never retries a write: a 503 is one call and an unreachable error", async () => {
+    const { adapter, calls } = setup(json({ code: "x" }, 503));
+    expect(await kindOf(adapter.completeOrder(17))).toBe("unreachable");
+    expect(calls).toHaveLength(1);
+  });
+
+  it("maps 401 to unauthorized, 404 to notFound and another 4xx to rejected", async () => {
+    expect(await kindOf(setup(json(error401, 401)).adapter.completeOrder(1))).toBe("unauthorized");
+    expect(await kindOf(setup(json(error404, 404)).adapter.completeOrder(1))).toBe("notFound");
+    expect(await kindOf(setup(json({ code: "bad" }, 400)).adapter.completeOrder(1))).toBe(
+      "rejected",
+    );
+  });
+});
+
+describe("AST shipment tracking (recorded fixtures)", () => {
+  const root = "/wp-json/wc-shipment-tracking/v3";
+
+  it("sees the plugin by its namespace index, and its absence as false", async () => {
+    const present = setup(json(shipmentIndex));
+    await expect(present.adapter.hasShipmentTracking()).resolves.toBe(true);
+    expect(present.calls[0]?.url.pathname).toBe(root);
+    await expect(setup(json(errorNoRoute, 404)).adapter.hasShipmentTracking()).resolves.toBe(false);
+  });
+
+  it("doesn't take a store that is down for a store without the plugin", async () => {
+    expect(
+      await kindOf(
+        setupWith({ retries: 0 }, json({ code: "x" }, 503)).adapter.hasShipmentTracking(),
+      ),
+    ).toBe("unreachable");
+    expect(await kindOf(setup(json(error401, 401)).adapter.hasShipmentTracking())).toBe(
+      "unauthorized",
+    );
+  });
+
+  it("lists an order's items, parsed; a custom provider reads back with no name", async () => {
+    const { adapter, calls } = setup(json(shipments));
+    const items = await adapter.listShipmentTrackings(17);
+    expect(calls[0]?.url.pathname).toBe(`${root}/orders/17/shipment-trackings`);
+    expect(items).toEqual([
+      expect.objectContaining({ provider: "USPS", trackingNumber: "9400111899223344556677" }),
+      expect.objectContaining({
+        provider: "",
+        trackingNumber: "AF123",
+        link: "https://acme.test/track/AF123",
+      }),
+    ]);
+  });
+
+  it("posts a known provider by name and returns the item's id", async () => {
+    const { adapter, calls } = setup(json(shipmentCreated, 201));
+    await expect(
+      adapter.addShipmentTracking(17, {
+        trackingNumber: "9400111899223344556677",
+        dateShipped: "2026-11-02",
+        provider: { name: "USPS", custom: false },
+      }),
+    ).resolves.toEqual({ trackingId: shipmentCreated.tracking_id });
+    expect(calls[0]?.init.method).toBe("POST");
+    expect(calls[0]?.url.pathname).toBe(`${root}/orders/17/shipment-trackings`);
+    expect(JSON.parse(String(calls[0]?.init.body))).toEqual({
+      tracking_number: "9400111899223344556677",
+      date_shipped: "2026-11-02",
+      tracking_provider: "USPS",
+    });
+  });
+
+  it("posts an unknown carrier as a custom provider, with its link only when there is one", async () => {
+    const { adapter, calls } = setup(json(shipmentCreatedCustom, 201));
+    await adapter.addShipmentTracking(17, {
+      trackingNumber: "AF123",
+      dateShipped: "2026-11-02",
+      provider: { name: "Acme Freight", custom: true, link: "https://acme.test/track/AF123" },
+    });
+    await adapter.addShipmentTracking(17, {
+      trackingNumber: "AF124",
+      dateShipped: "2026-11-02",
+      provider: { name: "Acme Freight", custom: true, link: null },
+    });
+    expect(JSON.parse(String(calls[0]?.init.body))).toEqual({
+      tracking_number: "AF123",
+      date_shipped: "2026-11-02",
+      custom_tracking_provider: "Acme Freight",
+      custom_tracking_link: "https://acme.test/track/AF123",
+    });
+    expect(JSON.parse(String(calls[1]?.init.body))).not.toHaveProperty("custom_tracking_link");
+  });
+
+  it("maps a missing route to trackingUnavailable, a missing order to notFound, a bad body to rejected", async () => {
+    const item = {
+      trackingNumber: "1",
+      dateShipped: "2026-11-02",
+      provider: { name: "USPS", custom: false as const },
+    };
+    expect(await kindOf(setup(json(errorNoRoute, 404)).adapter.listShipmentTrackings(17))).toBe(
+      "trackingUnavailable",
+    );
+    expect(await kindOf(setup(json(errorNoRoute, 404)).adapter.addShipmentTracking(17, item))).toBe(
+      "trackingUnavailable",
+    );
+    expect(
+      await kindOf(setup(json(shipmentNoOrder, 404)).adapter.listShipmentTrackings(99999)),
+    ).toBe("notFound");
+    expect(
+      await kindOf(setup(json(shipmentRejected, 400)).adapter.addShipmentTracking(17, item)),
+    ).toBe("rejected");
+  });
+
+  it("never retries adding an item", async () => {
+    const { adapter, calls } = setup(json({ code: "x" }, 503));
+    await kindOf(
+      adapter.addShipmentTracking(17, {
+        trackingNumber: "1",
+        dateShipped: "2026-11-02",
+        provider: { name: "USPS", custom: false },
+      }),
+    );
+    expect(calls).toHaveLength(1);
   });
 });

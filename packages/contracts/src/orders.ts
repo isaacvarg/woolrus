@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { base, Id } from "./base";
+import { PrintState } from "./shipping";
 
 // Order workflow (SPEC-workflow "API"). Status moves and claims are server-owned: every mutation
 // carries the version the client saw, so a replay or a race fails with errors.workflow.stale.
@@ -143,6 +144,10 @@ export const QueueRow = z.object({
   unresolvedVoidCount: z.number().int(),
   /** Label purchase state for QA's badge; `none` outside QA and when nothing went wrong. */
   labelState: z.enum(["none", "purchasing", "failed", "unknown"]),
+  /** Ready queue only (zero/none elsewhere): packages, carrier and service, and printing. */
+  packageCount: z.number().int(),
+  shippingSummary: z.string().nullable(),
+  printState: PrintState,
 });
 export type QueueRow = z.infer<typeof QueueRow>;
 
@@ -309,6 +314,8 @@ export const OrderPackageSummary = z.object({
   items: z.array(z.object({ orderItemId: Id, name: z.string(), quantity: z.number().int() })),
   /** A label exists or may exist at the carrier. */
   liveLabel: z.boolean(),
+  /** Removed after a repack; kept for the label history. */
+  discarded: z.boolean(),
   /** Notes on this package. */
   noteCount: z.number().int(),
 });
@@ -354,6 +361,16 @@ export type ExternalChangeDiff = z.infer<typeof ExternalChangeDiff>;
 export const ExternalChange = z.object({ detectedAt: z.date(), diff: ExternalChangeDiff });
 export type ExternalChange = z.infer<typeof ExternalChange>;
 
+/** The push of Completed and notes back to WooCommerce (SPEC-shipping "WooCommerce push"). */
+export const WooPushView = z.object({
+  status: z.enum(["NOT_NEEDED", "PENDING", "SUCCEEDED", "FAILED"]),
+  attempts: z.number().int(),
+  /** A message key (errors.*). */
+  error: z.string().nullable(),
+  pushedAt: z.date().nullable(),
+});
+export type WooPushView = z.infer<typeof WooPushView>;
+
 /** The order detail page: the order plus what's in it and what the caller may do. */
 export const OrderView = OrderDetail.extend({
   externalChange: ExternalChange.nullable(),
@@ -368,6 +385,7 @@ export const OrderView = OrderDetail.extend({
   /** Every quality issue on the order, open first, then newest. */
   issues: z.array(QualityIssueView),
   allowedActions: z.array(OrderAction),
+  wooPush: WooPushView,
 });
 export type OrderView = z.infer<typeof OrderView>;
 

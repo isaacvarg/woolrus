@@ -35,7 +35,9 @@
     "closeMenu": "Cerrar menú",
     "voids": "Anulaciones",
     "failedJobs": "Trabajos fallidos",
-    "issues": "Incidencias"
+    "issues": "Incidencias",
+    "customs": "Aduanas",
+    "manifests": "Manifiestos"
   },
   "navFooter": {
     "preferences": "Preferencias",
@@ -159,6 +161,13 @@
       "urlMoveConfirm": "Guardar y eliminar claves",
       "savedKeysCleared": "Guardado. Se eliminaron las claves de la dirección anterior: agrégalas para la nueva.",
       "testConnection": "Probar conexión",
+      "trackingPluginFound": "Advanced Shipment Tracking está instalado en la tienda.",
+      "trackingPluginMissing": "Advanced Shipment Tracking no está instalado en la tienda. Los pedidos enviados llevarán una nota con los números de seguimiento hasta que lo esté.",
+      "tracking": {
+        "title": "Números de seguimiento",
+        "intro": "Añade los números de seguimiento al pedido en WooCommerce para que aparezcan en la página del pedido del cliente y en el correo de Completado. Requiere el plugin gratuito Advanced Shipment Tracking en la tienda; sin él, los números van en una nota para el cliente.",
+        "label": "Añadir seguimiento con Advanced Shipment Tracking"
+      },
       "testHint": "Comprueba la URL y las claves guardadas de la tienda.",
       "testOk": "Conectado. La tienda usa {weight} para el peso y {dimension} para las dimensiones.",
       "webhook": {
@@ -328,7 +337,18 @@
     "startPacking": "Empezar a empacar",
     "startedPacking": "Empacarás el pedido {number}.",
     "startQa": "Iniciar control de calidad",
-    "startedQa": "El pedido {number} es tuyo para revisar."
+    "startedQa": "El pedido {number} es tuyo para revisar.",
+    "printLabels": "Imprimir etiquetas",
+    "printing": "Imprimiendo…",
+    "printSelected": "Imprimir etiquetas ({count})",
+    "packages": "{count, plural, one {# paquete} other {# paquetes}}",
+    "printState": {
+      "none": "Sin imprimir",
+      "partial": "Impresa en parte",
+      "printed": "Impresa {times}×"
+    },
+    "packagesColumn": "Paquetes",
+    "printColumn": "Etiquetas"
   },
   "order": {
     "title": "Pedido #{number}",
@@ -359,6 +379,7 @@
     "notPhysical": "No se maneja en el almacén",
     "packages": "Paquetes",
     "package": "Paquete {number}",
+    "packageDiscarded": "Paquete {number} (descartado)",
     "noBox": "Sin caja todavía",
     "units": "{count, plural, one {# unidad} other {# unidades}}",
     "liveLabel": "Etiqueta",
@@ -427,6 +448,35 @@
     "pickedBy": "{name}, {time}",
     "openPickScreen": "Abrir pantalla de surtido",
     "openPackScreen": "Abrir pantalla de empaque"
+  },
+  "pushErrors": {
+    "title": "Errores de envío a Woo",
+    "intro": "Pedidos enviados cuya actualización en WooCommerce falló o sigue esperando. Reintentar los envía de nuevo.",
+    "order": "Pedido",
+    "error": "Error",
+    "attempts": "Intentos",
+    "lastTry": "Último intento",
+    "status": {
+      "FAILED": "Falló",
+      "PENDING": "Pendiente demasiado tiempo"
+    },
+    "selectOrder": "Seleccionar pedido {number}",
+    "retry": "Reintentar",
+    "retrySelected": "Reintentar seleccionados",
+    "retried": "En cola para reintentar.",
+    "retriedCount": "{count, plural, one {# pedido} other {# pedidos}} en cola para reintentar.",
+    "none": "Ninguna actualización de WooCommerce necesita atención."
+  },
+  "wooPush": {
+    "title": "Actualización en Woo",
+    "status": {
+      "NOT_NEEDED": "No hace falta",
+      "PENDING": "Actualización en Woo pendiente",
+      "SUCCEEDED": "Enviado a Woo",
+      "FAILED": "Falló la actualización en Woo"
+    },
+    "attempts": "{count, plural, one {# intento} other {# intentos}}",
+    "pushedAt": "Enviado {at}"
   },
   "orderShipping": {
     "title": "Envío",
@@ -599,6 +649,7 @@
     "labelVoidRequested": "Anulación solicitada",
     "labelVoided": "Etiqueta anulada",
     "labelVoidRejected": "Anulación rechazada",
+    "labelWrittenOff": "Dada de baja",
     "voidLabel": "Anular etiqueta",
     "voidRetry": "Anular etiqueta otra vez",
     "voidTitle": "¿Anular esta etiqueta?",
@@ -1075,7 +1126,8 @@
       "emailFrom": "Usa una dirección como no-reply@example.com o Woolrus '<'no-reply@example.com>."
     },
     "settings": {
-      "encryptionKeyMissing": "No se pueden guardar secretos: falta la clave de cifrado del servidor o no es válida. Pide a quien administra el servidor que configure SETTINGS_ENCRYPTION_KEY."
+      "encryptionKeyMissing": "No se pueden guardar secretos: falta la clave de cifrado del servidor o no es válida. Pide a quien administra el servidor que configure SETTINGS_ENCRYPTION_KEY.",
+      "trackingPluginMissing": "No se puede activar el seguimiento: la tienda no tiene el plugin Advanced Shipment Tracking. Pide a quien administra la tienda que lo instale y lo active, y vuelve a intentarlo."
     },
     "picking": {
       "notPicking": "Este pedido no está en surtido, así que sus líneas no pueden cambiar.",
@@ -1153,6 +1205,8 @@
       "notWooCommerce": "Esa URL no parece una tienda WooCommerce (no se encontró la API REST v3).",
       "rateLimited": "WooCommerce está limitando las solicitudes. La sincronización lo intentará de nuevo en breve.",
       "badResponse": "WooCommerce envió una respuesta que Woolrus no pudo leer.",
+      "rejected": "La tienda rechazó la actualización. Hace falta que una persona la revise.",
+      "trackingUnavailable": "La tienda no tiene el plugin Advanced Shipment Tracking. No se pueden añadir números de seguimiento hasta instalarlo.",
       "notConfigured": "WooCommerce aún no está configurado. Agrega la URL de la tienda y las claves en Configuración → Integraciones.",
       "importFailed": "No se pudo guardar el pedido. La sincronización lo intentará de nuevo en la próxima ejecución.",
       "notFlagged": "Este pedido no tiene cambios de la tienda por revisar. Se ha actualizado.",
@@ -1172,7 +1226,15 @@
       "notOffered": "La paquetería no ofrece los servicios activados para este envío, desde esta dirección de origen o hacia esta dirección. Revisa qué servicios están activados en Ajustes → Envíos.",
       "addressRejected": "La paquetería rechazó la dirección de destino o de origen. Revisa ambas direcciones.",
       "unavailable": "No se pudo conectar con el proveedor de envíos. Inténtalo de nuevo en un minuto.",
-      "timeout": "El proveedor de envíos tardó demasiado en responder. Inténtalo de nuevo en un minuto."
+      "labelNotStuck": "La anulación de la etiqueta no fue rechazada ni está pendiente, así que no hay nada que reintentar ni dar de baja.",
+      "timeout": "El proveedor de envíos tardó demasiado en responder. Inténtalo de nuevo en un minuto.",
+      "hsCodeInvalid": "Usa de 6 a 10 dígitos; los puntos están bien, p. ej. 3401.11.",
+      "countryInvalid": "Usa el código de país de 2 letras, p. ej. US.",
+      "notPrintable": "Solo se pueden imprimir etiquetas activas de pedidos Listos o Completados.",
+      "unprintedLabels": "Estos pedidos tienen etiquetas que nunca se imprimieron: {orderNumbers}.",
+      "noLabelsToManifest": "No quedan etiquetas enviadas por incluir en el manifiesto de este transportista y día.",
+      "manifestsUnsupported": "Esta cuenta de transportista no admite manifiestos.",
+      "customsIncomplete": "Este paquete internacional no se puede cotizar: agrega el código HS y el país de origen de {products} en Configuración → Aduanas."
     },
     "carriers": {
       "credentialsMissing": "Primero agrega las credenciales del proveedor.",
@@ -1243,6 +1305,7 @@
       "allPackagesLabelled": "Todos los paquetes ya tienen etiqueta, así que no hay tarifas que actualizar.",
       "purchaseInProgress": "Se están comprando las etiquetas de este pedido. Espera a que termine.",
       "packageRateExpired": "La tarifa de envío del paquete {package} venció. Actualiza las tarifas y elige otra.",
+      "customsIncomplete": "El paquete {package} sale del país y necesita datos de aduana (código HS y país de origen) de {products}. Agrégalos en Configuración → Aduanas y actualiza las tarifas.",
       "packageProviderOff": "El proveedor de envíos del paquete {package} está desactivado. Un administrador lo activa en Ajustes → Envíos.",
       "providerUnavailable": "No hay un proveedor disponible para comprar esta etiqueta. Revisa Ajustes → Envíos.",
       "purchaseUnknown": "No pudimos confirmar si esta etiqueta se compró. Busca en el proveedor una etiqueta con el número de este pedido.",
@@ -1426,5 +1489,100 @@
     "retryLabel": "Reintentar trabajo {queue}",
     "dismissLabel": "Descartar trabajo {queue}",
     "order": "Pedido"
+  },
+  "customsNotice": {
+    "international": "Internacional",
+    "missing": "A este pedido internacional le faltan datos de aduana:",
+    "package": "Paquete {number}: {products}",
+    "openEditor": "Agrégalos en Configuración → Aduanas"
+  },
+  "customs": {
+    "title": "Aduanas",
+    "intro": "Código HS, país de origen y una descripción breve de los productos en envíos internacionales. Los cambios se aplican en la próxima consulta de tarifas.",
+    "filter": "Mostrar",
+    "filters": {
+      "all": "Todos los productos",
+      "missing": "Sin datos de aduanas",
+      "international": "En un pedido internacional ahora"
+    },
+    "product": "Producto",
+    "sku": "SKU",
+    "hsCode": "Código HS",
+    "hsCodeHint": "De 6 a 10 dígitos",
+    "countryOfOrigin": "País de origen",
+    "countryHint": "Código de 2 letras",
+    "description": "Descripción aduanera",
+    "descriptionHint": "Hasta 100 caracteres",
+    "actions": "Acciones",
+    "edit": "Editar",
+    "editProduct": "Editar datos de aduanas de {name}",
+    "save": "Guardar",
+    "cancel": "Cancelar",
+    "saved": "Datos de aduanas guardados para {name}.",
+    "missingBadge": "Faltan datos",
+    "complete": "Completo",
+    "international": "Pedido internacional",
+    "empty": "Ningún producto coincide con este filtro.",
+    "loadMore": "Cargar más",
+    "none": "Sin definir"
+  },
+  "stuckLabels": {
+    "title": "Etiquetas que no se pudieron anular",
+    "intro": "El transportista no anuló estas etiquetas, así que el pedido aún no puede volver a Empaque.",
+    "package": "Paquete {number}",
+    "rejected": "Anulación rechazada",
+    "requested": "Anulación sin respuesta",
+    "retry": "Reintentar anulación",
+    "retried": "La etiqueta se anuló.",
+    "stillStuck": "El transportista todavía no anuló la etiqueta.",
+    "writeOff": "Dar de baja",
+    "writeOffTitle": "¿Dar de baja esta etiqueta?",
+    "writeOffBody": "Hazlo solo después de consultar al transportista: la etiqueta se envió, o el transportista la cobrará de todos modos. Su costo queda en los reportes y el pedido se puede reempacar.",
+    "reason": "Motivo",
+    "cancel": "Cancelar",
+    "confirm": "Dar de baja la etiqueta",
+    "writtenOff": "La etiqueta se dio de baja."
+  },
+  "print": {
+    "reprint": "Reimprimir",
+    "reprintOrder": "Reimprimir todas las etiquetas",
+    "title": "Etiquetas",
+    "package": "Paquete {number}",
+    "printedTimes": "Impresa {count}×",
+    "notPrinted": "Sin imprimir",
+    "popupBlocked": "La impresión quedó registrada, pero el navegador bloqueó la pestaña nueva. Permite las ventanas emergentes y pulsa Reimprimir."
+  },
+  "ship": {
+    "ship": "Enviar",
+    "shipSelected": "Enviar ({count})",
+    "shipped": "{count, plural, one {# pedido enviado.} other {# pedidos enviados.}}",
+    "failed": "El pedido {number} no se pudo enviar: {reason}",
+    "unprintedTitle": "Etiquetas sin imprimir",
+    "unprintedBody": "Las etiquetas de estos pedidos nunca se imprimieron: {orders}. ¿Enviar de todos modos?",
+    "cancel": "Cancelar",
+    "shipAnyway": "Enviar de todos modos"
+  },
+  "repack": {
+    "repack": "Reempacar",
+    "repackSelected": "Reempacar ({count})",
+    "title": "Reempacar pedidos",
+    "warning": "Las etiquetas de {count, plural, one {este pedido} other {estos # pedidos}} se anularán en el transportista y {count, plural, one {el pedido vuelve} other {los pedidos vuelven}} a Empaque.",
+    "reason": "Motivo",
+    "cancel": "Cancelar",
+    "confirm": "Anular etiquetas y reempacar",
+    "repacked": "{count, plural, one {# pedido vuelve} other {# pedidos vuelven}} a Empaque.",
+    "failed": "El pedido {number} no se pudo reempacar: {reason}",
+    "blocked": "Paquete {package}: {reason}"
+  },
+  "manifests": {
+    "title": "Manifiestos",
+    "intro": "Al final del día, incluye en un manifiesto las etiquetas enviadas e imprime el formulario para el transportista.",
+    "date": "Fecha de envío",
+    "empty": "No hay etiquetas enviadas ni manifiestos de este día.",
+    "unmanifested": "{count, plural, =0 {Sin etiquetas pendientes de manifiesto} one {# etiqueta sin manifiesto} other {# etiquetas sin manifiesto}}",
+    "create": "Crear manifiesto",
+    "created": "Manifiesto creado para {count, plural, one {# etiqueta} other {# etiquetas}}.",
+    "made": "Manifiesto de las {time} · {count, plural, one {# etiqueta} other {# etiquetas}}",
+    "print": "Imprimir"
   }
 }

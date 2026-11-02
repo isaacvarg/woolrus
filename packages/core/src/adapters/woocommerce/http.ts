@@ -6,13 +6,19 @@ import {
   weightUnits,
 } from "./adapter";
 import { StoreError, type StoreErrorKind } from "./errors";
-import { parseOrder, parseProduct, parseVariation } from "./schemas";
+import {
+  parseOrder,
+  parseOrderNote,
+  parseProduct,
+  parseShipmentTracking,
+  parseVariation,
+} from "./schemas";
 
 export type StoreConfig = { url: string; consumerKey: string; consumerSecret: string };
 
 /** One HTTP attempt, for server logs. Deliberately has no room for headers, query or bodies. */
 export type StoreRequestLog = {
-  method: "GET";
+  method: "GET" | "POST" | "PUT";
   path: string;
   status: number | null;
   durationMs: number;
@@ -34,6 +40,8 @@ const MAX_RETRIES = 3;
 const BASE_BACKOFF_MS = 500;
 const MAX_RETRY_AFTER_MS = 60_000;
 
+/** `root` replaces the wc/v3 path; `noRoute` is the error for WordPress's `rest_no_route` 404. */
+type RequestOptions = { allowNotFound?: boolean; root?: string; noRoute?: StoreErrorKind };
 type Params = Record<string, string | number | undefined>;
 type Reply = { body: unknown; headers: Headers };
 
@@ -50,20 +58,44 @@ export function createStoreAdapter(
 
   const base = new URL(config.url);
   const apiPath = `${base.pathname.replace(/\/+$/, "")}/wp-json/wc/v3`;
+  // AST's namespace: the route the paid Shipment Tracking extension uses, served by the free plugin.
+  const trackingRoot = `${base.pathname.replace(/\/+$/, "")}/wp-json/wc-shipment-tracking/v3`;
   const authorization = `Basic ${Buffer.from(`${config.consumerKey}:${config.consumerSecret}`).toString("base64")}`;
 
   async function get(
     route: string,
     params: Params,
-    opts: { allowNotFound: true },
+    opts: RequestOptions & { allowNotFound: true },
   ): Promise<Reply | null>;
-  async function get(route: string, params?: Params): Promise<Reply>;
+  async function get(route: string, params?: Params, opts?: RequestOptions): Promise<Reply>;
   async function get(
     route: string,
     params: Params = {},
-    opts: { allowNotFound?: boolean } = {},
+    opts: RequestOptions = {},
   ): Promise<Reply | null> {
-    const path = `${apiPath}${route}`;
+    return request("GET", route, params, undefined, opts);
+  }
+
+  /**
+   * A write is never retried inside the adapter: it may have landed, and `woo.push` matches a lost
+   * response against the order's own lists before it posts again. A 4xx the store gave for the
+   * body is `rejected`.
+   */
+  const write = (
+    method: "POST" | "PUT",
+    route: string,
+    body: unknown,
+    opts: RequestOptions = {},
+  ): Promise<Reply> => request(method, route, {}, body, opts) as Promise<Reply>;
+
+  async function request(
+    method: "GET" | "POST" | "PUT",
+    route: string,
+    params: Params,
+    payload: unknown,
+    opts: RequestOptions,
+  ): Promise<Reply | null> {
+    const path = `${opts.root ?? apiPath}${route}`;
     const url = new URL(path, base);
     for (const [key, value] of Object.entries(params)) {
       if (value !== undefined) url.searchParams.set(key, String(value));
@@ -73,20 +105,26 @@ export function createStoreAdapter(
       const started = performance.now();
       const entry = (status: number | null, error?: StoreErrorKind) =>
         log({
-          method: "GET",
+          method,
           path,
           status,
           durationMs: Math.round(performance.now() - started),
           attempt,
           ...(error ? { error } : {}),
         });
-      const retry = attempt <= maxRetries;
+      const retry = method === "GET" && attempt <= maxRetries;
       const backoff = BASE_BACKOFF_MS * 2 ** (attempt - 1);
 
       let response: Response;
       try {
         response = await doFetch(url, {
-          headers: { authorization, accept: "application/json" },
+          method,
+          headers: {
+            authorization,
+            accept: "application/json",
+            ...(payload === undefined ? {} : { "content-type": "application/json" }),
+          },
+          body: payload === undefined ? undefined : JSON.stringify(payload),
           // Never follow: a redirect could lead off the https-only store URL (to an internal
           // address, say), and the store's REST API doesn't redirect.
           redirect: "manual",
@@ -100,7 +138,7 @@ export function createStoreAdapter(
         }
         const reason =
           error instanceof Error && error.name === "TimeoutError" ? "timeout" : "network error";
-        throw new StoreError("unreachable", `GET ${path}: ${reason}`);
+        throw new StoreError("unreachable", `${method} ${path}: ${reason}`);
       }
 
       const { status } = response;
@@ -113,12 +151,12 @@ export function createStoreAdapter(
           await sleep(retryAfterMs(response.headers.get("retry-after")) ?? backoff);
           continue;
         }
-        throw new StoreError(kind, `GET ${path}: ${status}`, status);
+        throw new StoreError(kind, `${method} ${path}: ${status}`, status);
       }
 
       const fail = (kind: StoreErrorKind): never => {
         entry(status, kind);
-        throw new StoreError(kind, `GET ${path}: ${status}`, status);
+        throw new StoreError(kind, `${method} ${path}: ${status}`, status);
       };
       if (status === 401 || status === 403) return fail("unauthorized");
       if (status >= 300 && status < 400) return fail("notWooCommerce");
@@ -130,14 +168,14 @@ export function createStoreAdapter(
       if (body === undefined) return fail("badResponse");
 
       if (status === 404) {
-        if (errorCode(body) === "rest_no_route") return fail("notWooCommerce");
+        if (errorCode(body) === "rest_no_route") return fail(opts.noRoute ?? "notWooCommerce");
         if (opts.allowNotFound) {
           entry(status);
           return null;
         }
         return fail("notFound");
       }
-      if (status < 200 || status >= 300) return fail("badResponse");
+      if (status < 200 || status >= 300) return fail(method === "GET" ? "badResponse" : "rejected");
 
       entry(status);
       return { body, headers: response.headers };
@@ -159,6 +197,8 @@ export function createStoreAdapter(
       return value as T;
     throw new StoreError("badResponse", `${name}: unsupported unit`);
   };
+
+  const tracking: RequestOptions = { root: trackingRoot, noRoute: "trackingUnavailable" };
 
   return {
     async ping() {
@@ -208,6 +248,65 @@ export function createStoreAdapter(
         products: list(body, "products").map(parseProduct),
         totalPages: totalPages(headers),
       };
+    },
+
+    async listOrderNotes(orderId) {
+      const notes = [];
+      for (let page = 1, pages = 1; page <= pages; page++) {
+        const { body, headers } = await get(`/orders/${orderId}/notes`, {
+          per_page: PER_PAGE,
+          page,
+        });
+        notes.push(...list(body, "notes").map(parseOrderNote));
+        pages = totalPages(headers);
+      }
+      return notes;
+    },
+
+    async addOrderNote(orderId, { note, customerNote }) {
+      const { body } = await write("POST", `/orders/${orderId}/notes`, {
+        note,
+        customer_note: customerNote,
+      });
+      return { noteId: parseOrderNote(body).id };
+    },
+
+    async hasShipmentTracking() {
+      try {
+        await get("", {}, { root: trackingRoot, noRoute: "trackingUnavailable" });
+        return true;
+      } catch (error) {
+        if (error instanceof StoreError && error.kind === "trackingUnavailable") return false;
+        throw error;
+      }
+    },
+
+    async listShipmentTrackings(orderId) {
+      const { body } = await get(`/orders/${orderId}/shipment-trackings`, {}, tracking);
+      return list(body, "shipment trackings").map(parseShipmentTracking);
+    },
+
+    async addShipmentTracking(orderId, { trackingNumber, dateShipped, provider }) {
+      const { body } = await write(
+        "POST",
+        `/orders/${orderId}/shipment-trackings`,
+        {
+          tracking_number: trackingNumber,
+          date_shipped: dateShipped,
+          ...(provider.custom
+            ? {
+                custom_tracking_provider: provider.name,
+                ...(provider.link ? { custom_tracking_link: provider.link } : {}),
+              }
+            : { tracking_provider: provider.name }),
+        },
+        tracking,
+      );
+      return { trackingId: parseShipmentTracking(body).trackingId };
+    },
+
+    async completeOrder(orderId) {
+      await write("PUT", `/orders/${orderId}`, { status: "completed" });
     },
 
     async listVariations(productId) {

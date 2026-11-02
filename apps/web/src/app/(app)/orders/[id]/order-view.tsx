@@ -15,7 +15,10 @@ import { VoidRow } from "@/components/exceptions/void-row";
 import type { TargetOption } from "@/components/notes/note-composer";
 import { useTargetName } from "@/components/notes/note-list";
 import { NoteOnTarget, NotesPanel } from "@/components/notes/notes-panel";
+import { OrderLabels } from "@/components/shipping/order-labels";
 import { OrderShippingPanel } from "@/components/shipping/order-shipping";
+import { StuckLabels } from "@/components/shipping/stuck-labels";
+import { WooPushStatus } from "@/components/shipping/woo-push-status";
 import { Button } from "@/components/ui/fields";
 import { toast } from "@/components/ui/toast";
 import { useErrorMessage } from "@/lib/errors";
@@ -64,6 +67,8 @@ export function OrderView({
   canVoid,
   canReport,
   canRefreshRates,
+  canPrint = false,
+  canRetryPush = false,
 }: {
   id: string;
   userId: string | null;
@@ -71,6 +76,8 @@ export function OrderView({
   canVoid: boolean;
   canReport: boolean;
   canRefreshRates: boolean;
+  canPrint?: boolean;
+  canRetryPush?: boolean;
 }) {
   const t = useTranslations();
   const errorMessage = useErrorMessage();
@@ -92,6 +99,8 @@ export function OrderView({
       canVoid={canVoid}
       canReport={canReport}
       canRefreshRates={canRefreshRates}
+      canPrint={canPrint}
+      canRetryPush={canRetryPush}
     />
   );
 }
@@ -103,6 +112,8 @@ function OrderLayout({
   canVoid,
   canReport,
   canRefreshRates,
+  canPrint,
+  canRetryPush,
 }: {
   order: Order;
   userId: string | null;
@@ -110,6 +121,8 @@ function OrderLayout({
   canVoid: boolean;
   canReport: boolean;
   canRefreshRates: boolean;
+  canPrint: boolean;
+  canRetryPush: boolean;
 }) {
   const t = useTranslations();
   const targets = useNoteTargets(order);
@@ -129,6 +142,11 @@ function OrderLayout({
         </Link>
       )}
       <OrderActions order={order} userId={userId} />
+      <WooPushStatus orderId={order.id} push={order.wooPush} canRetry={canRetryPush} />
+      {canPrint && (order.status === "READY" || order.status === "COMPLETED") && (
+        <OrderLabels orderId={order.id} />
+      )}
+      {order.status === "READY" && <StuckLabels orderId={order.id} />}
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
           <OrderLines order={order} notes={notes} canVoid={canVoid} />
@@ -417,7 +435,9 @@ function OrderPackages({ order, notes }: { order: Order; notes: NotesProps }) {
           >
             <div className="flex items-center justify-between gap-2">
               <div className="font-semibold">
-                {t("order.package", { number: pkg.number })}
+                {t(pkg.discarded ? "order.packageDiscarded" : "order.package", {
+                  number: pkg.number,
+                })}
                 {pkg.liveLabel && (
                   <span className="badge badge-info ms-2">{t("order.liveLabel")}</span>
                 )}

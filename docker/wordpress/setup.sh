@@ -19,6 +19,17 @@ if ! wp plugin is-active woocommerce 2>/dev/null; then
   wp plugin install woocommerce --activate
 fi
 
+# Advanced Shipment Tracking (zorem, free): the store's tracking route `wc-shipment-tracking/v3`, which
+# Woolrus uses when the tracking switch is on (SPEC-shipping). Pinned so the recorded fixtures stay valid.
+# AST loads its carrier list from an Action Scheduler job that WP-Cron never runs here, so run it now:
+# without carriers a "USPS" item comes back with no provider.
+if ! wp plugin is-active woo-advanced-shipment-tracking 2>/dev/null; then
+  wp plugin install woo-advanced-shipment-tracking --version=4.0.5 --activate
+fi
+if [ "$(wp db query "SELECT COUNT(*) FROM $(wp db prefix)woo_shippment_provider" --skip-column-names 2>/dev/null)" = "0" ]; then
+  wp eval 'do_action( "ast_insert_shipping_provider" );'
+fi
+
 # WooCommerce only accepts basic auth (consumer key/secret) over HTTPS. Production is HTTPS; this
 # dev-only must-use plugin lets the plain-HTTP local store accept it for REST requests.
 mkdir -p wp-content/mu-plugins

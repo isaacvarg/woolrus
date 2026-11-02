@@ -471,19 +471,11 @@ describe("deletePackage", () => {
     });
   });
 
-  it("is refused when any label, even a voided one, references the package", async () => {
-    const { packer, order } = await packing();
-    const box = await makeBox();
-    const { packages } = await addPackage(db, packer, {
-      orderId: order.id,
-      box: { boxId: box.id },
-      idempotencyKey: key(),
-    });
-    const pkg = id(packages[0]);
-    await db.shippingLabel.create({
+  const labelOn = (packageId: string, status: "VOIDED" | "WRITTEN_OFF" | "ACTIVE") =>
+    db.shippingLabel.create({
       data: {
-        packageId: pkg,
-        status: "VOIDED",
+        packageId,
+        status,
         provider: "SHIPSTATION",
         idempotencyKey: key(),
         carrierCode: "usps",
@@ -492,10 +484,56 @@ describe("deletePackage", () => {
       },
     });
 
+  it("is refused while a live label references the package", async () => {
+    const { packer, order } = await packing();
+    const box = await makeBox();
+    const { packages } = await addPackage(db, packer, {
+      orderId: order.id,
+      box: { boxId: box.id },
+      idempotencyKey: key(),
+    });
+    const pkg = id(packages[0]);
+    await labelOn(pkg, "ACTIVE");
+
     await expect(deletePackage(db, packer, { packageId: pkg })).rejects.toMatchObject({
       messageKey: "errors.packing.packageHasLabels",
     });
-    expect(await db.package.count({ where: { id: pkg } })).toBe(1);
+    expect(await db.package.count({ where: { id: pkg, discardedAt: null } })).toBe(1);
+  });
+
+  it("discards a package whose labels are all voided or written off", async () => {
+    const { packer, order, items } = await packing([{ quantity: 3 }]);
+    const box = await makeBox();
+    const add = () =>
+      addPackage(db, packer, { orderId: order.id, box: { boxId: box.id }, idempotencyKey: key() });
+    await add();
+    const { packages } = await add();
+    const [p1, p2] = packages;
+    await packUnits(db, packer, { packageId: id(p2), orderItemId: id(items[0]), quantity: 2 });
+    await labelOn(id(p2), "VOIDED");
+    await labelOn(id(p2), "WRITTEN_OFF");
+
+    const result = await deletePackage(db, packer, { packageId: id(p2) });
+
+    expect(result.packages.map((p) => p.id)).toEqual([id(p1)]);
+    expect(result.lines[0]).toMatchObject({ unassigned: 3, packedIn: [] });
+    const kept = await db.package.findUniqueOrThrow({ where: { id: id(p2) } });
+    expect(kept.discardedAt).not.toBeNull();
+    expect(await rows(id(p2))).toHaveLength(0);
+    expect(await db.shippingLabel.count({ where: { packageId: id(p2) } })).toBe(2);
+
+    // The packed gate ignores it: the empty discarded box isn't reported.
+    const view = await getPackView(db, packer, { orderId: order.id });
+    expect(view.unmet.filter((u) => u.messageKey.endsWith("packageEmpty"))).toEqual([
+      expect.objectContaining({ params: { package: 1 } }),
+    ]);
+
+    // Numbers aren't reused, and a discarded package can't be changed.
+    const next = await add();
+    expect(next.packages.map((p) => p.number)).toEqual([1, 3]);
+    await expect(
+      packUnits(db, packer, { packageId: id(p2), orderItemId: id(items[0]) }),
+    ).rejects.toBeDefined();
   });
 });
 

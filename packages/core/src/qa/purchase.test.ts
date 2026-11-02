@@ -33,6 +33,61 @@ const labels = () => db.shippingLabel.findMany({ orderBy: { createdAt: "asc" } }
 const status = async (orderId: string) =>
   (await db.order.findUniqueOrThrow({ where: { id: orderId } })).status;
 
+describe("purchaseLabels customs", () => {
+  const abroad = {
+    name: "Clara",
+    address1: "1 Rue Main",
+    city: "Toronto",
+    state: "ON",
+    postalCode: "M5V 2T6",
+    country: "CA",
+  };
+
+  it("buys an international package with the declaration built from its rows", async () => {
+    const built = await verifiedQaOrder(db, 1);
+    const productId = built.items[0]?.productId ?? "";
+    await db.product.update({
+      where: { id: productId },
+      data: { hsCode: "340111", countryOfOrigin: "US" },
+    });
+    await db.order.update({ where: { id: built.order.id }, data: { shipTo: abroad } });
+    const provider = fakeProvider();
+    const seen: unknown[] = [];
+    const buy = provider.purchaseLabel.bind(provider);
+    provider.purchaseLabel = (input) => {
+      seen.push(input.shipment.customs);
+      return buy(input);
+    };
+    await completeQaWithLabels(db, built.qa, {
+      orderId: built.order.id,
+      expectedVersion: built.order.version,
+    });
+
+    await purchaseLabels(
+      db,
+      { providers: [provider], storage: createMemoryStorage() },
+      { orderId: built.order.id, requestedById: built.qa.userId },
+    );
+
+    expect(seen).toMatchObject([
+      { items: [{ quantity: 1, valueCents: 1000, hsCode: "340111", countryOfOrigin: "US" }] },
+    ]);
+    expect((await labels())[0]?.status).toBe("ACTIVE");
+  });
+
+  it("sends no customs for a domestic package", async () => {
+    const { run, provider } = await requested(1);
+    const seen: unknown[] = [];
+    const buy = provider.purchaseLabel.bind(provider);
+    provider.purchaseLabel = (input) => {
+      seen.push(input.shipment.customs);
+      return buy(input);
+    };
+    await run();
+    expect(seen).toEqual([undefined]);
+  });
+});
+
 describe("purchaseLabels", () => {
   it("buys every label, stores tracking, cost and the PDF, and moves the order to Ready as the requester", async () => {
     const { run, order, qa, storage, provider } = await requested(3);

@@ -64,6 +64,7 @@ model User {
   labelsPurchased    ShippingLabel[]     @relation("LabelPurchasedBy")
   labelsVoided       ShippingLabel[]     @relation("LabelVoidedBy")
   manifestsCreated   Manifest[]
+  labelPrints        LabelPrint[]
   notes              Note[]
   issuesReported     QualityIssue[]      @relation("IssueReporter")
   issuesResponsible  QualityIssue[]      @relation("IssueResponsible")

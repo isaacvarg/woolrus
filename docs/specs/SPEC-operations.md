@@ -124,7 +124,7 @@ providers and fake providers make it `degraded`. Added:
 
 | Entry | Values | Effect |
 |---|---|---|
-| `woocommerce` | `ok`, `fail`, `unconfigured` | `fail` → `degraded`. Calls `store.ping()` (the store-sync adapter) with a 3 s timeout. The result is cached in memory for 30 s, so the public endpoint can't be used to hammer the store. |
+| `woocommerce` | `ok`, `fail`, `unconfigured`, `trackingUnavailable` | `fail` and `trackingUnavailable` → `degraded`. Calls `store.ping()` (the store-sync adapter) with a 3 s timeout; when `Settings.wooTrackingEnabled` is on it also calls `hasShipmentTracking()`, and a store without AST's route is `trackingUnavailable` (SPEC-shipping). With the switch off the AST route is not checked. The result is cached in memory for 30 s, so the public endpoint can't be used to hammer the store. |
 | `worker` | `ok`, `stale` | `stale` → `degraded`. `stale` when the last heartbeat is older than 3 minutes or there is none. |
 
 Both are `degraded`, not down: the floor keeps working on a broken store or a stopped worker, and the web
@@ -259,7 +259,8 @@ for dev/test): `SENTRY_DSN`, `SENTRY_ENVIRONMENT`, `WOOLRUS_VERSION` (set by CI 
    `requestId`; the response carries `x-request-id`; an audit row written by that call has the same `requestId`.
    Every job logs its outcome with `queue`, `jobId` and `orderId` when present. A log call with a PII key prints
    `[redacted]`. Biome fails on `console.*` outside the CLI.
-6. **Health:** `woocommerce` reports `ok`, `fail` (store down or 3 s timeout) and `unconfigured`; `fail` makes
+6. **Health:** `woocommerce` reports `ok`, `fail` (store down or 3 s timeout), `unconfigured` and
+   `trackingUnavailable` (tracking switch on, AST missing); `fail` and `trackingUnavailable` make
    `degraded: true` with status 200; a second call within 30 s doesn't ping again. `worker` reports `ok` after a
    heartbeat and `stale` when the last one is over 3 minutes old or missing, and `stale` makes `degraded`.
 7. **Containers:** with the worker stopped from consuming jobs, its container turns unhealthy within 4 minutes;

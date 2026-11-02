@@ -13,6 +13,7 @@ export const LabelState = z.enum([
   "VOID_REQUESTED",
   "VOIDED",
   "VOID_REJECTED",
+  "WRITTEN_OFF",
 ]);
 export type LabelState = z.infer<typeof LabelState>;
 

@@ -27,6 +27,8 @@ type DemoProduct = {
   physical?: boolean;
   /** What a scanner reads off the label (FR-PICK-06); the rest match by SKU. */
   barcode?: string;
+  /** Customs data (SPEC-shipping "Customs"); none leaves the product's declaration incomplete. */
+  customs?: { hsCode: string; countryOfOrigin: string; description: string };
 };
 
 const products: DemoProduct[] = [
@@ -80,6 +82,16 @@ const products: DemoProduct[] = [
   { sku: "BOOK-WINTER", name: "Pattern book: Winter Knits", bin: "D-01-1", weightOz: 14 },
   // Sold in the store but never handled on the floor: it only raises priority.
   { sku: "RUSH-ORDER", name: "Rush Order", bin: "", weightOz: 0, physical: false },
+  // The two Canadian Ready orders (SPEC-shipping "Dev data"): one product with customs data, one without.
+  {
+    sku: "SCARF-CA-HS",
+    name: "Alpaca scarf",
+    bin: "E-01-1",
+    weightOz: 6,
+    dims: [10, 6, 2],
+    customs: { hsCode: "6117.10", countryOfOrigin: "PE", description: "Knitted alpaca scarf" },
+  },
+  { sku: "SCARF-CA-NOHS", name: "Wool hat", bin: "E-01-2", weightOz: 5, dims: [9, 7, 3] },
 ];
 
 /** How far the floor got with an order's lines and packages, independent of its status. */
@@ -110,6 +122,8 @@ type DemoOrder = {
   address2?: string;
   /** One package per physical line instead of a single package. */
   splitPackages?: boolean;
+  /** The ship-to country (an ISO code), when not the US. */
+  country?: string;
 };
 
 type DemoIssue = {
@@ -174,6 +188,11 @@ const orders: DemoOrder[] = [
   { customer: "Gonzalo Pardo", status: "PACKING", lines: [["WOOL-ALP-CRM", 2]], progress: "picked", ageHours: 21, inStageMinutes: 80, voids: [{ line: 0, quantity: 2 }] },
   { customer: "Hilda Cano", status: "COMPLETED", lines: [["KIT-BEANIE", 3]], progress: "labeled", ageHours: 120, inStageMinutes: 96 * 60, voids: [{ line: 0, quantity: 1, resolved: true }], issues: [{ type: "WRONG_ITEM", severity: "MAJOR", description: "Customer received a Navy beanie kit", stage: "CUSTOMER", customerReported: true }] },
   { customer: "Ignacio Lara", status: "COMPLETED", lines: [["BOOK-WINTER", 1]], progress: "labeled", ageHours: 130, inStageMinutes: 100 * 60, issues: [{ type: "LABELING_ERROR", severity: "MINOR", description: "Label printed upside down", stage: "SHIPPING", status: "RESOLVED", resolution: "Reprinted and re-taped" }] },
+  // Shipping dev data (SPEC-shipping "Dev data"): package 2's void is rejected by the fake provider, and a
+  // Canadian order with customs data next to one without. Tracking stays off (wooTrackingEnabled defaults false).
+  { customer: "Jimena Ortiz", status: "READY", lines: [["KIT-BEANIE", 1], ["NDL-CIRC-5", 1]], progress: "labeled", ageHours: 27, inStageMinutes: 45, splitPackages: true, address2: "VOID-REJECT-2" },
+  { customer: "Kevin Lund", status: "READY", lines: [["SCARF-CA-HS", 2]], progress: "labeled", ageHours: 29, inStageMinutes: 50, country: "CA" },
+  { customer: "Lucia Maple", status: "READY", lines: [["SCARF-CA-NOHS", 1]], progress: "labeled", ageHours: 31, inStageMinutes: 55, country: "CA" },
 ];
 
 const flow: WorkflowStatus[] = ["PENDING", "PICKING", "PACKING", "QA", "READY", "COMPLETED"];
@@ -216,14 +235,15 @@ const address = (
   name: string,
   street = "742 Evergreen Terrace",
   address2?: string,
+  country = "US",
 ): Prisma.InputJsonObject => ({
   name,
   address1: street,
   ...(address2 ? { address2 } : {}),
-  city: "Austin",
-  state: "TX",
-  postalCode: "78701",
-  country: "US",
+  city: country === "CA" ? "Toronto" : "Austin",
+  state: country === "CA" ? "ON" : "TX",
+  postalCode: country === "CA" ? "M5V 2T6" : "78701",
+  country,
 });
 
 /** Stacks seeded before dimensions existed get them on the next seed. */
@@ -247,6 +267,9 @@ async function upsertProducts(db: Db): Promise<Map<string, { id: string; physica
         binLocation: p.bin || null,
         physical,
         barcode: p.barcode ?? null,
+        hsCode: p.customs?.hsCode ?? null,
+        countryOfOrigin: p.customs?.countryOfOrigin ?? null,
+        customsDescription: p.customs?.description ?? null,
         rawPayload: { demo: true },
         syncedAt: new Date(),
       },
@@ -504,8 +527,8 @@ async function createDemoOrder(
       currency: "USD",
       customerName: spec.customer,
       customerEmail: `${spec.customer.split(" ")[0]?.toLowerCase()}@example.test`,
-      shippingAddress: address(spec.customer, spec.street, spec.address2),
-      billingAddress: address(spec.customer, spec.street, spec.address2),
+      shippingAddress: address(spec.customer, spec.street, spec.address2, spec.country),
+      billingAddress: address(spec.customer, spec.street, spec.address2, spec.country),
       totalCents: spec.lines.reduce((sum, [, qty]) => sum + qty * 1800, 0),
       shippingMethod: spec.method ?? "Flat rate",
       orderedAt,
@@ -646,7 +669,7 @@ async function createDemoOrder(
         if (cheapest) bought = { ...cheapest, costCents: cheapest.amountCents };
         await tx.order.update({
           where: { id: order.id },
-          data: fakeShipTo(address(spec.customer, spec.street, spec.address2), now),
+          data: fakeShipTo(address(spec.customer, spec.street, spec.address2, spec.country), now),
         });
       } else if (verified && "placeholder" in shipping) {
         await tx.shippingRate.create({
@@ -670,8 +693,9 @@ async function createDemoOrder(
             packageId: pkg.id,
             status: "ACTIVE",
             provider: bought.provider,
-            idempotencyKey: `demo-label-${index + 1}`,
-            trackingNumber: `9400100000000000${String(index + 1).padStart(6, "0")}`,
+            idempotencyKey:
+              number === 1 ? `demo-label-${index + 1}` : `demo-label-${index + 1}-${number}`,
+            trackingNumber: `9400100000000000${String(index + 1).padStart(6, "0")}${number === 1 ? "" : number}`,
             carrierCode: bought.carrierCode,
             serviceCode: bought.serviceCode,
             costCents: bought.costCents,

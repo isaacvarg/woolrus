@@ -24,8 +24,12 @@ describe("sync contract", () => {
 
   it("reports units on success and only a message key on failure", () => {
     expect(
-      TestConnectionResult.parse({ ok: true, units: { weight: "lbs", dimension: "in" } }),
-    ).toEqual({ ok: true, units: { weight: "lbs", dimension: "in" } });
+      TestConnectionResult.parse({
+        ok: true,
+        units: { weight: "lbs", dimension: "in" },
+        shipmentTracking: false,
+      }),
+    ).toEqual({ ok: true, units: { weight: "lbs", dimension: "in" }, shipmentTracking: false });
     expect(
       TestConnectionResult.parse({ ok: false, messageKey: "errors.sync.unauthorized", extra: 1 }),
     ).toEqual({ ok: false, messageKey: "errors.sync.unauthorized" });

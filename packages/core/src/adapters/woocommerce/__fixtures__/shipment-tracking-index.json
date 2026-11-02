@@ -1,0 +1,116 @@
+{
+  "namespace": "wc-shipment-tracking/v3",
+  "routes": {
+    "/wc-shipment-tracking/v3": {
+      "namespace": "wc-shipment-tracking/v3",
+      "methods": ["GET"],
+      "endpoints": [
+        {
+          "methods": ["GET"],
+          "args": {
+            "namespace": {
+              "default": "wc-shipment-tracking/v3",
+              "required": false
+            },
+            "context": {
+              "default": "view",
+              "required": false
+            }
+          }
+        }
+      ],
+      "_links": {
+        "self": [
+          {
+            "href": "https://localhost:8090/wp-json/wc-shipment-tracking/v3"
+          }
+        ]
+      }
+    },
+    "/wc-shipment-tracking/v3/orders/(?P<order_id>[\\d]+)/shipment-trackings": {
+      "namespace": "wc-shipment-tracking/v3",
+      "methods": ["GET", "POST"],
+      "endpoints": [
+        {
+          "methods": ["GET"],
+          "args": {
+            "context": {
+              "description": "Scope under which the request is made; determines fields present in response.",
+              "type": "string",
+              "enum": ["view", "edit"],
+              "default": "view",
+              "required": false
+            }
+          }
+        },
+        {
+          "methods": ["POST"],
+          "args": {
+            "tracking_provider": {
+              "description": "Tracking provider name.",
+              "type": "string",
+              "required": false
+            },
+            "custom_tracking_provider": {
+              "description": "Custom tracking provider name.",
+              "type": "string",
+              "required": false
+            },
+            "custom_tracking_link": {
+              "description": "Custom tracking provider link.",
+              "type": "url",
+              "required": false
+            },
+            "tracking_number": {
+              "required": true
+            },
+            "date_shipped": {
+              "description": "Date when package was shipped.",
+              "type": "date",
+              "required": false
+            }
+          }
+        }
+      ]
+    },
+    "/wc-shipment-tracking/v3/orders/(?P<order_id>[\\d]+)/shipment-trackings/providers": {
+      "namespace": "wc-shipment-tracking/v3",
+      "methods": ["GET"],
+      "endpoints": [
+        {
+          "methods": ["GET"],
+          "args": []
+        }
+      ]
+    },
+    "/wc-shipment-tracking/v3/orders/(?P<order_id>[\\d]+)/shipment-trackings/(?P<id>[a-fA-F0-9]{0,32})": {
+      "namespace": "wc-shipment-tracking/v3",
+      "methods": ["GET", "DELETE"],
+      "endpoints": [
+        {
+          "methods": ["GET"],
+          "args": {
+            "context": {
+              "description": "Scope under which the request is made; determines fields present in response.",
+              "type": "string",
+              "enum": ["view", "edit"],
+              "default": "view",
+              "required": false
+            }
+          }
+        },
+        {
+          "methods": ["DELETE"],
+          "args": []
+        }
+      ]
+    }
+  },
+  "_links": {
+    "up": [
+      {
+        "href": "https://localhost:8090/wp-json/"
+      }
+    ]
+  }
+}

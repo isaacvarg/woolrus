@@ -2,9 +2,11 @@ import type { SimulatedFailure } from "./contract";
 import { ShippingError, shippingErrorFromCause, shippingErrorFromStatus } from "./errors";
 import type {
   AddressCheck,
+  CustomsDeclaration,
   ProviderCapabilities,
   ProviderCarrier,
   ProviderId,
+  ProviderManifest,
   ProviderRate,
   PurchasedLabel,
   PurchaseInput,
@@ -26,14 +28,29 @@ export type FakeProviderOptions = {
   latencyMs?: number;
   /** Bought labels, by idempotency key. Pass one to share labels between instances. */
   labels?: Map<string, FakeLabel>;
+  /** Made manifests. Pass one to share them between instances. */
+  manifests?: FakeManifest[];
   /** The Bridge-Source-shaped fake can quote but not buy (stage 1); the other ignores it. */
   quoteOnly?: boolean;
 };
 
-export type FakeLabel = PurchasedLabel & { idempotencyKey: string; voided: boolean };
+export type FakeManifest = ProviderManifest & { carrierExternalId: string; shipDate: string };
+
+export type FakeLabel = PurchasedLabel & {
+  idempotencyKey: string;
+  voided: boolean;
+  /** The provider declines to void it (`VOID-REJECT-<n>` in the ship-to line 2). */
+  voidRejected: boolean;
+};
 
 /** One request the fake made, as the real provider would see it. */
-export type FakeRequest = { operation: string; carrierExternalId?: string; serviceCode?: string };
+export type FakeRequest = {
+  operation: string;
+  carrierExternalId?: string;
+  serviceCode?: string;
+  /** The declaration the request carried. */
+  customs?: CustomsDeclaration;
+};
 
 type CatalogService = {
   code: string;
@@ -61,6 +78,8 @@ abstract class FakeProvider implements ShippingProvider {
   readonly requests: FakeRequest[] = [];
 
   protected readonly labels: Map<string, FakeLabel>;
+  protected readonly manifests: FakeManifest[];
+  #loseManifest = false;
   readonly #credentials: Record<string, string>;
   readonly #latencyMs: number;
   #failures: SimulatedFailure[] = [];
@@ -72,6 +91,18 @@ abstract class FakeProvider implements ShippingProvider {
     this.#credentials = options.credentials ?? {};
     this.#latencyMs = options.latencyMs ?? 0;
     this.labels = options.labels ?? new Map();
+    this.manifests = options.manifests ?? [];
+  }
+
+  /** The next manifest is made but its response is lost (a timeout), so the retry has to look it up. */
+  loseNextManifestResponse(): void {
+    this.#loseManifest = true;
+  }
+
+  protected takeManifestLoss(): boolean {
+    const lost = this.#loseManifest;
+    this.#loseManifest = false;
+    return lost;
   }
 
   /** Makes the next `times` requests fail the way the provider's transport would. */
@@ -150,7 +181,8 @@ abstract class FakeProvider implements ShippingProvider {
   /**
    * Dev and e2e triggers in the ship-to's second line: `FAIL-BUY-<n>` refuses package `n` as
    * `notOffered`; `SLOW-BUY` buys the label but loses the first response (a timeout), so the
-   * retry has to find it by its idempotency key instead of buying again.
+   * retry has to find it by its idempotency key instead of buying again. `VOID-REJECT-<n>` makes the
+   * provider decline to void package `n`'s label (see `newLabel`).
    */
   protected purchaseTrigger(input: PurchaseInput): "slow" | undefined {
     const line = input.shipment.shipTo.address2 ?? "";
@@ -163,6 +195,13 @@ abstract class FakeProvider implements ShippingProvider {
       : undefined;
   }
 
+  /** A provider can't book an international shipment without a declaration. */
+  protected requireCustoms({ shipment }: PurchaseInput): void {
+    if (shipment.shipTo.country !== shipment.shipFrom.country && !shipment.customs) {
+      throw new ShippingError("rejected", "purchaseLabel 422 customs_required", 422);
+    }
+  }
+
   /** Throws the lost response after the label was bought, once per key. */
   protected loseResponse(input: PurchaseInput): never {
     this.#slowed.add(input.idempotencyKey);
@@ -170,6 +209,12 @@ abstract class FakeProvider implements ShippingProvider {
       "purchaseLabel",
       new DOMException("The operation timed out", "TimeoutError"),
     );
+  }
+
+  /** Whether the provider will decline to void this package's label. */
+  protected voidRejects(input: PurchaseInput): boolean {
+    const rejected = /VOID-REJECT-(\d+)/.exec(input.shipment.shipTo.address2 ?? "")?.[1];
+    return rejected !== undefined && Number(rejected) === input.packageNumber;
   }
 
   protected newLabel(
@@ -190,12 +235,13 @@ abstract class FakeProvider implements ShippingProvider {
       shipDate: startOfDay(new Date()),
       idempotencyKey: input.idempotencyKey,
       voided: false,
+      voidRejected: this.voidRejects(input),
     };
     this.labels.set(input.idempotencyKey, label);
     return label;
   }
 
-  protected label({ idempotencyKey, voided, ...label }: FakeLabel): PurchasedLabel {
+  protected label({ idempotencyKey, voided, voidRejected, ...label }: FakeLabel): PurchasedLabel {
     return label;
   }
 }
@@ -271,7 +317,7 @@ export class FakeShipStationProvider extends FakeProvider {
 
   /** Every requested service in one call, each with a rate id. */
   async getRates(request: RateRequest): Promise<ProviderRate[]> {
-    await this.request({ operation: "getRates" });
+    await this.request({ operation: "getRates", customs: request.customs });
     const shipmentId = `se-shp-${crypto.randomUUID()}`;
     return request.services.flatMap(({ carrierExternalId, code }) => {
       const match = this.service(request, carrierExternalId, code);
@@ -297,7 +343,8 @@ export class FakeShipStationProvider extends FakeProvider {
 
   /** Buys from the rate id; the same idempotency key returns the label already bought. */
   async purchaseLabel(input: PurchaseInput): Promise<PurchasedLabel> {
-    await this.request({ operation: "purchaseLabel" });
+    await this.request({ operation: "purchaseLabel", customs: input.shipment.customs });
+    this.requireCustoms(input);
     const existing = this.labels.get(input.idempotencyKey);
     if (existing) return this.label(existing);
     const slow = this.purchaseTrigger(input);
@@ -330,8 +377,52 @@ export class FakeShipStationProvider extends FakeProvider {
     await this.request({ operation: "voidLabel" });
     const label = [...this.labels.values()].find((l) => l.providerLabelId === providerLabelId);
     if (label?.voided) return { approved: false, message: "Label already voided." };
+    if (label?.voidRejected) return { approved: false, message: "The carrier won't void it." };
     if (label) label.voided = true;
     return { approved: true };
+  }
+
+  async createManifest(input: {
+    carrierExternalId: string;
+    shipDate: string;
+    providerLabelIds: string[];
+  }): Promise<ProviderManifest> {
+    await this.request({ operation: "createManifest", carrierExternalId: input.carrierExternalId });
+    if (input.providerLabelIds.length === 0) {
+      throw shippingErrorFromStatus("createManifest", 400, "field_value_required");
+    }
+    const id = `se-manifest-${crypto.randomUUID()}`;
+    const manifest: FakeManifest = {
+      providerManifestId: id,
+      providerLabelIds: [...input.providerLabelIds],
+      document: { pdf: new TextEncoder().encode(fakeLabelPdf(id).replace("LABEL", "MANIFEST")) },
+      carrierExternalId: input.carrierExternalId,
+      shipDate: input.shipDate,
+    };
+    this.manifests.push(manifest);
+    if (this.takeManifestLoss()) {
+      throw shippingErrorFromCause(
+        "createManifest",
+        new DOMException("The operation timed out", "TimeoutError"),
+      );
+    }
+    return this.manifest(manifest);
+  }
+
+  async findManifests(input: {
+    carrierExternalId: string;
+    shipDate: string;
+  }): Promise<ProviderManifest[]> {
+    await this.request({ operation: "findManifests", carrierExternalId: input.carrierExternalId });
+    return this.manifests
+      .filter(
+        (m) => m.carrierExternalId === input.carrierExternalId && m.shipDate === input.shipDate,
+      )
+      .map((m) => this.manifest(m));
+  }
+
+  private manifest({ carrierExternalId, shipDate, ...manifest }: FakeManifest): ProviderManifest {
+    return manifest;
   }
 }
 
@@ -368,7 +459,7 @@ export class FakeBridgeSourceProvider extends FakeProvider {
       addressValidation: false,
       labelLookup: false,
       void: true,
-      manifests: true,
+      manifests: false,
       purchase: options.quoteOnly !== true,
     };
   }
@@ -395,7 +486,12 @@ export class FakeBridgeSourceProvider extends FakeProvider {
     request: RateRequest,
     { carrierExternalId, code, providerData }: RateRequest["services"][number],
   ): Promise<ProviderRate | null> {
-    await this.request({ operation: "getRates", carrierExternalId, serviceCode: code });
+    await this.request({
+      operation: "getRates",
+      carrierExternalId,
+      serviceCode: code,
+      customs: request.customs,
+    });
     if (!providerData.packageTypeCode) {
       throw shippingErrorFromStatus("getRates", 422, "PACKAGE_TYPE_REQUIRED");
     }
@@ -417,7 +513,8 @@ export class FakeBridgeSourceProvider extends FakeProvider {
     if (!this.capabilities.purchase) {
       throw new ShippingError("rejected", "bookingDisabled");
     }
-    await this.request({ operation: "purchaseLabel" });
+    await this.request({ operation: "purchaseLabel", customs: input.shipment.customs });
+    this.requireCustoms(input);
     const slow = this.purchaseTrigger(input);
     const match = this.service(
       input.shipment,
@@ -440,6 +537,7 @@ export class FakeBridgeSourceProvider extends FakeProvider {
   async voidLabel(providerLabelId: string): Promise<{ approved: boolean; message?: string }> {
     await this.request({ operation: "voidLabel" });
     const label = [...this.labels.values()].find((l) => l.providerLabelId === providerLabelId);
+    if (label?.voidRejected) return { approved: false, message: "The carrier won't void it." };
     if (label) label.voided = true;
     return { approved: true };
   }

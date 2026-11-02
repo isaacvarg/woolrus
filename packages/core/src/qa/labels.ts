@@ -7,12 +7,12 @@ import { recordAudit } from "../audit";
 import { enqueue } from "../enqueue";
 import { AppError, notFound } from "../errors";
 import { JOBS_SCHEMA, queues } from "../jobs";
-import { type Actor, assertCan } from "../permissions";
+import { type Actor, assertCan, can } from "../permissions";
 import { lockOrder } from "../workflow/lock";
 import { notifyOrderChanged } from "../workflow/notify";
 import { type QaOptions, qaResult } from "./queries";
 
-// Settling and voiding (SPEC-qa "Settling and voiding"). `shipping` will widen the QA-only check for repack (SPEC-qa).
+// Settling and voiding (SPEC-qa "Settling and voiding"). repack (shipping) reuses it for Ready orders.
 
 /** One provider call, however long the provider takes to answer. */
 export const VOID_TIMEOUT_MS = 30_000;
@@ -25,19 +25,36 @@ export type VoidLabelOptions = QaOptions & {
 };
 
 /**
- * Voids an `ACTIVE` label of an order in QA. The intent (`VOID_REQUESTED`) commits before the
- * provider is called: approved → `VOIDED`; declined → `VOID_REJECTED`, still live; a transient
- * failure leaves `VOID_REQUESTED` and the same call can be repeated. The row is never deleted.
+ * Voids an `ACTIVE` label of an order in QA, or of a Ready order for someone who may repack it.
+ * See `voidLabelStep`; this adds the QA screen's result.
  */
 export async function voidLabel(
   db: Db,
   actor: Actor,
+  input: VoidLabelInput,
+  options: VoidLabelOptions = {},
+): Promise<QaResult> {
+  const { orderId } = await voidLabelStep(db, actor, input, options);
+  return db.$transaction((tx) => qaResult(tx, orderId, { now: options.now }));
+}
+
+export type VoidStep = { orderId: string; status: "VOIDED" | "VOID_REJECTED" };
+
+/**
+ * The void itself. The intent (`VOID_REQUESTED`) commits before the provider is called: approved →
+ * `VOIDED`; declined → `VOID_REJECTED`, still live; a transient failure leaves `VOID_REQUESTED` and the
+ * same call can be repeated. The row is never deleted. In QA it needs `label.void`; in Ready it needs
+ * `order.repack` (SPEC-shipping decision 4), and a `VOID_REJECTED` label may be tried again there.
+ */
+export async function voidLabelStep(
+  db: Db,
+  actor: Actor,
   { labelId, reason }: VoidLabelInput,
   { now = new Date(), providers, adapters, timeoutMs = VOID_TIMEOUT_MS }: VoidLabelOptions = {},
-): Promise<QaResult> {
-  assertCan(actor, "label.void");
+): Promise<VoidStep> {
   const why = reason.trim();
   if (!why) throw new AppError("BAD_REQUEST", "errors.validation");
+  if (!can(actor, "label.void") && !can(actor, "order.repack")) assertCan(actor, "label.void");
   const available = providers ?? (await createShippingProviders(db, adapters));
 
   const { orderId, providerLabelId, callVoid } = await db.$transaction(async (tx) => {
@@ -48,11 +65,14 @@ export async function voidLabel(
     const orderId = found?.package?.orderId;
     if (!orderId) throw notFound();
     const order = await lockOrder(tx, orderId);
-    if (order.status !== "QA") throw new AppError("CONFLICT", "errors.qa.notQa");
+    if (order.status === "QA") assertCan(actor, "label.void");
+    else if (order.status === "READY") assertCan(actor, "order.repack");
+    else throw new AppError("CONFLICT", "errors.qa.notQa");
 
     // Read after the lock, so a concurrent void can't be missed. VOID_REQUESTED is a repeat.
     const label = await tx.shippingLabel.findUniqueOrThrow({ where: { id: labelId } });
-    if (label.status !== "ACTIVE" && label.status !== "VOID_REQUESTED") {
+    const retryable = order.status === "READY" && label.status === "VOID_REJECTED";
+    if (label.status !== "ACTIVE" && label.status !== "VOID_REQUESTED" && !retryable) {
       throw new AppError("CONFLICT", "errors.qa.labelNotVoidable");
     }
     const provider = available.find((p) => p.id === label.provider);
@@ -115,7 +135,7 @@ export async function voidLabel(
       select: { id: true, status: true },
     });
     await notifyOrderChanged(tx, order);
-    return qaResult(tx, orderId, { now });
+    return { orderId, status: approved ? "VOIDED" : "VOID_REJECTED" } as const;
   });
 }
 

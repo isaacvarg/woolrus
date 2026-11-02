@@ -175,6 +175,21 @@ describe("fetchRates fan-out (SC 8)", () => {
     });
   });
 
+  it("skips a discarded package: no request for it, no rates stored", async () => {
+    await catalog("SHIPSTATION", ["demo_ground"]);
+    const { shipStation } = fakes();
+    const { packages, payload } = await inQa({}, 2);
+    const discarded = packages[1]?.id as string;
+    await db.package.update({ where: { id: discarded }, data: { discardedAt: new Date() } });
+
+    const result = await fetchRates(db, [shipStation], payload);
+
+    expect(result).toEqual({ status: "done" });
+    expect((await ratesOf(packages[0]?.id as string)).length).toBeGreaterThan(0);
+    expect(await ratesOf(discarded)).toEqual([]);
+    expect(await pkgRow(discarded)).toMatchObject({ ratesStatus: "NONE" });
+  });
+
   it("sends only enabled services of enabled, still-listed carriers, matching domestic", async () => {
     await catalog("SHIPSTATION", ["demo_ground", "demo_express", "demo_express_intl"]);
     await catalog("BRIDGE_SOURCE", ["GND", "EXP"]);
@@ -205,7 +220,9 @@ describe("fetchRates fan-out (SC 8)", () => {
       postalCode: "06600",
       country: "MX",
     };
-    const { packages, payload } = await inQa();
+    const { packages, payload } = await inQa({
+      lines: [{ pickStatus: "PICKED", customs: { hsCode: "340111", countryOfOrigin: "US" } }],
+    });
     await db.order.update({
       where: { id: payload.orderId },
       data: { shippingAddress: mx, billingAddress: mx },
@@ -1508,5 +1525,84 @@ describe("address validation (SC 7)", () => {
         messageKey: "errors.carriers.notInQa",
       });
     });
+  });
+});
+
+describe("customs on rates (SC 12)", () => {
+  const ca = {
+    name: "Clara",
+    address1: "1 Rue Main",
+    city: "Toronto",
+    state: "ON",
+    postalCode: "M5V 2T6",
+    country: "CA",
+  };
+  const toCanada = async (
+    customs: { hsCode?: string; countryOfOrigin?: string } | undefined,
+    country = "CA",
+  ) => {
+    await catalog("SHIPSTATION", ["demo_ground", "demo_express_intl"]);
+    const built = await inQa({
+      lines: [{ name: "Soap", quantity: 2, pickStatus: "PICKED", unitPriceCents: 450, customs }],
+      packages: [{ items: [{ line: 0, quantity: 2 }], weightOz: 20 }],
+    });
+    const address = { ...ca, country };
+    await db.order.update({
+      where: { id: built.order.id },
+      data: { shippingAddress: address, billingAddress: address },
+    });
+    return built;
+  };
+
+  it("sends the declaration with the rate request of an international package", async () => {
+    const { payload } = await toCanada({ hsCode: "340111", countryOfOrigin: "US" });
+    const provider = stub("SHIPSTATION", []);
+
+    await fetchRates(db, [provider], payload);
+
+    expect(provider.calls[0]?.customs).toMatchObject({
+      contents: "merchandise",
+      nonDelivery: "return_to_sender",
+      items: [
+        {
+          description: "Soap",
+          quantity: 2,
+          valueCents: 900,
+          hsCode: "340111",
+          countryOfOrigin: "US",
+        },
+      ],
+    });
+  });
+
+  it("records customsIncomplete naming the product and calls no provider", async () => {
+    const { packages, payload } = await toCanada({ countryOfOrigin: "US" });
+    const provider = stub("SHIPSTATION", []);
+
+    await fetchRates(db, [provider], payload);
+
+    expect(provider.calls).toHaveLength(0);
+    expect(await pkgRow(packages[0]?.id as string)).toMatchObject({
+      ratesStatus: "FAILED",
+      rateErrors: [
+        {
+          provider: null,
+          messageKey: "errors.shipping.customsIncomplete",
+          params: { products: "Soap" },
+        },
+      ],
+    });
+    expect(await ratesOf(packages[0]?.id as string)).toEqual([]);
+  });
+
+  it("sends no customs for a domestic package, missing data or not", async () => {
+    await catalog("SHIPSTATION", ["demo_ground"]);
+    const { payload } = await inQa();
+    const provider = stub("SHIPSTATION", []);
+
+    await fetchRates(db, [provider], payload);
+
+    expect(provider.calls).toHaveLength(1);
+    expect(provider.calls[0]?.customs).toBeUndefined();
   });
 });

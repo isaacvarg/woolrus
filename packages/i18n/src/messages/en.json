@@ -35,7 +35,9 @@
     "closeMenu": "Close menu",
     "voids": "Voids",
     "failedJobs": "Failed jobs",
-    "issues": "Issues"
+    "issues": "Issues",
+    "customs": "Customs",
+    "manifests": "Manifests"
   },
   "navFooter": {
     "preferences": "Preferences",
@@ -159,6 +161,13 @@
       "urlMoveConfirm": "Save and remove keys",
       "savedKeysCleared": "Saved. The keys for the old address were removed: add them for the new one.",
       "testConnection": "Test connection",
+      "trackingPluginFound": "Advanced Shipment Tracking is installed on the store.",
+      "trackingPluginMissing": "Advanced Shipment Tracking is not installed on the store. Shipped orders will get a note with the tracking numbers until it is.",
+      "tracking": {
+        "title": "Tracking numbers",
+        "intro": "Add tracking numbers to the order in WooCommerce so they show on the customer's order page and in the Completed email. Needs the free Advanced Shipment Tracking plugin on the store; without it the numbers go in a customer note.",
+        "label": "Add tracking items with Advanced Shipment Tracking"
+      },
       "testHint": "Checks the saved store URL and keys.",
       "testOk": "Connected. The store uses {weight} for weight and {dimension} for dimensions.",
       "webhook": {
@@ -328,7 +337,18 @@
     "startPacking": "Start packing",
     "startedPacking": "Order {number} is yours to pack.",
     "startQa": "Start QA",
-    "startedQa": "Order {number} is yours to check."
+    "startedQa": "Order {number} is yours to check.",
+    "printLabels": "Print labels",
+    "printing": "Printing…",
+    "printSelected": "Print labels ({count})",
+    "packages": "{count, plural, one {# package} other {# packages}}",
+    "printState": {
+      "none": "Not printed",
+      "partial": "Partly printed",
+      "printed": "Printed {times}×"
+    },
+    "packagesColumn": "Packages",
+    "printColumn": "Labels"
   },
   "order": {
     "title": "Order #{number}",
@@ -359,6 +379,7 @@
     "notPhysical": "Not handled on the floor",
     "packages": "Packages",
     "package": "Package {number}",
+    "packageDiscarded": "Package {number} (discarded)",
     "noBox": "No box yet",
     "units": "{count, plural, one {# unit} other {# units}}",
     "liveLabel": "Label",
@@ -427,6 +448,35 @@
     "pickedBy": "{name}, {time}",
     "openPickScreen": "Open pick screen",
     "openPackScreen": "Open pack screen"
+  },
+  "pushErrors": {
+    "title": "Push errors",
+    "intro": "Shipped orders whose WooCommerce update failed or is still waiting. Retry sends them again.",
+    "order": "Order",
+    "error": "Error",
+    "attempts": "Attempts",
+    "lastTry": "Last try",
+    "status": {
+      "FAILED": "Failed",
+      "PENDING": "Pending too long"
+    },
+    "selectOrder": "Select order {number}",
+    "retry": "Retry",
+    "retrySelected": "Retry selected",
+    "retried": "Queued to retry.",
+    "retriedCount": "{count, plural, one {# order} other {# orders}} queued to retry.",
+    "none": "No WooCommerce updates need attention."
+  },
+  "wooPush": {
+    "title": "Woo update",
+    "status": {
+      "NOT_NEEDED": "Not needed",
+      "PENDING": "Woo update pending",
+      "SUCCEEDED": "Sent to Woo",
+      "FAILED": "Woo update failed"
+    },
+    "attempts": "{count, plural, one {# attempt} other {# attempts}}",
+    "pushedAt": "Sent {at}"
   },
   "orderShipping": {
     "title": "Shipping",
@@ -599,6 +649,7 @@
     "labelVoidRequested": "Void requested",
     "labelVoided": "Label voided",
     "labelVoidRejected": "Void refused",
+    "labelWrittenOff": "Written off",
     "voidLabel": "Void label",
     "voidRetry": "Void label again",
     "voidTitle": "Void this label?",
@@ -1075,7 +1126,8 @@
       "emailFrom": "Use an address like no-reply@example.com or Woolrus '<'no-reply@example.com>."
     },
     "settings": {
-      "encryptionKeyMissing": "Secrets can't be saved: the server's encryption key is missing or invalid. Ask whoever runs the server to set SETTINGS_ENCRYPTION_KEY."
+      "encryptionKeyMissing": "Secrets can't be saved: the server's encryption key is missing or invalid. Ask whoever runs the server to set SETTINGS_ENCRYPTION_KEY.",
+      "trackingPluginMissing": "Tracking can't be switched on: the store doesn't have the Advanced Shipment Tracking plugin. Ask whoever runs the store to install and activate it, then try again."
     },
     "picking": {
       "notPicking": "This order isn't being picked, so its lines can't change.",
@@ -1153,6 +1205,8 @@
       "notWooCommerce": "That URL doesn't look like a WooCommerce store (no REST API v3 found).",
       "rateLimited": "WooCommerce is limiting requests. Sync will try again shortly.",
       "badResponse": "WooCommerce sent a response Woolrus couldn't read.",
+      "rejected": "The store refused the update. It needs a person to look at it.",
+      "trackingUnavailable": "The store has no Advanced Shipment Tracking plugin. Tracking numbers can't be added until it is installed.",
       "notConfigured": "WooCommerce isn't set up yet. Add the store URL and keys in Settings → Integrations.",
       "importFailed": "The order couldn't be saved. Sync will try it again on the next run.",
       "notFlagged": "This order has no store change to review. It has been refreshed.",
@@ -1172,7 +1226,15 @@
       "notOffered": "The carrier doesn't offer the services that are on for this shipment, from this ship-from address or to this address. Check which services are on in Settings → Shipping.",
       "addressRejected": "The carrier refused the ship-to or ship-from address. Check both addresses.",
       "unavailable": "The shipping provider couldn't be reached. Try again in a minute.",
-      "timeout": "The shipping provider took too long to answer. Try again in a minute."
+      "labelNotStuck": "The label's void wasn't rejected or pending, so there is nothing to retry or write off.",
+      "timeout": "The shipping provider took too long to answer. Try again in a minute.",
+      "hsCodeInvalid": "Use 6 to 10 digits; dots are fine, e.g. 3401.11.",
+      "countryInvalid": "Use the 2-letter country code, e.g. US.",
+      "notPrintable": "Only active labels on Ready or Completed orders can be printed.",
+      "unprintedLabels": "These orders have labels that were never printed: {orderNumbers}.",
+      "noLabelsToManifest": "There are no shipped labels left to manifest for this carrier and day.",
+      "manifestsUnsupported": "This carrier account can't be manifested.",
+      "customsIncomplete": "This international package can't be rated: add the HS code and country of origin for {products} in Settings → Customs."
     },
     "carriers": {
       "credentialsMissing": "Add the provider's credentials first.",
@@ -1243,6 +1305,7 @@
       "allPackagesLabelled": "Every package already has a label, so there are no rates to refresh.",
       "purchaseInProgress": "Labels are being bought for this order. Wait for that to finish.",
       "packageRateExpired": "Package {package}'s shipping rate has expired. Refresh the rates and pick another.",
+      "customsIncomplete": "Package {package} ships abroad and needs customs data (HS code and country of origin) for {products}. Add it in Settings → Customs, then refresh the rates.",
       "packageProviderOff": "The shipping provider for package {package} is turned off. An admin turns it on in Settings → Shipping.",
       "providerUnavailable": "A provider isn't available to buy this label. Check Settings → Shipping.",
       "purchaseUnknown": "We couldn't confirm whether this label was bought. Check the provider for a label with this order's number.",
@@ -1426,5 +1489,100 @@
     "retryLabel": "Retry job {queue}",
     "dismissLabel": "Dismiss job {queue}",
     "order": "Order"
+  },
+  "customsNotice": {
+    "international": "International",
+    "missing": "This international order is missing customs data:",
+    "package": "Package {number}: {products}",
+    "openEditor": "Add it in Settings → Customs"
+  },
+  "customs": {
+    "title": "Customs",
+    "intro": "HS code, country of origin and a short description for the products on international parcels. Changes apply to the next rate fetch.",
+    "filter": "Show",
+    "filters": {
+      "all": "All products",
+      "missing": "Missing customs data",
+      "international": "On an international order now"
+    },
+    "product": "Product",
+    "sku": "SKU",
+    "hsCode": "HS code",
+    "hsCodeHint": "6 to 10 digits",
+    "countryOfOrigin": "Country of origin",
+    "countryHint": "2-letter code",
+    "description": "Customs description",
+    "descriptionHint": "Up to 100 characters",
+    "actions": "Actions",
+    "edit": "Edit",
+    "editProduct": "Edit customs data for {name}",
+    "save": "Save",
+    "cancel": "Cancel",
+    "saved": "Customs data saved for {name}.",
+    "missingBadge": "Missing data",
+    "complete": "Complete",
+    "international": "International order",
+    "empty": "No products match this filter.",
+    "loadMore": "Load more",
+    "none": "Not set"
+  },
+  "stuckLabels": {
+    "title": "Labels that couldn't be voided",
+    "intro": "The carrier didn't void these labels, so the order can't go back to Packing yet.",
+    "package": "Package {number}",
+    "rejected": "Void rejected",
+    "requested": "Void not answered",
+    "retry": "Retry void",
+    "retried": "The label was voided.",
+    "stillStuck": "The carrier still hasn't voided the label.",
+    "writeOff": "Write off",
+    "writeOffTitle": "Write off this label?",
+    "writeOffBody": "Only do this after checking with the carrier: the label shipped, or the carrier will bill it anyway. Its cost stays in reports and the order can be repacked.",
+    "reason": "Reason",
+    "cancel": "Cancel",
+    "confirm": "Write off label",
+    "writtenOff": "The label was written off."
+  },
+  "print": {
+    "reprint": "Reprint",
+    "reprintOrder": "Reprint all labels",
+    "title": "Labels",
+    "package": "Package {number}",
+    "printedTimes": "Printed {count}×",
+    "notPrinted": "Not printed",
+    "popupBlocked": "The print was recorded, but the browser blocked the new tab. Allow pop-ups and press Reprint."
+  },
+  "ship": {
+    "ship": "Ship",
+    "shipSelected": "Ship ({count})",
+    "shipped": "{count, plural, one {# order shipped.} other {# orders shipped.}}",
+    "failed": "Order {number} couldn't ship: {reason}",
+    "unprintedTitle": "Labels never printed",
+    "unprintedBody": "These orders' labels were never printed: {orders}. Ship anyway?",
+    "cancel": "Cancel",
+    "shipAnyway": "Ship anyway"
+  },
+  "repack": {
+    "repack": "Repack",
+    "repackSelected": "Repack ({count})",
+    "title": "Repack orders",
+    "warning": "The labels of {count, plural, one {this order} other {these # orders}} will be voided at the carrier and the {count, plural, one {order goes} other {orders go}} back to Packing.",
+    "reason": "Reason",
+    "cancel": "Cancel",
+    "confirm": "Void labels and repack",
+    "repacked": "{count, plural, one {# order is} other {# orders are}} back in Packing.",
+    "failed": "Order {number} couldn't be repacked: {reason}",
+    "blocked": "Package {package}: {reason}"
+  },
+  "manifests": {
+    "title": "Manifests",
+    "intro": "At the end of the day, manifest the labels that shipped and print the form for the carrier.",
+    "date": "Ship date",
+    "empty": "No shipped labels or manifests for this day.",
+    "unmanifested": "{count, plural, =0 {No labels not manifested} one {# label not manifested} other {# labels not manifested}}",
+    "create": "Create manifest",
+    "created": "Manifest created for {count, plural, one {# label} other {# labels}}.",
+    "made": "Manifest at {time} · {count, plural, one {# label} other {# labels}}",
+    "print": "Print"
   }
 }

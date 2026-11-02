@@ -269,6 +269,16 @@ describe("testStoreConnection", () => {
     expect(await testStoreConnection(db, admin, async () => store)).toEqual({
       ok: true,
       units: { weight: "kg", dimension: "cm" },
+      shipmentTracking: true,
+    });
+  });
+
+  it("always says whether the AST plugin is there (SPEC-shipping success criterion 14)", async () => {
+    const store = new FakeStoreAdapter();
+    store.setShipmentTrackingPlugin(false);
+    expect(await testStoreConnection(db, admin, async () => store)).toMatchObject({
+      ok: true,
+      shipmentTracking: false,
     });
   });
 

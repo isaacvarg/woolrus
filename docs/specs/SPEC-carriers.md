@@ -104,6 +104,10 @@ export interface ShippingProvider {
   purchaseLabel(input: PurchaseInput): Promise<PurchasedLabel>;
   findLabel?(idempotencyKey: string): Promise<PurchasedLabel | null>;
   voidLabel?(providerLabelId: string): Promise<{ approved: boolean; message?: string }>;
+  // `manifests` capability only (SPEC-shipping "Manifests"); `shipDate` is YYYY-MM-DD.
+  createManifest?(input: { carrierExternalId: string; shipDate: string; providerLabelIds: string[] }):
+    Promise<ProviderManifest>;                                          // { providerManifestId, providerLabelIds, document }
+  findManifests?(input: { carrierExternalId: string; shipDate: string }): Promise<ProviderManifest[]>;
 }
 ```
 
@@ -118,11 +122,14 @@ So a rate never has to have an id, and a purchase always carries the shipment:
   `providerData` (jsonb on `CarrierService`) is what only the adapter reads, e.g. Bridge Source's custom-packaging
   `packageTypeCode` and its supported countries.
 - **`RateRequest`:** `{ orderNumber, shipFrom, shipTo, residential, package: { lengthIn, widthIn, heightIn,
-  weightOz }, items: { sku, name, quantity }[], services: { carrierExternalId, code, providerData }[] }`. Only
+  weightOz }, items: { sku, name, quantity }[], customs?, services: { carrierExternalId, code, providerData }[] }`. Only
   enabled carriers and services are sent (FR-SHIP-02). Order number and items let the provider link the shipment
   to the sale (FR-SHIP-01). `residential` comes from the address check when the provider says (stored as
   `Order.shipToResidential`, so later fetches of the stored ship-to price it the same), else "no company name on the
-  ship-to".
+  ship-to". `customs` is the declaration of an international package (SPEC-shipping "Customs"); the ShipStation
+  adapter maps it to the shipment's `customs` block and the fakes refuse an international purchase without it. A
+  package whose declaration lacks an HS code or origin isn't rated: its `rateErrors` get `errors.shipping.customsIncomplete
+  { products }` and no provider is called.
 - **`ProviderRate`:** `{ providerRateId?, providerShipmentId?, carrierExternalId, serviceCode, serviceName,
   amountCents, currency, deliveryDays?, estimatedDeliveryAt?, guaranteed, trackable, expiresAt? }`.
 - **`PurchaseInput`:** `{ rate: { providerRateId?, providerShipmentId?, carrierExternalId, serviceCode,
@@ -168,6 +175,8 @@ built (source-driven; record the fixtures from the real API with a test key, the
 | `purchaseLabel` | `POST /v2/labels/rates/{rate_id}`, `label_format: pdf`, `label_layout: 4x6`, our key as the label's external reference |
 | `findLabel` | `GET /v2/labels` filtered by that reference |
 | `voidLabel` | `PUT /v2/labels/{label_id}/void`; `approved: false` is returned, not thrown (SRS §7.1 #6) |
+| `createManifest` | `POST /v2/manifests` with `carrier_id`, `ship_date`, `label_ids`; an `in_progress` answer is `unavailable` (looked up later), `carrier_not_supported` is `notOffered`; the document is the first manifest's `manifest_download.href` (ShipStation hosts only) |
+| `findManifests` | `GET /v2/manifests` filtered by `carrier_id` and `ship_date_start`/`ship_date_end` (the day) |
 
 Capabilities: all four `true`. UPS appears as one of ShipStation's carriers; nothing in Woolrus is UPS-specific.
 

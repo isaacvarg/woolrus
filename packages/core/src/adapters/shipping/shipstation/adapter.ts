@@ -2,8 +2,10 @@ import type { z } from "zod";
 import { ShippingError, shippingErrorFromCause, shippingErrorFromStatus } from "../errors";
 import {
   type AddressCheck,
+  type CustomsDeclaration,
   PROVIDER_TIMEOUT_MS,
   type ProviderCarrier,
+  type ProviderManifest,
   type ProviderRate,
   type PurchasedLabel,
   type PurchaseInput,
@@ -14,9 +16,11 @@ import {
 import {
   type ApiError,
   carriersResponse,
+  createManifestResponse,
   errorResponse,
   labelSchema,
   labelsResponse,
+  manifestsResponse,
   ratesResponse,
   validateResponse,
   voidResponse,
@@ -49,7 +53,9 @@ function refusal(errors: ApiError[] | null | undefined): ShippingError["kind"] |
   );
   if (address) return "addressRejected";
   const businessRules = errors.some(
-    (e) => e.error_source === "carrier" && e.error_type === "business_rules",
+    (e) =>
+      (e.error_source === "carrier" && e.error_type === "business_rules") ||
+      e.error_code === "carrier_not_supported",
   );
   return businessRules ? "notOffered" : null;
 }
@@ -78,6 +84,27 @@ function toShipStation(address: ShipAddress, residential: Residential) {
     postal_code: address.postalCode,
     country_code: address.country,
     address_residential_indicator: residential,
+  };
+}
+
+const money = (valueCents: number, currency: string) => ({
+  currency: currency.toLowerCase(),
+  amount: valueCents / 100,
+});
+
+/** The declaration in ShipStation's `customs` block (ShipEngine v2: `customs_items` with tariff code and origin). */
+function toCustoms(customs: CustomsDeclaration) {
+  return {
+    contents: customs.contents,
+    non_delivery: customs.nonDelivery,
+    customs_items: customs.items.map((item) => ({
+      ...(item.sku && { sku: item.sku }),
+      description: item.description,
+      quantity: item.quantity,
+      value: money(item.valueCents, item.currency),
+      harmonized_tariff_code: item.hsCode,
+      country_of_origin: item.countryOfOrigin,
+    })),
   };
 }
 
@@ -116,6 +143,21 @@ function toLabel(label: z.output<typeof labelSchema>, operation: string): Purcha
     currency: label.shipment_cost.currency.toUpperCase(),
     document: { url },
     shipDate: label.ship_date,
+  };
+}
+
+function toManifest(
+  manifest: z.output<typeof manifestsResponse>["manifests"][number],
+  operation: string,
+): ProviderManifest {
+  const url = manifest.manifest_download?.href;
+  if (!url || !isShipStationDownload(url)) {
+    throw new ShippingError("unavailable", `${operation} malformed`);
+  }
+  return {
+    providerManifestId: manifest.manifest_id,
+    providerLabelIds: manifest.label_ids ?? [],
+    document: { url },
   };
 }
 
@@ -248,6 +290,7 @@ export class ShipStationAdapter implements ShippingProvider {
           quantity: item.quantity,
           ...(item.sku && { sku: item.sku }),
         })),
+        ...(request.customs && { customs: toCustoms(request.customs) }),
         packages: [
           {
             package_code: "package",
@@ -333,6 +376,51 @@ export class ShipStationAdapter implements ShippingProvider {
       voidResponse,
     );
     return { approved: result.approved, ...(result.message && { message: result.message }) };
+  }
+
+  /**
+   * An explicit manifest of these labels. ShipStation can answer `in_progress` with no document yet;
+   * that's `unavailable`, and the caller's `findManifests` picks the manifest up once it is ready.
+   */
+  async createManifest(input: {
+    carrierExternalId: string;
+    shipDate: string;
+    providerLabelIds: string[];
+  }): Promise<ProviderManifest> {
+    const result = await this.call(
+      "createManifest",
+      "POST",
+      "/v2/manifests",
+      createManifestResponse,
+      {
+        carrier_id: input.carrierExternalId,
+        ship_date: input.shipDate,
+        label_ids: input.providerLabelIds,
+      },
+    );
+    const [manifest] = result.manifests ?? [];
+    if (result.status === "in_progress" || !manifest) {
+      throw new ShippingError("unavailable", "createManifest in_progress");
+    }
+    return toManifest(manifest, "createManifest");
+  }
+
+  async findManifests(input: {
+    carrierExternalId: string;
+    shipDate: string;
+  }): Promise<ProviderManifest[]> {
+    const query = new URLSearchParams({
+      carrier_id: input.carrierExternalId,
+      ship_date_start: `${input.shipDate}T00:00:00.000Z`,
+      ship_date_end: `${input.shipDate}T23:59:59.999Z`,
+    });
+    const { manifests } = await this.call(
+      "findManifests",
+      "GET",
+      `/v2/manifests?${query}`,
+      manifestsResponse,
+    );
+    return manifests.map((manifest) => toManifest(manifest, "findManifests"));
   }
 
   private async call<Schema extends z.ZodType>(

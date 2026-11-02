@@ -11,8 +11,12 @@ import {
   createBatch,
   createBox,
   createInvitation,
+  createLabelPrint,
+  createManifest,
   createNote,
   createPriorityRule,
+  createShippingProviders,
+  customsProducts,
   deactivateUser,
   deleteBox,
   deleteIssue,
@@ -54,14 +58,18 @@ import {
   listUsers,
   listVoids,
   lockStation,
+  manifestCandidates,
   markLabelNotBought,
   markOutOfStock,
   myPicks,
+  orderCustoms,
   orderMutations,
+  orderPrintableLabels,
   packRemaining,
   packUnits,
   permissionsFor,
   pickLine,
+  pushErrors,
   queueCounts,
   reactivateUser,
   recheckAddress,
@@ -71,6 +79,7 @@ import {
   renameStation,
   reopenIssue,
   reorderPriorityRules,
+  repackOrders,
   reportIssue,
   requestSync,
   resendInvitation,
@@ -78,6 +87,8 @@ import {
   resolveVoids,
   restoreBox,
   retryFailedJob,
+  retryVoid,
+  retryWooPush,
   revokeBadge,
   revokeInvitation,
   revokeStation,
@@ -98,7 +109,9 @@ import {
   setServiceEnabled,
   setVerified,
   setWeight,
+  shipOrders,
   stationStatus,
+  stuckLabels,
   substitute,
   syncCarriers,
   testProvider,
@@ -114,12 +127,14 @@ import {
   updateNote,
   updatePreferences,
   updatePriorityRule,
+  updateProductCustoms,
   updateProviderConfig,
   updateSettings,
   updateUserRoles,
   voidCounts,
   voidItem,
   voidLabel,
+  writeOffLabel,
 } from "@woolrus/core";
 import { db } from "@woolrus/db";
 import { createLogger } from "@woolrus/logger";
@@ -177,6 +192,48 @@ export const router = implementer.router({
       restoreBox(db, context.actor, input),
     ),
     delete: api.boxes.delete.handler(({ input, context }) => deleteBox(db, context.actor, input)),
+  },
+  shipping: {
+    shipOrders: api.shipping.shipOrders.handler(({ input, context }) =>
+      shipOrders(db, context.actor, input),
+    ),
+    createLabelPrint: api.shipping.createLabelPrint.handler(({ input, context }) =>
+      createLabelPrint(db, context.actor, input),
+    ),
+    orderPrintableLabels: api.shipping.orderPrintableLabels.handler(({ input, context }) =>
+      orderPrintableLabels(db, context.actor, input),
+    ),
+    orderCustoms: api.shipping.orderCustoms.handler(({ input, context }) =>
+      orderCustoms(db, context.actor, input),
+    ),
+    repack: api.shipping.repack.handler(async ({ input, context }) =>
+      repackOrders(db, context.actor, input, { providers: await createShippingProviders(db) }),
+    ),
+    retryVoid: api.shipping.retryVoid.handler(async ({ input, context }) =>
+      retryVoid(db, context.actor, input, { providers: await createShippingProviders(db) }),
+    ),
+    writeOffLabel: api.shipping.writeOffLabel.handler(({ input, context }) =>
+      writeOffLabel(db, context.actor, input),
+    ),
+    stuckLabels: api.shipping.stuckLabels.handler(({ input, context }) =>
+      stuckLabels(db, context.actor, input),
+    ),
+    pushErrors: api.shipping.pushErrors.handler(({ context }) => pushErrors(db, context.actor)),
+    retryWooPush: api.shipping.retryWooPush.handler(({ input, context }) =>
+      retryWooPush(db, context.actor, input),
+    ),
+    customsProducts: api.shipping.customsProducts.handler(({ input, context }) =>
+      customsProducts(db, context.actor, input),
+    ),
+    updateProductCustoms: api.shipping.updateProductCustoms.handler(({ input, context }) =>
+      updateProductCustoms(db, context.actor, input),
+    ),
+    manifestCandidates: api.shipping.manifestCandidates.handler(async ({ input, context }) =>
+      manifestCandidates(db, context.actor, await createShippingProviders(db), input),
+    ),
+    createManifest: api.shipping.createManifest.handler(async ({ input, context }) =>
+      createManifest(db, context.actor, await createShippingProviders(db), storage(), input),
+    ),
   },
   settings: {
     get: api.settings.get.handler(({ context }) => getSettings(db, context.actor)),

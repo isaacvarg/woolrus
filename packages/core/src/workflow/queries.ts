@@ -5,6 +5,7 @@ import {
   type OrderListPage,
   type OrderListSort,
   type OrderView,
+  type PrintState,
   type QualityIssueSeverity,
   type QueueCounts,
   type QueuePage,
@@ -101,7 +102,19 @@ type QueueSqlRow = {
   topOpenSeverity: QualityIssueSeverity | null;
   unresolvedVoidCount: number;
   labelState: "none" | "purchasing" | "failed" | "unknown";
+  packageCount: number;
+  shippingSummary: string | null;
+  activeLabels: number;
+  printedLabels: number;
+  minPrintCount: number;
 };
+
+/** "Printed 2×" is the times every label has been printed; some printed and some not is partial. */
+function printStateOf(r: QueueSqlRow): PrintState {
+  if (r.activeLabels === 0 || r.printedLabels === 0) return { kind: "none" };
+  if (r.printedLabels < r.activeLabels) return { kind: "partial" };
+  return { kind: "printed", times: r.minPrintCount };
+}
 
 /**
  * One queue, most urgent first: priority desc, then the oldest order. `nextCursor` is null on the
@@ -141,7 +154,12 @@ export async function listQueue(
       qi.top_severity AS "topOpenSeverity",
       COALESCE(uv.unresolved_count, 0)::int AS "unresolvedVoidCount",
       CASE WHEN lb.has_unknown THEN 'unknown' WHEN lb.has_purchasing THEN 'purchasing'
-        WHEN lb.has_failed THEN 'failed' ELSE 'none' END AS "labelState"
+        WHEN lb.has_failed THEN 'failed' ELSE 'none' END AS "labelState",
+      COALESCE(pk.package_count, 0)::int AS "packageCount",
+      pl.summary AS "shippingSummary",
+      COALESCE(pl.active_labels, 0)::int AS "activeLabels",
+      COALESCE(pl.printed_labels, 0)::int AS "printedLabels",
+      COALESCE(pl.min_print_count, 0)::int AS "minPrintCount"
     FROM orders o
     LEFT JOIN users u ON u.id = o.claimed_by_id AND o.claimed_at > ${claimCutoff}
     -- One grouped subquery each, over this stage's orders only.
@@ -175,6 +193,26 @@ export async function listQueue(
       WHERE p.order_id IN (SELECT id FROM orders WHERE status = ${stage}::workflow_status)
       GROUP BY p.order_id
     ) lb ON lb.order_id = o.id
+    -- Packages, services and print counts matter to the Ready queue only.
+    LEFT JOIN (
+      SELECT p.order_id, COUNT(*) AS package_count
+      FROM packages p
+      WHERE p.discarded_at IS NULL AND ${stage}::text = 'READY'
+        AND p.order_id IN (SELECT id FROM orders WHERE status = ${stage}::workflow_status)
+      GROUP BY p.order_id
+    ) pk ON pk.order_id = o.id
+    LEFT JOIN (
+      SELECT p.order_id, COUNT(*) AS active_labels,
+        COUNT(*) FILTER (WHERE l.print_count > 0) AS printed_labels,
+        MIN(l.print_count) AS min_print_count,
+        STRING_AGG(DISTINCT COALESCE(cs.name, l.service_code), ', ') AS summary
+      FROM shipping_labels l
+      JOIN packages p ON p.id = l.package_id
+      LEFT JOIN carrier_services cs ON cs.id = l.service_id
+      WHERE l.status::text = 'ACTIVE' AND p.discarded_at IS NULL AND ${stage}::text = 'READY'
+        AND p.order_id IN (SELECT id FROM orders WHERE status = ${stage}::workflow_status)
+      GROUP BY p.order_id
+    ) pl ON pl.order_id = o.id
     WHERE o.status = ${stage}::workflow_status
       ${searchFilter(search)}
       ${afterCursor(after)}
@@ -216,6 +254,9 @@ export async function listQueue(
       topOpenSeverity: r.topOpenSeverity,
       unresolvedVoidCount: r.unresolvedVoidCount,
       labelState: r.labelState,
+      packageCount: r.packageCount,
+      shippingSummary: r.shippingSummary,
+      printState: printStateOf(r),
     })),
     nextCursor: rows.length > pageSize && last ? encodeCursor(last) : null,
   };
@@ -362,6 +403,7 @@ export async function getOrder(
         quantity: it.quantity,
       })),
       liveLabel: p.labels.length > 0,
+      discarded: p.discardedAt !== null,
       noteCount: notes.packages.get(p.id) ?? 0,
     })),
     voids: voids.map(toVoidView),
@@ -369,6 +411,12 @@ export async function getOrder(
     issues: issues
       .map(toIssueView)
       .sort((a, b) => Number(b.status === "OPEN") - Number(a.status === "OPEN")),
+    wooPush: {
+      status: order.wooPushStatus,
+      attempts: order.wooPushAttempts,
+      error: order.wooPushError,
+      pushedAt: order.wooPushedAt,
+    },
     allowedActions: allowedActions(actor, {
       status: order.status,
       heldFromStatus: order.heldFromStatus,

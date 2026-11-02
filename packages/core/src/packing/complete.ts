@@ -38,7 +38,7 @@ async function lockNextPacking(tx: DbTx, actor: Actor, now: Date): Promise<{ id:
  */
 async function noteStaleWeights(tx: DbTx, actor: Actor, orderId: string): Promise<void> {
   const stale = await tx.package.findMany({
-    where: { orderId, weightStale: true, weightOz: { not: null } },
+    where: { orderId, discardedAt: null, weightStale: true, weightOz: { not: null } },
     orderBy: { number: "asc" },
     select: { id: true, weightOz: true },
   });

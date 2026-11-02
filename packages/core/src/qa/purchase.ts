@@ -18,6 +18,7 @@ import { parcel } from "../carriers/rates";
 import { AppError } from "../errors";
 import { type Actor, can } from "../permissions";
 import { loadSettings } from "../settings/service";
+import { buildCustoms, customsLines } from "../shipping/customs";
 import { liveLabelStatuses } from "../workflow/gates";
 import { lockOrder } from "../workflow/lock";
 import { notifyOrderChanged } from "../workflow/notify";
@@ -67,7 +68,7 @@ const labelInclude = {
   package: {
     include: {
       box: true,
-      items: { include: { orderItem: true } },
+      items: { include: { orderItem: { include: { product: true } } } },
       rates: {
         where: { selected: true },
         include: { carrier: true, service: true },
@@ -126,6 +127,9 @@ class Purchase {
     if (to.kind !== "complete" || !size) return "errors.carriers.packageIncomplete";
     if (!from.success) return "errors.carriers.noShipFrom";
     const shipTo: ShipAddress = to.address;
+    const abroad = shipTo.country !== from.data.country;
+    const declaration = abroad ? buildCustoms(customsLines(pkg.items)) : null;
+    if (declaration && !declaration.complete) return "errors.shipping.customsIncomplete";
     return {
       orderNumber: order.number,
       shipFrom: from.data,
@@ -137,6 +141,7 @@ class Purchase {
         name: item.orderItem.name,
         quantity: item.quantity,
       })),
+      ...(declaration && { customs: declaration.customs }),
       services: [],
     };
   }

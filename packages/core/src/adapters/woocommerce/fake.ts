@@ -1,9 +1,17 @@
 import { toCents } from "../../units";
-import type { DimensionUnit, ListOrdersQuery, StoreAdapter, WeightUnit } from "./adapter";
-import type { StoreError } from "./errors";
+import type {
+  DimensionUnit,
+  ListOrdersQuery,
+  ShipmentTrackingInput,
+  StoreAdapter,
+  WeightUnit,
+} from "./adapter";
+import { StoreError } from "./errors";
 import {
   parseOrder,
+  parseOrderNote,
   parseProduct,
+  parseShipmentTracking,
   parseVariation,
   type WooOrder,
   type WooProduct,
@@ -48,8 +56,13 @@ export class FakeStoreAdapter implements StoreAdapter {
   #orders = new Map<number, Json>();
   #products = new Map<number, Json>();
   #variations = new Map<number, Json[]>();
+  #notes = new Map<number, Json[]>();
+  #trackings = new Map<number, Json[]>();
+  #astInstalled = true;
+  #loseNextTracking: StoreError | null = null;
   #failures: { method: Method; error: StoreError }[] = [];
   #defaultProductId: number | null = null;
+  #loseNextNote: StoreError | null = null;
 
   constructor(options: { units?: { weight: WeightUnit; dimension: DimensionUnit } } = {}) {
     this.units = options.units ?? { weight: "lbs", dimension: "in" };
@@ -203,6 +216,37 @@ export class FakeStoreAdapter implements StoreAdapter {
     this.#variations.delete(id);
   }
 
+  /** Notes the store holds for the order, as raw REST JSON (what `woo.push` tests assert on). */
+  notesOf(orderId: number): { id: number; note: string; customer_note: boolean }[] {
+    return structuredClone((this.#notes.get(orderId) ?? []) as never);
+  }
+
+  /** The next `addOrderNote` call stores the note but throws `error` as if the response were lost. */
+  loseNextNoteResponse(error: StoreError): void {
+    this.#loseNextNote = error;
+  }
+
+  /** Installs or removes the AST plugin (installed by default, like the dev store). */
+  setShipmentTrackingPlugin(installed: boolean): void {
+    this.#astInstalled = installed;
+  }
+
+  /** Tracking items the store holds for the order, as raw AST JSON. */
+  trackingsOf(orderId: number): {
+    tracking_id: string;
+    tracking_provider: string;
+    tracking_link: string;
+    tracking_number: string;
+    date_shipped: string;
+  }[] {
+    return structuredClone((this.#trackings.get(orderId) ?? []) as never);
+  }
+
+  /** The next `addShipmentTracking` call stores the item but throws `error` as if the response were lost. */
+  loseNextTrackingResponse(error: StoreError): void {
+    this.#loseNextTracking = error;
+  }
+
   // ---- StoreAdapter --------------------------------------------------------------------------
 
   async ping(): Promise<void> {
@@ -258,6 +302,60 @@ export class FakeStoreAdapter implements StoreAdapter {
     return (this.#variations.get(productId) ?? []).map((v) => parseVariation(structuredClone(v)));
   }
 
+  async listOrderNotes(orderId: number) {
+    this.#call("listOrderNotes", orderId);
+    this.#order(orderId, "notFound");
+    return (this.#notes.get(orderId) ?? []).map((n) => parseOrderNote(structuredClone(n)));
+  }
+
+  async addOrderNote(orderId: number, input: { note: string; customerNote: boolean }) {
+    this.#call("addOrderNote", orderId, input);
+    this.#order(orderId, "notFound");
+    const note = { id: this.#nextId++, note: input.note, customer_note: input.customerNote };
+    this.#notes.set(orderId, [...(this.#notes.get(orderId) ?? []), note]);
+    const lost = this.#loseNextNote;
+    this.#loseNextNote = null;
+    if (lost) throw lost;
+    return { noteId: note.id };
+  }
+
+  async hasShipmentTracking() {
+    this.#call("hasShipmentTracking");
+    return this.#astInstalled;
+  }
+
+  async listShipmentTrackings(orderId: number) {
+    this.#call("listShipmentTrackings", orderId);
+    this.#requireTracking(orderId);
+    return (this.#trackings.get(orderId) ?? []).map((t) =>
+      parseShipmentTracking(structuredClone(t)),
+    );
+  }
+
+  async addShipmentTracking(orderId: number, input: ShipmentTrackingInput) {
+    this.#call("addShipmentTracking", orderId, input);
+    this.#requireTracking(orderId);
+    // Like AST: a custom provider is stored under no known name, with the link it was given.
+    const item: Json = {
+      tracking_id: String(this.#nextId++).padStart(32, "0"),
+      tracking_provider: input.provider.custom ? "" : input.provider.name,
+      tracking_link: input.provider.custom ? (input.provider.link ?? "") : "",
+      tracking_number: input.trackingNumber,
+      date_shipped: input.dateShipped,
+    };
+    this.#trackings.set(orderId, [...(this.#trackings.get(orderId) ?? []), item]);
+    const lost = this.#loseNextTracking;
+    this.#loseNextTracking = null;
+    if (lost) throw lost;
+    return { trackingId: item.tracking_id as string };
+  }
+
+  async completeOrder(orderId: number) {
+    this.#call("completeOrder", orderId);
+    this.#order(orderId, "notFound");
+    this.editOrder(orderId, { status: "completed" });
+  }
+
   // ---- Internals -----------------------------------------------------------------------------
 
   #call(method: Method, ...args: unknown[]): void {
@@ -267,13 +365,19 @@ export class FakeStoreAdapter implements StoreAdapter {
     if (failure) throw failure.error;
   }
 
+  #requireTracking(orderId: number): void {
+    if (!this.#astInstalled) throw new StoreError("trackingUnavailable", "no AST route", 404);
+    this.#order(orderId, "notFound");
+  }
+
   #tick(): string {
     this.#clock += 1000;
     return new Date(this.#clock).toISOString().slice(0, 19);
   }
 
-  #order(id: number): Json {
+  #order(id: number, missing: "throw" | "notFound" = "throw"): Json {
     const order = this.#orders.get(id);
+    if (!order && missing === "notFound") throw new StoreError("notFound", `order ${id}`, 404);
     if (!order) throw new Error(`FakeStoreAdapter: no order ${id}`);
     return order;
   }

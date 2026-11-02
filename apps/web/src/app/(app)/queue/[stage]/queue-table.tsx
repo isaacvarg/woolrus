@@ -8,6 +8,9 @@ import { useFormatter, useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
 import { Input, Label, SearchField } from "react-aria-components";
 import { NoteCount } from "@/components/notes/note-count";
+import { RepackButton } from "@/components/shipping/repack-button";
+import { ShipButton } from "@/components/shipping/ship-button";
+import { useLabelPrint } from "@/components/shipping/use-label-print";
 import { Button, Checkbox } from "@/components/ui/fields";
 import { toast } from "@/components/ui/toast";
 import { useErrorMessage } from "@/lib/errors";
@@ -16,6 +19,8 @@ import { useReasonText } from "@/lib/reasons";
 import { PickTogether } from "./pick-together";
 
 const SEARCH_DEBOUNCE_MS = 250;
+/** The most orders one print covers (`CreateLabelPrintInput`); past it the button is off rather than printing a prefix. */
+const MAX_PRINT_ORDERS = 50;
 
 /** Time in stage, coarsened for a glance: minutes, then hours, then days. */
 function ageParts(since: Date, now: number): { unit: "Minutes" | "Hours" | "Days"; count: number } {
@@ -47,12 +52,18 @@ export function QueueTable({
   canBeginPicking,
   canPack,
   canQa,
+  canPrint = false,
+  canShip = false,
+  canRepack = false,
 }: {
   stage: QueueStage;
   userId: string | null;
   canBeginPicking: boolean;
   canPack: boolean;
   canQa: boolean;
+  canPrint?: boolean;
+  canShip?: boolean;
+  canRepack?: boolean;
 }) {
   const t = useTranslations();
   const reasonText = useReasonText();
@@ -80,15 +91,20 @@ export function QueueTable({
   const showBeginPicking = stage === "PENDING" && canBeginPicking;
   const showStartPacking = stage === "PACKING" && canPack;
   const showStartQa = stage === "QA" && canQa;
+  const showPrint = stage === "READY" && canPrint;
+  const showReady = stage === "READY";
   const columns =
     7 +
     (onHold ? 1 : 0) +
     (showBeginPicking ? 2 : 0) +
     (showStartPacking ? 1 : 0) +
-    (showStartQa ? 1 : 0);
+    (showStartQa ? 1 : 0) +
+    (showPrint ? 1 : 0) +
+    (showReady ? 2 : 0);
   // Ticked for Pick together, by id. Rows keep the version they were ticked at: if one changes
   // meanwhile the batch is refused as stale and the panel says so.
   const [selected, setSelected] = useState<Map<string, QueueRow>>(() => new Map());
+  const printLabels = useLabelPrint({ onPrinted: () => setSelected(new Map()) });
   const toggle = (row: QueueRow, on: boolean) =>
     setSelected((current) => {
       const next = new Map(current);
@@ -151,11 +167,34 @@ export function QueueTable({
         <PickTogether selected={[...selected.values()]} onStarted={() => setSelected(new Map())} />
       )}
 
+      {showPrint && (
+        <Button
+          isDisabled={selected.size === 0 || selected.size > MAX_PRINT_ORDERS}
+          isPending={printLabels.isPending}
+          onPress={() => printLabels.mutate({ orderIds: [...selected.keys()] })}
+        >
+          {selected.size > 0
+            ? t("queue.printSelected", { count: selected.size })
+            : t("queue.printLabels")}
+        </Button>
+      )}
+
+      {showReady && canShip && (
+        <ShipButton orderIds={[...selected.keys()]} onShipped={() => setSelected(new Map())} />
+      )}
+
+      {showReady && canRepack && (
+        <RepackButton
+          orderNumbers={new Map([...selected].map(([id, row]) => [id, row.number]))}
+          onRepacked={() => setSelected(new Map())}
+        />
+      )}
+
       <div className="overflow-x-auto rounded-box bg-base-100 shadow-sm">
         <table className="table text-base">
           <thead>
             <tr>
-              {showBeginPicking && (
+              {(showBeginPicking || showPrint) && (
                 <th>
                   <span className="sr-only">{t("queue.select")}</span>
                 </th>
@@ -167,6 +206,8 @@ export function QueueTable({
               {/* Hidden on tablets in portrait: the floor needs the age, not the date. */}
               <th className="hidden lg:table-cell">{t("queue.orderedAt")}</th>
               <th>{t("queue.age")}</th>
+              {showReady && <th>{t("queue.packagesColumn")}</th>}
+              {showReady && <th>{t("queue.printColumn")}</th>}
               {onHold ? (
                 <>
                   <th>{t("queue.heldFrom")}</th>
@@ -223,6 +264,17 @@ export function QueueTable({
                       router.push(href);
                   }}
                 >
+                  {showPrint && (
+                    <td className="w-12">
+                      <Checkbox
+                        aria-label={t("queue.selectOrder", { number: row.number })}
+                        isSelected={selected.has(row.id)}
+                        onChange={(on) => toggle(row, on)}
+                      >
+                        {null}
+                      </Checkbox>
+                    </td>
+                  )}
                   {showBeginPicking && (
                     <td className="w-12">
                       {!claimedByOther(row) && (
@@ -318,6 +370,22 @@ export function QueueTable({
                     {/* Red alone and a hover title reach neither screen readers nor touch. */}
                     {row.slaBreached && <span className="sr-only"> {t("queue.slaBreached")}</span>}
                   </td>
+                  {showReady && (
+                    <td>
+                      {t("queue.packages", { count: row.packageCount })}
+                      {row.shippingSummary && (
+                        <span className="block text-sm opacity-70">{row.shippingSummary}</span>
+                      )}
+                    </td>
+                  )}
+                  {showReady && (
+                    <td data-testid="queue-print-state" data-state={row.printState.kind}>
+                      {/* Text, not colour alone, says whether it was printed. */}
+                      {row.printState.kind === "printed"
+                        ? t("queue.printState.printed", { times: row.printState.times })
+                        : t(`queue.printState.${row.printState.kind}`)}
+                    </td>
+                  )}
                   {onHold ? (
                     <>
                       <td>{row.heldFromStatus && t(`status.${row.heldFromStatus}`)}</td>

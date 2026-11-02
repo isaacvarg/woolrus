@@ -1,6 +1,7 @@
 import type { Db } from "@woolrus/db";
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createActor, resetDb, testDb } from "../../test/db";
+import { FakeStoreAdapter } from "../adapters/woocommerce/fake";
 import { getPublicSettings, getSettings, setSecret, updateSettings } from "./service";
 
 const db: Db = testDb();
@@ -39,6 +40,7 @@ describe("settings service", () => {
       qaMustDifferFromPacker: false,
       labelCostConfirmRatio: 2,
       labelCostConfirmFreeCents: 1500,
+      wooTrackingEnabled: false,
       secrets: {
         wooConsumerKey: { configured: false },
         wooConsumerSecret: { configured: false },
@@ -264,5 +266,63 @@ describe("integration URL origin changes", () => {
     expect((await clearAudits()).map((a) => a.after)).toEqual([
       { secret: "lumexiaApiKey", reason: "urlChanged" },
     ]);
+  });
+});
+
+describe("tracking switch (SPEC-shipping success criterion 5)", () => {
+  it("is refused while the store lacks the AST route, and nothing changes", async () => {
+    const admin = await createActor(db, ["ADMIN"]);
+    const store = new FakeStoreAdapter();
+    store.setShipmentTrackingPlugin(false);
+    await expect(
+      updateSettings(db, admin, { wooTrackingEnabled: true }, async () => store),
+    ).rejects.toMatchObject({ message: "errors.settings.trackingPluginMissing" });
+    expect((await getSettings(db, admin)).wooTrackingEnabled).toBe(false);
+    expect(await db.auditEvent.count({ where: { entityType: "Settings" } })).toBe(0);
+  });
+
+  it("is refused when no store is configured", async () => {
+    const admin = await createActor(db, ["ADMIN"]);
+    await expect(
+      updateSettings(db, admin, { wooTrackingEnabled: true }, async () => null),
+    ).rejects.toMatchObject({ message: "errors.settings.trackingPluginMissing" });
+  });
+
+  it("is allowed once the store has the route, and audited", async () => {
+    const admin = await createActor(db, ["ADMIN"]);
+    const updated = await updateSettings(
+      db,
+      admin,
+      { wooTrackingEnabled: true },
+      async () => new FakeStoreAdapter(),
+    );
+    expect(updated.wooTrackingEnabled).toBe(true);
+    const audit = await db.auditEvent.findMany({ where: { entityType: "Settings" } });
+    expect(audit.map((a) => [a.before, a.after])).toEqual([
+      [{ wooTrackingEnabled: false }, { wooTrackingEnabled: true }],
+    ]);
+  });
+
+  it("switches off without asking the store", async () => {
+    const admin = await createActor(db, ["ADMIN"]);
+    await updateSettings(
+      db,
+      admin,
+      { wooTrackingEnabled: true },
+      async () => new FakeStoreAdapter(),
+    );
+    const connect = vi.fn(async () => null);
+    const updated = await updateSettings(db, admin, { wooTrackingEnabled: false }, connect);
+    expect(updated.wooTrackingEnabled).toBe(false);
+    expect(connect).not.toHaveBeenCalled();
+  });
+
+  it.each(nonAdmins)("is forbidden for %s, before touching the store", async (role) => {
+    const actor = await createActor(db, [role]);
+    const connect = vi.fn(async () => new FakeStoreAdapter());
+    await expect(
+      updateSettings(db, actor, { wooTrackingEnabled: true }, connect),
+    ).rejects.toMatchObject({ kind: "FORBIDDEN" });
+    expect(connect).not.toHaveBeenCalled();
   });
 });

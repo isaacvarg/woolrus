@@ -114,6 +114,8 @@ export function describeShippingProvider(
       );
       expect(typeof provider.findLabel === "function").toBe(provider.capabilities.labelLookup);
       expect(typeof provider.voidLabel === "function").toBe(provider.capabilities.void);
+      expect(typeof provider.createManifest === "function").toBe(provider.capabilities.manifests);
+      expect(typeof provider.findManifests === "function").toBe(provider.capabilities.manifests);
     });
 
     it("pings with accepted credentials", async () => {
@@ -223,6 +225,28 @@ export function describeShippingProvider(
         const label = await purchase(request, rate, `contract-${crypto.randomUUID()}`);
         const result = await provider.voidLabel(label.providerLabelId);
         expect(typeof result.approved).toBe("boolean");
+      },
+    );
+
+    it.skipIf(!quotes || !buys)(
+      "manifests labels, and finds that manifest again by carrier and day",
+      async (ctx) => {
+        if (!provider.createManifest || !provider.findManifests) return ctx.skip();
+        const request = await domesticRequest();
+        const [rate] = await provider.getRates(request);
+        if (!rate) throw new Error("no rate to buy");
+        const label = await purchase(request, rate, `contract-${crypto.randomUUID()}`);
+        const shipDate = label.shipDate.toISOString().slice(0, 10);
+        const input = { carrierExternalId: rate.carrierExternalId, shipDate };
+        expect(await provider.findManifests(input)).toEqual([]);
+        const made = await provider.createManifest({
+          ...input,
+          providerLabelIds: [label.providerLabelId],
+        });
+        expect(made.providerManifestId).toBeTruthy();
+        expect(made.providerLabelIds).toEqual([label.providerLabelId]);
+        const found = await provider.findManifests(input);
+        expect(found.map((m) => m.providerManifestId)).toEqual([made.providerManifestId]);
       },
     );
 

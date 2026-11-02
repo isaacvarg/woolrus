@@ -18,8 +18,13 @@ import error400 from "./__fixtures__/error-400.json" with { type: "json" };
 import error401 from "./__fixtures__/error-401.json" with { type: "json" };
 import error429 from "./__fixtures__/error-429.json" with { type: "json" };
 import error500 from "./__fixtures__/error-500.json" with { type: "json" };
+import errorManifestCarrier from "./__fixtures__/error-manifest-carrier.json" with { type: "json" };
 import label from "./__fixtures__/label.json" with { type: "json" };
 import labelsEmpty from "./__fixtures__/labels-empty.json" with { type: "json" };
+import manifestCreated from "./__fixtures__/manifest-created.json" with { type: "json" };
+import manifestInProgress from "./__fixtures__/manifest-in-progress.json" with { type: "json" };
+import manifestsEmpty from "./__fixtures__/manifests-empty.json" with { type: "json" };
+import manifestsList from "./__fixtures__/manifests-list.json" with { type: "json" };
 import rates from "./__fixtures__/rates.json" with { type: "json" };
 import ratesError from "./__fixtures__/rates-error.json" with { type: "json" };
 import voidApproved from "./__fixtures__/void-approved.json" with { type: "json" };
@@ -46,6 +51,7 @@ function fixtureApi(overrides: Record<string, () => Response> = {}) {
   const calls: Call[] = [];
   const failures: SimulatedFailure[] = [];
   const bought = new Map<string, typeof label>();
+  const manifests: (typeof manifestCreated.manifests)[number][] = [];
 
   const fetch: typeof globalThis.fetch = async (input, init = {}) => {
     const url = new URL(String(input));
@@ -81,6 +87,20 @@ function fixtureApi(overrides: Record<string, () => Response> = {}) {
       return json(found ? { ...labelsEmpty, labels: [found], total: 1, pages: 1 } : labelsEmpty);
     }
     if (method === "PUT" && url.pathname.endsWith("/void")) return json(voidApproved);
+    if (route === "POST /v2/manifests") {
+      const { label_ids, carrier_id } = body as { label_ids: string[]; carrier_id: string };
+      const made = {
+        ...(manifestCreated.manifests[0] as (typeof manifestCreated.manifests)[number]),
+        label_ids,
+        carrier_id,
+      };
+      manifests.push(made);
+      return json({ ...manifestCreated, manifests: [made] });
+    }
+    if (route === "GET /v2/manifests") {
+      const found = manifests.filter((m) => m.carrier_id === url.searchParams.get("carrier_id"));
+      return json(found.length > 0 ? { ...manifestsList, manifests: found } : manifestsEmpty);
+    }
     return json({ errors: [{ error_code: "not_found" }] }, 404);
   };
 
@@ -254,6 +274,51 @@ describe("ShipStation adapter", () => {
             },
           ],
         },
+      });
+    });
+
+    it("sends no customs block for a domestic shipment", async () => {
+      const { provider, calls } = setup();
+      await provider.getRates(request);
+      expect(JSON.stringify(calls.at(-1)?.body)).not.toContain("customs");
+    });
+
+    it("maps the declaration to the shipment's customs block", async () => {
+      const { provider, calls } = setup();
+      await provider.getRates({
+        ...request,
+        shipTo: { ...request.shipTo, country: "CA" },
+        customs: {
+          contents: "merchandise",
+          nonDelivery: "return_to_sender",
+          items: [
+            {
+              sku: "SOAP",
+              description: "Soap bar",
+              quantity: 2,
+              valueCents: 900,
+              currency: "USD",
+              hsCode: "340111",
+              countryOfOrigin: "US",
+              weightOz: 8,
+            },
+          ],
+        },
+      });
+      const body = calls.at(-1)?.body as { shipment: { customs: unknown } };
+      expect(body.shipment.customs).toEqual({
+        contents: "merchandise",
+        non_delivery: "return_to_sender",
+        customs_items: [
+          {
+            sku: "SOAP",
+            description: "Soap bar",
+            quantity: 2,
+            value: { currency: "usd", amount: 9 },
+            harmonized_tariff_code: "340111",
+            country_of_origin: "US",
+          },
+        ],
       });
     });
 
@@ -534,6 +599,81 @@ describe("ShipStation adapter", () => {
       expect(text, file).not.toMatch(/"(phone|email)"\s*:\s*"[^"]/);
       expect(text, file).not.toMatch(/"account_number"\s*:\s*"(?!X+")/);
     }
+  });
+
+  describe("manifests", () => {
+    const input = {
+      carrierExternalId: "se-1000002",
+      shipDate: "2026-11-02",
+      providerLabelIds: ["se-5000001", "se-5000002"],
+    };
+
+    it("creates an explicit manifest of the labels and returns its download", async () => {
+      const { provider, calls } = setup();
+      const made = await provider.createManifest(input);
+      const call = calls.at(-1);
+      expect(call?.method).toBe("POST");
+      expect(call?.url.pathname).toBe("/v2/manifests");
+      expect(call?.body).toEqual({
+        carrier_id: "se-1000002",
+        ship_date: "2026-11-02",
+        label_ids: ["se-5000001", "se-5000002"],
+      });
+      expect(made).toEqual({
+        providerManifestId: "se-6000001",
+        providerLabelIds: ["se-5000001", "se-5000002"],
+        document: {
+          url: "https://api.shipstation.com/v2/downloads/10/fixture/manifest-6000001.pdf",
+        },
+      });
+    });
+
+    it("treats an in-progress manifest as unavailable, to be looked up later", async () => {
+      const { provider } = setup({ "POST /v2/manifests": () => json(manifestInProgress) });
+      expect(await rejection(provider.createManifest(input))).toMatchObject({
+        kind: "unavailable",
+        permanent: false,
+      });
+    });
+
+    it("surfaces a carrier without manifests as notOffered", async () => {
+      const { provider } = setup({
+        "POST /v2/manifests": () => json(errorManifestCarrier, 400),
+      });
+      expect(await rejection(provider.createManifest(input))).toMatchObject({
+        kind: "notOffered",
+      });
+    });
+
+    it("refuses a manifest whose download isn't on a ShipStation host", async () => {
+      const elsewhere = {
+        ...manifestCreated,
+        manifests: [
+          {
+            ...manifestCreated.manifests[0],
+            manifest_download: { href: "https://evil.example.com/m.pdf" },
+          },
+        ],
+      };
+      const { provider } = setup({ "POST /v2/manifests": () => json(elsewhere) });
+      expect(await rejection(provider.createManifest(input))).toMatchObject({
+        kind: "unavailable",
+        detail: "createManifest malformed",
+      });
+    });
+
+    it("finds the day's manifests for a carrier account, and none when there are none", async () => {
+      const { provider, calls } = setup();
+      expect(await provider.findManifests(input)).toEqual([]);
+      await provider.createManifest(input);
+      const found = await provider.findManifests(input);
+      const call = calls.at(-1);
+      expect(call?.url.searchParams.get("carrier_id")).toBe("se-1000002");
+      expect(call?.url.searchParams.get("ship_date_start")).toBe("2026-11-02T00:00:00.000Z");
+      expect(call?.url.searchParams.get("ship_date_end")).toBe("2026-11-02T23:59:59.999Z");
+      expect(found.map((m) => m.providerManifestId)).toEqual(["se-6000001"]);
+      expect(found[0]?.providerLabelIds).toEqual(["se-5000001", "se-5000002"]);
+    });
   });
 
   describe("errors", () => {
