@@ -141,7 +141,10 @@ function RateReason({
         isDisabled={save.isPending}
         onChange={(key) => {
           const next = key === noReason || key === null ? null : RateSelectionReason.parse(key);
-          if (next !== reason) save.mutate({ reason: next });
+          if (next === reason) return;
+          // The server drops the note with any other reason; so does the field.
+          if (next !== "OTHER") setDraft("");
+          save.mutate({ reason: next });
         }}
       />
       {reason === "OTHER" && (

@@ -38,7 +38,21 @@ test("QA picks the pricier rate with a reason; the label and the drawer carry it
 
       await page.getByTestId("qa-rate").nth(1).click();
       await expect(page.getByTestId("qa-rate").nth(1)).toHaveAttribute("data-selected", "true");
-      await page.getByRole("button", { name: /Why this rate\?/ }).click();
+      const reason = page.getByRole("button", { name: /Why this rate\?/ });
+      const note = page.getByRole("textbox", { name: "Note" });
+      // A note written for Other doesn't come back after another reason replaced it.
+      await reason.click();
+      await page.getByRole("option", { name: "Other" }).click();
+      await note.fill("Customer called");
+      await note.blur();
+      await reason.click();
+      await page.getByRole("option", { name: "Customer requested" }).click();
+      await expect(note).toHaveCount(0);
+      await reason.click();
+      await page.getByRole("option", { name: "Other" }).click();
+      await expect(note).toHaveValue("");
+
+      await reason.click();
       await page.getByRole("option", { name: "Faster delivery" }).click();
       await expect(page.getByRole("button", { name: /Why this rate\?/ })).toContainText(
         "Faster delivery",

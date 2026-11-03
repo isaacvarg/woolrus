@@ -168,7 +168,7 @@ Additions to existing models:
 
 ### Writing the log (`packages/core/src/rate-history/log.ts`)
 
-`logRateFetch(tx, input): Promise<{ fetchId, quoteIdsByKey }>` — pure insert, no permission check (callers already
+`logRateFetch(tx, input): Promise<{ fetchId, quoteIds }>` (`quoteIds[i]` is the quote of `input.rates[i]`) — pure insert, no permission check (callers already
 hold theirs). `input` = source, trigger, the order/package or lab ids, the ship-to (reduced to the lane inside the
 helper, so callers can't leak a full address by mistake), residential, international, the parcel, the provider
 errors, the rates as `ProviderRate` + resolved carrier and service ids, and which providers were fake.

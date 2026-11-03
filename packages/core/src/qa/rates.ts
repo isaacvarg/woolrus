@@ -63,9 +63,10 @@ function assertReasonNeeded(
   }
 }
 
+/** `assertNote` has already refused a note without OTHER. */
 const reasonFields = (reason: RateSelectionReason | null, note: string | undefined) => ({
   selectionReason: reason,
-  selectionNote: reason === "OTHER" ? (note ?? null) : null,
+  selectionNote: note ?? null,
 });
 
 /**
