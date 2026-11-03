@@ -79,7 +79,7 @@ States: `not started` → `spec draft` → `spec approved` → `planned` → `in
 | `returns` | M5 | — | [#31](https://github.com/isaacvarg/woolrus/issues/31) | not started |
 | `reporting` | M5 | — | [#32](https://github.com/isaacvarg/woolrus/issues/32) | not started |
 | `rate-history` | M5 | [SPEC-rate-history](docs/specs/SPEC-rate-history.md) | [#139](https://github.com/isaacvarg/woolrus/issues/139) | done |
-| `rate-lab` | M5 | [SPEC-rate-lab](docs/specs/SPEC-rate-lab.md) | [#140](https://github.com/isaacvarg/woolrus/issues/140) | spec approved |
+| `rate-lab` | M5 | [SPEC-rate-lab](docs/specs/SPEC-rate-lab.md) | [#140](https://github.com/isaacvarg/woolrus/issues/140) | planned |
 
 **Next up:** pick the first module in roadmap order whose dependencies are `done` and whose own state isn't `done`.
 
