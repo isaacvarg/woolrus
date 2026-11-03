@@ -18,9 +18,9 @@ reads the quotes `rate-history` keeps from real packages: what was chosen, what 
 
 - **SRS:** FR-REP-03 (spend by carrier and service; label cost vs. shipping charged), FR-REP-04 (CSV export) for
   its own reports. New: rate testing.
-- **Users:** Admin and Shipper run tests, get one-off quotes and read runs and trends (`ratelab.use`). Admins
-  manage test addresses, parcels and groups (`ratelab.manage`) and read Real orders (`report.read`, Admin only
-  today).
+- **Users:** anyone given the **Rate Lab** role (any user, next to their other roles; decision 13) runs tests, gets
+  one-off quotes, reads runs and trends (`ratelab.use`) and manages test addresses, parcels and groups
+  (`ratelab.manage`). Admins have both. Real orders needs `report.read` (Admin only today).
 - **Why now:** M4 shipped labels. Before we change carrier accounts or box sizes, we want to measure prices
   rather than guess, and see what real orders actually paid.
 
@@ -73,7 +73,10 @@ reads the quotes `rate-history` keeps from real packages: what was chosen, what 
 
 ### Permissions (`packages/core/src/permissions.ts`)
 
-New: `ratelab.use` (Admin, Shipper), `ratelab.manage` (Admin). Real orders uses the existing `report.read`.
+New role `RATE_LAB` (Prisma `Role`, i18n label, assignable on Users like any other role) granting the new
+`ratelab.use` and `ratelab.manage`; Admins have both through `ADMIN`. No other role gets them, so a Shipper or QA
+user sees Rate Lab only once the role is ticked. The two permissions stay separate so `manage` could move to a
+narrower role later. Real orders uses the existing `report.read`.
 
 ### Data (`packages/db/prisma/schema/rate-lab.prisma`, new file)
 
@@ -321,7 +324,7 @@ where noted. Filters: date range, carrier, service, destination country/state, b
 
 ### UI (`apps/web/src/app/(app)/rate-lab/`)
 
-- **Sidebar:** a **Rate Lab** entry for `ratelab.use` (Admin, Shipper), next to Manifests. The layout has tabs:
+- **Sidebar:** a **Rate Lab** entry for `ratelab.use` (Admin, Rate Lab role), next to Manifests. The layout has tabs:
   **Runs · Addresses · Parcels · Quote · Trends · Real orders** (Real orders only with `report.read`).
 - **Runs:** a table modelled on `sync/sync-runs.tsx`: started at, started by, duration, status badge, combinations,
   quotes, failures, groups. **New run** dialog with group/item pickers and the live combination count (red and
@@ -351,7 +354,7 @@ fakes with slightly drifting prices, so Trends has lines in dev.
 
 ### Files expected to change
 
-`packages/db/prisma/schema/{rate-lab,shipping,system}.prisma` + one migration, `packages/db/prisma/seed*.ts`,
+`packages/db/prisma/schema/{rate-lab,shipping,system,auth}.prisma` + one migration, `packages/db/prisma/seed*.ts`,
 `packages/core/src/rate-lab/**` (+ tests), `packages/core/src/permissions.ts`, `packages/core/src/jobs.ts`,
 `packages/core/src/operations/pii-purge.ts`, `packages/core/src/settings/**`, `packages/core/src/index.ts`,
 `apps/worker/src/**`, `packages/contracts/src/{rate-lab,settings,index}.ts`, `apps/web/src/server/router.ts`,
@@ -392,14 +395,16 @@ fakes with slightly drifting prices, so Trends has lines in dev.
 13. **Real orders:** on seeded labels, the cheapest-pick %, overspend (with the reason split), carrier share, lane
     cost and cost-vs-charged figures are exact; voided labels are excluded.
 14. **CSV:** column set and quoting; a title starting with `=` is escaped; forbidden without the permission.
-15. **Permissions:** every procedure and both CSV routes have allowed and forbidden tests (a Shipper can run but
-    not edit addresses; a Shipper can't read Real orders; a Picker can't open Rate Lab).
+15. **Permissions:** every procedure and both CSV routes have allowed and forbidden tests (a Rate Lab user can run
+    and edit addresses but can't read Real orders; a Shipper or QA user without the role can't open Rate Lab; a
+    Picker given the role can).
 16. **Performance:** a 250-combination run against fakes at 1 s latency finishes in under 2 minutes; `run` loads
     a 250-combination × 10-quote run in under 500 ms p95; Real orders over 10,000 packages loads in under 1 s.
-17. **E2E (desktop), fake providers:** an admin adds two addresses and two parcels in a group → a shipper starts a
-    run, sees progress, opens the finished run and sees insights → exports CSV (download received) → opens the PDF
-    report page → does a one-off quote → Trends shows a cell per combination. A Picker doesn't see Rate Lab. The
-    run report page has no nav and fits the print width (checked with `page.emulateMedia({ media: "print" })`).
+17. **E2E (desktop), fake providers:** an admin adds two addresses and two parcels in a group → a Rate Lab user
+    starts a run, sees progress, opens the finished run and sees insights → exports CSV (download received) → opens
+    the PDF report page → does a one-off quote → Trends shows a cell per combination. A user without the Rate Lab
+    role doesn't see it. The run report page has no nav and fits the print width (checked with
+    `page.emulateMedia({ media: "print" })`).
 18. Green: `pnpm lint && pnpm typecheck && pnpm test && pnpm build`, `migrate:check`, plus Playwright.
 
 ## Assumptions
@@ -428,7 +433,9 @@ fakes with slightly drifting prices, so Trends has lines in dev.
 11. **Run cap** counts combinations, set on Settings → Shipping, default 250.
 12. **One-off quotes** are saved as `ONE_OFF` runs, kept out of Trends, and can be saved as test addresses and
     parcels.
-13. **Permissions:** `ratelab.use` for Admin and Shipper, `ratelab.manage` and Real orders (`report.read`) for Admin.
+13. **Permissions:** a `RATE_LAB` role, tacked onto any user next to their other roles, grants `ratelab.use` and
+    `ratelab.manage`; Admins have both. Real orders stays `report.read` (Admin). (Revised 2026-11-03: was Admin and
+    Shipper for `use`, Admin for `manage`; QA needs access too, granted per user.)
 
 ## Open questions
 
@@ -436,5 +443,3 @@ fakes with slightly drifting prices, so Trends has lines in dev.
    shipment record in the ShipStation account. If so, every lab combination leaves one there. To check against the
    v2 reference when the job ticket is built. If it does, we either accept it (they're never labelled) or pass a
    flag that avoids it, if the API has one.
-2. **QA role access:** QA picks rates every day but isn't in `ratelab.use` (decided: Admin and Shipper). Should QA
-   see Rate Lab too?
