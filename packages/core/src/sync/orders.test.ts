@@ -387,6 +387,41 @@ describe("syncOrders: later polls (SC 2, SC 3 retry)", () => {
     });
   });
 
+  it("starts over from every processing order once the store URL moves to another origin", async () => {
+    await poll(later(HOUR));
+    const moveStore = (before: string, after: string, at: Date) =>
+      db.auditEvent.create({
+        data: {
+          entityType: "Settings",
+          entityId: "1",
+          action: "update",
+          before: { wooStoreUrl: before },
+          after: { wooStoreUrl: after },
+          at,
+        },
+      });
+    await moveStore("https://old.example", "https://new.example", later(2 * HOUR));
+    store.calls.length = 0;
+
+    await poll(later(3 * HOUR));
+
+    expect(store.calls.find((c) => c.method === "listOrders")?.args[0]).toEqual({
+      status: "processing",
+      page: 1,
+    });
+
+    // A path-only change is the same store: the next poll takes its window from the one above.
+    await moveStore("https://new.example", "https://new.example/shop", later(4 * HOUR));
+    store.calls.length = 0;
+
+    await poll(later(5 * HOUR));
+
+    expect(store.calls.find((c) => c.method === "listOrders")?.args[0]).toEqual({
+      modifiedAfter: new Date(later(3 * HOUR).getTime() - 10 * 60 * 1000),
+      page: 1,
+    });
+  });
+
   it("imports a new order created after the last poll, and nothing twice", async () => {
     store.addOrder();
     await poll(store.now());
