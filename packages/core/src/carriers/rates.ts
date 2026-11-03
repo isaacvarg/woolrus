@@ -12,23 +12,17 @@ import {
   type LabelStatus,
   Prisma,
   type RatesStatus,
-  type ShipToStatus,
   type WorkflowStatus,
 } from "@woolrus/db";
-import type { ErrorCode } from "@woolrus/i18n";
 import { z } from "zod";
-import { ShippingError, shippingErrorFromCause } from "../adapters/shipping/errors";
 import {
-  type AddressCheck,
   PROVIDER_TIMEOUT_MS,
   type ProviderId,
-  type ProviderRate,
   providerCanPurchase,
   providerIds,
   type RateRequest,
   type ShipAddress,
   type ShippingProvider,
-  withTimeout,
 } from "../adapters/shipping/provider";
 import { type AdapterFactories, createShippingProviders } from "../adapters/shipping/registry";
 import { recordAudit } from "../audit";
@@ -44,8 +38,8 @@ import { liveLabelStatuses } from "../workflow/gates";
 import { lockOrder } from "../workflow/lock";
 import { notifyOrderChanged } from "../workflow/notify";
 import { resolveShipTo } from "./address";
-import { listUsableServices } from "./carriers";
 import { cheapestPurchasable, compareRates } from "./compare";
+import { checkAddress, laneProviders, type ProviderOutcome, quoteParcel } from "./quote";
 
 // The rate fetch (SPEC-carriers "Rate fetch", job `rates.fetch`): every enabled provider is asked
 // for every package in parallel, and the merged rates are stored with the cheapest selected. Each
@@ -103,51 +97,6 @@ export type FetchRatesOptions = {
 };
 
 export type FetchRatesResult = { status: "done" | "stale" };
-
-type UsableService = Awaited<ReturnType<typeof listUsableServices>>[number];
-
-type ProviderOutcome =
-  | { provider: ProviderId; ok: true; rates: ProviderRate[] }
-  | {
-      provider: ProviderId | null;
-      ok: false;
-      messageKey: ErrorCode;
-      permanent: boolean;
-      params?: Record<string, string | number>;
-    };
-
-const serviceKey = (carrierExternalId: string, code: string) => `${carrierExternalId}\n${code}`;
-
-async function askProvider(
-  provider: ShippingProvider,
-  request: RateRequest,
-  timeoutMs: number,
-): Promise<ProviderOutcome> {
-  if (request.services.length === 0) {
-    return {
-      provider: provider.id,
-      ok: false,
-      messageKey: "errors.carriers.noCarriers",
-      permanent: true,
-    };
-  }
-  try {
-    return {
-      provider: provider.id,
-      ok: true,
-      rates: await withTimeout(provider.getRates(request), timeoutMs),
-    };
-  } catch (cause) {
-    const error =
-      cause instanceof ShippingError ? cause : shippingErrorFromCause("getRates", cause);
-    return {
-      provider: provider.id,
-      ok: false,
-      messageKey: error.messageKey,
-      permanent: error.permanent,
-    };
-  }
-}
 
 const orderInclude = {
   packages: {
@@ -216,58 +165,6 @@ async function markPackages(
   });
 }
 
-/** What the address check decided: the address rates use, and what's stored about it. */
-type CheckedShipTo = {
-  shipTo: ShipAddress;
-  status: ShipToStatus;
-  messages: string[];
-  checkedAt: Date | null;
-  residential?: boolean;
-};
-
-/**
- * What's stored when rates use the original address: every answer but a correction with an
- * address, which a correction without one falls back to as a warning.
- */
-const fallbackStatus: Record<AddressCheck["status"], ShipToStatus> = {
-  verified: "VERIFIED",
-  corrected: "WARNING",
-  warning: "WARNING",
-  error: "ERROR",
-};
-
-/**
- * FR-SHIP-12: the first provider that can validate checks the resolved address. No such provider,
- * or a check that fails, leaves it `UNCHECKED`; neither ever stops the rate fetch.
- */
-async function checkShipTo(
-  providers: ShippingProvider[],
-  original: ShipAddress,
-  now: Date,
-  timeoutMs: number,
-): Promise<CheckedShipTo> {
-  const unchecked: CheckedShipTo = {
-    shipTo: original,
-    status: "UNCHECKED",
-    messages: [],
-    checkedAt: null,
-  };
-  const validator = providers.find((p) => p.capabilities.addressValidation && p.validateAddress);
-  if (!validator?.validateAddress) return unchecked;
-  let check: AddressCheck;
-  try {
-    check = await withTimeout(validator.validateAddress(original), timeoutMs);
-  } catch {
-    return unchecked;
-  }
-  const checked = { messages: check.messages, checkedAt: now, residential: check.residential };
-  // A correction without an address to use is only a warning.
-  if (check.status === "corrected" && check.address) {
-    return { ...checked, shipTo: check.address, status: "CORRECTED" };
-  }
-  return { ...checked, shipTo: original, status: fallbackStatus[check.status] };
-}
-
 /**
  * One `rates.fetch` run. Providers are passed in (the job builds the enabled ones), so tests use
  * fakes. Returns `stale` without writing when a newer fetch was requested meanwhile.
@@ -296,7 +193,7 @@ export async function fetchRates(
   const resolved = stored?.kind === "complete" ? null : resolveShipTo(order);
   const checked =
     resolved?.kind === "complete"
-      ? await checkShipTo(providers, resolved.address, now, timeoutMs)
+      ? await checkAddress(providers, resolved.address, { now, timeoutMs })
       : null;
   const shipTo = stored?.kind === "complete" ? stored.address : (checked?.shipTo ?? null);
   const shipFrom = ShipFromAddress.safeParse((await loadSettings(db)).shipFromAddress);
@@ -348,13 +245,7 @@ export async function fetchRates(
   if (started === "failed" || !shipTo || !shipFrom.success) return done;
 
   const domestic = shipTo.country === shipFrom.data.country;
-  const usable = await Promise.all(
-    providers.map(async (provider) =>
-      (await listUsableServices(db, provider.id)).filter((s) =>
-        domestic ? s.domestic : s.international,
-      ),
-    ),
-  );
+  const lane = await laneProviders(db, providers, { domestic });
   const base = {
     orderNumber: order.number,
     shipFrom: shipFrom.data,
@@ -390,25 +281,19 @@ export async function fetchRates(
           };
           return { pkg, quoted: null, outcomes: [outcome] };
         }
-        const request = (services: UsableService[]): RateRequest => ({
-          ...base,
-          package: size,
-          ...(declaration && { customs: declaration.customs }),
-          items: pkg.items.map((item) => ({
-            sku: item.orderItem.sku,
-            name: item.orderItem.name,
-            quantity: item.quantity,
-          })),
-          services: services.map((s) => ({
-            carrierExternalId: s.carrier.externalId,
-            code: s.code,
-            providerData: z.record(z.string(), z.unknown()).catch({}).parse(s.providerData),
-          })),
-        });
-        const outcomes = await Promise.all(
-          providers.map((provider, i) =>
-            askProvider(provider, request(usable[i] ?? []), timeoutMs),
-          ),
+        const outcomes = await quoteParcel(
+          lane,
+          {
+            ...base,
+            package: size,
+            ...(declaration && { customs: declaration.customs }),
+            items: pkg.items.map((item) => ({
+              sku: item.orderItem.sku,
+              name: item.orderItem.name,
+              quantity: item.quantity,
+            })),
+          },
+          { timeoutMs },
         );
         return { pkg, quoted: size, outcomes };
       }),
@@ -418,32 +303,11 @@ export async function fetchRates(
   const transient = outcomes.some((o) => !o.ok && !o.permanent);
   if (!finalAttempt && transient && !outcomes.some((o) => o.ok)) throw new RatesRetryError();
 
-  const services = new Map(
-    providers.map((provider, i) => [
-      provider.id,
-      new Map((usable[i] ?? []).map((s) => [serviceKey(s.carrier.externalId, s.code), s])),
-    ]),
-  );
   const expiry = new Date(now.getTime() + RATE_TTL_HOURS * 3_600_000);
   const canPurchase = new Map(providers.map((p) => [p.id, p.capabilities.purchase]));
   const fakeProviders = new Set(providers.filter((p) => p.fake).map((p) => p.id));
   for (const { pkg, quoted, outcomes } of asked) {
-    // Extras the provider returned for services that aren't on are dropped, and so is a negative
-    // price: a malformed quote that would sort first and be selected.
-    const rates = outcomes
-      .flatMap((o) =>
-        o.ok
-          ? o.rates.flatMap((rate) => {
-              const service = services
-                .get(o.provider)
-                ?.get(serviceKey(rate.carrierExternalId, rate.serviceCode));
-              return service && rate.amountCents >= 0
-                ? [{ ...rate, provider: o.provider, service, carrierId: service.carrierId }]
-                : [];
-            })
-          : [],
-      )
-      .sort(compareRates);
+    const rates = outcomes.flatMap((o) => (o.ok ? o.rates : [])).sort(compareRates);
     // Cheapest first, so the first rate a provider can buy is the one to select; quote-only rates
     // are kept for comparison and never selected.
     const selectedIndex = rates.findIndex((rate) => canPurchase.get(rate.provider) === true);
