@@ -2,64 +2,194 @@
   "services": [
     {
       "carrierCode": "CARRIER_A",
-      "carrierName": "Carrier A",
+      "carrierLabel": "Carrier A",
+      "serviceLabel": "A Ground",
       "serviceCode": "A_GROUND",
-      "serviceName": "A Ground",
       "inbound": false,
-      "packageTypes": [
-        { "packageTypeCode": "A_ENVELOPE", "name": "Envelope", "custom": false },
-        { "packageTypeCode": "A_CUSTOM", "name": "Customer packaging", "custom": true }
+      "supportedCountries": ["US"],
+      "unsupportedCountries": [],
+      "signatureOptions": [
+        {
+          "signatureOptionCode": "NO_SIGNATURE_REQUIRED",
+          "signatureOptionLabel": "No Signature Required"
+        }
       ],
-      "supportedCountries": ["US"],
-      "unsupportedCountries": []
+      "supportedDangerousGoodsCodes": null,
+      "packageTypes": [
+        {
+          "packageTypeCode": "carrier_a_envelope",
+          "packageTypeLabel": "Envelope",
+          "multipieceSupported": true,
+          "weightUnit": "lb",
+          "maxWeightPerPiece": null,
+          "dimType": null,
+          "dimUnit": "in",
+          "presetLength": null,
+          "presetWidth": null,
+          "presetHeight": null
+        },
+        {
+          "packageTypeCode": "carrier_a_custom_package",
+          "packageTypeLabel": "Your Packaging",
+          "multipieceSupported": true,
+          "weightUnit": "lb",
+          "maxWeightPerPiece": null,
+          "dimType": null,
+          "dimUnit": "in",
+          "presetLength": null,
+          "presetWidth": null,
+          "presetHeight": null
+        }
+      ]
     },
     {
       "carrierCode": "CARRIER_A",
-      "carrierName": "Carrier A",
+      "carrierLabel": "Carrier A",
+      "serviceLabel": "A Express International",
       "serviceCode": "A_EXPRESS_INTL",
-      "serviceName": "A Express International",
       "inbound": false,
-      "packageTypes": [{ "packageTypeCode": "A_CUSTOM_INTL", "custom": true }],
       "supportedCountries": ["US", "CA", "MX"],
-      "unsupportedCountries": []
+      "unsupportedCountries": [],
+      "signatureOptions": [
+        {
+          "signatureOptionCode": "NO_SIGNATURE_REQUIRED",
+          "signatureOptionLabel": "No Signature Required"
+        }
+      ],
+      "supportedDangerousGoodsCodes": null,
+      "packageTypes": [
+        {
+          "packageTypeCode": "carrier_a_custom_package",
+          "packageTypeLabel": "Your Packaging",
+          "multipieceSupported": true,
+          "weightUnit": "lb",
+          "maxWeightPerPiece": null,
+          "dimType": null,
+          "dimUnit": "in",
+          "presetLength": null,
+          "presetWidth": null,
+          "presetHeight": null
+        }
+      ]
     },
     {
       "carrierCode": "CARRIER_A",
-      "carrierName": "Carrier A",
+      "carrierLabel": "Carrier A",
+      "serviceLabel": "A Return (inbound)",
       "serviceCode": "A_RETURN",
-      "serviceName": "A Return (inbound)",
       "inbound": true,
-      "packageTypes": [{ "packageTypeCode": "A_CUSTOM", "custom": true }],
       "supportedCountries": ["US"],
-      "unsupportedCountries": []
+      "unsupportedCountries": [],
+      "signatureOptions": [
+        {
+          "signatureOptionCode": "NO_SIGNATURE_REQUIRED",
+          "signatureOptionLabel": "No Signature Required"
+        }
+      ],
+      "supportedDangerousGoodsCodes": null,
+      "packageTypes": [
+        {
+          "packageTypeCode": "carrier_a_custom_package",
+          "packageTypeLabel": "Your Packaging",
+          "multipieceSupported": true,
+          "weightUnit": "lb",
+          "maxWeightPerPiece": null,
+          "dimType": null,
+          "dimUnit": "in",
+          "presetLength": null,
+          "presetWidth": null,
+          "presetHeight": null
+        }
+      ]
     },
     {
       "carrierCode": "CARRIER_B",
-      "carrierName": "Carrier B",
+      "carrierLabel": "Carrier B",
+      "serviceLabel": "B World",
       "serviceCode": "B_WORLD",
-      "serviceName": "B World",
       "inbound": false,
-      "packageTypes": [{ "packageTypeCode": "B_CUSTOM", "custom": true }],
       "supportedCountries": [],
-      "unsupportedCountries": ["CU", "KP"]
+      "unsupportedCountries": ["CU", "KP"],
+      "signatureOptions": [
+        {
+          "signatureOptionCode": "NO_SIGNATURE_REQUIRED",
+          "signatureOptionLabel": "No Signature Required"
+        }
+      ],
+      "supportedDangerousGoodsCodes": null,
+      "packageTypes": [
+        {
+          "packageTypeCode": "carrier_b_custom_package",
+          "packageTypeLabel": "Your Packaging",
+          "multipieceSupported": true,
+          "weightUnit": "lb",
+          "maxWeightPerPiece": null,
+          "dimType": null,
+          "dimUnit": "in",
+          "presetLength": null,
+          "presetWidth": null,
+          "presetHeight": null
+        }
+      ]
     },
     {
       "carrierCode": "CARRIER_B",
+      "serviceLabel": "B Parcel",
       "serviceCode": "B_NO_CUSTOM",
-      "serviceName": "B Parcel",
       "inbound": false,
-      "packageTypes": [{ "packageTypeCode": "B_PALLET", "custom": false }],
       "supportedCountries": ["US"],
-      "unsupportedCountries": []
+      "unsupportedCountries": [],
+      "signatureOptions": [
+        {
+          "signatureOptionCode": "NO_SIGNATURE_REQUIRED",
+          "signatureOptionLabel": "No Signature Required"
+        }
+      ],
+      "supportedDangerousGoodsCodes": null,
+      "packageTypes": [
+        {
+          "packageTypeCode": "carrier_b_pallet",
+          "packageTypeLabel": "Pallet",
+          "multipieceSupported": true,
+          "weightUnit": "lb",
+          "maxWeightPerPiece": null,
+          "dimType": null,
+          "dimUnit": "in",
+          "presetLength": null,
+          "presetWidth": null,
+          "presetHeight": null
+        }
+      ]
     },
     {
       "carrierCode": "CARRIER_C",
-      "carrierName": "Carrier C",
+      "carrierLabel": "Carrier C",
+      "serviceLabel": "C Return (inbound)",
       "serviceCode": "C_RETURN",
-      "serviceName": "C Return (inbound)",
       "inbound": true,
-      "packageTypes": [{ "packageTypeCode": "C_CUSTOM", "custom": true }],
-      "supportedCountries": ["US"]
+      "supportedCountries": ["US"],
+      "unsupportedCountries": null,
+      "signatureOptions": [
+        {
+          "signatureOptionCode": "NO_SIGNATURE_REQUIRED",
+          "signatureOptionLabel": "No Signature Required"
+        }
+      ],
+      "supportedDangerousGoodsCodes": null,
+      "packageTypes": [
+        {
+          "packageTypeCode": "carrier_c_custom_package",
+          "packageTypeLabel": "Your Packaging",
+          "multipieceSupported": true,
+          "weightUnit": "lb",
+          "maxWeightPerPiece": null,
+          "dimType": null,
+          "dimUnit": "in",
+          "presetLength": null,
+          "presetWidth": null,
+          "presetHeight": null
+        }
+      ]
     }
   ]
 }

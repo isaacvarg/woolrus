@@ -189,6 +189,7 @@
     },
     "shipping": {
       "title": "Envíos",
+      "fakeProviders": "Los proveedores simulados están activados (SHIPPING_PROVIDERS=fake): ShipStation y Bridge Source son simulados, aceptan cualquier credencial y solo muestran transportistas de demostración. Quítalo de .env y reinicia para usar los reales.",
       "intro": "Woolrus pide tarifas a cada proveedor de envíos solo mientras está activado. Agrega sus credenciales, prueba la conexión y luego actívalo.",
       "names": {
         "SHIPSTATION": "ShipStation",

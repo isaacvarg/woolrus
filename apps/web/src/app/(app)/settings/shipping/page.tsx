@@ -1,4 +1,4 @@
-import { can } from "@woolrus/core";
+import { can, fakeShippingProviders } from "@woolrus/core";
 import { getTranslations } from "next-intl/server";
 import { currentActor } from "@/server/actor";
 import { CostCheckSection } from "./cost-check";
@@ -13,6 +13,11 @@ export default async function ShippingSettingsPage() {
       <h1 className="text-3xl font-bold">{t("settings.shipping.title")}</h1>
       {actor && can(actor, "settings.manage") ? (
         <>
+          {fakeShippingProviders() && (
+            <p role="status" className="alert alert-warning">
+              {t("settings.shipping.fakeProviders")}
+            </p>
+          )}
           <p className="text-base-content/70">{t("settings.shipping.intro")}</p>
           <ProvidersSection />
           <CostCheckSection />

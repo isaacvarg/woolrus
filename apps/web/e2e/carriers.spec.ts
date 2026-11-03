@@ -198,4 +198,6 @@ test("an admin reaches Shipping from the nav, and Integrations no longer shows S
   await expect(page.getByRole("heading", { name: "Shipping", level: 1 })).toBeVisible();
   await expect(card(page, "ShipStation")).toBeVisible();
   await expect(card(page, "Bridge Source")).toBeVisible();
+  // E2E runs on the fakes, and the page says so.
+  await expect(page.getByText(en.settings.shipping.fakeProviders)).toBeVisible();
 });

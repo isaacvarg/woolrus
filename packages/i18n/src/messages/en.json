@@ -189,6 +189,7 @@
     },
     "shipping": {
       "title": "Shipping",
+      "fakeProviders": "Fake providers are on (SHIPPING_PROVIDERS=fake): ShipStation and Bridge Source are simulated, accept any credentials and list only demo carriers. Unset it in .env and restart to use the real ones.",
       "intro": "Woolrus asks each shipping provider for rates only while it's on. Add its credentials and test the connection, then turn it on.",
       "names": {
         "SHIPSTATION": "ShipStation",

@@ -3,6 +3,7 @@ import type { Db, DbTx, Prisma, SyncStatus } from "@woolrus/db";
 import type { ListOrdersQuery, StoreAdapter, WooOrder } from "../adapters/woocommerce/adapter";
 import { recordAudit } from "../audit";
 import { systemActor } from "../permissions";
+import { integrationEnvFallback } from "../settings/env";
 import { notifyOrderChanged } from "../workflow/notify";
 import { recomputePriorities } from "../workflow/priority-rules";
 import { reconcileKnownOrder } from "./apply";
@@ -103,18 +104,24 @@ async function runSync(
 
 type FetchPlan =
   | { orderIds: number[] }
-  /** No poll has finished yet: every `processing` order. */
+  /** No poll of this store has finished yet: every `processing` order. */
   | { first: true }
   | { modifiedAfter: Date; retryIds: number[] };
 
 /**
  * Later polls take everything modified since the last finished poll started (any status, so
  * cancellations are seen), plus the ids that failed in it. A FAILED run doesn't count as finished:
- * it may have missed pages, so the next window still starts from the run before it.
+ * it may have missed pages, so the next window still starts from the run before it. Polls from
+ * before the store URL last changed origin were of another store, so they don't count either.
  */
 async function pollPlan(db: Db): Promise<FetchPlan> {
+  const movedAt = await storeMovedAt(db);
   const last = await db.syncRun.findFirst({
-    where: { type: "ORDERS_POLL", status: { in: ["SUCCEEDED", "PARTIAL"] } },
+    where: {
+      type: "ORDERS_POLL",
+      status: { in: ["SUCCEEDED", "PARTIAL"] },
+      ...(movedAt && { startedAt: { gte: movedAt } }),
+    },
     orderBy: { startedAt: "desc" },
     select: { startedAt: true, errors: { select: { externalId: true } } },
   });
@@ -123,6 +130,34 @@ async function pollPlan(db: Db): Promise<FetchPlan> {
     Number.isInteger,
   );
   return { modifiedAfter: new Date(last.startedAt.getTime() - POLL_OVERLAP_MS), retryIds };
+}
+
+/**
+ * When `wooStoreUrl` last moved to another origin, from the Settings audit trail. An unset URL is
+ * the dev env fallback (`WOO_URL`), so replacing it with another store is a move too.
+ */
+async function storeMovedAt(db: Db): Promise<Date | null> {
+  const fallback = integrationEnvFallback()?.wooUrl ?? null;
+  const origin = (url: unknown) => {
+    const effective = typeof url === "string" ? url : fallback;
+    if (effective === null) return null;
+    try {
+      return new URL(effective).origin;
+    } catch {
+      return effective;
+    }
+  };
+  const updates = await db.auditEvent.findMany({
+    where: { entityType: "Settings", action: "update" },
+    orderBy: { at: "desc" },
+    select: { before: true, after: true, at: true },
+  });
+  const moved = updates.find(({ before, after }) => {
+    const from = before as Record<string, unknown> | null;
+    const to = after as Record<string, unknown> | null;
+    return !!to && "wooStoreUrl" in to && origin(from?.wooStoreUrl) !== origin(to.wooStoreUrl);
+  });
+  return moved?.at ?? null;
 }
 
 /**

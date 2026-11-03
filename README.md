@@ -66,6 +66,21 @@ in and become Admin. Without an email provider, the magic link is printed in the
 | `pnpm --filter @woolrus/web test:e2e` | Playwright smoke tests (desktop + tablet) |
 | `pnpm db:migrate` | Create/apply a migration after editing `packages/db/prisma/schema` |
 | `pnpm db:studio` | Browse the database |
+| `pnpm stack:up` / `pnpm stack:down` | Start / stop the dev stack (data is kept) |
+| `docker compose -f docker/compose.dev.yml down -v` | Stop the dev stack and **delete its volumes** (Postgres, RustFS, WooCommerce) |
+
+### Resetting the dev environment
+
+Wipes all V2 dev data (the compose project is `woolrus-v2-dev`; v1's stack is untouched), then rebuilds it:
+
+```bash
+docker compose -f docker/compose.dev.yml down -v
+pnpm stack:up
+pnpm db:migrate && pnpm db:seed
+pnpm dev
+```
+
+To reset only the database, keeping WooCommerce and RustFS: `pnpm --filter @woolrus/db exec prisma migrate reset`.
 
 ## Adding an endpoint
 

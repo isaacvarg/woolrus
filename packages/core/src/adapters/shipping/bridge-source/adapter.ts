@@ -28,6 +28,9 @@ function refusal(category: string | null | undefined): ShippingError["kind"] {
   return "rejected";
 }
 
+/** The package type for the shipper's own box: every carrier's is `<carrier>_custom_package`. */
+const CUSTOM_PACKAGE = /_custom_package$/i;
+
 /** A provider error code worth logging: one short token, so it can't carry free text. */
 const ERROR_CODE = /^[A-Za-z0-9_.:-]{1,64}$/;
 
@@ -37,11 +40,32 @@ const QUOTE_CONCURRENCY = 4;
 /** Dollars to whole cents, half up; the precision cut absorbs binary noise (0.285 * 100 = 28.499…). */
 const toCents = (amount: number) => Math.round(Number((amount * 100).toPrecision(12)));
 
-/** Ounces to the pounds-and-ounces split the quote takes. */
-function weight(totalOz: number) {
-  const pounds = Math.floor(totalOz / 16);
-  return { pounds, ounces: Math.round((totalOz - pounds * 16) * 100) / 100 };
+/** Ounces to the quote's pounds, rounded up to hundredths so a package is never under-declared. */
+const pounds = (oz: number) => String(Math.ceil(Number(((oz / 16) * 100).toPrecision(12))) / 100);
+
+/** International quotes need a declared value of at least 1.00 (a 500 otherwise). */
+const MIN_DECLARED_CENTS = 100;
+
+/** Line values in cents to the quote's dollars, or null at home (no customs). */
+function declaredValue(customs: RateRequest["customs"]): string | null {
+  if (!customs) return null;
+  const cents = customs.items.reduce((sum, item) => sum + item.valueCents, 0);
+  return (Math.max(cents, MIN_DECLARED_CENTS) / 100).toFixed(2);
 }
+
+/** Whether a service's stored country lists allow shipping to `country`; no lists allow it. */
+function servesCountry(providerData: Record<string, unknown>, country: string): boolean {
+  const list = (key: string) => {
+    const value = providerData[key];
+    return Array.isArray(value) ? value.filter((c): c is string => typeof c === "string") : [];
+  };
+  const supported = list("supportedCountries");
+  if (supported.length > 0 && !supported.includes(country)) return false;
+  return !list("unsupportedCountries").includes(country);
+}
+
+/** Failures that would fail every other quote too, so the rest aren't asked. */
+const STOPS_ALL: ShippingError["kind"][] = ["unauthorized", "timeout"];
 
 const upper = (codes: string[] | null | undefined) => (codes ?? []).map((c) => c.toUpperCase());
 
@@ -99,18 +123,18 @@ export class BridgeSourceAdapter implements ShippingProvider {
     for (const service of services) {
       if (service.inbound === true) continue;
       const carrier = carriers.get(service.carrierCode) ?? {
-        name: service.carrierName || service.carrierCode,
+        name: service.carrierLabel || service.carrierCode,
         services: new Map<string, ProviderService>(),
       };
       carriers.set(service.carrierCode, carrier);
       if (carrier.services.has(service.serviceCode)) continue;
-      const custom = service.packageTypes?.find((p) => p.custom === true);
+      const custom = service.packageTypes?.find((p) => CUSTOM_PACKAGE.test(p.packageTypeCode));
       carrier.services.set(service.serviceCode, {
         code: service.serviceCode,
-        name: service.serviceName,
+        name: service.serviceLabel,
         ...lanes(service),
         providerData: {
-          serviceName: service.serviceName,
+          serviceName: service.serviceLabel,
           ...(custom && { packageTypeCode: custom.packageTypeCode }),
           supportedCountries: upper(service.supportedCountries),
           unsupportedCountries: upper(service.unsupportedCountries),
@@ -127,40 +151,45 @@ export class BridgeSourceAdapter implements ShippingProvider {
   }
 
   /**
-   * One `POST …/quote` per requested service with a custom package type (the rest are skipped: no
-   * package to rate), at most `QUOTE_CONCURRENCY` at once, all inside one provider budget. A service
-   * Bridge Source says it doesn't offer is dropped; any other failure fails the call, and so does
-   * every service being refused.
+   * One `POST …/quote` per requested service with a custom package type whose country lists allow
+   * the destination (the rest are skipped without a request), at most `QUOTE_CONCURRENCY` at once,
+   * all inside one provider budget. A service that fails is dropped while any other quotes:
+   * Bridge Source answers a service it won't quote (not on the account, wrong lane) with a 500, so
+   * a failed service says nothing about the rest. With no quote at all the call fails, preferring
+   * a failure over a refusal; `unauthorized` and `timeout` stop the remaining quotes.
    */
   async getRates(request: RateRequest): Promise<ProviderRate[]> {
     const budget = AbortSignal.timeout(this.timeoutMs);
+    const country = request.shipTo.country.toUpperCase();
     const quotable = request.services.filter(
-      (service) => typeof service.providerData.packageTypeCode === "string",
+      (service) =>
+        typeof service.providerData.packageTypeCode === "string" &&
+        servesCountry(service.providerData, country),
     );
     const results: (ProviderRate | null)[] = new Array(quotable.length).fill(null);
     const refused: ShippingError[] = [];
+    const failures: ShippingError[] = [];
     let next = 0;
-    let failed: ShippingError | null = null;
+    let stopped = false;
     const worker = async () => {
-      while (failed === null && next < quotable.length) {
+      while (!stopped && next < quotable.length) {
         const index = next++;
         const service = quotable[index];
         if (!service) return;
         try {
           results[index] = await this.quote(request, service, budget);
         } catch (error) {
-          if (error instanceof ShippingError && error.kind === "notOffered") refused.push(error);
-          else
-            failed ??=
-              error instanceof ShippingError ? error : shippingErrorFromCause("getRates", error);
+          const failure =
+            error instanceof ShippingError ? error : shippingErrorFromCause("getRates", error);
+          (failure.kind === "notOffered" ? refused : failures).push(failure);
+          if (STOPS_ALL.includes(failure.kind)) stopped = true;
         }
       }
     };
     await Promise.all(Array.from({ length: Math.min(QUOTE_CONCURRENCY, quotable.length) }, worker));
-    if (failed) throw failed;
     const rates = results.filter((rate): rate is ProviderRate => rate !== null);
-    const first = refused[0];
-    if (rates.length === 0 && first) throw first;
+    const first = failures[0] ?? refused[0];
+    if (first && (rates.length === 0 || stopped)) throw first;
     return rates;
   }
 
@@ -174,15 +203,28 @@ export class BridgeSourceAdapter implements ShippingProvider {
       "getRates",
       "POST",
       "/quote",
+      // The quote takes only zip and country for each address, and numbers as strings.
       {
         carrierCode: service.carrierExternalId,
         serviceCode: service.code,
         packageTypeCode: service.providerData.packageTypeCode,
+        signatureOptionCode: "NO_SIGNATURE_REQUIRED",
         residential: request.residential,
-        shipFrom: request.shipFrom,
-        shipTo: request.shipTo,
-        weight: weight(pack.weightOz),
-        dimensions: { length: pack.lengthIn, width: pack.widthIn, height: pack.heightIn },
+        currency: "USD",
+        weightUnit: "lb",
+        dimUnit: "in",
+        sender: { zip: request.shipFrom.postalCode, country: request.shipFrom.country },
+        receiver: { zip: request.shipTo.postalCode, country: request.shipTo.country },
+        pieces: [
+          {
+            weight: pounds(pack.weightOz),
+            length: String(pack.lengthIn),
+            width: String(pack.widthIn),
+            height: String(pack.heightIn),
+            insuranceAmount: null,
+            declaredValue: declaredValue(request.customs),
+          },
+        ],
       },
       signal,
     );

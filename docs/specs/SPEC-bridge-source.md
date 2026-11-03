@@ -99,10 +99,19 @@ and this spec disagree, the docs win and this spec gets corrected in the same PR
 | `purchaseLabel` | *(stage 1)* throws `rejected` / `bookingDisabled` | See stage 2. |
 | `validateAddress`, `findLabel`, `voidLabel` | not implemented | Optional methods left off; capabilities `false`. |
 
-**Quote partial failure:** a service Bridge Source refuses for this shipment (422 about the service, country or
-package) is dropped from the result and logged; it does not fail the package. The call fails as a whole
-(`ShippingError`) only when **every** requested service failed, with the kind of the first failure; this is what lets
-the existing partial-failure and retry rules in SPEC-carriers (criterion 9) work unchanged.
+**Quote partial failure:** a service that fails for this shipment is dropped from the result; it does not fail the
+package. The live API (checked 2026-11-03) answers a service it won't quote, such as one not set up on the account or
+the wrong lane, with a **500** `INTERNAL_SERVER_ERROR`, not a 422, so a failed service says nothing about the others.
+The call fails as a whole (`ShippingError`) only when **no** service quoted, with the first failure that isn't a
+refusal (else the first refusal); `unauthorized` and `timeout` stop the remaining quotes and fail the call. Services
+whose stored country lists rule out the destination are skipped without a request. This is what lets the existing
+partial-failure and retry rules in SPEC-carriers (criterion 9) work unchanged.
+
+**Live quote shape (2026-11-03):** `sender` and `receiver` are `{ zip, country }` only (other address fields are
+refused), plus `signatureOptionCode` (`NO_SIGNATURE_REQUIRED`), `currency` `USD`, `weightUnit` `lb`, `dimUnit` `in`,
+`residential`, and one `pieces[]` entry whose weight, dimensions, `insuranceAmount` and `declaredValue` are decimal
+strings or null. Abroad, `declaredValue` (the customs total, at least 1.00) is required. `totalAmount` comes back as a
+decimal string.
 
 **Residential and address:** the quote carries `shipTo` as given; if Bridge Source has a residential flag the adapter
 sets it from `RateRequest.residential`. If it has none, that is noted in the fixtures README and in the open
