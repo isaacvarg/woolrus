@@ -368,15 +368,16 @@ export async function fetchRates(
       .filter((pkg) => !pkg.labels.some(isLive))
       .map(async (pkg) => {
         const size = parcel(pkg);
+        // `quoted` is the parcel the providers were asked about. Without one (no parcel yet, or
+        // customs data missing) nothing is logged: that's our data, not a provider failing.
         if (!size) {
-          // Not logged: without a parcel there's nothing a quote could be compared against.
           const outcome: ProviderOutcome = {
             provider: null,
             ok: false,
             messageKey: "errors.carriers.packageIncomplete",
             permanent: true,
           };
-          return { pkg, size, outcomes: [outcome] };
+          return { pkg, quoted: null, outcomes: [outcome] };
         }
         const declaration = domestic ? null : buildCustoms(customsLines(pkg.items));
         if (declaration && !declaration.complete) {
@@ -387,7 +388,7 @@ export async function fetchRates(
             permanent: true,
             params: { products: declaration.missing.join(", ") },
           };
-          return { pkg, size, outcomes: [outcome] };
+          return { pkg, quoted: null, outcomes: [outcome] };
         }
         const request = (services: UsableService[]): RateRequest => ({
           ...base,
@@ -409,7 +410,7 @@ export async function fetchRates(
             askProvider(provider, request(usable[i] ?? []), timeoutMs),
           ),
         );
-        return { pkg, size, outcomes };
+        return { pkg, quoted: size, outcomes };
       }),
   );
 
@@ -426,7 +427,7 @@ export async function fetchRates(
   const expiry = new Date(now.getTime() + RATE_TTL_HOURS * 3_600_000);
   const canPurchase = new Map(providers.map((p) => [p.id, p.capabilities.purchase]));
   const fakeProviders = new Set(providers.filter((p) => p.fake).map((p) => p.id));
-  for (const { pkg, size, outcomes } of asked) {
+  for (const { pkg, quoted, outcomes } of asked) {
     // Extras the provider returned for services that aren't on are dropped, and so is a negative
     // price: a malformed quote that would sort first and be selected.
     const rates = outcomes
@@ -437,7 +438,7 @@ export async function fetchRates(
                 .get(o.provider)
                 ?.get(serviceKey(rate.carrierExternalId, rate.serviceCode));
               return service && rate.amountCents >= 0
-                ? [{ ...rate, provider: o.provider, service }]
+                ? [{ ...rate, provider: o.provider, service, carrierId: service.carrierId }]
                 : [];
             })
           : [],
@@ -463,7 +464,7 @@ export async function fetchRates(
       // A label bought since the fetch began keeps the rate it was bought with.
       if (await hasLiveLabel(tx, pkg.id)) return true;
       // The log is written with the rates it describes, so QA's screen and the history agree.
-      const logged = size
+      const logged = quoted
         ? await logRateFetch(tx, {
             source: "ORDER",
             trigger,
@@ -473,7 +474,7 @@ export async function fetchRates(
             residential: base.residential,
             international: !domestic,
             boxId: pkg.boxId,
-            parcel: size,
+            parcel: quoted,
             providerErrors: errors,
             rates: rates.map((rate) => ({
               ...rate,

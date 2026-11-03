@@ -14,10 +14,12 @@ import addressVerified from "../adapters/shipping/shipstation/__fixtures__/addre
 };
 import rates from "../adapters/shipping/shipstation/__fixtures__/rates.json" with { type: "json" };
 import { ShipStationAdapter } from "../adapters/shipping/shipstation/adapter";
-import { fetchRates, refreshRates } from "../carriers/rates";
+import { fetchRates, getOrderShipping, refreshRates } from "../carriers/rates";
 import { forgetShipTo, keepOriginalAddress, recheckAddress } from "../carriers/ship-to";
 import { type OrderRateFetchTrigger, queues } from "../jobs";
 import { completePack } from "../packing/complete";
+import { qaResult } from "../qa/queries";
+import { selectRate, setRateSelectionReason } from "../qa/rates";
 import { loadSettings } from "../settings/service";
 
 // SPEC-rate-history: every order rate fetch is kept, with its quotes, beside the working rates.
@@ -298,6 +300,156 @@ describe("stale jobs write nothing (SC 3)", () => {
   });
 });
 
+describe("only fetches a provider answered are logged", () => {
+  it("logs nothing for a package with no parcel, or one held back for missing customs data", async () => {
+    await catalog("SHIPSTATION", ["demo_ground", "demo_express_intl"]);
+    const { order, payload } = await inQa();
+    const canada = {
+      name: "Clara",
+      address1: "1 Rue Main",
+      city: "Toronto",
+      state: "ON",
+      postalCode: "M5V 2T6",
+      country: "CA",
+    };
+    // An international package without an HS code: customsIncomplete, and no provider asked.
+    await db.order.update({
+      where: { id: order.id },
+      data: { shippingAddress: canada, billingAddress: canada },
+    });
+    const provider = stub("SHIPSTATION", []);
+
+    await fetchRates(db, [provider], payload);
+
+    expect(provider.calls).toHaveLength(0);
+    expect(await db.rateFetch.count()).toBe(0);
+
+    const unweighed = await createOrder(db, {
+      status: "QA",
+      lines: [{ quantity: 1, pickStatus: "PICKED" }],
+      packages: [{ items: [{ line: 0, quantity: 1 }], weightOz: null }],
+    });
+    await db.order.update({ where: { id: unweighed.order.id }, data: { rateGeneration: 1 } });
+    await fetchRates(db, bothFakes(), { orderId: unweighed.order.id, generation: 1 });
+    expect(await db.rateFetch.count()).toBe(0);
+  });
+
+  it("logs nothing for a package that got a live label while the providers answered", async () => {
+    await catalog("SHIPSTATION", ["demo_ground"]);
+    let release = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const provider = stub(
+      "SHIPSTATION",
+      [{ carrierExternalId: "se-demo-ground", serviceCode: "demo_ground", amountCents: 500 }],
+      gate,
+    );
+    const { packages, payload } = await inQa();
+
+    const slow = fetchRates(db, [provider], payload);
+    await vi.waitFor(() => expect(provider.calls).toHaveLength(1));
+    await db.shippingLabel.create({
+      data: {
+        packageId: packages[0]?.id,
+        status: "ACTIVE",
+        provider: "SHIPSTATION",
+        idempotencyKey: crypto.randomUUID(),
+        carrierCode: "demo_ground",
+        serviceCode: "demo_ground",
+        currency: "USD",
+      },
+    });
+    release();
+
+    expect(await slow).toEqual({ status: "done" });
+    expect(await db.rateFetch.count()).toBe(0);
+  });
+
+  it("drops the quotes carriers drops: services that aren't on, and negative prices", async () => {
+    await catalog("SHIPSTATION", ["demo_ground"]);
+    const provider = stub("SHIPSTATION", [
+      { carrierExternalId: "se-demo-ground", serviceCode: "demo_ground", amountCents: 700 },
+      { carrierExternalId: "se-demo-ground", serviceCode: "demo_ground_saver", amountCents: 100 },
+      { carrierExternalId: "se-demo-ground", serviceCode: "demo_ground", amountCents: -5 },
+    ]);
+    const { order, payload } = await inQa();
+
+    await fetchRates(db, [provider], payload);
+
+    const [fetch] = await fetchesOf(order.id);
+    expect(fetch?.quotes.map((q) => [q.serviceCode, q.amountCents])).toEqual([
+      ["demo_ground", 700],
+    ]);
+  });
+});
+
+describe("cheapest on a full tie", () => {
+  // Two accounts' services with the same price, days and name: only the account tells them apart.
+  const tied = [
+    {
+      carrierExternalId: "se-demo-ground",
+      serviceCode: "demo_ground",
+      serviceName: "Ground",
+      amountCents: 500,
+      deliveryDays: 3,
+    },
+    {
+      carrierExternalId: "se-demo-express",
+      serviceCode: "demo_express",
+      serviceName: "Ground",
+      amountCents: 500,
+      deliveryDays: 3,
+    },
+  ];
+
+  it("picks the same rate whatever order the provider answers in, and every read agrees", async () => {
+    await catalog("SHIPSTATION", ["demo_ground", "demo_express"]);
+    const qa = await createActor(db, ["QA"]);
+    const winners: string[] = [];
+    for (const answer of [tied, [...tied].reverse()]) {
+      const { order, packages, payload } = await inQa();
+      await db.order.update({
+        where: { id: order.id },
+        data: { claimedById: qa.userId, claimedAt: new Date() },
+      });
+      await fetchRates(db, [stub("SHIPSTATION", answer)], payload);
+
+      const [fetch] = await fetchesOf(order.id);
+      const cheapest = fetch?.quotes.find((q) => q.cheapest);
+      const selected = await db.shippingRate.findFirstOrThrow({
+        where: { packageId: packages[0]?.id, selected: true },
+      });
+      expect(cheapest?.id).toBe(selected.quoteId);
+      winners.push(selected.serviceCode);
+
+      const screen = await db.$transaction((tx) => qaResult(tx, order.id));
+      expect(screen.packages[0]?.rates.find((r) => r.cheapest)?.id).toBe(selected.id);
+      const shipping = await getOrderShipping(db, qa, { orderId: order.id });
+      expect(shipping.packages[0]?.rates.find((r) => r.cheapest)?.id).toBe(selected.id);
+
+      // The server agrees too: a reason is refused on that one and accepted on the other.
+      const other = await db.shippingRate.findFirstOrThrow({
+        where: { packageId: packages[0]?.id, selected: false },
+      });
+      await expect(
+        selectRate(db, qa, {
+          packageId: packages[0]?.id as string,
+          rateId: selected.id,
+          reason: "FASTER_DELIVERY",
+        }),
+      ).rejects.toMatchObject({ messageKey: "errors.qa.reasonNotNeeded" });
+      await selectRate(db, qa, { packageId: packages[0]?.id as string, rateId: other.id });
+      await setRateSelectionReason(db, qa, {
+        packageId: packages[0]?.id as string,
+        rateId: other.id,
+        reason: "CARRIER_RELIABILITY",
+      });
+    }
+    expect(new Set(winners).size).toBe(1);
+  });
+});
+
 describe("failures are logged (SC 4)", () => {
   it("every provider failing on the last attempt logs one fetch with no quotes and both errors", async () => {
     await bothCatalogs();
@@ -376,11 +528,18 @@ describe("lane only (SC 5)", () => {
 
     await fetchRates(db, bothFakes(), payload);
 
-    const rows = await db.$queryRaw<{ row: unknown }[]>`
-      SELECT row_to_json(f) AS row FROM rate_fetches f`;
-    expect(rows).toHaveLength(1);
-    const serialized = JSON.stringify(rows);
+    // Every column but the ids, which are hex and could hold "1234" by chance.
+    const rows = await db.$queryRaw<{ row: Record<string, unknown> }[]>`
+      SELECT row_to_json(f) AS row FROM rate_fetches f
+      UNION ALL SELECT row_to_json(q) FROM rate_quotes q`;
+    expect(rows.length).toBeGreaterThan(1);
+    const serialized = JSON.stringify(
+      rows.map(({ row }) =>
+        Object.fromEntries(Object.entries(row).filter(([k]) => !/(^|_)id$/.test(k))),
+      ),
+    );
     for (const secret of [
+      "Austin",
       "Ada",
       "Lovelace",
       "Analytical",
@@ -550,19 +709,22 @@ describe("the migration's check constraints (SC 10)", () => {
     const { order } = await createOrder(db, { status: "QA" });
     const labRunId = crypto.randomUUID();
 
+    const { packages } = await createOrder(db, { status: "QA", packages: [{}] });
+    const refused = /rate_fetches_source_ids/;
+    for (const data of [
+      { source: "LAB", trigger: "LAB_RUN", labRunId, orderId: order.id },
+      { source: "LAB", trigger: "LAB_RUN", labRunId, packageId: packages[0]?.id },
+      { source: "LAB", trigger: "LAB_RUN" },
+      { source: "ORDER", trigger: "REFRESH", orderId: order.id, labRunId },
+      { source: "ORDER", trigger: "REFRESH", orderId: order.id, labAddressId: labRunId },
+    ] as const) {
+      await expect(db.rateFetch.create({ data: { ...lane, ...data } })).rejects.toThrow(refused);
+    }
     await expect(
       db.rateFetch.create({
-        data: { ...lane, source: "LAB", trigger: "LAB_RUN", labRunId, orderId: order.id },
+        data: { ...lane, source: "ORDER", trigger: "REFRESH", orderId: order.id },
       }),
-    ).rejects.toThrow();
-    await expect(
-      db.rateFetch.create({
-        data: { ...lane, source: "ORDER", trigger: "REFRESH", orderId: order.id, labRunId },
-      }),
-    ).rejects.toThrow();
-    await expect(
-      db.rateFetch.create({ data: { ...lane, source: "LAB", trigger: "LAB_RUN" } }),
-    ).rejects.toThrow();
+    ).resolves.toMatchObject({ orderId: order.id });
     await expect(
       db.rateFetch.create({ data: { ...lane, source: "LAB", trigger: "LAB_RUN", labRunId } }),
     ).resolves.toMatchObject({ labRunId });
@@ -585,16 +747,19 @@ describe("the migration's check constraints (SC 10)", () => {
         },
       });
 
+    const rateRefused = /shipping_rates_selection_note_other/;
+    const labelRefused = /shipping_labels_selection_note_other/;
     await expect(
       createRate(db, packageId, { selectionReason: "FASTER_DELIVERY", selectionNote: "x" }),
-    ).rejects.toThrow();
-    await expect(createRate(db, packageId, { selectionNote: "x" })).rejects.toThrow();
+    ).rejects.toThrow(rateRefused);
+    await expect(createRate(db, packageId, { selectionNote: "x" })).rejects.toThrow(rateRefused);
     await expect(
       createRate(db, packageId, { selectionReason: "OTHER", selectionNote: "x" }),
     ).resolves.toMatchObject({ selectionNote: "x" });
     await expect(
       label({ selectionReason: "CUSTOMER_REQUESTED", selectionNote: "x" }),
-    ).rejects.toThrow();
+    ).rejects.toThrow(labelRefused);
+    await expect(label({ selectionNote: "x" })).rejects.toThrow(labelRefused);
     await expect(label({ selectionReason: "OTHER", selectionNote: "x" })).resolves.toMatchObject({
       selectionNote: "x",
     });

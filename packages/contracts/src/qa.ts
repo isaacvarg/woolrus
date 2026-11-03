@@ -154,6 +154,8 @@ export type SelectRateInput = z.infer<typeof SelectRateInput>;
 export const SetRateSelectionReasonInput = z
   .object({
     packageId: Id,
+    /** The rate the reason is for: refused when another one was selected meanwhile. */
+    rateId: Id,
     reason: RateSelectionReason.nullable(),
     note: RateSelectionNote.optional(),
   })

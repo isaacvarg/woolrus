@@ -709,7 +709,6 @@
     "reasonLabel": "¿Por qué esta tarifa? (opcional)",
     "reasonNone": "Sin motivo",
     "reasonNote": "Nota",
-    "reasonSaved": "Motivo guardado.",
     "reasons": {
       "FASTER_DELIVERY": "Entrega más rápida",
       "CUSTOMER_REQUESTED": "Lo pidió el cliente",
@@ -1341,7 +1340,8 @@
       "costConfirmRequired": "Estas etiquetas cuestan mucho más de lo que el cliente pagó por el envío. Confirma para comprarlas de todos modos.",
       "reasonNotNeeded": "Esa es la tarifa más barata, así que no necesita motivo.",
       "reasonNoteNeedsOther": "La nota es solo para el motivo Otro.",
-      "noRateSelected": "Este paquete aún no tiene tarifa elegida. Elige una primero."
+      "noRateSelected": "Este paquete aún no tiene tarifa elegida. Elige una primero.",
+      "rateNoLongerSelected": "Esa tarifa ya no está elegida. Vuelve a elegir el motivo para la tarifa elegida."
     }
   },
   "emails": {

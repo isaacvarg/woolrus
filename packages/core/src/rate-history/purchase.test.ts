@@ -1,11 +1,13 @@
 import type { Db, ShippingRate } from "@woolrus/db";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { resetDb, testDb } from "../../test/db";
-import { fakeProvider, verifiedQaOrder } from "../../test/qa-fixtures";
+import { demoService, fakeProvider, verifiedQaOrder } from "../../test/qa-fixtures";
 import { ShippingError } from "../adapters/shipping/errors";
 import { createMemoryStorage } from "../adapters/storage/memory";
+import { fetchRates } from "../carriers/rates";
 import { completeQaWithLabels } from "../qa/complete";
 import { purchaseLabels } from "../qa/purchase";
+import { selectRate } from "../qa/rates";
 import { logRateFetch } from "./log";
 
 // SPEC-rate-history "Choice and purchase": a label remembers the logged quote it was bought from,
@@ -134,5 +136,61 @@ describe("a label remembers its quote (SC 9)", () => {
     await run();
 
     expect(await onlyLabel()).toMatchObject({ status: "ACTIVE", rateQuoteId: null });
+  });
+});
+
+describe("the whole chain", () => {
+  it("fetch, pick the pricier rate with a reason, buy: the label points at that quote, not the cheapest", async () => {
+    const built = await verifiedQaOrder(db, 1);
+    const pkg = built.packages[0];
+    if (!pkg) throw new Error("package");
+    // A real fetch instead of the fixture's rate: Demo Ground and the cheaper Demo Ground Saver.
+    const { carrier } = await demoService(db);
+    await db.carrierService.create({
+      data: {
+        carrierId: carrier.id,
+        code: "demo_ground_saver",
+        name: "Demo Ground Saver",
+        domestic: true,
+        international: false,
+        enabled: true,
+      },
+    });
+    await db.shippingRate.deleteMany({ where: { packageId: pkg.id } });
+    await db.order.update({ where: { id: built.order.id }, data: { rateGeneration: 1 } });
+    const provider = fakeProvider();
+    await fetchRates(db, [provider], { orderId: built.order.id, generation: 1 });
+    const pricier = await db.shippingRate.findFirstOrThrow({
+      where: { packageId: pkg.id, serviceCode: "demo_ground" },
+    });
+
+    await selectRate(db, built.qa, {
+      packageId: pkg.id,
+      rateId: pricier.id,
+      reason: "CARRIER_RELIABILITY",
+    });
+    await completeQaWithLabels(db, built.qa, {
+      orderId: built.order.id,
+      expectedVersion: built.order.version,
+    });
+    await purchaseLabels(
+      db,
+      { providers: [provider], storage: createMemoryStorage() },
+      { orderId: built.order.id, requestedById: built.qa.userId },
+    );
+
+    const label = await db.shippingLabel.findFirstOrThrow({
+      include: { rateQuote: { include: { fetch: { include: { quotes: true } } } } },
+    });
+    expect(label).toMatchObject({
+      status: "ACTIVE",
+      rateQuoteId: pricier.quoteId,
+      selectionReason: "CARRIER_RELIABILITY",
+    });
+    const quotes = label.rateQuote?.fetch.quotes ?? [];
+    expect(quotes.map((q) => q.serviceCode).sort()).toEqual(["demo_ground", "demo_ground_saver"]);
+    const cheapest = quotes.filter((q) => q.cheapest);
+    expect(cheapest.map((q) => q.serviceCode)).toEqual(["demo_ground_saver"]);
+    expect(cheapest[0]?.id).not.toBe(label.rateQuoteId);
   });
 });

@@ -86,7 +86,11 @@ describe("selectRate with a reason (SC 8)", () => {
     await selectRate(db, qa, { packageId: pkg.id, rateId: cheap.id });
 
     await expect(
-      setRateSelectionReason(db, qa, { packageId: pkg.id, reason: "FASTER_DELIVERY" }),
+      setRateSelectionReason(db, qa, {
+        packageId: pkg.id,
+        rateId: cheap.id,
+        reason: "FASTER_DELIVERY",
+      }),
     ).rejects.toMatchObject({ messageKey: "errors.qa.reasonNotNeeded" });
   });
 
@@ -129,11 +133,16 @@ describe("setRateSelectionReason (SC 8, 11)", () => {
     const { qa, pkg, dear } = await inQa();
     await selectRate(db, qa, { packageId: pkg.id, rateId: dear.id });
 
-    await setRateSelectionReason(db, qa, { packageId: pkg.id, reason: "CARRIER_RELIABILITY" });
+    await setRateSelectionReason(db, qa, {
+      packageId: pkg.id,
+      rateId: dear.id,
+      reason: "CARRIER_RELIABILITY",
+    });
     expect(await rateRow(dear.id)).toMatchObject({ selectionReason: "CARRIER_RELIABILITY" });
 
     const result = await setRateSelectionReason(db, qa, {
       packageId: pkg.id,
+      rateId: dear.id,
       reason: "OTHER",
       note: "Hand-delivered last time",
     });
@@ -142,7 +151,7 @@ describe("setRateSelectionReason (SC 8, 11)", () => {
       note: "Hand-delivered last time",
     });
 
-    await setRateSelectionReason(db, qa, { packageId: pkg.id, reason: null });
+    await setRateSelectionReason(db, qa, { packageId: pkg.id, rateId: dear.id, reason: null });
     expect(await rateRow(dear.id)).toMatchObject({ selectionReason: null, selectionNote: null });
 
     const audits = await db.auditEvent.findMany({
@@ -158,11 +167,15 @@ describe("setRateSelectionReason (SC 8, 11)", () => {
   });
 
   it("is forbidden for a Packer", async () => {
-    const { pkg } = await inQa();
+    const { pkg, dear } = await inQa();
     const packer = await createActor(db, ["PACKER"]);
 
     await expect(
-      setRateSelectionReason(db, packer, { packageId: pkg.id, reason: "FASTER_DELIVERY" }),
+      setRateSelectionReason(db, packer, {
+        packageId: pkg.id,
+        rateId: dear.id,
+        reason: "FASTER_DELIVERY",
+      }),
     ).rejects.toMatchObject({ kind: "FORBIDDEN" });
   });
 
@@ -171,7 +184,12 @@ describe("setRateSelectionReason (SC 8, 11)", () => {
     await selectRate(db, qa, { packageId: pkg.id, rateId: dear.id });
 
     await expect(
-      setRateSelectionReason(db, qa, { packageId: pkg.id, reason: "FASTER_DELIVERY", note: "x" }),
+      setRateSelectionReason(db, qa, {
+        packageId: pkg.id,
+        rateId: dear.id,
+        reason: "FASTER_DELIVERY",
+        note: "x",
+      }),
     ).rejects.toMatchObject({ messageKey: "errors.qa.reasonNoteNeedsOther" });
 
     await db.shippingLabel.create({
@@ -186,17 +204,116 @@ describe("setRateSelectionReason (SC 8, 11)", () => {
       },
     });
     await expect(
-      setRateSelectionReason(db, qa, { packageId: pkg.id, reason: "FASTER_DELIVERY" }),
+      setRateSelectionReason(db, qa, {
+        packageId: pkg.id,
+        rateId: dear.id,
+        reason: "FASTER_DELIVERY",
+      }),
     ).rejects.toMatchObject({ messageKey: "errors.qa.packageHasLabel" });
   });
 
   it("refuses a package with no selected rate", async () => {
-    const { qa, pkg } = await inQa();
+    const { qa, pkg, cheap } = await inQa();
     await db.shippingRate.updateMany({ where: { packageId: pkg.id }, data: { selected: false } });
 
     await expect(
-      setRateSelectionReason(db, qa, { packageId: pkg.id, reason: "FASTER_DELIVERY" }),
+      setRateSelectionReason(db, qa, {
+        packageId: pkg.id,
+        rateId: cheap.id,
+        reason: "FASTER_DELIVERY",
+      }),
     ).rejects.toMatchObject({ kind: "CONFLICT", messageKey: "errors.qa.noRateSelected" });
+  });
+});
+
+describe("reason edge cases", () => {
+  const reasonAudits = () => db.auditEvent.count({ where: { action: "rate.reason" } });
+
+  it("refuses a reason meant for a rate that's no longer selected", async () => {
+    const { qa, pkg, dear, dearest } = await inQa();
+    await selectRate(db, qa, { packageId: pkg.id, rateId: dear.id });
+    await selectRate(db, qa, { packageId: pkg.id, rateId: dearest.id });
+
+    await expect(
+      setRateSelectionReason(db, qa, {
+        packageId: pkg.id,
+        rateId: dear.id,
+        reason: "FASTER_DELIVERY",
+      }),
+    ).rejects.toMatchObject({ kind: "CONFLICT", messageKey: "errors.qa.rateNoLongerSelected" });
+    expect(await rateRow(dearest.id)).toMatchObject({ selectionReason: null });
+  });
+
+  it("writes and audits nothing when the reason and note are what's stored", async () => {
+    const { qa, pkg, dear } = await inQa();
+    await selectRate(db, qa, { packageId: pkg.id, rateId: dear.id, reason: "OTHER", note: "n" });
+    const set = () =>
+      setRateSelectionReason(db, qa, {
+        packageId: pkg.id,
+        rateId: dear.id,
+        reason: "OTHER",
+        note: " n ",
+      });
+
+    await set();
+    await selectRate(db, qa, { packageId: pkg.id, rateId: dear.id, reason: "OTHER", note: "n" });
+
+    expect(await reasonAudits()).toBe(0);
+    expect(await rateRow(dear.id)).toMatchObject({ selectionReason: "OTHER", selectionNote: "n" });
+  });
+
+  it("re-selecting the selected rate with a new reason saves it as rate.reason; without one keeps it", async () => {
+    const { qa, pkg, dear } = await inQa();
+    await selectRate(db, qa, { packageId: pkg.id, rateId: dear.id, reason: "FASTER_DELIVERY" });
+
+    await selectRate(db, qa, { packageId: pkg.id, rateId: dear.id, reason: "CUSTOMER_REQUESTED" });
+    expect(await rateRow(dear.id)).toMatchObject({ selectionReason: "CUSTOMER_REQUESTED" });
+    const audit = await db.auditEvent.findFirstOrThrow({ where: { action: "rate.reason" } });
+    expect(audit.before).toMatchObject({ rateId: dear.id, reason: "FASTER_DELIVERY" });
+    expect(audit.after).toMatchObject({ rateId: dear.id, reason: "CUSTOMER_REQUESTED" });
+
+    await selectRate(db, qa, { packageId: pkg.id, rateId: dear.id });
+    expect(await rateRow(dear.id)).toMatchObject({ selectionReason: "CUSTOMER_REQUESTED" });
+    expect(await reasonAudits()).toBe(1);
+  });
+
+  it("refuses a note that's blank or over 200 characters, even called directly", async () => {
+    const { qa, pkg, dear } = await inQa();
+    await selectRate(db, qa, { packageId: pkg.id, rateId: dear.id });
+
+    for (const note of ["   ", "x".repeat(201)]) {
+      await expect(
+        setRateSelectionReason(db, qa, {
+          packageId: pkg.id,
+          rateId: dear.id,
+          reason: "OTHER",
+          note,
+        }),
+      ).rejects.toMatchObject({ kind: "BAD_REQUEST" });
+    }
+    await expect(
+      setRateSelectionReason(db, qa, {
+        packageId: pkg.id,
+        rateId: dear.id,
+        reason: null,
+        note: "x",
+      }),
+    ).rejects.toMatchObject({ messageKey: "errors.qa.reasonNoteNeedsOther" });
+  });
+
+  it("refuses a QA user without the claim, and an order no longer in QA", async () => {
+    const { qa, order, pkg, dear } = await inQa();
+    await selectRate(db, qa, { packageId: pkg.id, rateId: dear.id });
+    const stranger = await createActor(db, ["QA"]);
+    const input = { packageId: pkg.id, rateId: dear.id, reason: "FASTER_DELIVERY" } as const;
+
+    await expect(setRateSelectionReason(db, stranger, input)).rejects.toMatchObject({
+      messageKey: "errors.workflow.claimRequired",
+    });
+    await db.order.update({ where: { id: order.id }, data: { status: "READY" } });
+    await expect(setRateSelectionReason(db, qa, input)).rejects.toMatchObject({
+      messageKey: "errors.qa.notQa",
+    });
   });
 });
 

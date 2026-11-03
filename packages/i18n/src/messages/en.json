@@ -709,7 +709,6 @@
     "reasonLabel": "Why this rate? (optional)",
     "reasonNone": "No reason given",
     "reasonNote": "Note",
-    "reasonSaved": "Reason saved.",
     "reasons": {
       "FASTER_DELIVERY": "Faster delivery",
       "CUSTOMER_REQUESTED": "Customer requested",
@@ -1341,7 +1340,8 @@
       "costConfirmRequired": "These labels cost much more than the customer paid for shipping. Confirm to buy them anyway.",
       "reasonNotNeeded": "That's the cheapest rate, so it needs no reason.",
       "reasonNoteNeedsOther": "A note is only for the reason Other.",
-      "noRateSelected": "This package has no selected rate yet. Pick one first."
+      "noRateSelected": "This package has no selected rate yet. Pick one first.",
+      "rateNoLongerSelected": "That rate isn't selected any more. Choose the reason again for the selected one."
     }
   },
   "emails": {

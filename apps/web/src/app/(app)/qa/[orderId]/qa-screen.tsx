@@ -17,7 +17,7 @@ import { ScanBanner, type ScanOutcome } from "../../pick/[orderId]/pick-screen";
 import { hasLiveLabel } from "./live-label";
 import { money } from "./money";
 import { QaDrawer } from "./qa-drawer";
-import { RatesTable, RefreshRatesButton } from "./qa-rates";
+import { RatesTable, RefreshRatesButton, reasonSavesSettled } from "./qa-rates";
 import { FailedPackages, isUnknownPurchase, MarkNotBought } from "./qa-settle";
 import { isVoidable, VoidLabelButton } from "./qa-void";
 
@@ -215,8 +215,14 @@ function QaLayout({
     null,
   );
   const complete = useMutation({
-    mutationFn: (confirmCost?: boolean) =>
-      client.orders.completeQa({ id: order.id, expectedVersion: order.version, confirmCost }),
+    mutationFn: async (confirmCost?: boolean) => {
+      await reasonSavesSettled(queryClient, order.id);
+      return client.orders.completeQa({
+        id: order.id,
+        expectedVersion: order.version,
+        confirmCost,
+      });
+    },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: viewKey }),
     onError: (error) => {
       const ask = costConfirmOf(error);

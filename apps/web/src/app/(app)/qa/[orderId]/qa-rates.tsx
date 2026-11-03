@@ -1,6 +1,11 @@
 "use client";
 
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  type QueryClient,
+  useIsMutating,
+  useMutation,
+  useQueryClient,
+} from "@tanstack/react-query";
 import {
   type QaPackage,
   type QaResult,
@@ -17,6 +22,19 @@ import { hasLiveLabel } from "./live-label";
 import { money } from "./money";
 
 // The carriers' rates table of one package (SPEC-qa "Rate selection"): QA picks another service.
+
+/** Reason saves of one order, so the rates and Complete QA can wait for them. */
+const reasonKey = (orderId: string) => ["qa", "rateReason", orderId];
+
+/**
+ * Resolves once no reason save of the order is in flight. Complete QA waits for it: the label
+ * copies the reason when it's created, and a note saved on blur races the tap that caused the blur.
+ */
+export async function reasonSavesSettled(queryClient: QueryClient, orderId: string) {
+  while (queryClient.isMutating({ mutationKey: reasonKey(orderId) }) > 0) {
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+}
 
 /** Writes that change the screen's rates. They refetch it instead of patching, as the rates change. */
 export function useQaRefetch(orderId: string) {
@@ -52,6 +70,8 @@ export function RatesTable({
     ...settle,
   });
   const locked = disabled || hasLiveLabel(pkg);
+  // A reason being saved is for the selected rate, so the selection holds still until it lands.
+  const savingReason = useIsMutating({ mutationKey: reasonKey(orderId) }) > 0;
 
   if (pkg.rates.length === 0) return <p className="text-sm opacity-70">{t("qa.noRates")}</p>;
   const selected = pkg.rates.find((r) => r.selected);
@@ -61,7 +81,9 @@ export function RatesTable({
         {pkg.rates.map((rate) => (
           <li key={rate.id}>
             <Button
-              isDisabled={locked || rate.expired || rate.quoteOnly || select.isPending}
+              isDisabled={
+                locked || rate.expired || rate.quoteOnly || select.isPending || savingReason
+              }
               onPress={() => !rate.selected && select.mutate(rate.id)}
               aria-pressed={rate.selected}
               data-testid="qa-rate"
@@ -95,6 +117,7 @@ export function RatesTable({
           key={selected.id}
           orderId={orderId}
           packageId={pkg.id}
+          rateId={selected.id}
           reason={pkg.selectedRate.reason}
           note={pkg.selectedRate.note}
         />
@@ -107,16 +130,18 @@ const noReason = "NONE";
 
 /**
  * SPEC-rate-history: why QA picked a rate that isn't the cheapest one that can be bought. Optional,
- * saved on change, and never blocks Complete QA.
+ * saved on change; Complete QA waits for a save in flight but never needs one.
  */
 function RateReason({
   orderId,
   packageId,
+  rateId,
   reason,
   note,
 }: {
   orderId: string;
   packageId: string;
+  rateId: string;
   reason: RateSelectionReason | null;
   note: string | null;
 }) {
@@ -124,8 +149,9 @@ function RateReason({
   const settle = useQaRefetch(orderId);
   const [draft, setDraft] = useState(note ?? "");
   const save = useMutation({
+    mutationKey: reasonKey(orderId),
     mutationFn: (input: { reason: RateSelectionReason | null; note?: string }) =>
-      client.qa.setRateSelectionReason({ packageId, ...input }),
+      client.qa.setRateSelectionReason({ packageId, rateId, ...input }),
     ...settle,
   });
   const options = [

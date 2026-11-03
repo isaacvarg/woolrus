@@ -1,8 +1,9 @@
-import type {
-  QaResult,
-  RateSelectionReason,
-  SelectRateInput,
-  SetRateSelectionReasonInput,
+import {
+  type QaResult,
+  RateSelectionNote,
+  type RateSelectionReason,
+  type SelectRateInput,
+  type SetRateSelectionReasonInput,
 } from "@woolrus/contracts";
 import type { Db, DbTx, ShippingRate } from "@woolrus/db";
 import type { ProviderId } from "../adapters/shipping/provider";
@@ -25,10 +26,15 @@ const snapshot = (rate: { id: string; amountCents: number; serviceName: string }
   serviceName: rate.serviceName,
 });
 
-/** A note only explains "Other" (also refused by the contract; core is called directly too). */
+/**
+ * A note only explains "Other", and is 1–200 characters once trimmed. The contract checks both;
+ * core does too because it's called directly (jobs, scripts) and the column has no limit.
+ */
 function assertNote(reason: RateSelectionReason | null | undefined, note: string | undefined) {
-  if (note !== undefined && reason !== "OTHER") {
-    throw new AppError("BAD_REQUEST", "errors.qa.reasonNoteNeedsOther");
+  if (note === undefined) return;
+  if (reason !== "OTHER") throw new AppError("BAD_REQUEST", "errors.qa.reasonNoteNeedsOther");
+  if (!RateSelectionNote.safeParse(note).success) {
+    throw new AppError("BAD_REQUEST", "errors.field.invalid");
   }
 }
 
@@ -66,7 +72,7 @@ function assertReasonNeeded(
 /** `assertNote` has already refused a note without OTHER. */
 const reasonFields = (reason: RateSelectionReason | null, note: string | undefined) => ({
   selectionReason: reason,
-  selectionNote: note ?? null,
+  selectionNote: note?.trim() ?? null,
 });
 
 /**
@@ -115,9 +121,7 @@ export async function selectRate(
         after: { ...snapshot(rate), reason: reason ?? null },
         at: now,
       });
-    } else if (reason) {
-      await saveReason(tx, actor, rate, reason, note, now);
-    } else {
+    } else if (!reason || !(await saveReason(tx, actor, rate, reason, note, now))) {
       return qaResult(tx, order.id);
     }
     await touchClaim(tx, actor, order.id, { now });
@@ -126,6 +130,7 @@ export async function selectRate(
   });
 }
 
+/** Stores and audits the reason; false (and nothing written) when it's what's stored already. */
 async function saveReason(
   tx: DbTx,
   actor: Actor,
@@ -133,8 +138,14 @@ async function saveReason(
   reason: RateSelectionReason | null,
   note: string | undefined,
   now: Date,
-) {
+): Promise<boolean> {
   const fields = reasonFields(reason, note);
+  if (
+    fields.selectionReason === rate.selectionReason &&
+    fields.selectionNote === rate.selectionNote
+  ) {
+    return false;
+  }
   await tx.shippingRate.update({ where: { id: rate.id }, data: fields });
   await recordAudit(tx, actor, {
     entityType: "Package",
@@ -144,6 +155,7 @@ async function saveReason(
     after: { rateId: rate.id, reason: fields.selectionReason },
     at: now,
   });
+  return true;
 }
 
 /**
@@ -153,7 +165,7 @@ async function saveReason(
 export async function setRateSelectionReason(
   db: Db,
   actor: Actor,
-  { packageId, reason, note }: SetRateSelectionReasonInput,
+  { packageId, rateId, reason, note }: SetRateSelectionReasonInput,
   { now = new Date() }: QaOptions = {},
 ): Promise<QaResult> {
   assertCan(actor, "order.qa");
@@ -162,8 +174,10 @@ export async function setRateSelectionReason(
     const { order, rates, quoteOnly } = await lockForRateChoice(tx, actor, packageId, now);
     const rate = rates.find((r) => r.selected);
     if (!rate) throw new AppError("CONFLICT", "errors.qa.noRateSelected");
+    // A reason picked for one rate never lands on another selected since.
+    if (rate.id !== rateId) throw new AppError("CONFLICT", "errors.qa.rateNoLongerSelected");
     if (reason) assertReasonNeeded(rate, rates, quoteOnly);
-    await saveReason(tx, actor, rate, reason, note, now);
+    if (!(await saveReason(tx, actor, rate, reason, note, now))) return qaResult(tx, order.id);
     await touchClaim(tx, actor, order.id, { now });
     await notifyOrderChanged(tx, { id: order.id, status: order.status });
     return qaResult(tx, order.id);
