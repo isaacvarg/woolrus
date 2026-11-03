@@ -34,8 +34,9 @@ import { type AdapterFactories, createShippingProviders } from "../adapters/ship
 import { recordAudit } from "../audit";
 import { enqueue } from "../enqueue";
 import { AppError, notFound } from "../errors";
-import { type JobPayloads, queues } from "../jobs";
+import { type JobPayloads, type OrderRateFetchTrigger, queues } from "../jobs";
 import { type Actor, assertCan } from "../permissions";
+import { logRateFetch } from "../rate-history/log";
 import { loadSettings } from "../settings/service";
 import { buildCustoms, customsLines } from "../shipping/customs";
 import { toNumber } from "../units";
@@ -44,6 +45,7 @@ import { lockOrder } from "../workflow/lock";
 import { notifyOrderChanged } from "../workflow/notify";
 import { resolveShipTo } from "./address";
 import { listUsableServices } from "./carriers";
+import { compareRates } from "./compare";
 
 // The rate fetch (SPEC-carriers "Rate fetch", job `rates.fetch`): every enabled provider is asked
 // for every package in parallel, and the merged rates are stored with the cheapest selected. Each
@@ -67,13 +69,17 @@ type RatesPayload = JobPayloads[typeof queues.ratesFetch];
  * Starts a fetch for the order's next generation on the caller's transaction, so it's enqueued
  * only if that commits. The caller holds the order's row lock.
  */
-export async function requestRateFetch(tx: DbTx, orderId: string): Promise<number> {
+export async function requestRateFetch(
+  tx: DbTx,
+  orderId: string,
+  trigger: OrderRateFetchTrigger = "PACKING_COMPLETE",
+): Promise<number> {
   const { rateGeneration } = await tx.order.update({
     where: { id: orderId },
     data: { rateGeneration: { increment: 1 } },
     select: { rateGeneration: true },
   });
-  await enqueue(tx, queues.ratesFetch, { orderId, generation: rateGeneration });
+  await enqueue(tx, queues.ratesFetch, { orderId, generation: rateGeneration, trigger });
   return rateGeneration;
 }
 
@@ -111,29 +117,6 @@ type ProviderOutcome =
     };
 
 const serviceKey = (carrierExternalId: string, code: string) => `${carrierExternalId}\n${code}`;
-
-/** Cheapest first; ties: fewer delivery days, then provider order, then service name. */
-function compareRates(
-  a: {
-    amountCents: number;
-    deliveryDays?: number | null;
-    provider: ProviderId;
-    serviceName: string;
-  },
-  b: {
-    amountCents: number;
-    deliveryDays?: number | null;
-    provider: ProviderId;
-    serviceName: string;
-  },
-): number {
-  return (
-    a.amountCents - b.amountCents ||
-    (a.deliveryDays ?? Number.POSITIVE_INFINITY) - (b.deliveryDays ?? Number.POSITIVE_INFINITY) ||
-    providerIds.indexOf(a.provider) - providerIds.indexOf(b.provider) ||
-    a.serviceName.localeCompare(b.serviceName)
-  );
-}
 
 async function askProvider(
   provider: ShippingProvider,
@@ -292,7 +275,7 @@ async function checkShipTo(
 export async function fetchRates(
   db: Db,
   providers: ShippingProvider[],
-  { orderId, generation }: RatesPayload,
+  { orderId, generation, trigger = "PACKING_COMPLETE" }: RatesPayload,
   {
     now = new Date(),
     finalAttempt = true,
@@ -386,13 +369,14 @@ export async function fetchRates(
       .map(async (pkg) => {
         const size = parcel(pkg);
         if (!size) {
+          // Not logged: without a parcel there's nothing a quote could be compared against.
           const outcome: ProviderOutcome = {
             provider: null,
             ok: false,
             messageKey: "errors.carriers.packageIncomplete",
             permanent: true,
           };
-          return { pkg, outcomes: [outcome] };
+          return { pkg, size, outcomes: [outcome] };
         }
         const declaration = domestic ? null : buildCustoms(customsLines(pkg.items));
         if (declaration && !declaration.complete) {
@@ -403,7 +387,7 @@ export async function fetchRates(
             permanent: true,
             params: { products: declaration.missing.join(", ") },
           };
-          return { pkg, outcomes: [outcome] };
+          return { pkg, size, outcomes: [outcome] };
         }
         const request = (services: UsableService[]): RateRequest => ({
           ...base,
@@ -425,7 +409,7 @@ export async function fetchRates(
             askProvider(provider, request(usable[i] ?? []), timeoutMs),
           ),
         );
-        return { pkg, outcomes };
+        return { pkg, size, outcomes };
       }),
   );
 
@@ -441,7 +425,8 @@ export async function fetchRates(
   );
   const expiry = new Date(now.getTime() + RATE_TTL_HOURS * 3_600_000);
   const canPurchase = new Map(providers.map((p) => [p.id, p.capabilities.purchase]));
-  for (const { pkg, outcomes } of asked) {
+  const fakeProviders = new Set(providers.filter((p) => p.fake).map((p) => p.id));
+  for (const { pkg, size, outcomes } of asked) {
     // Extras the provider returned for services that aren't on are dropped, and so is a negative
     // price: a malformed quote that would sort first and be selected.
     const rates = outcomes
@@ -477,9 +462,33 @@ export async function fetchRates(
       if (!status) return false;
       // A label bought since the fetch began keeps the rate it was bought with.
       if (await hasLiveLabel(tx, pkg.id)) return true;
+      // The log is written with the rates it describes, so QA's screen and the history agree.
+      const logged = size
+        ? await logRateFetch(tx, {
+            source: "ORDER",
+            trigger,
+            orderId,
+            packageId: pkg.id,
+            shipTo,
+            residential: base.residential,
+            international: !domestic,
+            boxId: pkg.boxId,
+            parcel: size,
+            providerErrors: errors,
+            rates: rates.map((rate) => ({
+              ...rate,
+              carrierId: rate.service.carrierId,
+              serviceId: rate.service.id,
+              carrierCode: rate.service.carrier.code,
+              quoteOnly: canPurchase.get(rate.provider) !== true,
+            })),
+            fakeProviders,
+          })
+        : null;
       await tx.shippingRate.deleteMany({ where: { packageId: pkg.id } });
       await tx.shippingRate.createMany({
         data: rates.map((rate, i) => ({
+          quoteId: logged?.quoteIds[i] ?? null,
           packageId: pkg.id,
           provider: rate.provider,
           carrierId: rate.service.carrierId,
@@ -583,9 +592,10 @@ export async function lockRerate(tx: DbTx, orderId: string) {
 export async function refetch(
   tx: DbTx,
   orderId: string,
+  trigger: OrderRateFetchTrigger,
   { dropRates = false }: { dropRates?: boolean } = {},
 ): Promise<number> {
-  const generation = await requestRateFetch(tx, orderId);
+  const generation = await requestRateFetch(tx, orderId, trigger);
   if (dropRates) await tx.shippingRate.deleteMany({ where: { package: { orderId } } });
   await tx.package.updateMany({
     where: { orderId, ...withoutLiveLabel },
@@ -618,7 +628,7 @@ export async function refreshRates(
     if (packages > 0 && new Set(labels.map((l) => l.packageId)).size === packages) {
       throw new AppError("CONFLICT", "errors.qa.allPackagesLabelled");
     }
-    const generation = await refetch(tx, orderId);
+    const generation = await refetch(tx, orderId, "REFRESH");
     await recordAudit(tx, actor, {
       entityType: "Order",
       entityId: orderId,

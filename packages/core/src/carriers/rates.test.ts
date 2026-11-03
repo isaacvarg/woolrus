@@ -798,7 +798,9 @@ describe("Packing → QA hook (SC 12)", () => {
 
     await completePack(db, packer, { orderId: order.id, expectedVersion: 3, after: "queue" });
 
-    expect(await jobs(order.id)).toEqual([{ data: { orderId: order.id, generation: 1 } }]);
+    expect(await jobs(order.id)).toEqual([
+      { data: { orderId: order.id, generation: 1, trigger: "PACKING_COMPLETE" } },
+    ]);
     expect(await db.order.findUniqueOrThrow({ where: { id: order.id } })).toMatchObject({
       rateGeneration: 1,
     });
@@ -835,7 +837,7 @@ describe("refreshRates", () => {
       ratesStatus: "FETCHING",
     });
     expect(await jobs(payload.orderId)).toEqual([
-      { data: { orderId: payload.orderId, generation: 2 } },
+      { data: { orderId: payload.orderId, generation: 2, trigger: "REFRESH" } },
     ]);
     expect(
       await db.auditEvent.findFirst({
@@ -1425,7 +1427,7 @@ describe("address validation (SC 7)", () => {
       });
       expect(shipping.packages[0]).toMatchObject({ ratesStatus: "FETCHING", rates: [] });
       expect(await jobs(payload.orderId)).toEqual([
-        { data: { orderId: payload.orderId, generation: 2 } },
+        { data: { orderId: payload.orderId, generation: 2, trigger: "ADDRESS_CHANGE" } },
       ]);
       const audit = await db.auditEvent.findFirstOrThrow({
         where: { entityId: payload.orderId, action: "shipTo.useOriginal" },
@@ -1491,7 +1493,7 @@ describe("address validation (SC 7)", () => {
       // The original stays on show until the fetch resolves it again.
       expect(shipping.shipTo.original).toEqual(original);
       expect(await jobs(payload.orderId)).toEqual([
-        { data: { orderId: payload.orderId, generation: 2 } },
+        { data: { orderId: payload.orderId, generation: 2, trigger: "ADDRESS_CHANGE" } },
       ]);
       expect(
         await db.auditEvent.findFirst({

@@ -67,6 +67,7 @@ export * from "./qa/queries";
 export * from "./qa/rates";
 export * from "./qa/scan";
 export * from "./qa/verify";
+export * from "./rate-history/log";
 export * from "./settings/crypto";
 export { encryptionKey } from "./settings/env";
 export * from "./settings/format";

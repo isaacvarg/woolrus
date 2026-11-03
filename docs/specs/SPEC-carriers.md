@@ -96,6 +96,8 @@ export type ProviderCapabilities = {
 export interface ShippingProvider {
   readonly id: ProviderId;
   readonly capabilities: ProviderCapabilities;
+  /** Set only by the fake adapters; the quote log flags their quotes (SPEC-rate-history). */
+  readonly fake?: true;
   /** Succeeds when the credentials are accepted. */
   ping(): Promise<void>;
   listCarriers(): Promise<ProviderCarrier[]>;              // each with its services
@@ -240,7 +242,8 @@ The dev env fallback stays: `SHIPSTATION_API_KEY` fills an unset key in developm
 
 ### Rate fetch (`packages/core/src/carriers/rates.ts`, job `rates.fetch`)
 
-Payload `{ orderId, generation }`. Enqueued in the transaction that moves an order Packing → QA (a hook in
+Payload `{ orderId, generation, trigger? }`; `trigger` (`PACKING_COMPLETE`, `REFRESH` or `ADDRESS_CHANGE`, default
+`PACKING_COMPLETE` for jobs queued before it existed) is what the quote log records (SPEC-rate-history). Enqueued in the transaction that moves an order Packing → QA (a hook in
 `workflow`'s `completePacking`, added here) and by `refreshRates({ orderId })` (`order.qa`, order in QA). Refresh
 re-rates only the packages **without** a live label, so a partly bought order can re-rate the failed package; it is
 refused while a label of the order is `PURCHASING` or when every package has a live label (changed by SPEC-qa,
@@ -252,7 +255,8 @@ are checked against it, so a refresh or a repack never gets overwritten by an ol
 3. For each package × each enabled provider, in parallel: send the enabled carriers and services of that provider
    whose Domestic/International flag matches the ship-to country (ship-from is US). A provider with no usable
    carriers is skipped with `noCarriers`.
-4. In one transaction per package, if the generation still matches: delete its rates, insert the returned ones
+4. In one transaction per package, if the generation still matches: log the fetch and its quotes
+   (`logRateFetch`, SPEC-rate-history), delete its rates, insert the returned ones, each pointing at its quote,
    tagged with provider and carrier, set `expiresAt` = the provider's, else `fetchedAt + RATE_TTL_HOURS` (24, decision 6), drop rates for services not enabled (the provider may return extras), and
    mark the cheapest **selected** among rates whose provider has `purchase` (ties: fewer delivery days, then provider
    order, then service name). Quote-only rates are stored and returned with `quoteOnly: true` (derived at read time

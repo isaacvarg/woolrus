@@ -43,7 +43,7 @@ export async function keepOriginalAddress(
         shipToResidential: null,
       },
     });
-    const generation = await refetch(tx, orderId, { dropRates: true });
+    const generation = await refetch(tx, orderId, "ADDRESS_CHANGE", { dropRates: true });
     await recordAudit(tx, actor, {
       entityType: "Order",
       entityId: orderId,
@@ -69,7 +69,7 @@ export async function recheckAddress(
     // The original stays on show until the fetch resolves it again.
     const { shipToOriginal: _, ...recheck } = cleared;
     await tx.order.update({ where: { id: orderId }, data: recheck });
-    const generation = await refetch(tx, orderId, { dropRates: true });
+    const generation = await refetch(tx, orderId, "ADDRESS_CHANGE", { dropRates: true });
     await recordAudit(tx, actor, {
       entityType: "Order",
       entityId: orderId,
@@ -91,5 +91,5 @@ export async function forgetShipTo(
   order: { id: string; status: WorkflowStatus },
 ): Promise<void> {
   await tx.order.update({ where: { id: order.id }, data: cleared });
-  if (order.status === "QA") await refetch(tx, order.id, { dropRates: true });
+  if (order.status === "QA") await refetch(tx, order.id, "ADDRESS_CHANGE", { dropRates: true });
 }
