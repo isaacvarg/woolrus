@@ -2,7 +2,7 @@
 
 **Milestone:** M5 · **Depends on:** `carriers` (the rate fetch and the seam), `qa` (rate selection, label purchase)
 · **Used by:** `rate-lab` (writes Lab fetches, reads both for its dashboards), `reporting` (spend and choice
-statistics, later) · **State:** spec approved
+statistics, later) · **State:** planned
 
 Project-wide commands, structure, code style, testing levels and boundaries are in [`../../SPEC.md`](../../SPEC.md);
 this spec only adds what is specific to `rate-history`.
