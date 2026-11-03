@@ -22,13 +22,13 @@ const json = (body: unknown, status = 200) =>
 
 const errorBodies = { 400: error422, 401: error401, 429: error500, 500: error500 };
 
-/** `POST …/quote` answers by service code; anything else gets a default. */
+/** `POST …/quote` answers by service code (money as strings, like the live API); else a default. */
 const quotes: Record<string, unknown> = {
-  A_GROUND: { totalAmount: 8.5 },
-  A_EXPRESS_INTL: { totalAmount: 41.995 },
-  R1: { totalAmount: 1.005 },
+  A_GROUND: { totalAmount: "8.50" },
+  A_EXPRESS_INTL: { totalAmount: "41.995" },
+  R1: { totalAmount: "1.005" },
   R2: { totalAmount: 0.285 },
-  R3: { totalAmount: 19.999 },
+  R3: { totalAmount: "19.999" },
 };
 const quoteRoute = `POST /restapi/v1/customers/${customerId}/quote`;
 
@@ -68,12 +68,13 @@ type Call = { method: string; url: URL; headers: Headers };
 function fixtureApi(overrides: Record<string, () => Response> = {}) {
   const calls: Call[] = [];
   const bodies: Record<string, unknown>[] = [];
-  const failures: SimulatedFailure[] = [];
+  // A failure sticks until the next one is set: getRates makes a request per service, and the
+  // contract's "next call fails" means all of them (one failed service alone is dropped).
+  let failure: SimulatedFailure | undefined;
   const fetch: typeof globalThis.fetch = async (input, init = {}) => {
     const url = new URL(String(input));
     const method = init.method ?? "GET";
     calls.push({ method, url, headers: new Headers(init.headers) });
-    const failure = failures.shift();
     if (failure === "network") throw new TypeError("fetch failed");
     if (failure === "timeout") throw new DOMException("The operation timed out.", "TimeoutError");
     if (failure) return json(errorBodies[failure], failure === 400 ? 404 : failure);
@@ -86,11 +87,14 @@ function fixtureApi(overrides: Record<string, () => Response> = {}) {
     if (method === "POST" && url.pathname.endsWith(`/restapi/v1/customers/${customerId}/quote`)) {
       const body = JSON.parse(String(init.body)) as { serviceCode: string };
       bodies.push(body);
-      return json(quotes[body.serviceCode] ?? { totalAmount: 12.34 });
+      return json(quotes[body.serviceCode] ?? { totalAmount: "12.34" });
     }
     return json({ error: "not found" }, 404);
   };
-  return { fetch, calls, bodies, failNext: (f: SimulatedFailure) => failures.push(f) };
+  const failNext = (f: SimulatedFailure) => {
+    failure = f;
+  };
+  return { fetch, calls, bodies, failNext };
 }
 
 function setup(overrides?: Record<string, () => Response>, config: Record<string, unknown> = {}) {
@@ -163,13 +167,13 @@ describe("BridgeSourceAdapter", () => {
       const [a, b] = await setup().provider.listCarriers();
       expect(a?.services[0]?.providerData).toEqual({
         serviceName: "A Ground",
-        packageTypeCode: "A_CUSTOM",
+        packageTypeCode: "carrier_a_custom_package",
         supportedCountries: ["US"],
         unsupportedCountries: [],
       });
       expect(b?.services[0]?.providerData).toMatchObject({
         serviceName: "B World",
-        packageTypeCode: "B_CUSTOM",
+        packageTypeCode: "carrier_b_custom_package",
         unsupportedCountries: ["CU", "KP"],
       });
       // listed, but without a package type: getRates skips it
@@ -193,13 +197,13 @@ describe("BridgeSourceAdapter", () => {
                 {
                   carrierCode: "X",
                   serviceCode: "X_OUT",
-                  serviceName: "Out only",
+                  serviceLabel: "Out only",
                   supportedCountries: ["CA"],
                 },
                 {
                   carrierCode: "X",
                   serviceCode: "X_NO_US",
-                  serviceName: "No US",
+                  serviceLabel: "No US",
                   unsupportedCountries: ["us"],
                 },
               ]),
@@ -254,7 +258,7 @@ describe("BridgeSourceAdapter", () => {
     it("quotes each requested service with the custom package, converting units at the boundary", async () => {
       const { provider, bodies, calls } = setup();
       const rates = await provider.getRates(
-        rateRequest([service("A_GROUND", "CARRIER_A", "A_CUSTOM"), service("A_EXPRESS_INTL")]),
+        rateRequest([service("A_GROUND", "CARRIER_A", "carrier_a_custom_package"), service("A_EXPRESS_INTL")]),
       );
       expect(rates).toEqual([
         {
@@ -271,14 +275,69 @@ describe("BridgeSourceAdapter", () => {
       expect(rates[0]).not.toHaveProperty("providerRateId");
       expect(rates[0]).not.toHaveProperty("expiresAt");
       expect(calls.every((c) => c.headers.get("authorization") === `RSIS ${apiKey}`)).toBe(true);
-      expect(bodies[0]).toMatchObject({
+      // The live API's shape (checked 2026-11-03): numbers as strings, pounds rounded up to
+      // hundredths, and addresses as zip and country only (it refuses any other field).
+      expect(bodies[0]).toEqual({
         carrierCode: "CARRIER_A",
         serviceCode: "A_GROUND",
-        packageTypeCode: "A_CUSTOM",
+        packageTypeCode: "carrier_a_custom_package",
+        signatureOptionCode: "NO_SIGNATURE_REQUIRED",
         residential: true,
-        weight: { pounds: 1, ounces: 6.5 },
-        dimensions: { length: 10, width: 8, height: 4 },
+        currency: "USD",
+        weightUnit: "lb",
+        dimUnit: "in",
+        sender: { zip: "97477", country: "US" },
+        receiver: { zip: "97477", country: "US" },
+        pieces: [
+          {
+            weight: "1.41",
+            length: "10",
+            width: "8",
+            height: "4",
+            insuranceAmount: null,
+            declaredValue: null,
+          },
+        ],
       });
+    });
+
+    it("declares the customs value abroad, at least the 1.00 Bridge Source requires", async () => {
+      const abroad = (valueCents: number): RateRequest => ({
+        ...rateRequest([service("S1")]),
+        shipTo: { ...address, country: "CA", postalCode: "M5V 2T6" },
+        customs: {
+          contents: "merchandise",
+          nonDelivery: "return_to_sender",
+          items: [
+            { sku: "A", description: "Yarn", quantity: 2, valueCents, currency: "USD", hsCode: "5109", countryOfOrigin: "US" },
+            { sku: "B", description: "Yarn", quantity: 1, valueCents: 5, currency: "USD", hsCode: "5109", countryOfOrigin: "US" },
+          ],
+        },
+      });
+      const { provider, bodies } = setup();
+      await provider.getRates(abroad(2500));
+      await provider.getRates(abroad(10));
+      const declared = bodies.map((b) => (b.pieces as { declaredValue: unknown }[])[0]?.declaredValue);
+      expect(declared).toEqual(["25.05", "1.00"]);
+      expect(bodies[0]?.receiver).toEqual({ zip: "M5V 2T6", country: "CA" });
+    });
+
+    it("skips a service whose country lists rule out the destination, without a request", async () => {
+      const { provider, bodies } = setup();
+      const lists = (code: string, providerData: Record<string, unknown>) => {
+        const s = service(code);
+        return { ...s, providerData: { ...s.providerData, ...providerData } };
+      };
+      const rates = await provider.getRates(
+        rateRequest([
+          lists("NOT_US", { supportedCountries: [], unsupportedCountries: ["US"] }),
+          lists("CA_ONLY", { supportedCountries: ["CA"], unsupportedCountries: [] }),
+          lists("US_TOO", { supportedCountries: ["US", "PR"], unsupportedCountries: [] }),
+          service("NO_LISTS"),
+        ]),
+      );
+      expect(rates.map((r) => r.serviceCode)).toEqual(["US_TOO", "NO_LISTS"]);
+      expect(bodies).toHaveLength(2);
     });
 
     it("rounds money half up to whole cents", async () => {
@@ -314,13 +373,31 @@ describe("BridgeSourceAdapter", () => {
       expect(error).toMatchObject({ kind: "notOffered", status: 422 });
     });
 
-    it("fails the whole call on any other failure", async () => {
+    it("drops a service that fails with a 500 while others quote", async () => {
+      // The live API answers a refused service (not on the account, wrong lane) with a 500.
       let n = 0;
       const { provider } = setup({
-        [quoteRoute]: () => (++n === 2 ? json(error500, 500) : json({ totalAmount: 5 })),
+        [quoteRoute]: () => (++n === 2 ? json(error500, 500) : json({ totalAmount: "5.00" })),
+      });
+      const rates = await provider.getRates(rateRequest([service("S1"), service("S2")]));
+      expect(rates).toHaveLength(1);
+    });
+
+    it("fails with a failure other than a refusal when no service quotes", async () => {
+      let n = 0;
+      const { provider } = setup({
+        [quoteRoute]: () => (++n === 1 ? json(error422NotOffered, 422) : json(error500, 500)),
       });
       const error = await rejection(provider.getRates(rateRequest([service("S1"), service("S2")])));
       expect(error.kind).toBe("unavailable");
+    });
+
+    it("stops at the first unauthorized answer", async () => {
+      const { provider, bodies } = setup({ [quoteRoute]: () => json(error401, 401) });
+      const codes = Array.from({ length: 10 }, (_, i) => `S${i}`);
+      const error = await rejection(provider.getRates(rateRequest(codes.map((c) => service(c)))));
+      expect(error.kind).toBe("unauthorized");
+      expect(bodies.length).toBeLessThanOrEqual(4);
     });
 
     it("treats a quote body that doesn't parse as unavailable", async () => {

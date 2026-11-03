@@ -147,7 +147,7 @@ describe("Bridge Source behind the carriers service", () => {
     expect(again?.services.find((s) => s.code === "A_EXPRESS_INTL")?.enabled).toBe(false);
 
     const stored = await db.carrierService.findFirstOrThrow({ where: { code: "A_GROUND" } });
-    expect(stored.providerData).toMatchObject({ packageTypeCode: "A_CUSTOM" });
+    expect(stored.providerData).toMatchObject({ packageTypeCode: "carrier_a_custom_package" });
   });
 
   it("clears the credentials on an origin change of the base URL, not on a path change", async () => {
