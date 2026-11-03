@@ -209,6 +209,9 @@ export async function completeQaWithLabels(
           carrierCode: rate.carrierCode,
           serviceCode: rate.serviceCode,
           quotedAmountCents: rate.amountCents,
+          // Set with the intent, so a failed or reconciled purchase still says what it was bought
+          // from (SPEC-rate-history decision 1). Null for rates older than the quote log.
+          rateQuoteId: rate.quoteId,
           currency: rate.currency,
           purchasedById: actor.userId,
         },
