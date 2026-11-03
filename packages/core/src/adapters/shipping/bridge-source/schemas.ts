@@ -35,7 +35,13 @@ export const servicesResponse = z.union([
 /** `POST …/quote`: the all-in price (surcharges included) in dollars, sent as a decimal string. */
 export const quoteResponse = z.object({
   totalAmount: z
-    .union([z.number(), z.string().regex(/^\d+(\.\d+)?$/).transform(Number)])
+    .union([
+      z.number(),
+      z
+        .string()
+        .regex(/^\d+(\.\d+)?$/)
+        .transform(Number),
+    ])
     .pipe(z.number().finite().nonnegative()),
 });
 

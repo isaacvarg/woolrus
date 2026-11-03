@@ -6,9 +6,7 @@
       "serviceLabel": "A Ground",
       "serviceCode": "A_GROUND",
       "inbound": false,
-      "supportedCountries": [
-        "US"
-      ],
+      "supportedCountries": ["US"],
       "unsupportedCountries": [],
       "signatureOptions": [
         {
@@ -50,11 +48,7 @@
       "serviceLabel": "A Express International",
       "serviceCode": "A_EXPRESS_INTL",
       "inbound": false,
-      "supportedCountries": [
-        "US",
-        "CA",
-        "MX"
-      ],
+      "supportedCountries": ["US", "CA", "MX"],
       "unsupportedCountries": [],
       "signatureOptions": [
         {
@@ -84,9 +78,7 @@
       "serviceLabel": "A Return (inbound)",
       "serviceCode": "A_RETURN",
       "inbound": true,
-      "supportedCountries": [
-        "US"
-      ],
+      "supportedCountries": ["US"],
       "unsupportedCountries": [],
       "signatureOptions": [
         {
@@ -117,10 +109,7 @@
       "serviceCode": "B_WORLD",
       "inbound": false,
       "supportedCountries": [],
-      "unsupportedCountries": [
-        "CU",
-        "KP"
-      ],
+      "unsupportedCountries": ["CU", "KP"],
       "signatureOptions": [
         {
           "signatureOptionCode": "NO_SIGNATURE_REQUIRED",
@@ -148,9 +137,7 @@
       "serviceLabel": "B Parcel",
       "serviceCode": "B_NO_CUSTOM",
       "inbound": false,
-      "supportedCountries": [
-        "US"
-      ],
+      "supportedCountries": ["US"],
       "unsupportedCountries": [],
       "signatureOptions": [
         {
@@ -180,9 +167,7 @@
       "serviceLabel": "C Return (inbound)",
       "serviceCode": "C_RETURN",
       "inbound": true,
-      "supportedCountries": [
-        "US"
-      ],
+      "supportedCountries": ["US"],
       "unsupportedCountries": null,
       "signatureOptions": [
         {

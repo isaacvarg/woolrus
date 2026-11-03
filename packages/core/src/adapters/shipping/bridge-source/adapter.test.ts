@@ -258,7 +258,10 @@ describe("BridgeSourceAdapter", () => {
     it("quotes each requested service with the custom package, converting units at the boundary", async () => {
       const { provider, bodies, calls } = setup();
       const rates = await provider.getRates(
-        rateRequest([service("A_GROUND", "CARRIER_A", "carrier_a_custom_package"), service("A_EXPRESS_INTL")]),
+        rateRequest([
+          service("A_GROUND", "CARRIER_A", "carrier_a_custom_package"),
+          service("A_EXPRESS_INTL"),
+        ]),
       );
       expect(rates).toEqual([
         {
@@ -309,15 +312,33 @@ describe("BridgeSourceAdapter", () => {
           contents: "merchandise",
           nonDelivery: "return_to_sender",
           items: [
-            { sku: "A", description: "Yarn", quantity: 2, valueCents, currency: "USD", hsCode: "5109", countryOfOrigin: "US" },
-            { sku: "B", description: "Yarn", quantity: 1, valueCents: 5, currency: "USD", hsCode: "5109", countryOfOrigin: "US" },
+            {
+              sku: "A",
+              description: "Yarn",
+              quantity: 2,
+              valueCents,
+              currency: "USD",
+              hsCode: "5109",
+              countryOfOrigin: "US",
+            },
+            {
+              sku: "B",
+              description: "Yarn",
+              quantity: 1,
+              valueCents: 5,
+              currency: "USD",
+              hsCode: "5109",
+              countryOfOrigin: "US",
+            },
           ],
         },
       });
       const { provider, bodies } = setup();
       await provider.getRates(abroad(2500));
       await provider.getRates(abroad(10));
-      const declared = bodies.map((b) => (b.pieces as { declaredValue: unknown }[])[0]?.declaredValue);
+      const declared = bodies.map(
+        (b) => (b.pieces as { declaredValue: unknown }[])[0]?.declaredValue,
+      );
       expect(declared).toEqual(["25.05", "1.00"]);
       expect(bodies[0]?.receiver).toEqual({ zip: "M5V 2T6", country: "CA" });
     });
