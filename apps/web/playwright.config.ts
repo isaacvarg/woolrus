@@ -10,7 +10,10 @@ const baseURL = process.env.E2E_BASE_URL ?? "http://localhost:3000";
 
 export default defineConfig({
   testDir: "./e2e",
-  use: { baseURL },
+  // CI runs ~350 tests against one production server, where a timing miss now and then fails the
+  // run. A test that passes on retry is still reported as flaky; the retry records a trace.
+  retries: process.env.CI ? 2 : 0,
+  use: { baseURL, trace: "on-first-retry" },
   projects: [
     { name: "desktop", use: { ...devices["Desktop Chrome"] } },
     // The floor runs on Android tablets.
