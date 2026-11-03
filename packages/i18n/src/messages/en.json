@@ -37,7 +37,8 @@
     "failedJobs": "Failed jobs",
     "issues": "Issues",
     "customs": "Customs",
-    "manifests": "Manifests"
+    "manifests": "Manifests",
+    "rateLab": "Rate Lab"
   },
   "navFooter": {
     "preferences": "Preferences",
@@ -1143,7 +1144,8 @@
       "usState": "Use the 2-letter state code, e.g. TX.",
       "usZip": "Use a 5-digit ZIP code (or ZIP+4).",
       "email": "Enter a valid email address.",
-      "emailFrom": "Use an address like no-reply@example.com or Woolrus '<'no-reply@example.com>."
+      "emailFrom": "Use an address like no-reply@example.com or Woolrus '<'no-reply@example.com>.",
+      "country": "Use the 2-letter country code, e.g. US."
     },
     "settings": {
       "encryptionKeyMissing": "Secrets can't be saved: the server's encryption key is missing or invalid. Ask whoever runs the server to set SETTINGS_ENCRYPTION_KEY.",
@@ -1342,6 +1344,12 @@
       "reasonNoteNeedsOther": "A note is only for the reason Other.",
       "noRateSelected": "This package has no selected rate yet. Pick one first.",
       "rateNoLongerSelected": "That rate isn't selected any more. Choose the reason again for the selected one."
+    },
+    "rateLab": {
+      "locked": "This address has been used in runs, so its address can't change. Duplicate it to change the address.",
+      "recheckChanged": "The check now gives a different address or residential flag, and runs have used this one. Duplicate it to use the new result.",
+      "groupInvalid": "Pick groups of the right kind that aren't archived.",
+      "groupNameTaken": "A group with this name already exists."
     }
   },
   "emails": {
@@ -1390,7 +1398,8 @@
       "PICKER": "Picker",
       "PACKER": "Packer",
       "QA": "QA",
-      "SHIPPER": "Shipper"
+      "SHIPPER": "Shipper",
+      "RATE_LAB": "Rate Lab"
     },
     "setPin": "Set PIN",
     "clearPin": "Clear PIN",
@@ -1608,5 +1617,76 @@
     "created": "Manifest created for {count, plural, one {# label} other {# labels}}.",
     "made": "Manifest at {time} · {count, plural, one {# label} other {# labels}}",
     "print": "Print"
+  },
+  "rateLab": {
+    "title": "Rate Lab",
+    "sections": "Rate Lab sections",
+    "tabs": {
+      "runs": "Runs",
+      "addresses": "Addresses",
+      "parcels": "Parcels",
+      "quote": "Quote",
+      "trends": "Trends",
+      "realOrders": "Real orders"
+    },
+    "comingSoon": "This part of Rate Lab isn't built yet.",
+    "addresses": {
+      "add": "Add address",
+      "edit": "Edit address",
+      "titleField": "Title",
+      "description": "What it tests",
+      "group": "Group",
+      "allGroups": "All groups",
+      "search": "Search titles",
+      "showArchived": "Show archived",
+      "loading": "Loading…",
+      "empty": "No test addresses yet.",
+      "address": "Address",
+      "check": "Check",
+      "type": "Type",
+      "groups": "Groups",
+      "actions": "Actions",
+      "residential": "Residential",
+      "commercial": "Commercial",
+      "locked": "Locked",
+      "lockedReason": "Used in runs: physical fields locked. Duplicate to change.",
+      "archived": "Archived",
+      "duplicate": "Duplicate",
+      "archive": "Archive",
+      "unarchive": "Unarchive",
+      "recheck": "Re-check",
+      "save": "Save",
+      "cancel": "Cancel",
+      "close": "Close",
+      "addressLegend": "Address",
+      "groupsLegend": "Groups",
+      "noGroups": "No address groups yet. Add some under Groups.",
+      "checkResult": "Address check",
+      "fields": {
+        "name": "Recipient name",
+        "company": "Company",
+        "phone": "Phone",
+        "email": "Email",
+        "address1": "Address line 1",
+        "address2": "Address line 2",
+        "city": "City",
+        "state": "State or province",
+        "postalCode": "Postal code",
+        "country": "Country (2-letter code)"
+      }
+    },
+    "groups": {
+      "manage": "Manage groups",
+      "title": "Address groups",
+      "add": "Add group",
+      "name": "Group name",
+      "rename": "Rename",
+      "renameTitle": "Rename {name}",
+      "archive": "Archive",
+      "save": "Save",
+      "cancel": "Cancel",
+      "close": "Close",
+      "empty": "No groups yet."
+    }
   }
 }

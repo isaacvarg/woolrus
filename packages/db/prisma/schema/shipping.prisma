@@ -54,6 +54,7 @@ model Box {
 
   packages    Package[]
   rateFetches RateFetch[]
+  labParcels  RateLabParcel[]
 
   @@map("boxes")
 }
@@ -376,7 +377,7 @@ model RateFetch {
   /// ORDER only. SetNull: a package deleted in packing keeps its history.
   orderId        String?          @map("order_id") @db.Uuid
   packageId      String?          @map("package_id") @db.Uuid
-  /// LAB only; the FK is added by rate-lab's migration.
+  /// LAB only.
   labRunId       String?          @map("lab_run_id") @db.Uuid
   labAddressId   String?          @map("lab_address_id") @db.Uuid
   labParcelId    String?          @map("lab_parcel_id") @db.Uuid
@@ -399,10 +400,14 @@ model RateFetch {
   fake           Boolean
   fetchedAt      DateTime         @default(now()) @map("fetched_at") @db.Timestamptz(3)
 
-  order   Order?      @relation(fields: [orderId], references: [id], onDelete: SetNull)
-  package Package?    @relation(fields: [packageId], references: [id], onDelete: SetNull)
-  box     Box?        @relation(fields: [boxId], references: [id], onDelete: SetNull)
-  quotes  RateQuote[]
+  order      Order?          @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  package    Package?        @relation(fields: [packageId], references: [id], onDelete: SetNull)
+  box        Box?            @relation(fields: [boxId], references: [id], onDelete: SetNull)
+  // Archived, never deleted: a test address or parcel with quotes can't go.
+  labRun     RateLabRun?     @relation(fields: [labRunId], references: [id], onDelete: Cascade)
+  labAddress RateLabAddress? @relation(fields: [labAddressId], references: [id], onDelete: Restrict)
+  labParcel  RateLabParcel?  @relation(fields: [labParcelId], references: [id], onDelete: Restrict)
+  quotes     RateQuote[]
 
   @@index([source, fetchedAt(sort: Desc)])
   @@index([orderId])

@@ -3,7 +3,8 @@
 import { ORPCError } from "@orpc/client";
 import { useTranslations } from "next-intl";
 
-function errorData(
+/** The API error's data (message key, fields, params), or undefined for anything else. */
+export function errorData(
   error: unknown,
 ): { messageKey?: unknown; fields?: unknown; params?: unknown } | undefined {
   return error instanceof ORPCError

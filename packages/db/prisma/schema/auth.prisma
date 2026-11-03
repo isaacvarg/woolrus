@@ -7,6 +7,8 @@ enum Role {
   PACKER
   QA
   SHIPPER
+  /// Rate Lab: run price tests and manage test addresses and parcels (SPEC-rate-lab decision 13).
+  RATE_LAB
 
   @@map("role")
 }
@@ -75,6 +77,9 @@ model User {
   returnsCreated     ReturnRequest[]
   auditEvents        AuditEvent[]
   idempotentRequests IdempotentRequest[]
+  labAddresses       RateLabAddress[]
+  labParcels         RateLabParcel[]
+  labRuns            RateLabRun[]
 
   @@map("users")
 }

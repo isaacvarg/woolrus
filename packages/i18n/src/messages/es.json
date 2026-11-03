@@ -37,7 +37,8 @@
     "failedJobs": "Trabajos fallidos",
     "issues": "Incidencias",
     "customs": "Aduanas",
-    "manifests": "Manifiestos"
+    "manifests": "Manifiestos",
+    "rateLab": "Rate Lab"
   },
   "navFooter": {
     "preferences": "Preferencias",
@@ -1143,7 +1144,8 @@
       "usState": "Usa el código de estado de 2 letras, p. ej. TX.",
       "usZip": "Usa un código postal de 5 dígitos (o ZIP+4).",
       "email": "Ingresa un correo electrónico válido.",
-      "emailFrom": "Usa una dirección como no-reply@example.com o Woolrus '<'no-reply@example.com>."
+      "emailFrom": "Usa una dirección como no-reply@example.com o Woolrus '<'no-reply@example.com>.",
+      "country": "Usa el código de país de 2 letras, p. ej. US."
     },
     "settings": {
       "encryptionKeyMissing": "No se pueden guardar secretos: falta la clave de cifrado del servidor o no es válida. Pide a quien administra el servidor que configure SETTINGS_ENCRYPTION_KEY.",
@@ -1342,6 +1344,12 @@
       "reasonNoteNeedsOther": "La nota es solo para el motivo Otro.",
       "noRateSelected": "Este paquete aún no tiene tarifa elegida. Elige una primero.",
       "rateNoLongerSelected": "Esa tarifa ya no está elegida. Vuelve a elegir el motivo para la tarifa elegida."
+    },
+    "rateLab": {
+      "locked": "Esta dirección ya se usó en pruebas, así que no se puede cambiar. Duplícala para cambiar la dirección.",
+      "recheckChanged": "La verificación ahora da otra dirección u otro indicador residencial, y las pruebas ya usaron esta. Duplícala para usar el nuevo resultado.",
+      "groupInvalid": "Elige grupos del tipo correcto que no estén archivados.",
+      "groupNameTaken": "Ya existe un grupo con este nombre."
     }
   },
   "emails": {
@@ -1390,7 +1398,8 @@
       "PICKER": "Surtidor",
       "PACKER": "Empacador",
       "QA": "QA",
-      "SHIPPER": "Envíos"
+      "SHIPPER": "Envíos",
+      "RATE_LAB": "Rate Lab"
     },
     "setPin": "Establecer PIN",
     "clearPin": "Borrar PIN",
@@ -1608,5 +1617,76 @@
     "created": "Manifiesto creado para {count, plural, one {# etiqueta} other {# etiquetas}}.",
     "made": "Manifiesto de las {time} · {count, plural, one {# etiqueta} other {# etiquetas}}",
     "print": "Imprimir"
+  },
+  "rateLab": {
+    "title": "Rate Lab",
+    "sections": "Secciones de Rate Lab",
+    "tabs": {
+      "runs": "Pruebas",
+      "addresses": "Direcciones",
+      "parcels": "Paquetes",
+      "quote": "Cotizar",
+      "trends": "Tendencias",
+      "realOrders": "Pedidos reales"
+    },
+    "comingSoon": "Esta parte de Rate Lab aún no está lista.",
+    "addresses": {
+      "add": "Agregar dirección",
+      "edit": "Editar dirección",
+      "titleField": "Título",
+      "description": "Qué prueba",
+      "group": "Grupo",
+      "allGroups": "Todos los grupos",
+      "search": "Buscar títulos",
+      "showArchived": "Mostrar archivadas",
+      "loading": "Cargando…",
+      "empty": "Aún no hay direcciones de prueba.",
+      "address": "Dirección",
+      "check": "Verificación",
+      "type": "Tipo",
+      "groups": "Grupos",
+      "actions": "Acciones",
+      "residential": "Residencial",
+      "commercial": "Comercial",
+      "locked": "Bloqueada",
+      "lockedReason": "Usada en pruebas: los datos físicos están bloqueados. Duplícala para cambiarlos.",
+      "archived": "Archivada",
+      "duplicate": "Duplicar",
+      "archive": "Archivar",
+      "unarchive": "Desarchivar",
+      "recheck": "Verificar de nuevo",
+      "save": "Guardar",
+      "cancel": "Cancelar",
+      "close": "Cerrar",
+      "addressLegend": "Dirección",
+      "groupsLegend": "Grupos",
+      "noGroups": "Aún no hay grupos de direcciones. Agrégalos en Grupos.",
+      "checkResult": "Verificación de la dirección",
+      "fields": {
+        "name": "Nombre del destinatario",
+        "company": "Empresa",
+        "phone": "Teléfono",
+        "email": "Correo electrónico",
+        "address1": "Dirección, línea 1",
+        "address2": "Dirección, línea 2",
+        "city": "Ciudad",
+        "state": "Estado o provincia",
+        "postalCode": "Código postal",
+        "country": "País (código de 2 letras)"
+      }
+    },
+    "groups": {
+      "manage": "Administrar grupos",
+      "title": "Grupos de direcciones",
+      "add": "Agregar grupo",
+      "name": "Nombre del grupo",
+      "rename": "Renombrar",
+      "renameTitle": "Renombrar {name}",
+      "archive": "Archivar",
+      "save": "Guardar",
+      "cancel": "Cancelar",
+      "close": "Cerrar",
+      "empty": "Aún no hay grupos."
+    }
   }
 }

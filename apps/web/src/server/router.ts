@@ -1,6 +1,8 @@
 import {
   addPackage,
   archiveBox,
+  archiveLabAddress,
+  archiveLabGroup,
   clearPin,
   clearProviderCredentials,
   clearSecret,
@@ -11,7 +13,9 @@ import {
   createBatch,
   createBox,
   createInvitation,
+  createLabAddress,
   createLabelPrint,
+  createLabGroup,
   createManifest,
   createNote,
   createPriorityRule,
@@ -24,6 +28,7 @@ import {
   deletePackage,
   deletePriorityRule,
   dismissFailedJob,
+  duplicateLabAddress,
   finishBatch,
   getBatch,
   getEmailSender,
@@ -46,6 +51,8 @@ import {
   listFailedJobs,
   listInvitations,
   listIssues,
+  listLabAddresses,
+  listLabGroups,
   listNotes,
   listOrders,
   listPriorityRules,
@@ -73,9 +80,11 @@ import {
   queueCounts,
   reactivateUser,
   recheckAddress,
+  recheckLabAddress,
   refreshRates,
   registerStation,
   removeFromBatch,
+  renameLabGroup,
   renameStation,
   reopenIssue,
   reorderPriorityRules,
@@ -118,6 +127,7 @@ import {
   testProvider,
   testStoreConnection,
   touchStation,
+  unarchiveLabAddress,
   undoVoid,
   unlockWithBadge,
   unlockWithPin,
@@ -125,6 +135,7 @@ import {
   unpickLine,
   updateBox,
   updateIssue,
+  updateLabAddress,
   updateNote,
   updatePreferences,
   updatePriorityRule,
@@ -595,6 +606,41 @@ export const router = implementer.router({
         ),
       },
     },
+  },
+  rateLab: {
+    addresses: api.rateLab.addresses.handler(({ input, context }) =>
+      listLabAddresses(db, context.actor, input),
+    ),
+    createAddress: api.rateLab.createAddress.handler(async ({ input, context }) =>
+      createLabAddress(db, context.actor, input, { providers: await createShippingProviders(db) }),
+    ),
+    updateAddress: api.rateLab.updateAddress.handler(async ({ input, context }) =>
+      updateLabAddress(db, context.actor, input, { providers: await createShippingProviders(db) }),
+    ),
+    recheckAddress: api.rateLab.recheckAddress.handler(async ({ input, context }) =>
+      recheckLabAddress(db, context.actor, input, { providers: await createShippingProviders(db) }),
+    ),
+    duplicateAddress: api.rateLab.duplicateAddress.handler(({ input, context }) =>
+      duplicateLabAddress(db, context.actor, input),
+    ),
+    archiveAddress: api.rateLab.archiveAddress.handler(({ input, context }) =>
+      archiveLabAddress(db, context.actor, input),
+    ),
+    unarchiveAddress: api.rateLab.unarchiveAddress.handler(({ input, context }) =>
+      unarchiveLabAddress(db, context.actor, input),
+    ),
+    groups: api.rateLab.groups.handler(({ input, context }) =>
+      listLabGroups(db, context.actor, input),
+    ),
+    createGroup: api.rateLab.createGroup.handler(({ input, context }) =>
+      createLabGroup(db, context.actor, input),
+    ),
+    renameGroup: api.rateLab.renameGroup.handler(({ input, context }) =>
+      renameLabGroup(db, context.actor, input),
+    ),
+    archiveGroup: api.rateLab.archiveGroup.handler(({ input, context }) =>
+      archiveLabGroup(db, context.actor, input),
+    ),
   },
 });
 
