@@ -1,3 +1,4 @@
+import type { RateFetchTrigger } from "@woolrus/db";
 import type { Locale } from "@woolrus/i18n";
 import type { EmailTemplate } from "./identity/emails";
 
@@ -52,8 +53,11 @@ export type JobPayloads = {
   /** Object keys (files and thumbnails); missing ones count as deleted. */
   [queues.storageDelete]: { keys: string[] };
   [queues.storageSweep]: Record<string, never>;
-  /** `generation` is the order's `rateGeneration` when enqueued; a job for an older one writes nothing. */
-  [queues.ratesFetch]: { orderId: string; generation: number };
+  /**
+   * `generation` is the order's `rateGeneration` when enqueued; a job for an older one writes nothing.
+   * `trigger` is what the quote log records; jobs queued before it existed count as packing.
+   */
+  [queues.ratesFetch]: { orderId: string; generation: number; trigger?: OrderRateFetchTrigger };
   [queues.piiPurge]: Record<string, never>;
   [queues.opsHeartbeat]: Record<string, never>;
   /** `requestedById` pressed Complete QA; the job moves the order to Ready as them. */
@@ -61,6 +65,9 @@ export type JobPayloads = {
   [queues.labelsReconcile]: Record<string, never>;
   [queues.wooPush]: { orderId: string };
 };
+
+/** What can cause an order's rate fetch (Rate Lab runs have their own trigger). */
+export type OrderRateFetchTrigger = Exclude<RateFetchTrigger, "LAB_RUN">;
 
 /** Finished jobs stay 30 days, so a failure over a long weekend is still there on Monday. */
 export const JOB_RETENTION_SECONDS = 30 * 24 * 60 * 60;

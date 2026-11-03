@@ -539,7 +539,15 @@
     "useOriginal": "Usar la dirección original",
     "usingOriginal": "Se usa la dirección original. Obteniendo las tarifas de nuevo.",
     "recheck": "Verificar la dirección de nuevo",
-    "rechecking": "Verificando la dirección de nuevo."
+    "rechecking": "Verificando la dirección de nuevo.",
+    "reason": "Por qué no la más barata: {reason}",
+    "reasons": {
+      "FASTER_DELIVERY": "Entrega más rápida",
+      "CUSTOMER_REQUESTED": "Lo pidió el cliente",
+      "CARRIER_RELIABILITY": "Fiabilidad del transportista",
+      "CHEAPEST_UNAVAILABLE": "La más barata no estaba disponible o falló",
+      "OTHER": "Otro"
+    }
   },
   "pack": {
     "title": "Empacar #{number}",
@@ -697,7 +705,18 @@
       "body": "Las etiquetas cuestan {cost}, el cliente pagó {charged} por el envío. ¿Comprar de todos modos?",
       "confirm": "Comprar de todos modos",
       "cancel": "Ahora no"
-    }
+    },
+    "reasonLabel": "¿Por qué esta tarifa? (opcional)",
+    "reasonNone": "Sin motivo",
+    "reasonNote": "Nota",
+    "reasons": {
+      "FASTER_DELIVERY": "Entrega más rápida",
+      "CUSTOMER_REQUESTED": "Lo pidió el cliente",
+      "CARRIER_RELIABILITY": "Fiabilidad del transportista",
+      "CHEAPEST_UNAVAILABLE": "La más barata no estaba disponible o falló",
+      "OTHER": "Otro"
+    },
+    "drawerReason": "Motivo: {reason}"
   },
   "pick": {
     "title": "Surtir #{number}",
@@ -1318,7 +1337,11 @@
       "voidRejected": "El proveedor rechazó anular esta etiqueta. Sigue activa.",
       "voidUnsupported": "Este proveedor no permite anular etiquetas desde aquí. Anúlala con el proveedor.",
       "labelNotVoidable": "Solo se puede anular una etiqueta comprada que siga activa.",
-      "costConfirmRequired": "Estas etiquetas cuestan mucho más de lo que el cliente pagó por el envío. Confirma para comprarlas de todos modos."
+      "costConfirmRequired": "Estas etiquetas cuestan mucho más de lo que el cliente pagó por el envío. Confirma para comprarlas de todos modos.",
+      "reasonNotNeeded": "Esa es la tarifa más barata, así que no necesita motivo.",
+      "reasonNoteNeedsOther": "La nota es solo para el motivo Otro.",
+      "noRateSelected": "Este paquete aún no tiene tarifa elegida. Elige una primero.",
+      "rateNoLongerSelected": "Esa tarifa ya no está elegida. Vuelve a elegir el motivo para la tarifa elegida."
     }
   },
   "emails": {

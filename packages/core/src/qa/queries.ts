@@ -1,5 +1,6 @@
 import type { QaLabel, QaPackage, QaPurchase, QaResult, QaView } from "@woolrus/contracts";
 import type { DbTx, Prisma } from "@woolrus/db";
+import { cheapestPurchasable } from "../carriers/compare";
 import { quoteOnlyProviders } from "../carriers/rates";
 import { notFound } from "../errors";
 import { openCriticalIssues } from "../exceptions/queries";
@@ -88,6 +89,7 @@ export async function qaResult(
 
   const view: QaPackage[] = packages.map((pkg) => {
     const rate = pkg.rates.find((r) => r.selected);
+    const cheapest = cheapestPurchasable(pkg.rates, quoteOnly);
     const label = pkg.labels.find((l) => live.has(l.status)) ?? pkg.labels[0];
     return {
       id: pkg.id,
@@ -119,12 +121,15 @@ export async function qaResult(
         selected: r.selected,
         expired: r.expiresAt !== null && r.expiresAt <= now,
         quoteOnly: quoteOnly.has(r.provider),
+        cheapest: r === cheapest,
       })),
       selectedRate: rate
         ? {
             carrierCode: rate.carrierCode,
             serviceName: rate.serviceName,
             amountCents: rate.amountCents,
+            reason: rate.selectionReason,
+            note: rate.selectionNote,
           }
         : null,
       noteCount: notes.packages.get(pkg.id) ?? 0,

@@ -75,6 +75,7 @@ const BRIDGE_QUOTE_CONCURRENCY = 4;
 abstract class FakeProvider implements ShippingProvider {
   abstract readonly id: ProviderId;
   abstract readonly capabilities: ProviderCapabilities;
+  readonly fake = true as const;
   readonly requests: FakeRequest[] = [];
 
   protected readonly labels: Map<string, FakeLabel>;

@@ -1,6 +1,14 @@
-import type { QaResult, SelectRateInput } from "@woolrus/contracts";
-import type { Db } from "@woolrus/db";
+import {
+  type QaResult,
+  RateSelectionNote,
+  type RateSelectionReason,
+  type SelectRateInput,
+  type SetRateSelectionReasonInput,
+} from "@woolrus/contracts";
+import type { Db, DbTx, ShippingRate } from "@woolrus/db";
+import type { ProviderId } from "../adapters/shipping/provider";
 import { recordAudit } from "../audit";
+import { cheapestPurchasable } from "../carriers/compare";
 import { quoteOnlyProviders } from "../carriers/rates";
 import { AppError, notFound } from "../errors";
 import { type Actor, assertCan } from "../permissions";
@@ -19,59 +27,159 @@ const snapshot = (rate: { id: string; amountCents: number; serviceName: string }
 });
 
 /**
- * Selects `rateId` for the package, leaving exactly one selected. Refused for an expired rate, a
- * quote-only rate, a rate of another package, or a package with a live label; choosing the selected rate again
- * changes and audits nothing.
+ * A note only explains "Other", and is 1–200 characters once trimmed. The contract checks both;
+ * core does too because it's called directly (jobs, scripts) and the column has no limit.
+ */
+function assertNote(reason: RateSelectionReason | null | undefined, note: string | undefined) {
+  if (note === undefined) return;
+  if (reason !== "OTHER") throw new AppError("BAD_REQUEST", "errors.qa.reasonNoteNeedsOther");
+  if (!RateSelectionNote.safeParse(note).success) {
+    throw new AppError("BAD_REQUEST", "errors.field.invalid");
+  }
+}
+
+/**
+ * Locks the package's order for a rate choice: in QA, claimed by the actor, and the package without
+ * a live label. Returns the order and the package's rates.
+ */
+async function lockForRateChoice(tx: DbTx, actor: Actor, packageId: string, now: Date) {
+  const pkg = await tx.package.findUnique({
+    where: { id: packageId },
+    select: { orderId: true, discardedAt: true },
+  });
+  if (!pkg || pkg.discardedAt) throw notFound();
+  const order = await lockForQa(tx, actor, pkg.orderId, now);
+  // Read after the lock, so a refresh or a purchase can't slip in between.
+  const live = await tx.shippingLabel.count({
+    where: { packageId, status: { in: [...liveLabelStatuses] } },
+  });
+  if (live > 0) throw new AppError("CONFLICT", "errors.qa.packageHasLabel");
+  const rates = await tx.shippingRate.findMany({ where: { packageId } });
+  return { order, rates, quoteOnly: await quoteOnlyProviders(tx) };
+}
+
+/** A reason is only for a rate that isn't the cheapest one that can be bought, so the data stays clean. */
+function assertReasonNeeded(
+  rate: ShippingRate,
+  rates: ShippingRate[],
+  quoteOnly: ReadonlySet<ProviderId>,
+) {
+  if (cheapestPurchasable(rates, quoteOnly)?.id === rate.id) {
+    throw new AppError("CONFLICT", "errors.qa.reasonNotNeeded");
+  }
+}
+
+/** `assertNote` has already refused a note without OTHER. */
+const reasonFields = (reason: RateSelectionReason | null, note: string | undefined) => ({
+  selectionReason: reason,
+  selectionNote: note?.trim() ?? null,
+});
+
+/**
+ * Selects `rateId` for the package, leaving exactly one selected, with QA's optional reason
+ * (SPEC-rate-history "Choice and purchase"); the reason of the rate it replaces is cleared.
+ * Refused for an expired rate, a quote-only rate, a rate of another package, a package with a live
+ * label, or a reason on the cheapest rate. Choosing the selected rate again changes and audits
+ * nothing, unless it brings a reason.
  */
 export async function selectRate(
   db: Db,
   actor: Actor,
-  { packageId, rateId }: SelectRateInput,
+  { packageId, rateId, reason, note }: SelectRateInput,
   { now = new Date() }: QaOptions = {},
 ): Promise<QaResult> {
   assertCan(actor, "order.qa");
+  assertNote(reason, note);
   return db.$transaction(async (tx) => {
-    const pkg = await tx.package.findUnique({
-      where: { id: packageId },
-      select: { orderId: true, discardedAt: true },
-    });
-    if (!pkg || pkg.discardedAt) throw notFound();
-    const { orderId } = pkg;
-    const order = await lockForQa(tx, actor, orderId, now);
-
-    // Read after the lock, so a refresh or a purchase can't slip in between.
-    const rate = await tx.shippingRate.findFirst({ where: { id: rateId, packageId } });
+    const { order, rates, quoteOnly } = await lockForRateChoice(tx, actor, packageId, now);
+    const rate = rates.find((r) => r.id === rateId);
     if (!rate) throw notFound();
-    const live = await tx.shippingLabel.count({
-      where: { packageId, status: { in: [...liveLabelStatuses] } },
-    });
-    if (live > 0) throw new AppError("CONFLICT", "errors.qa.packageHasLabel");
     if (rate.expiresAt && rate.expiresAt <= now) {
       throw new AppError("CONFLICT", "errors.qa.rateExpired");
     }
-    if ((await quoteOnlyProviders(tx)).has(rate.provider)) {
+    if (quoteOnly.has(rate.provider)) {
       throw new AppError("CONFLICT", "errors.qa.rateQuoteOnly");
     }
+    if (reason) assertReasonNeeded(rate, rates, quoteOnly);
 
     if (!rate.selected) {
-      const previous = await tx.shippingRate.findFirst({ where: { packageId, selected: true } });
+      const previous = rates.find((r) => r.selected);
       // Unselect first: one selected rate per package is a unique index.
       await tx.shippingRate.updateMany({
         where: { packageId, selected: true },
-        data: { selected: false },
+        data: { selected: false, selectionReason: null, selectionNote: null },
       });
-      await tx.shippingRate.update({ where: { id: rate.id }, data: { selected: true } });
+      await tx.shippingRate.update({
+        where: { id: rate.id },
+        data: { selected: true, ...reasonFields(reason ?? null, note) },
+      });
       await recordAudit(tx, actor, {
         entityType: "Package",
         entityId: packageId,
         action: "rate.select",
         before: previous ? snapshot(previous) : undefined,
-        after: snapshot(rate),
+        after: { ...snapshot(rate), reason: reason ?? null },
         at: now,
       });
-      await touchClaim(tx, actor, orderId, { now });
-      await notifyOrderChanged(tx, { id: order.id, status: order.status });
+    } else if (!reason || !(await saveReason(tx, actor, rate, reason, note, now))) {
+      return qaResult(tx, order.id);
     }
-    return qaResult(tx, orderId);
+    await touchClaim(tx, actor, order.id, { now });
+    await notifyOrderChanged(tx, { id: order.id, status: order.status });
+    return qaResult(tx, order.id);
+  });
+}
+
+/** Stores and audits the reason; false (and nothing written) when it's what's stored already. */
+async function saveReason(
+  tx: DbTx,
+  actor: Actor,
+  rate: ShippingRate,
+  reason: RateSelectionReason | null,
+  note: string | undefined,
+  now: Date,
+): Promise<boolean> {
+  const fields = reasonFields(reason, note);
+  if (
+    fields.selectionReason === rate.selectionReason &&
+    fields.selectionNote === rate.selectionNote
+  ) {
+    return false;
+  }
+  await tx.shippingRate.update({ where: { id: rate.id }, data: fields });
+  await recordAudit(tx, actor, {
+    entityType: "Package",
+    entityId: rate.packageId,
+    action: "rate.reason",
+    before: { rateId: rate.id, reason: rate.selectionReason },
+    after: { rateId: rate.id, reason: fields.selectionReason },
+    at: now,
+  });
+  return true;
+}
+
+/**
+ * Adds, changes or (with null) clears why the package's selected rate isn't the cheapest, without
+ * selecting again. Same preconditions as `selectRate`. Audited as `rate.reason`.
+ */
+export async function setRateSelectionReason(
+  db: Db,
+  actor: Actor,
+  { packageId, rateId, reason, note }: SetRateSelectionReasonInput,
+  { now = new Date() }: QaOptions = {},
+): Promise<QaResult> {
+  assertCan(actor, "order.qa");
+  assertNote(reason, note);
+  return db.$transaction(async (tx) => {
+    const { order, rates, quoteOnly } = await lockForRateChoice(tx, actor, packageId, now);
+    const rate = rates.find((r) => r.selected);
+    if (!rate) throw new AppError("CONFLICT", "errors.qa.noRateSelected");
+    // A reason picked for one rate never lands on another selected since.
+    if (rate.id !== rateId) throw new AppError("CONFLICT", "errors.qa.rateNoLongerSelected");
+    if (reason) assertReasonNeeded(rate, rates, quoteOnly);
+    if (!(await saveReason(tx, actor, rate, reason, note, now))) return qaResult(tx, order.id);
+    await touchClaim(tx, actor, order.id, { now });
+    await notifyOrderChanged(tx, { id: order.id, status: order.status });
+    return qaResult(tx, order.id);
   });
 }

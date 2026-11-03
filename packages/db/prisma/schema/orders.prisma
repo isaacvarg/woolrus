@@ -126,6 +126,7 @@ model Order {
   voids         ItemVoid[]
   returns       ReturnRequest[]
   pickBatches   PickBatchOrder[]
+  rateFetches   RateFetch[]
 
   @@index([status, priority(sort: Desc), orderedAt])
   @@index([number])

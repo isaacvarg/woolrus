@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { base, Id, IdempotencyKey } from "./base";
+import { RateSelectionReason } from "./carriers";
 import { LineAttribute, OrderDetail } from "./orders";
 
 // QA (SPEC-qa "API"). Writes need the order in QA and the caller's live claim.
@@ -53,6 +54,9 @@ export const QaRow = z.object({
 });
 export type QaRow = z.infer<typeof QaRow>;
 
+/** A short note, only with reason OTHER. */
+export const RateSelectionNote = z.string().trim().min(1).max(200);
+
 export const QaRate = z.object({
   id: Id,
   carrierCode: z.string(),
@@ -63,6 +67,8 @@ export const QaRate = z.object({
   expired: z.boolean(),
   /** The provider can quote this rate but not buy it, so it can't be selected. */
   quoteOnly: z.boolean(),
+  /** The package's cheapest rate that can be bought, by carriers' tie rule. */
+  cheapest: z.boolean(),
 });
 export type QaRate = z.infer<typeof QaRate>;
 
@@ -76,9 +82,15 @@ export const QaPackage = z.object({
   label: QaLabel.nullable(),
   /** Every rate fetched for the package, cheapest first, for the rates table. */
   rates: z.array(QaRate),
-  /** The selected rate, for the drawer. */
+  /** The selected rate, for the drawer, with QA's reason for it when it isn't the cheapest. */
   selectedRate: z
-    .object({ carrierCode: z.string(), serviceName: z.string(), amountCents: z.number().int() })
+    .object({
+      carrierCode: z.string(),
+      serviceName: z.string(),
+      amountCents: z.number().int(),
+      reason: RateSelectionReason.nullable(),
+      note: z.string().nullable(),
+    })
     .nullable(),
   noteCount: z.number().int(),
 });
@@ -122,8 +134,33 @@ export const SetVerifiedInput = z.object({
 });
 export type SetVerifiedInput = z.infer<typeof SetVerifiedInput>;
 
-export const SelectRateInput = z.object({ packageId: Id, rateId: Id });
+/** A note is only for reason OTHER. */
+const noteNeedsOther = (input: { reason?: RateSelectionReason | null; note?: string }) =>
+  input.note === undefined || input.reason === "OTHER";
+const noteNeedsOtherIssue = { path: ["note"], message: "errors.qa.reasonNoteNeedsOther" };
+
+export const SelectRateInput = z
+  .object({
+    packageId: Id,
+    rateId: Id,
+    /** Only for a rate that isn't the cheapest one that can be bought. */
+    reason: RateSelectionReason.optional(),
+    note: RateSelectionNote.optional(),
+  })
+  .refine(noteNeedsOther, noteNeedsOtherIssue);
 export type SelectRateInput = z.infer<typeof SelectRateInput>;
+
+/** Adds, changes or (null) clears the reason for the package's selected rate. */
+export const SetRateSelectionReasonInput = z
+  .object({
+    packageId: Id,
+    /** The rate the reason is for: refused when another one was selected meanwhile. */
+    rateId: Id,
+    reason: RateSelectionReason.nullable(),
+    note: RateSelectionNote.optional(),
+  })
+  .refine(noteNeedsOther, noteNeedsOtherIssue);
+export type SetRateSelectionReasonInput = z.infer<typeof SetRateSelectionReasonInput>;
 export const ScanVerifyInput = z.object({
   orderId: Id,
   /** The package the scanner is pointed at: the card the user touched last. */
@@ -175,6 +212,15 @@ export const qa = {
       summary: "Select another of the package's rates",
     })
     .input(SelectRateInput)
+    .output(QaResult),
+  setRateSelectionReason: base
+    .route({
+      method: "POST",
+      path: "/packages/{packageId}/selected-rate/reason",
+      tags,
+      summary: "Add, change or clear why the package's selected rate isn't the cheapest",
+    })
+    .input(SetRateSelectionReasonInput)
     .output(QaResult),
   scan: base
     .route({

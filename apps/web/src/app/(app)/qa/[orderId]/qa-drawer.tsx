@@ -97,6 +97,16 @@ function DrawerBody({ view, close }: { view: QaView; close: () => void }) {
                     amount: money(format, pkg.selectedRate.amountCents),
                   })
                 : t("qa.drawerNoRate")}
+              {pkg.selectedRate?.reason && (
+                <span className="block opacity-70" data-testid="qa-drawer-reason">
+                  {t("qa.drawerReason", {
+                    reason:
+                      pkg.selectedRate.reason === "OTHER" && pkg.selectedRate.note
+                        ? pkg.selectedRate.note
+                        : t(`qa.reasons.${pkg.selectedRate.reason}`),
+                  })}
+                </span>
+              )}
             </div>
             <ul className="space-y-2">
               {pkg.rows.map((row) => (

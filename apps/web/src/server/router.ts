@@ -104,6 +104,7 @@ import {
   setPin,
   setProviderCredentials,
   setProviderEnabled,
+  setRateSelectionReason,
   setResponsible,
   setSecret,
   setServiceEnabled,
@@ -350,6 +351,9 @@ export const router = implementer.router({
     ),
     selectRate: api.qa.selectRate.handler(({ input, context }) =>
       selectRate(db, context.actor, input),
+    ),
+    setRateSelectionReason: api.qa.setRateSelectionReason.handler(({ input, context }) =>
+      setRateSelectionReason(db, context.actor, input),
     ),
     scan: api.qa.scan.handler(({ input, context }) => scanVerify(db, context.actor, input)),
     voidLabel: api.qa.voidLabel.handler(({ input, context }) =>

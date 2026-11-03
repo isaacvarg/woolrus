@@ -190,6 +190,8 @@ export type ProviderManifest = {
 export interface ShippingProvider {
   readonly id: ProviderId;
   readonly capabilities: ProviderCapabilities;
+  /** Set only by the fake adapters, so the quote log can flag their quotes (SPEC-rate-history). */
+  readonly fake?: true;
   /** Succeeds when the credentials are accepted. */
   ping(): Promise<void>;
   listCarriers(): Promise<ProviderCarrier[]>;
