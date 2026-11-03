@@ -106,6 +106,12 @@ badge and disables the control), and the package must have no live label (`error
 Unselects the old rate and selects the new one in one statement order that keeps the one-selected-per-package index
 happy (unselect first). Audited `rate.select` with both rate ids and amounts.
 
+SPEC-rate-history adds an optional reason: `selectRate` takes `reason?`/`note?`, accepted only when the chosen rate
+isn't the package's cheapest purchasable one (`errors.qa.reasonNotNeeded`), a note only with `OTHER`
+(`errors.qa.reasonNoteNeedsOther`). Selecting another rate clears it; `rate.select` records it.
+`qa.setRateSelectionReason({ packageId, reason | null, note? })` changes it without re-selecting (`rate.reason`), and
+Complete QA copies it, with the rate's logged quote, onto the label.
+
 Refresh stays `carriers.refreshRates`, with one change (edit to SPEC-carriers): it refreshes the packages **without**
 a live label and leaves the others' rates alone, so a partly bought order can re-rate the failed package. It is
 refused only while a label of the order is `PURCHASING`, or when every package has a live label. The `rates.fetch`
@@ -225,6 +231,7 @@ reconciled. Labels marked `purchaseUnknown` are skipped; they wait for a person.
 | `qa.setVerified` | `POST /package-items/{packageItemId}/verified` |
 | `qa.scan` | `POST /orders/{orderId}/qa/scan` |
 | `qa.selectRate` | `POST /packages/{packageId}/selected-rate` |
+| `qa.setRateSelectionReason` | `POST /packages/{packageId}/selected-rate/reason` |
 | `orders.completeQa` (handler replaced) | `POST /orders/{id}/complete-qa` |
 | `qa.voidLabel` | `POST /labels/{labelId}/void` |
 | `qa.markLabelNotBought` | `POST /labels/{labelId}/not-bought` |

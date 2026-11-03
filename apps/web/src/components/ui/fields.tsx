@@ -16,9 +16,15 @@ import {
   FieldError,
   Input,
   Label,
+  ListBox,
+  ListBoxItem,
   type NumberFieldProps,
+  Popover,
   type RadioGroupProps,
   type RadioProps,
+  Select,
+  type SelectProps,
+  SelectValue,
   type SwitchProps,
   Text,
   TextArea,
@@ -171,6 +177,38 @@ export function Radio({
         </>
       )}
     </AriaRadio>
+  );
+}
+
+/** A single choice from a short fixed list, as a compact dropdown (React Aria Select). */
+export function SelectField<K extends string>({
+  label,
+  options,
+  ...props
+}: Omit<SelectProps<{ id: K }>, "children"> & {
+  label: string;
+  options: readonly { id: K; label: string }[];
+}) {
+  return (
+    <Select {...props} className="fieldset">
+      <Label className="fieldset-legend">{label}</Label>
+      <AriaButton className="select w-full text-start">
+        <SelectValue className="truncate" />
+      </AriaButton>
+      <Popover className="rounded-box border border-base-300 bg-base-100 shadow-lg">
+        <ListBox className="menu w-(--trigger-width) p-1" items={options}>
+          {(option) => (
+            <ListBoxItem
+              id={option.id}
+              className="cursor-pointer rounded-field px-3 py-2 outline-none data-focused:bg-base-200 data-selected:font-semibold"
+            >
+              {option.label}
+            </ListBoxItem>
+          )}
+        </ListBox>
+      </Popover>
+      <AppFieldError />
+    </Select>
   );
 }
 

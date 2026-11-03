@@ -45,7 +45,7 @@ import { lockOrder } from "../workflow/lock";
 import { notifyOrderChanged } from "../workflow/notify";
 import { resolveShipTo } from "./address";
 import { listUsableServices } from "./carriers";
-import { compareRates } from "./compare";
+import { cheapestPurchasable, compareRates } from "./compare";
 
 // The rate fetch (SPEC-carriers "Rate fetch", job `rates.fetch`): every enabled provider is asked
 // for every package in parallel, and the merged rates are stored with the cheapest selected. Each
@@ -692,28 +692,35 @@ export async function getOrderShipping(
       messages: storedMessages.parse(order.shipToMessages),
       checkedAt: order.shipToCheckedAt,
     },
-    packages: order.packages.map((pkg) => ({
-      id: pkg.id,
-      number: pkg.number,
-      ratesStatus: pkg.ratesStatus,
-      ratesFetchedAt: pkg.ratesFetchedAt,
-      rateErrors: storedErrors.parse(pkg.rateErrors),
-      rates: [...pkg.rates].sort(compareRates).map((rate) => ({
-        id: rate.id,
-        provider: rate.provider,
-        carrierName: rate.carrier.label ?? rate.carrier.name,
-        serviceName: rate.serviceName,
-        amountCents: rate.amountCents,
-        currency: rate.currency,
-        deliveryDays: rate.deliveryDays,
-        estimatedDeliveryAt: rate.estimatedDeliveryAt,
-        guaranteed: rate.guaranteed,
-        expiresAt: rate.expiresAt,
-        expired: rate.expiresAt !== null && rate.expiresAt <= now,
-        selected: rate.selected,
-        quoteOnly: quoteOnly.has(rate.provider),
-      })),
-    })),
+    packages: order.packages.map((pkg) => {
+      const cheapest = cheapestPurchasable(pkg.rates, quoteOnly);
+      const selected = pkg.rates.find((rate) => rate.selected);
+      return {
+        id: pkg.id,
+        number: pkg.number,
+        ratesStatus: pkg.ratesStatus,
+        ratesFetchedAt: pkg.ratesFetchedAt,
+        rateErrors: storedErrors.parse(pkg.rateErrors),
+        selectionReason: selected?.selectionReason ?? null,
+        selectionNote: selected?.selectionNote ?? null,
+        rates: [...pkg.rates].sort(compareRates).map((rate) => ({
+          id: rate.id,
+          provider: rate.provider,
+          carrierName: rate.carrier.label ?? rate.carrier.name,
+          serviceName: rate.serviceName,
+          amountCents: rate.amountCents,
+          currency: rate.currency,
+          deliveryDays: rate.deliveryDays,
+          estimatedDeliveryAt: rate.estimatedDeliveryAt,
+          guaranteed: rate.guaranteed,
+          expiresAt: rate.expiresAt,
+          expired: rate.expiresAt !== null && rate.expiresAt <= now,
+          selected: rate.selected,
+          quoteOnly: quoteOnly.has(rate.provider),
+          cheapest: rate === cheapest,
+        })),
+      };
+    }),
   };
 }
 

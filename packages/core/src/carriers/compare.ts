@@ -19,3 +19,14 @@ export function compareRates(a: Comparable, b: Comparable): number {
     a.serviceName.localeCompare(b.serviceName)
   );
 }
+
+/**
+ * The rate carriers would pre-select: the cheapest whose provider can buy it. QA's reason for a
+ * pricier pick is only asked for, and only accepted, when the selected rate isn't this one.
+ */
+export function cheapestPurchasable<T extends Comparable>(
+  rates: readonly T[],
+  quoteOnly: ReadonlySet<ProviderId>,
+): T | undefined {
+  return [...rates].filter((rate) => !quoteOnly.has(rate.provider)).sort(compareRates)[0];
+}

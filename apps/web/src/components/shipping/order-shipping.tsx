@@ -328,6 +328,16 @@ export function PackageRates({ pkg }: { pkg: PackageShipping }) {
           </table>
         </div>
       )}
+      {pkg.selectionReason && (
+        <p className="text-sm" data-testid="order-rate-reason">
+          {t("orderShipping.reason", {
+            reason:
+              pkg.selectionReason === "OTHER" && pkg.selectionNote
+                ? pkg.selectionNote
+                : t(`orderShipping.reasons.${pkg.selectionReason}`),
+          })}
+        </p>
+      )}
     </div>
   );
 }

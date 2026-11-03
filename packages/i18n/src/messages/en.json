@@ -539,7 +539,15 @@
     "useOriginal": "Use original address",
     "usingOriginal": "Using the original address. Fetching rates again.",
     "recheck": "Check address again",
-    "rechecking": "Checking the address again."
+    "rechecking": "Checking the address again.",
+    "reason": "Why not the cheapest: {reason}",
+    "reasons": {
+      "FASTER_DELIVERY": "Faster delivery",
+      "CUSTOMER_REQUESTED": "Customer requested",
+      "CARRIER_RELIABILITY": "Carrier reliability",
+      "CHEAPEST_UNAVAILABLE": "Cheapest unavailable or failed",
+      "OTHER": "Other"
+    }
   },
   "pack": {
     "title": "Pack #{number}",
@@ -697,7 +705,19 @@
       "body": "Labels cost {cost}, the customer paid {charged} for shipping. Buy anyway?",
       "confirm": "Buy anyway",
       "cancel": "Not yet"
-    }
+    },
+    "reasonLabel": "Why this rate? (optional)",
+    "reasonNone": "No reason given",
+    "reasonNote": "Note",
+    "reasonSaved": "Reason saved.",
+    "reasons": {
+      "FASTER_DELIVERY": "Faster delivery",
+      "CUSTOMER_REQUESTED": "Customer requested",
+      "CARRIER_RELIABILITY": "Carrier reliability",
+      "CHEAPEST_UNAVAILABLE": "Cheapest unavailable or failed",
+      "OTHER": "Other"
+    },
+    "drawerReason": "Why: {reason}"
   },
   "pick": {
     "title": "Pick #{number}",
@@ -1318,7 +1338,10 @@
       "voidRejected": "The provider declined to void this label. It is still active.",
       "voidUnsupported": "This provider can't void labels from here. Void it with the provider.",
       "labelNotVoidable": "Only a bought label that is still active can be voided.",
-      "costConfirmRequired": "These labels cost much more than the customer paid for shipping. Confirm to buy them anyway."
+      "costConfirmRequired": "These labels cost much more than the customer paid for shipping. Confirm to buy them anyway.",
+      "reasonNotNeeded": "That's the cheapest rate, so it needs no reason.",
+      "reasonNoteNeedsOther": "A note is only for the reason Other.",
+      "noRateSelected": "This package has no selected rate yet. Pick one first."
     }
   },
   "emails": {

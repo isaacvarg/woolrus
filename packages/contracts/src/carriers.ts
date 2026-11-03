@@ -185,6 +185,16 @@ export const RateError = z.object({
 });
 export type RateError = z.infer<typeof RateError>;
 
+/** Why QA picked a rate other than the cheapest (SPEC-rate-history decision 2). Prisma enum RateSelectionReason. */
+export const RateSelectionReason = z.enum([
+  "FASTER_DELIVERY",
+  "CUSTOMER_REQUESTED",
+  "CARRIER_RELIABILITY",
+  "CHEAPEST_UNAVAILABLE",
+  "OTHER",
+]);
+export type RateSelectionReason = z.infer<typeof RateSelectionReason>;
+
 export const ShippingRateView = z.object({
   id: z.string(),
   provider: ShippingProviderId,
@@ -200,6 +210,8 @@ export const ShippingRateView = z.object({
   selected: z.boolean(),
   /** The provider can quote this rate but not buy it, so it can't be selected. */
   quoteOnly: z.boolean(),
+  /** The package's cheapest rate that can be bought, by the pre-selection's tie rule. */
+  cheapest: z.boolean(),
 });
 export type ShippingRateView = z.infer<typeof ShippingRateView>;
 
@@ -211,6 +223,9 @@ export const PackageShipping = z.object({
   ratesFetchedAt: z.date().nullable(),
   rateErrors: z.array(RateError),
   rates: z.array(ShippingRateView),
+  /** QA's reason for the selected rate when it isn't the cheapest (SPEC-rate-history). */
+  selectionReason: RateSelectionReason.nullable(),
+  selectionNote: z.string().nullable(),
 });
 export type PackageShipping = z.infer<typeof PackageShipping>;
 
