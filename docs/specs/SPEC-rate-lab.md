@@ -355,7 +355,13 @@ where noted. Filters: date range, carrier, service, destination country/state, b
 
 `pnpm db:seed` adds 6 test addresses (2 corrected by the ShipStation fake's "Street" rule, 1 Canadian), 4 parcels
 (2 from seeded boxes, 1 with contents for customs), and groups, plus 3 finished `SUITE` runs a week apart from the
-fakes with slightly drifting prices, so Trends has lines in dev.
+fakes with slightly drifting prices, so Trends has lines in dev (`packages/db/prisma/seed-rate-lab.ts`). Like the
+demo orders it is skipped when `NODE_ENV=production`, has fixed ids so re-seeding adds nothing, and writes the runs
+only with `SHIPPING_PROVIDERS=fake` (without it the addresses stay `UNCHECKED`). The seeded catalog has only domestic
+services on, so the Canadian combinations log what a real run would: `customsIncomplete` for parcels without
+contents and `noCarriers` for the one with them; the runs end `PARTIAL`. Demo Ground Saver rises over 10% in the
+latest run, so its insights flag a move. Runs are fake, so Trends shows them with **Include fake data**.
+`core/src/rate-lab/demo-lab.test.ts` holds the seed to a real run on the fakes.
 
 ### Files expected to change
 
@@ -365,7 +371,7 @@ fakes with slightly drifting prices, so Trends has lines in dev.
 `apps/worker/src/**`, `packages/contracts/src/{rate-lab,settings,index}.ts`, `apps/web/src/server/router.ts`,
 `apps/web/src/app/(app)/rate-lab/**`, `apps/web/src/app/api/rate-lab/**`, `apps/web/src/app/(app)/layout.tsx`,
 `apps/web/src/app/(app)/settings/shipping/**`, `apps/web/package.json` (Recharts), `packages/i18n/src/messages/{en,es}.json`,
-`apps/web/e2e/rate-lab.spec.ts`, `docs/specs/SPEC-operations.md` (purge edit).
+`apps/web/e2e/rate-lab*.spec.ts` (the full journey is `rate-lab-journey.spec.ts`), `docs/specs/SPEC-operations.md` (purge edit).
 
 ## Success criteria
 
