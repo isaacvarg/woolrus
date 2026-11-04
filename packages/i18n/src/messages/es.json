@@ -249,6 +249,14 @@
         "freeHint": "Para pedidos en los que el cliente no pagó nada por el envío.",
         "save": "Guardar",
         "saved": "Control del costo guardado."
+      },
+      "rateLab": {
+        "title": "Rate Lab",
+        "intro": "Cuántas combinaciones de dirección × paquete puede cotizar una ejecución de Rate Lab. Cada combinación pide tarifas a todos los proveedores activos.",
+        "cap": "Límite de combinaciones",
+        "capHint": "De 1 a 2000.",
+        "save": "Guardar",
+        "saved": "Límite de Rate Lab guardado."
       }
     }
   },
@@ -1361,7 +1369,9 @@
       "noProviders": "No hay ningún proveedor de envío activado. Activa uno en Configuración → Envíos primero.",
       "runActive": "Ya hay otra prueba en cola o en curso. Espera a que termine.",
       "noQuotes": "Ningún proveedor devolvió una cotización para ninguna combinación.",
-      "runFailed": "La prueba se detuvo por un error inesperado."
+      "runFailed": "La prueba se detuvo por un error inesperado.",
+      "stalled": "La ejecución dejó de responder durante 10 minutos y se marcó como fallida.",
+      "runNotActive": "Esta ejecución ya terminó."
     }
   },
   "emails": {
@@ -1851,7 +1861,11 @@
       "counting": "Contando…",
       "overCap": "Supera el límite de {cap} combinaciones fijado en Configuración.",
       "cancel": "Cancelar",
-      "start": "Iniciar prueba"
+      "start": "Iniciar prueba",
+      "cancelRun": "Cancelar ejecución",
+      "cancelRunLabel": "Cancelar la ejecución iniciada {startedAt}",
+      "cancelled": "Ejecución cancelada.",
+      "cancelAsked": "Se detendrá después de las combinaciones en curso."
     },
     "trends": {
       "addressGroups": "Grupos de direcciones",

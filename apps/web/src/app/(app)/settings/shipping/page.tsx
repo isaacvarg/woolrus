@@ -3,6 +3,7 @@ import { getTranslations } from "next-intl/server";
 import { currentActor } from "@/server/actor";
 import { CostCheckSection } from "./cost-check";
 import { ProvidersSection } from "./providers";
+import { RateLabCapSection } from "./rate-lab-cap";
 
 export default async function ShippingSettingsPage() {
   const t = await getTranslations();
@@ -21,6 +22,7 @@ export default async function ShippingSettingsPage() {
           <p className="text-base-content/70">{t("settings.shipping.intro")}</p>
           <ProvidersSection />
           <CostCheckSection />
+          <RateLabCapSection />
         </>
       ) : (
         <p role="alert" className="alert alert-error">

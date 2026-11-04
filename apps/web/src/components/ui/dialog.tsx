@@ -29,7 +29,7 @@ export function Dialog({
       {...props}
       className="fixed inset-0 z-40 grid place-items-center bg-black/40 p-4"
     >
-      <Modal className="w-full max-w-lg rounded-box bg-base-100 p-6 shadow-xl">
+      <Modal className="max-h-full w-full max-w-lg overflow-y-auto rounded-box bg-base-100 p-6 shadow-xl">
         <AriaDialog className="space-y-4 outline-none">
           {({ close }) => (
             <>

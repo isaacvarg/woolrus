@@ -4,6 +4,7 @@ import {
   archiveLabAddress,
   archiveLabGroup,
   archiveLabParcel,
+  cancelLabRun,
   clearPin,
   clearProviderCredentials,
   clearSecret,
@@ -693,6 +694,9 @@ export const router = implementer.router({
       labTrendSeries(db, context.actor, input),
     ),
     run: api.rateLab.run.handler(({ input, context }) => getLabRun(db, context.actor, input)),
+    cancelRun: api.rateLab.cancelRun.handler(({ input, context }) =>
+      cancelLabRun(db, context.actor, input),
+    ),
   },
 });
 

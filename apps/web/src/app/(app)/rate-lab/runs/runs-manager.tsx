@@ -1,11 +1,12 @@
 "use client";
 
-import { useInfiniteQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { LabRunRow, RateLabRunStatus } from "@woolrus/contracts";
 import Link from "next/link";
 import { useFormatter, useTranslations } from "next-intl";
 import { useState } from "react";
 import { Button } from "@/components/ui/fields";
+import { toast } from "@/components/ui/toast";
 import { useErrorMessage } from "@/lib/errors";
 import { orpc } from "@/lib/orpc";
 import { NewRunDialog } from "./new-run-dialog";
@@ -108,6 +109,7 @@ export function RunsManager() {
                   </span>
                   {row.fake && <span className="badge badge-outline ms-1">{t("fake")}</span>}
                   {row.error && <div className="text-sm text-error">{message(row.error)}</div>}
+                  {isActive(row) && <CancelRun row={row} />}
                 </td>
                 <td className="text-right tabular-nums">
                   {row.status === "RUNNING" ? (
@@ -151,6 +153,41 @@ export function RunsManager() {
       )}
       {starting && <NewRunDialog onClose={() => setStarting(false)} />}
     </div>
+  );
+}
+
+/** Cancel for a queued or running run; once asked, a running run says it's stopping. */
+function CancelRun({ row }: { row: LabRunRow }) {
+  const t = useTranslations("rateLab.runs");
+  const format = useFormatter();
+  const errorMessage = useErrorMessage();
+  const queryClient = useQueryClient();
+  const cancel = useMutation(
+    orpc.rateLab.cancelRun.mutationOptions({
+      onSuccess: async () => {
+        await queryClient.invalidateQueries({ queryKey: orpc.rateLab.runs.key() });
+        toast.success(t("cancelled"));
+      },
+      onError: (error) => toast.error(errorMessage(error)),
+    }),
+  );
+  if (row.cancelRequested) {
+    return <div className="text-sm opacity-70">{t("cancelAsked")}</div>;
+  }
+  return (
+    <Button
+      className="btn-outline btn-error btn-xs mt-1 block"
+      aria-label={t("cancelRunLabel", {
+        startedAt: format.dateTime(row.startedAt ?? row.createdAt, {
+          dateStyle: "short",
+          timeStyle: "medium",
+        }),
+      })}
+      isPending={cancel.isPending}
+      onPress={() => cancel.mutate({ id: row.id })}
+    >
+      {t("cancelRun")}
+    </Button>
   );
 }
 

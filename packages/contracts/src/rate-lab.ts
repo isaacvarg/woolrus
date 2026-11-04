@@ -341,6 +341,8 @@ export const LabRunRow = z.object({
   error: z.string().nullable(),
   addresses: SelectionSide,
   parcels: SelectionSide,
+  /** Cancel was asked; a running run stops after the combinations it's quoting. */
+  cancelRequested: z.boolean(),
 });
 export type LabRunRow = z.infer<typeof LabRunRow>;
 
@@ -367,6 +369,10 @@ export const LabRunDetail = z.object({
   insights: LabRunInsights,
 });
 export type LabRunDetail = z.infer<typeof LabRunDetail>;
+
+/** A queued run is cancelled at once; a running one stops after the combinations it's quoting. */
+export const CancelLabRunInput = z.object({ id: Id });
+export type CancelLabRunInput = z.input<typeof CancelLabRunInput>;
 
 const byId = z.object({ id: Id });
 const tags = ["Rate Lab"];
@@ -576,4 +582,14 @@ export const rateLab = {
     })
     .input(byId)
     .output(LabRunDetail),
+
+  cancelRun: base
+    .route({
+      method: "POST",
+      path: "/rate-lab/runs/{id}/cancel",
+      tags,
+      summary: "Cancel a queued or running suite run",
+    })
+    .input(CancelLabRunInput)
+    .output(LabRunRow),
 };

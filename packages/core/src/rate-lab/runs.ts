@@ -1,4 +1,5 @@
 import {
+  CancelLabRunInput,
   LabAddressValue,
   type LabRunPage,
   type LabRunPreview,
@@ -27,7 +28,7 @@ import {
   quoteParcel,
 } from "../carriers/quote";
 import { enqueue } from "../enqueue";
-import { AppError } from "../errors";
+import { AppError, notFound } from "../errors";
 import { withIdempotency } from "../idempotency";
 import { type JobPayloads, queues } from "../jobs";
 import { type Actor, assertCan } from "../permissions";
@@ -39,10 +40,13 @@ import { groupRefs } from "./catalog";
 
 // Rate Lab suite runs (SPEC-rate-lab "Runs", job `rateLab.run`): every chosen address × every
 // chosen parcel, quoted through each enabled provider and logged in rate history as LAB fetches.
-// Cancel, stuck-run recovery and the run detail are later tickets.
+// Runs can be cancelled, and a run whose worker died is failed as stalled so it never blocks the next.
 
 /** Combinations quoted at once: three keeps a run quick without crowding the providers. */
 export const LAB_CONCURRENCY = 3;
+
+/** A running run with no heartbeat for this long has lost its worker (SPEC-rate-lab "Stuck runs"). */
+export const LAB_STALL_MS = 10 * 60_000;
 
 type Selection = z.output<typeof LabRunSelection>;
 
@@ -108,6 +112,22 @@ const isUniqueViolation = (error: unknown) =>
   error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
 
 /**
+ * Fails every running run whose heartbeat (or start, before the first one) is older than
+ * `LAB_STALL_MS`: its worker is gone, and the run would otherwise hold the one-active-run slot.
+ */
+export async function recoverStalledLabRuns(db: Db | DbTx, now = new Date()): Promise<number> {
+  const before = new Date(now.getTime() - LAB_STALL_MS);
+  const { count } = await db.rateLabRun.updateMany({
+    where: {
+      status: "RUNNING",
+      OR: [{ heartbeatAt: { lt: before } }, { heartbeatAt: null, startedAt: { lt: before } }],
+    },
+    data: { status: "FAILED", error: "errors.rateLab.stalled", finishedAt: now },
+  });
+  return count;
+}
+
+/**
  * Queues a suite run of the selection. Refused, creating nothing, when either side is empty, the
  * combinations are over the cap, no provider is enabled, there's no ship-from, or another suite
  * run is queued or running (the one-active-run index decides that, so two starts can't race).
@@ -120,6 +140,7 @@ export async function startLabRun(
 ): Promise<LabRunRow> {
   assertCan(actor, "ratelab.use");
   const { idempotencyKey, selection } = StartLabRunInput.parse(input);
+  await recoverStalledLabRuns(db);
   let id: string;
   try {
     ({ id } = await db.$transaction(async (tx) =>
@@ -221,6 +242,7 @@ export async function labRunRows(db: Db, runs: LabRunRecord[]): Promise<LabRunRo
     error: run.error,
     addresses: side(selection.addressGroupIds, selection.addressIds),
     parcels: side(selection.parcelGroupIds, selection.parcelIds),
+    cancelRequested: run.cancelRequestedAt !== null,
   }));
 }
 
@@ -233,6 +255,7 @@ export async function listLabRuns(
   assertCan(actor, "ratelab.use");
   const { cursor, limit } = ListLabRunsInput.parse(input);
   const after = cursor ? decodeCursor(cursor) : null;
+  await recoverStalledLabRuns(db);
   const runs = await db.rateLabRun.findMany({
     where: {
       kind: "SUITE",
@@ -255,6 +278,52 @@ export async function listLabRuns(
   };
 }
 
+/**
+ * Cancels a suite run: a queued one at once, so its job quotes nothing; a running one is asked to
+ * stop, and its job ends CANCELLED once the combinations it's quoting are logged. Asking again
+ * changes nothing. Audited.
+ */
+export async function cancelLabRun(
+  db: Db,
+  actor: Actor,
+  input: CancelLabRunInput,
+): Promise<LabRunRow> {
+  assertCan(actor, "ratelab.use");
+  const { id } = CancelLabRunInput.parse(input);
+  await db.$transaction(async (tx) => {
+    // Held so the job's claim (QUEUED → RUNNING) waits: the run is cancelled in the state it's in.
+    const [locked] = await tx.$queryRaw<{ status: string }[]>`
+      SELECT status FROM rate_lab_runs WHERE id = ${id}::uuid AND kind = 'SUITE' FOR UPDATE`;
+    if (!locked) throw notFound();
+    const run = await tx.rateLabRun.findUniqueOrThrow({ where: { id } });
+    if (run.status !== "QUEUED" && run.status !== "RUNNING") {
+      throw new AppError("CONFLICT", "errors.rateLab.runNotActive");
+    }
+    if (run.cancelRequestedAt) return;
+    const now = new Date();
+    const status = run.status === "QUEUED" ? "CANCELLED" : run.status;
+    await tx.rateLabRun.update({
+      where: { id },
+      data: {
+        status,
+        cancelRequestedAt: now,
+        ...(status === "CANCELLED" && { finishedAt: now }),
+      },
+    });
+    await recordAudit(tx, actor, {
+      entityType: "RateLabRun",
+      entityId: id,
+      action: "cancel",
+      before: { status: run.status },
+      after: { status },
+    });
+  });
+  const rows = await labRunRows(db, [
+    await db.rateLabRun.findUniqueOrThrow({ where: { id }, include: labRunInclude }),
+  ]);
+  return rows[0] as LabRunRow;
+}
+
 type RunPayload = JobPayloads[typeof queues.rateLabRun];
 
 export type LabRunOptions = { timeoutMs?: number };
@@ -268,7 +337,8 @@ type Quoted = { request: Omit<RateRequest, "services">; outcomes: ProviderOutcom
 /**
  * One `rateLab.run`: works through the run's combinations `LAB_CONCURRENCY` at a time, logs each as
  * a LAB fetch, locks what it quotes, and ends SUCCEEDED, PARTIAL or FAILED. Never retries, never
- * buys. A run that isn't queued any more (picked up already, or cancelled) is left alone.
+ * buys. A run that isn't queued any more (picked up already, or cancelled) is left alone. Between
+ * combinations it stops when cancel was asked (ending CANCELLED) or the run was failed as stalled.
  */
 export async function runLabRun(
   db: Db,
@@ -426,13 +496,21 @@ export async function runLabRun(
       });
     };
 
+    let stopping = false;
+    const goOn = async () => {
+      if (stopping) return false;
+      const current = await db.rateLabRun.findUniqueOrThrow({
+        where: { id: runId },
+        select: { status: true, cancelRequestedAt: true },
+      });
+      stopping = current.status !== "RUNNING" || current.cancelRequestedAt !== null;
+      return !stopping;
+    };
     let next = 0;
     const work = async () => {
-      for (
-        let combination = combinations[next++];
-        combination;
-        combination = combinations[next++]
-      ) {
+      while (next < combinations.length && (await goOn())) {
+        const combination = combinations[next++];
+        if (!combination) return;
         const { address, parcel } = combination;
         await log(address, parcel, await quote(address, parcel));
       }
@@ -440,10 +518,17 @@ export async function runLabRun(
     await Promise.all(Array.from({ length: LAB_CONCURRENCY }, work));
 
     const done = await db.rateLabRun.findUniqueOrThrow({ where: { id: runId } });
-    const status =
-      done.quoteCount === 0 ? "FAILED" : done.failureCount > 0 ? "PARTIAL" : "SUCCEEDED";
-    await db.rateLabRun.update({
-      where: { id: runId },
+    // Failed as stalled meanwhile: that answer stands.
+    if (done.status !== "RUNNING") return { status: done.status };
+    const status = done.cancelRequestedAt
+      ? "CANCELLED"
+      : done.quoteCount === 0
+        ? "FAILED"
+        : done.failureCount > 0
+          ? "PARTIAL"
+          : "SUCCEEDED";
+    await db.rateLabRun.updateMany({
+      where: { id: runId, status: "RUNNING" },
       data: {
         status,
         error: status === "FAILED" ? "errors.rateLab.noQuotes" : null,
@@ -453,8 +538,8 @@ export async function runLabRun(
     });
     return { status };
   } catch (error) {
-    await db.rateLabRun.update({
-      where: { id: runId },
+    await db.rateLabRun.updateMany({
+      where: { id: runId, status: "RUNNING" },
       data: { status: "FAILED", error: "errors.rateLab.runFailed", finishedAt: new Date() },
     });
     throw error;

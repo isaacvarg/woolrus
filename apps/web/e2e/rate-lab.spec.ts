@@ -354,3 +354,148 @@ test("a Rate Lab user starts a run on the fakes, sees progress and sees it finis
     }
   });
 });
+
+test("an admin lowers the run cap; a Rate Lab user is held to it, then cancels a running run", async ({
+  page,
+}, info) => {
+  desktopOnly(info.project.name);
+  test.setTimeout(150_000);
+  const value = (title: string) => ({
+    name: title,
+    address1: "1 Main St",
+    city: "Denver",
+    state: "CO",
+    postalCode: "80202",
+    country: "US",
+  });
+  const addressGroup = await db.rateLabGroup.create({
+    data: { kind: "ADDRESS", name: `${prefix} Cancel addresses` },
+  });
+  const parcelGroup = await db.rateLabGroup.create({
+    data: { kind: "PARCEL", name: `${prefix} Cancel parcels` },
+  });
+  for (const letter of ["A", "B", "C", "D"]) {
+    const title = `${prefix} Cancel ${letter}`;
+    await db.rateLabAddress.create({
+      data: {
+        title,
+        original: value(title),
+        address: value(title),
+        residential: true,
+        checkStatus: "VERIFIED",
+        groups: { create: { groupId: addressGroup.id } },
+      },
+    });
+  }
+  await db.rateLabParcel.create({
+    data: {
+      title: `${prefix} Cancel parcel`,
+      lengthIn: 10,
+      widthIn: 8,
+      heightIn: 4,
+      weightOz: 20,
+      groups: { create: { groupId: parcelGroup.id } },
+    },
+  });
+  const runIds: string[] = [];
+
+  await withSettingsLock(async () => {
+    await ensureShipFrom();
+    const { carrier, service, created } = await demoService();
+    const before = await db.shippingProviderAccount.findUnique({
+      where: { provider: "SHIPSTATION" },
+    });
+    const capBefore = (await db.settings.findFirstOrThrow()).rateLabMaxCombinations;
+    await db.shippingCarrier.update({ where: { id: carrier.id }, data: { enabled: true } });
+    await db.carrierService.update({ where: { id: service.id }, data: { enabled: true } });
+    const admin = await (await page.context().browser()?.newContext())?.newPage();
+    if (!admin) throw new Error("no browser");
+    try {
+      await signInAs(admin, ["ADMIN"]);
+      await ok(
+        admin.request.put(`${api}/providers/SHIPSTATION/credentials`, {
+          data: { credentials: { apiKey: "e2e-rate-lab" } },
+        }),
+      );
+      await ok(
+        admin.request.post(`${api}/providers/SHIPSTATION/enabled`, { data: { enabled: true } }),
+      );
+      const setCap = async (cap: number) => {
+        await admin.goto("/settings/shipping");
+        const card = admin.getByRole("region", { name: "Rate Lab" });
+        await card.getByLabel("Combination cap").fill(String(cap));
+        await card.getByRole("button", { name: "Save" }).click();
+        await expect(admin.getByText("Rate Lab cap saved.")).toBeVisible();
+      };
+      await setCap(3);
+
+      await signInAs(page, ["QA", "RATE_LAB"]);
+      await page.goto("/rate-lab/runs");
+      const dialog = page.getByRole("dialog", { name: "New run" });
+      const pick = async () => {
+        await page.getByRole("button", { name: "New run" }).click();
+        await dialog.getByText(`${prefix} Cancel addresses`).click();
+        await dialog.getByText(`${prefix} Cancel parcels`).click();
+        await expect(dialog.getByTestId("lab-run-count")).toContainText(
+          "4 addresses × 1 parcel = 4 combinations",
+        );
+      };
+      await pick();
+      await expect(dialog).toContainText("That's over the cap of 3 combinations set in Settings.");
+      await expect(dialog.getByRole("button", { name: "Start run" })).toBeDisabled();
+      await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+
+      await setCap(4);
+      await pick();
+      await expect(dialog).not.toContainText("over the cap");
+      await dialog.getByRole("button", { name: "Start run" }).click();
+      await expect(dialog).toBeHidden();
+      const run = await db.rateLabRun.findFirstOrThrow({
+        where: { kind: "SUITE", status: "QUEUED" },
+        orderBy: { createdAt: "desc" },
+      });
+      runIds.push(run.id);
+
+      // CI starts no worker: the job runs here. Three of the four combinations are quoted at once,
+      // slowly, so the cancel lands while they're going and the fourth never starts.
+      const job = runLabRun(db, [createFakeShippingProvider("SHIPSTATION", { latencyMs: 6_000 })], {
+        runId: run.id,
+      });
+      const row = page.getByTestId("lab-run-row").first();
+      await expect(row).toContainText("Running", { timeout: 15_000 });
+      await row.getByRole("button", { name: /^Cancel the run started/ }).click();
+      await expect(page.getByText("Run cancelled.")).toBeVisible();
+      await expect(row).toContainText("Stopping after the combinations in progress.");
+      expect(await job).toEqual({ status: "CANCELLED" });
+      await expect(row).toContainText("Cancelled", { timeout: 15_000 });
+      await expect(row.getByRole("button", { name: /^Cancel the run started/ })).toHaveCount(0);
+      const done = await db.rateLabRun.findUniqueOrThrow({ where: { id: run.id } });
+      expect(done.completedCombinations).toBe(3);
+      expect(await db.rateFetch.count({ where: { labRunId: run.id } })).toBe(3);
+    } finally {
+      await db.settings.updateMany({ data: { rateLabMaxCombinations: capBefore } });
+      await db.$executeRaw`DELETE FROM pgboss.job WHERE name = 'rateLab.run'
+        AND data->>'runId' = ANY(${runIds})`;
+      await db.rateLabRun.deleteMany({ where: { id: { in: runIds } } });
+      await admin.request.delete(`${api}/providers/SHIPSTATION/credentials`);
+      await db.shippingProviderAccount.updateMany({
+        where: { provider: "SHIPSTATION" },
+        data: { enabled: before?.enabled ?? false },
+      });
+      if (created) {
+        await db.carrierService.deleteMany({ where: { carrierId: carrier.id } });
+        await db.shippingCarrier.deleteMany({ where: { id: carrier.id } });
+      } else {
+        await db.shippingCarrier.update({
+          where: { id: carrier.id },
+          data: { enabled: carrier.enabled },
+        });
+        await db.carrierService.update({
+          where: { id: service.id },
+          data: { enabled: service.enabled },
+        });
+      }
+      await admin.context().close();
+    }
+  });
+});

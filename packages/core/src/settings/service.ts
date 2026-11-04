@@ -84,6 +84,7 @@ function toAdminSettings(row: Settings): AdminSettings {
     labelCostConfirmRatio: row.labelCostConfirmRatio?.toNumber() ?? null,
     labelCostConfirmFreeCents: row.labelCostConfirmFreeCents,
     wooTrackingEnabled: row.wooTrackingEnabled,
+    rateLabMaxCombinations: row.rateLabMaxCombinations,
     // Status comes from the column alone, so reads never decrypt and work without a key.
     secrets: Object.fromEntries(
       SecretName.options.map((name) => [name, { configured: row[secretColumns[name]] !== null }]),

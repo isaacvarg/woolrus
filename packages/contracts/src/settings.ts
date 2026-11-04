@@ -92,6 +92,9 @@ const PickBatchMaxOrders = z.number().int().min(2).max(PICK_BATCH_MAX_ORDERS_CEI
 const LabelCostConfirmRatio = z.number().min(0.1).max(9999.99).nullable();
 const LabelCostConfirmFreeCents = z.number().int().min(1).max(10_000_000).nullable();
 const PiiRetentionDays = z.number().int().min(30).max(3650).nullable();
+/** Most address × parcel combinations one Rate Lab run may quote (SPEC-rate-lab "Runs"). */
+export const RATE_LAB_MAX_COMBINATIONS_CEILING = 2000;
+const RateLabMaxCombinations = z.number().int().min(1).max(RATE_LAB_MAX_COMBINATIONS_CEILING);
 
 export const SecretName = z.enum([
   "wooConsumerKey",
@@ -123,6 +126,7 @@ export const AdminSettings = z.object({
   labelCostConfirmRatio: z.number().nullable(),
   labelCostConfirmFreeCents: z.number().nullable(),
   wooTrackingEnabled: z.boolean(),
+  rateLabMaxCombinations: z.number(),
   secrets: z.record(SecretName, SecretStatus),
 });
 export type AdminSettings = z.infer<typeof AdminSettings>;
@@ -155,6 +159,7 @@ export const UpdateSettingsInput = z.object({
   labelCostConfirmFreeCents: LabelCostConfirmFreeCents.optional(),
   /** On is refused while the store lacks the AST plugin's route (SPEC-shipping "Tracking switch"). */
   wooTrackingEnabled: z.boolean().optional(),
+  rateLabMaxCombinations: RateLabMaxCombinations.optional(),
 });
 export type UpdateSettingsInput = z.infer<typeof UpdateSettingsInput>;
 
