@@ -212,7 +212,7 @@ export function ShipTo({ shipTo, actions }: { shipTo: ShipToView; actions?: Reac
   );
 }
 
-function useRateErrorText() {
+export function useRateErrorText() {
   const t = useTranslations();
   return (error: RateError) => {
     const reason = t.has(error.messageKey as never)
@@ -304,7 +304,7 @@ export function PackageRates({ pkg }: { pkg: PackageShipping }) {
                     )}
                   </td>
                   <td className="text-end tabular-nums">
-                    {price(format, rate.amountCents, rate.currency)}
+                    {ratePrice(format, rate.amountCents, rate.currency)}
                   </td>
                   <td>
                     {rate.deliveryDays !== null
@@ -346,7 +346,11 @@ export function PackageRates({ pkg }: { pkg: PackageShipping }) {
  * The amount in its currency. A code that isn't ISO 4217-shaped (a provider's typo) can't be
  * formatted, and next-intl's fallback would drop the currency, so it shows the number and the code.
  */
-function price(format: ReturnType<typeof useFormatter>, cents: number, currency: string): string {
+export function ratePrice(
+  format: ReturnType<typeof useFormatter>,
+  cents: number,
+  currency: string,
+): string {
   if (/^[A-Z]{3}$/.test(currency)) {
     return format.number(cents / 100, { style: "currency", currency });
   }

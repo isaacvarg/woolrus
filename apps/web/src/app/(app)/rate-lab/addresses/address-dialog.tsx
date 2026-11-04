@@ -11,7 +11,7 @@ import { Button, Checkbox, TextAreaField, TextField } from "@/components/ui/fiel
 import { errorData, useErrorMessage, useFieldErrors } from "@/lib/errors";
 import { orpc } from "@/lib/orpc";
 
-const addressFields = [
+export const addressFields = [
   "name",
   "company",
   "phone",
@@ -23,8 +23,14 @@ const addressFields = [
   "postalCode",
   "country",
 ] as const;
-type AddressField = (typeof addressFields)[number];
-const required = new Set<AddressField>(["name", "address1", "city", "postalCode", "country"]);
+export type AddressField = (typeof addressFields)[number];
+export const requiredAddressFields = new Set<AddressField>([
+  "name",
+  "address1",
+  "city",
+  "postalCode",
+  "country",
+]);
 
 /**
  * Adds a test address, or edits `address`. Saving a new one keeps the dialog open on the check's
@@ -179,7 +185,7 @@ export function AddressDialog({
                 label={t(`fields.${field}`)}
                 name={`address.${field}`}
                 type={field === "email" ? "email" : "text"}
-                isRequired={required.has(field)}
+                isRequired={requiredAddressFields.has(field)}
                 isDisabled={locked}
                 value={form[field]}
                 onChange={(value) => setForm({ ...form, [field]: value })}

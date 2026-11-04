@@ -89,6 +89,7 @@ import {
   previewLabRun,
   pushErrors,
   queueCounts,
+  quoteOneOff,
   reactivateUser,
   realOrders,
   recheckAddress,
@@ -113,6 +114,8 @@ import {
   revokeBadge,
   revokeInvitation,
   revokeStation,
+  saveOneOffAddress,
+  saveOneOffParcel,
   scan,
   scanBatch,
   scanIntoPackage,
@@ -687,6 +690,17 @@ export const router = implementer.router({
       startLabRun(db, context.actor, input, { providers: await createShippingProviders(db) }),
     ),
     runs: api.rateLab.runs.handler(({ input, context }) => listLabRuns(db, context.actor, input)),
+    quoteOneOff: api.rateLab.quoteOneOff.handler(async ({ input, context }) =>
+      quoteOneOff(db, context.actor, input, { providers: await createShippingProviders(db) }),
+    ),
+    saveOneOffAddress: api.rateLab.saveOneOffAddress.handler(async ({ input, context }) =>
+      saveOneOffAddress(db, context.actor, input, {
+        providers: await createShippingProviders(db),
+      }),
+    ),
+    saveOneOffParcel: api.rateLab.saveOneOffParcel.handler(({ input, context }) =>
+      saveOneOffParcel(db, context.actor, input),
+    ),
     trendGrid: api.rateLab.trendGrid.handler(({ input, context }) =>
       labTrendGrid(db, context.actor, input),
     ),

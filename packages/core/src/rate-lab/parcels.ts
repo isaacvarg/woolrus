@@ -108,7 +108,7 @@ type SizeInput = z.output<typeof CreateLabParcelInput>["size"];
  * The size to store. A box copies its inner size, and must be active unless it's the box the
  * parcel already has: that one keeps the size it copied, whatever the box says now.
  */
-async function resolveSize(
+export async function resolveParcelSize(
   tx: DbTx,
   size: SizeInput,
   current?: Physical,
@@ -220,7 +220,7 @@ export async function createLabParcel(
       async () => {
         await resolveGroups(tx, "PARCEL", groupIds);
         await checkItems(tx, items);
-        const physical: Physical = { ...(await resolveSize(tx, size)), weightOz, items };
+        const physical: Physical = { ...(await resolveParcelSize(tx, size)), weightOz, items };
         const row = await tx.rateLabParcel.create({
           data: {
             title,
@@ -265,7 +265,7 @@ export async function updateLabParcel(
     const before = physicalOf(current);
     const after: Physical = {
       ...before,
-      ...(size ? await resolveSize(tx, size, before) : {}),
+      ...(size ? await resolveParcelSize(tx, size, before) : {}),
       ...(weightOz !== undefined ? { weightOz } : {}),
       ...(items ? { items } : {}),
     };

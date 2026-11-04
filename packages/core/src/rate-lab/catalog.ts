@@ -100,7 +100,7 @@ async function loadAddress(tx: Db | DbTx, id: string): Promise<LabAddress> {
  * The address check (FR-SHIP-12) as a test address stores it. Residential is the provider's
  * answer, else "no company name". Never throws: no validator saves the address unchecked.
  */
-async function check(address: ShipAddress, deps: CatalogDeps) {
+export async function checkTestAddress(address: ShipAddress, deps: CatalogDeps) {
   const checked: CheckedAddress = await checkAddress(deps.providers, address, {
     now: deps.now,
     timeoutMs: deps.timeoutMs,
@@ -177,7 +177,7 @@ export async function createLabAddress(
   assertCan(actor, "ratelab.manage");
   const { idempotencyKey, title, description, address, groupIds } =
     CreateLabAddressInput.parse(input);
-  const checked = await check(address, deps);
+  const checked = await checkTestAddress(address, deps);
   return db.$transaction(async (tx) => {
     // Only the id is stored for a replay, so the answer is always read fresh (with real dates).
     const { id } = await withIdempotency(
@@ -226,7 +226,7 @@ export async function updateLabAddress(
   if (!existing) throw notFound();
   const moved = address !== undefined && !sameAddress(address, existing.original);
   if (moved && existing.lockedAt) throw new AppError("CONFLICT", "errors.rateLab.locked");
-  const checked = moved ? await check(address, deps) : undefined;
+  const checked = moved ? await checkTestAddress(address, deps) : undefined;
 
   return db.$transaction(async (tx) => {
     // The lock is read again under a row lock: a run may have quoted it since.
@@ -275,7 +275,7 @@ export async function recheckLabAddress(
   const existing = await db.rateLabAddress.findUnique({ where: { id } });
   if (!existing) throw notFound();
   const original = LabAddressValue.parse(existing.original);
-  const checked = await check(original, deps);
+  const checked = await checkTestAddress(original, deps);
 
   return db.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM rate_lab_addresses WHERE id = ${id}::uuid FOR UPDATE`;

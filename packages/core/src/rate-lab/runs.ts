@@ -7,36 +7,23 @@ import {
   LabRunSelection,
   ListLabRunsInput,
   PreviewLabRunInput,
-  type RateError,
   ShipFromAddress,
   StartLabRunInput,
 } from "@woolrus/contracts";
 import { type Db, type DbTx, Prisma } from "@woolrus/db";
 import type { z } from "zod";
-import type {
-  ProviderId,
-  RateRequest,
-  ShipAddress,
-  ShippingProvider,
-} from "../adapters/shipping/provider";
+import type { ShippingProvider } from "../adapters/shipping/provider";
 import { type AdapterFactories, createShippingProviders } from "../adapters/shipping/registry";
 import { recordAudit } from "../audit";
-import {
-  type LaneProvider,
-  laneProviders,
-  type ProviderOutcome,
-  quoteParcel,
-} from "../carriers/quote";
 import { enqueue } from "../enqueue";
 import { AppError, notFound } from "../errors";
 import { withIdempotency } from "../idempotency";
 import { type JobPayloads, queues } from "../jobs";
 import { type Actor, assertCan } from "../permissions";
-import { logRateFetch } from "../rate-history/log";
 import { loadSettings } from "../settings/service";
-import { buildCustoms } from "../shipping/customs";
 import { toNumber } from "../units";
 import { groupRefs } from "./catalog";
+import { type Combination, labQuoter } from "./combination";
 
 // Rate Lab suite runs (SPEC-rate-lab "Runs", job `rateLab.run`): every chosen address × every
 // chosen parcel, quoted through each enabled provider and logged in rate history as LAB fetches.
@@ -331,9 +318,6 @@ export type LabRunOptions = { timeoutMs?: number };
 type Address = Awaited<ReturnType<typeof resolveSelection>>["addresses"][number];
 type Parcel = Awaited<ReturnType<typeof resolveSelection>>["parcels"][number];
 
-/** A combination's answer, before it's logged. */
-type Quoted = { request: Omit<RateRequest, "services">; outcomes: ProviderOutcome[] };
-
 /**
  * One `rateLab.run`: works through the run's combinations `LAB_CONCURRENCY` at a time, logs each as
  * a LAB fetch, locks what it quotes, and ends SUCCEEDED, PARTIAL or FAILED. Never retries, never
@@ -364,137 +348,23 @@ export async function runLabRun(
       data: { combinations: combinations.length },
     });
 
-    const lanes = new Map<boolean, Promise<LaneProvider[]>>();
-    const lane = (domestic: boolean) => {
-      const found = lanes.get(domestic) ?? laneProviders(db, providers, { domestic });
-      lanes.set(domestic, found);
-      return found;
-    };
-    const canPurchase = new Map(providers.map((p) => [p.id, p.capabilities.purchase]));
-    const fakeProviders = new Set<ProviderId>(providers.filter((p) => p.fake).map((p) => p.id));
-    const orderNumber = `LAB-${runId.slice(-8)}`;
-
-    const quote = async (address: Address, parcel: Parcel): Promise<Quoted> => {
+    const quoter = labQuoter(db, providers, { runId, shipFrom, timeoutMs });
+    const combinationOf = (address: Address, parcel: Parcel): Combination => ({
       // The address quotes use: the corrected one when the check corrected it.
-      const shipTo: ShipAddress = LabAddressValue.parse(address.address);
-      const domestic = shipTo.country === shipFrom.country;
-      const request: Omit<RateRequest, "services"> = {
-        orderNumber,
-        shipFrom,
-        shipTo,
-        residential: address.residential,
-        package: {
-          lengthIn: toNumber(parcel.lengthIn) ?? 0,
-          widthIn: toNumber(parcel.widthIn) ?? 0,
-          heightIn: toNumber(parcel.heightIn) ?? 0,
-          weightOz: toNumber(parcel.weightOz) ?? 0,
-        },
-        items:
-          parcel.items.length > 0
-            ? parcel.items.map(({ product, quantity }) => ({
-                sku: product.sku,
-                name: product.name,
-                quantity,
-              }))
-            : [{ sku: null, name: parcel.title, quantity: 1 }],
-        // Lab quotes are never bought; quick ones leave no shipment at the provider (open question 1).
-        quick: true,
-      };
-      if (domestic) {
-        return { request, outcomes: await quoteParcel(await lane(true), request, { timeoutMs }) };
-      }
-      // Contents are the only customs source (decision 4): without them nothing can be declared.
-      const declaration =
-        parcel.items.length === 0
-          ? null
-          : buildCustoms(
-              parcel.items.map(({ product, quantity }) => ({
-                sku: product.sku,
-                name: product.name,
-                quantity,
-                unitPriceCents: product.priceCents ?? 0,
-                product,
-              })),
-            );
-      if (!declaration?.complete) {
-        return {
-          request,
-          outcomes: [
-            {
-              provider: null,
-              ok: false,
-              messageKey: "errors.shipping.customsIncomplete",
-              permanent: true,
-              params: {
-                products: declaration ? declaration.missing.join(", ") : parcel.title,
-              },
-            },
-          ],
-        };
-      }
-      const withCustoms = { ...request, customs: declaration.customs };
-      return {
-        request: withCustoms,
-        outcomes: await quoteParcel(await lane(false), withCustoms, { timeoutMs }),
-      };
-    };
-
-    const log = async (address: Address, parcel: Parcel, { request, outcomes }: Quoted) => {
-      const rates = outcomes.flatMap((o) => (o.ok ? o.rates : []));
-      const errors: RateError[] = outcomes.flatMap((o) =>
-        o.ok
-          ? []
-          : [
-              {
-                provider: o.provider,
-                messageKey: o.messageKey,
-                ...(o.params && { params: o.params }),
-              },
-            ],
-      );
-      await db.$transaction(async (tx) => {
-        await logRateFetch(tx, {
-          source: "LAB",
-          trigger: "LAB_RUN",
-          labRunId: runId,
-          labAddressId: address.id,
-          labParcelId: parcel.id,
-          shipTo: request.shipTo,
-          residential: request.residential,
-          international: request.shipTo.country !== shipFrom.country,
-          boxId: parcel.boxId,
-          parcel: request.package,
-          providerErrors: errors,
-          rates: rates.map((rate) => ({
-            ...rate,
-            carrierId: rate.service.carrierId,
-            serviceId: rate.service.id,
-            carrierCode: rate.service.carrier.code,
-            quoteOnly: canPurchase.get(rate.provider) !== true,
-          })),
-          fakeProviders,
-        });
-        // Quoted once, its physical fields are history: lock it with the first fetch (decision 5).
-        const now = new Date();
-        await tx.rateLabAddress.updateMany({
-          where: { id: address.id, lockedAt: null },
-          data: { lockedAt: now },
-        });
-        await tx.rateLabParcel.updateMany({
-          where: { id: parcel.id, lockedAt: null },
-          data: { lockedAt: now },
-        });
-        await tx.rateLabRun.update({
-          where: { id: runId },
-          data: {
-            completedCombinations: { increment: 1 },
-            quoteCount: { increment: rates.length },
-            failureCount: { increment: errors.length },
-            heartbeatAt: now,
-          },
-        });
-      });
-    };
+      shipTo: LabAddressValue.parse(address.address),
+      residential: address.residential,
+      labAddressId: address.id,
+      labParcelId: parcel.id,
+      parcel: {
+        title: parcel.title,
+        boxId: parcel.boxId,
+        lengthIn: toNumber(parcel.lengthIn) ?? 0,
+        widthIn: toNumber(parcel.widthIn) ?? 0,
+        heightIn: toNumber(parcel.heightIn) ?? 0,
+        weightOz: toNumber(parcel.weightOz) ?? 0,
+        items: parcel.items,
+      },
+    });
 
     let stopping = false;
     const goOn = async () => {
@@ -511,8 +381,8 @@ export async function runLabRun(
       while (next < combinations.length && (await goOn())) {
         const combination = combinations[next++];
         if (!combination) return;
-        const { address, parcel } = combination;
-        await log(address, parcel, await quote(address, parcel));
+        const quoted = combinationOf(combination.address, combination.parcel);
+        await quoter.log(quoted, await quoter.quote(quoted));
       }
     };
     await Promise.all(Array.from({ length: LAB_CONCURRENCY }, work));
@@ -532,7 +402,7 @@ export async function runLabRun(
       data: {
         status,
         error: status === "FAILED" ? "errors.rateLab.noQuotes" : null,
-        fake: fakeProviders.size > 0,
+        fake: quoter.fakeProviders.size > 0,
         finishedAt: new Date(),
       },
     });

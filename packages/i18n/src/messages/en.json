@@ -1371,7 +1371,12 @@
       "noQuotes": "No provider returned a quote for any combination.",
       "runFailed": "The run stopped on an unexpected error.",
       "stalled": "The run stopped responding for 10 minutes and was marked failed.",
-      "runNotActive": "This run has already finished."
+      "runNotActive": "This run has already finished.",
+      "parcelInvalid": "Pick saved parcels that exist and aren't archived.",
+      "oneOffNoParcels": "Pick or add at least one parcel.",
+      "oneOffTooMany": "{parcels} parcels is more than the {max} a quote can take. Pick fewer.",
+      "oneOffPurged": "This quote's address was cleared by the personal data purge, so it can't be saved.",
+      "oneOffParcelInvalid": "That typed parcel isn't part of this quote."
     }
   },
   "emails": {
@@ -1945,6 +1950,32 @@
       "deliveryDays": "Days",
       "marks": "Marks",
       "noRows": "No quotes match these filters."
+    },
+    "quote": {
+      "form": "One-off quote",
+      "savedParcels": "Saved parcels",
+      "noParcels": "No test parcels yet. Add some on Parcels, or add one by hand below.",
+      "parcelGroups": "Parcel groups",
+      "typedParcels": "Parcels typed here",
+      "typedParcel": "Typed parcel {number}",
+      "removeParcel": "Remove typed parcel {number}",
+      "addParcel": "Add parcel",
+      "parcelLimit": "Pick or add 1 to {max} parcels. The address is checked but not saved.",
+      "getQuotes": "Get quotes",
+      "results": "Quotes",
+      "fake": "Quoted by fake providers: these prices are made up.",
+      "saveAddress": "Save as test address",
+      "saveAddressTitle": "Save as test address",
+      "saveParcel": "Save parcel",
+      "saveParcelTitle": "Save as test parcel",
+      "parcelSize": "{length} × {width} × {height} in, {weight}",
+      "quotesFor": "Quotes for {parcel}",
+      "cheapest": "Cheapest",
+      "saved": "Saved as “{title}”.",
+      "titleField": "Title",
+      "saveHint": "It's saved unlocked, as typed. Add groups and a description on its own tab.",
+      "cancel": "Cancel",
+      "save": "Save"
     }
   },
   "charts": {

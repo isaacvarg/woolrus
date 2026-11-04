@@ -1371,7 +1371,12 @@
       "noQuotes": "Ningún proveedor devolvió una cotización para ninguna combinación.",
       "runFailed": "La prueba se detuvo por un error inesperado.",
       "stalled": "La ejecución dejó de responder durante 10 minutos y se marcó como fallida.",
-      "runNotActive": "Esta ejecución ya terminó."
+      "runNotActive": "Esta ejecución ya terminó.",
+      "parcelInvalid": "Elige paquetes guardados que existan y no estén archivados.",
+      "oneOffNoParcels": "Elige o agrega al menos un paquete.",
+      "oneOffTooMany": "{parcels} paquetes son más de los {max} que admite una cotización. Elige menos.",
+      "oneOffPurged": "La purga de datos personales borró la dirección de esta cotización, así que no se puede guardar.",
+      "oneOffParcelInvalid": "Ese paquete escrito no es parte de esta cotización."
     }
   },
   "emails": {
@@ -1945,6 +1950,32 @@
       "deliveryDays": "Días",
       "marks": "Marcas",
       "noRows": "Ninguna cotización coincide con estos filtros."
+    },
+    "quote": {
+      "form": "Cotización única",
+      "savedParcels": "Paquetes guardados",
+      "noParcels": "Aún no hay paquetes de prueba. Agrégalos en Paquetes, o agrega uno a mano abajo.",
+      "parcelGroups": "Grupos de paquetes",
+      "typedParcels": "Paquetes escritos aquí",
+      "typedParcel": "Paquete escrito {number}",
+      "removeParcel": "Quitar el paquete escrito {number}",
+      "addParcel": "Agregar paquete",
+      "parcelLimit": "Elige o agrega de 1 a {max} paquetes. La dirección se verifica pero no se guarda.",
+      "getQuotes": "Cotizar",
+      "results": "Cotizaciones",
+      "fake": "Cotizado por proveedores de prueba: estos precios son inventados.",
+      "saveAddress": "Guardar como dirección de prueba",
+      "saveAddressTitle": "Guardar como dirección de prueba",
+      "saveParcel": "Guardar paquete",
+      "saveParcelTitle": "Guardar como paquete de prueba",
+      "parcelSize": "{length} × {width} × {height} in, {weight}",
+      "quotesFor": "Cotizaciones de {parcel}",
+      "cheapest": "Más barata",
+      "saved": "Guardado como “{title}”.",
+      "titleField": "Título",
+      "saveHint": "Se guarda sin bloquear, tal como se escribió. Agrega grupos y una descripción en su propia pestaña.",
+      "cancel": "Cancelar",
+      "save": "Guardar"
     }
   },
   "charts": {

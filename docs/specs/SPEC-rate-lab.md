@@ -251,11 +251,14 @@ becomes `CANCELLED` at once. Audited.
 `quoteOneOff({ address, parcelIds?, parcelGroupIds?, adHocParcels? })` (`ratelab.use`): at least one parcel; total
 parcels ≤ 20. It checks the address (not stored as a test address), creates a `ONE_OFF` run and runs it **inline** in
 the request: one-offs are small, and the person is waiting. The one-active-run rule doesn't apply to `ONE_OFF`
-(the index covers `SUITE` only). It returns the run id; the Quote tab shows its quotes. One-off fetches are excluded
-from Trends (decision 12).
+(the index covers `SUITE` only). It returns the run id, the address check (typed vs. quoted) and each parcel's
+quotes and provider errors, which the Quote tab shows. Saved parcels it quotes are locked like a run's; a typed
+parcel has no contents, so an international one logs `customsIncomplete`. One-off fetches are excluded from Trends
+(decision 12).
 
 `saveOneOffAddress({ runId, title, groupIds })` and `saveOneOffParcel({ runId, index, title, groupIds })`
-(`ratelab.manage`) create a test address or parcel from it.
+(`ratelab.manage`) create a test address or parcel from it: the address is checked again as a new one, and a
+parcel keeps its box only while that box is active and still the size quoted.
 
 **PII:** a one-off address may be a real customer's. The PII purge (`operations`, edit to SPEC-operations) also
 clears `adHocAddress` on one-off runs older than `Settings.piiRetentionDays`; the lane in its fetches stays.

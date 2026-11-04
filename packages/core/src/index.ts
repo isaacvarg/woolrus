@@ -69,6 +69,7 @@ export * from "./qa/scan";
 export * from "./qa/verify";
 export * from "./rate-history/log";
 export * from "./rate-lab/catalog";
+export * from "./rate-lab/one-off";
 export * from "./rate-lab/parcels";
 export * from "./rate-lab/real-orders";
 export * from "./rate-lab/run-detail";

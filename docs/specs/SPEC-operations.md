@@ -188,6 +188,10 @@ names (decision 2), items, packages, rates, costs, tracking, stage events, voids
 **Not tied to one order**, done in the same daily run:
 - `InboundWebhook.payload` of processed deliveries older than the period → `{ redacted: true }` (only when a
   period is set).
+- `RateLabRun.adHocAddress` of Rate Lab one-off quotes created before the period → null (only when a period is
+  set; added by SPEC-rate-lab). The address typed may be a customer's. The run's fetches only ever stored the
+  lane (country, state, ZIP3), so they stay, and so do the typed parcels. **Save as test address** is then
+  refused.
 - `IdempotentRequest` rows older than 7 days are deleted whatever the setting: they exist for replays within
   minutes and hold response DTOs with customer data.
 

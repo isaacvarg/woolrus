@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { base, Id, IdempotencyKey, Inches, Ounces } from "./base";
-import { ShipToStatus } from "./carriers";
+import { RateError, ShippingProviderId, ShipToStatus } from "./carriers";
 import { RealOrders, RealOrdersInput } from "./rate-lab-real-orders";
 import { LabCombination, LabRunInsights } from "./rate-lab-run";
 import {
@@ -361,6 +361,96 @@ export const LabRunPage = z.object({
 });
 export type LabRunPage = z.infer<typeof LabRunPage>;
 
+// One-off quotes: a typed address against up to 20 parcels, quoted inline (SPEC-rate-lab "One-off
+// quotes"). Kept as ONE_OFF runs, never in Trends.
+
+export const LAB_ONE_OFF_MAX_PARCELS = 20;
+
+/** A parcel typed for a one-off: a box (its inner size is copied) or a size, and a weight. */
+export const LabAdHocParcel = z.object({ size: LabParcelSize, weightOz: Ounces });
+export type LabAdHocParcel = z.input<typeof LabAdHocParcel>;
+
+/** Saved parcels, by id or group, and typed ones: 1–20 in all, counted after groups resolve. */
+export const QuoteOneOffInput = z.object({
+  address: LabShipAddress,
+  parcelIds: z.array(Id).max(LAB_ONE_OFF_MAX_PARCELS).default([]),
+  parcelGroupIds: z.array(Id).max(50).default([]),
+  adHocParcels: z.array(LabAdHocParcel).max(LAB_ONE_OFF_MAX_PARCELS).default([]),
+});
+export type QuoteOneOffInput = z.input<typeof QuoteOneOffInput>;
+
+/** One quote of a one-off, as the Quote tab shows it. */
+export const LabOneOffQuote = z.object({
+  provider: ShippingProviderId,
+  carrierName: z.string(),
+  serviceName: z.string(),
+  amountCents: z.number().int(),
+  currency: z.string(),
+  deliveryDays: z.number().int().nullable(),
+  /** The provider can quote this rate but not buy it. */
+  quoteOnly: z.boolean(),
+  /** The cheapest rate that can be bought, by the same rule as QA's. */
+  cheapest: z.boolean(),
+});
+export type LabOneOffQuote = z.infer<typeof LabOneOffQuote>;
+
+/**
+ * A parcel's answer. `parcel` is the saved parcel it was; `adHocIndex` the typed one's position,
+ * which **Save parcel** takes.
+ */
+export const LabOneOffParcel = z.object({
+  parcel: z.object({ id: Id, title: z.string() }).nullable(),
+  adHocIndex: z.number().int().nullable(),
+  boxId: Id.nullable(),
+  lengthIn: z.number(),
+  widthIn: z.number(),
+  heightIn: z.number(),
+  weightOz: z.number(),
+  quotes: z.array(LabOneOffQuote),
+  errors: z.array(RateError),
+});
+export type LabOneOffParcel = z.infer<typeof LabOneOffParcel>;
+
+/** The run, the address check (typed vs. what was quoted) and each parcel's quotes, cheapest first. */
+export const LabOneOff = z.object({
+  runId: Id,
+  status: RateLabRunStatus,
+  fake: z.boolean(),
+  check: z.object({
+    status: ShipToStatus,
+    original: LabAddressValue,
+    address: LabAddressValue,
+    residential: z.boolean(),
+    messages: z.array(z.string()),
+    checkedAt: z.date().nullable(),
+  }),
+  parcels: z.array(LabOneOffParcel),
+});
+export type LabOneOff = z.infer<typeof LabOneOff>;
+
+/** **Save as test address**: the typed address becomes an unlocked test address. */
+export const SaveOneOffAddressInput = z.object({
+  idempotencyKey: IdempotencyKey,
+  runId: Id,
+  title: Title,
+  groupIds: GroupIds.default([]),
+});
+export type SaveOneOffAddressInput = z.input<typeof SaveOneOffAddressInput>;
+
+/** **Save parcel**: typed parcel `index` becomes an unlocked test parcel. */
+export const SaveOneOffParcelInput = z.object({
+  idempotencyKey: IdempotencyKey,
+  runId: Id,
+  index: z
+    .number()
+    .int()
+    .min(0)
+    .max(LAB_ONE_OFF_MAX_PARCELS - 1),
+  title: Title,
+  groupIds: GroupIds.default([]),
+});
+export type SaveOneOffParcelInput = z.input<typeof SaveOneOffParcelInput>;
+
 /** A run's page: its header, its selection as chosen (for Run again), quotes and insights. */
 export const LabRunDetail = z.object({
   run: LabRunRow,
@@ -553,6 +643,35 @@ export const rateLab = {
     .input(ListLabRunsInput)
     .output(LabRunPage),
 
+  quoteOneOff: base
+    .route({
+      method: "POST",
+      path: "/rate-lab/quote",
+      tags,
+      summary: "Quote a typed address against saved or typed parcels, inline",
+    })
+    .input(QuoteOneOffInput)
+    .output(LabOneOff),
+
+  saveOneOffAddress: base
+    .route({
+      method: "POST",
+      path: "/rate-lab/runs/{runId}/save-address",
+      tags,
+      summary: "Save a one-off's address as a test address",
+    })
+    .input(SaveOneOffAddressInput)
+    .output(LabAddress),
+
+  saveOneOffParcel: base
+    .route({
+      method: "POST",
+      path: "/rate-lab/runs/{runId}/save-parcel",
+      tags,
+      summary: "Save a one-off's typed parcel as a test parcel",
+    })
+    .input(SaveOneOffParcelInput)
+    .output(LabParcel),
   trendGrid: base
     .route({
       method: "GET",

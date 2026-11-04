@@ -499,3 +499,103 @@ test("an admin lowers the run cap; a Rate Lab user is held to it, then cancels a
     }
   });
 });
+
+test("a Rate Lab user quotes a typed address against a saved and a typed parcel, then saves the address", async ({
+  page,
+}, info) => {
+  desktopOnly(info.project.name);
+  test.setTimeout(120_000);
+  await db.rateLabParcel.create({
+    data: { title: `${prefix} Quote parcel`, lengthIn: 10, widthIn: 8, heightIn: 4, weightOz: 20 },
+  });
+  const startedAt = new Date();
+
+  await withSettingsLock(async () => {
+    await ensureShipFrom();
+    const { carrier, service, created } = await demoService();
+    const before = await db.shippingProviderAccount.findUnique({
+      where: { provider: "SHIPSTATION" },
+    });
+    await db.shippingCarrier.update({ where: { id: carrier.id }, data: { enabled: true } });
+    await db.carrierService.update({ where: { id: service.id }, data: { enabled: true } });
+    const admin = await (await page.context().browser()?.newContext())?.newPage();
+    if (!admin) throw new Error("no browser");
+    try {
+      await signInAs(admin, ["ADMIN"]);
+      await ok(
+        admin.request.put(`${api}/providers/SHIPSTATION/credentials`, {
+          data: { credentials: { apiKey: "e2e-rate-lab" } },
+        }),
+      );
+      await ok(
+        admin.request.post(`${api}/providers/SHIPSTATION/enabled`, { data: { enabled: true } }),
+      );
+
+      await signInAs(page, ["QA", "RATE_LAB"]);
+      await page.goto("/rate-lab/quote");
+      const form = page.getByRole("form", { name: "One-off quote" });
+      await form.getByLabel("Recipient name").fill("Pat Buyer");
+      await form.getByLabel("Address line 1").fill("12 Prairie Street");
+      await form.getByLabel("City").fill("Jordan");
+      await form.getByLabel("State or province").fill("MT");
+      await form.getByLabel("Postal code").fill("59337");
+      await form.getByText(`${prefix} Quote parcel`).click();
+      await form.getByRole("button", { name: "Add parcel" }).click();
+      const typed = form.getByTestId("typed-parcel");
+      await typed.getByText("Typed size").click();
+      await typed.getByLabel("Length (in)").fill("9");
+      await typed.getByLabel("Width (in)").fill("6");
+      await typed.getByLabel("Height (in)").fill("3");
+      await typed.getByLabel("Weight (lb)").fill("0");
+      await typed.getByLabel("Weight (oz)").fill("12");
+      await form.getByRole("button", { name: "Get quotes" }).click();
+
+      const results = page.getByRole("region", { name: "Quotes" });
+      await expect(results.getByTestId("ship-to")).toContainText("Corrected", { timeout: 30_000 });
+      const cards = results.getByTestId("parcel-quotes");
+      await expect(cards).toHaveCount(2);
+      await expect(cards.nth(0)).toContainText(`${prefix} Quote parcel`);
+      await expect(cards.nth(1)).toContainText("Typed parcel 1");
+      for (const card of [cards.nth(0), cards.nth(1)]) {
+        await expect(card.getByRole("table")).toBeVisible();
+        await expect(card.getByRole("row")).not.toHaveCount(1);
+        await expect(card).toContainText("Cheapest");
+      }
+
+      await results.getByRole("button", { name: "Save as test address" }).click();
+      const save = page.getByRole("dialog", { name: "Save as test address" });
+      await save.getByLabel("Title").fill(`${prefix} Quoted ranch`);
+      await save.getByRole("button", { name: "Save" }).click();
+      await expect(results.getByText(`Saved as “${prefix} Quoted ranch”.`)).toBeVisible();
+
+      const address = await db.rateLabAddress.findFirstOrThrow({
+        where: { title: `${prefix} Quoted ranch` },
+      });
+      expect(address.lockedAt).toBeNull();
+      expect(address.original).toMatchObject({ address1: "12 Prairie Street" });
+      expect(address.address).toMatchObject({ address1: "12 Prairie St" });
+    } finally {
+      // The one-off's fetches point at the saved parcel, so the run (and its fetches) go first.
+      await db.rateLabRun.deleteMany({ where: { kind: "ONE_OFF", createdAt: { gte: startedAt } } });
+      await admin.request.delete(`${api}/providers/SHIPSTATION/credentials`);
+      await db.shippingProviderAccount.updateMany({
+        where: { provider: "SHIPSTATION" },
+        data: { enabled: before?.enabled ?? false },
+      });
+      if (created) {
+        await db.carrierService.deleteMany({ where: { carrierId: carrier.id } });
+        await db.shippingCarrier.deleteMany({ where: { id: carrier.id } });
+      } else {
+        await db.shippingCarrier.update({
+          where: { id: carrier.id },
+          data: { enabled: carrier.enabled },
+        });
+        await db.carrierService.update({
+          where: { id: service.id },
+          data: { enabled: service.enabled },
+        });
+      }
+      await admin.context().close();
+    }
+  });
+});
