@@ -121,15 +121,20 @@ function Header({ detail: { run, selection } }: { detail: LabRunDetail }) {
         </h2>
         <span className={`badge ${statusBadge[run.status]}`}>{tr(`status_${run.status}`)}</span>
         {run.fake && <span className="badge badge-outline">{tr("fake")}</span>}
-        {run.kind === "SUITE" && (
-          <Button
-            className="btn-outline ms-auto"
-            isPending={again.isPending}
-            onPress={() => again.mutate({ idempotencyKey, selection })}
-          >
-            {t("runAgain")}
-          </Button>
-        )}
+        <div className="ms-auto flex flex-wrap gap-2">
+          <a className="btn btn-outline" href={`/api/rate-lab/runs/${run.id}/export.csv`} download>
+            {t("exportCsv")}
+          </a>
+          {run.kind === "SUITE" && (
+            <Button
+              className="btn-outline"
+              isPending={again.isPending}
+              onPress={() => again.mutate({ idempotencyKey, selection })}
+            >
+              {t("runAgain")}
+            </Button>
+          )}
+        </div>
       </div>
       {again.error && (
         <p role="alert" className="text-error">

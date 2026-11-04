@@ -70,6 +70,15 @@ function toInput(f: Filters): RealOrdersInput {
   };
 }
 
+/** The CSV export of what the dashboard shows: the same filters, as query parameters. */
+function exportHref(f: Filters): string {
+  const query = new URLSearchParams();
+  for (const [name, value] of Object.entries(toInput(f))) {
+    if (value !== undefined && value !== false) query.set(name, String(value));
+  }
+  return `/api/rate-lab/real-orders/export.csv?${query}`;
+}
+
 const laneName = (lane: { country: string; state: string | null }) =>
   lane.state ? `${lane.country}-${lane.state}` : lane.country;
 
@@ -153,6 +162,9 @@ export function RealOrdersDashboard() {
         <Checkbox isSelected={filters.includeFake} onChange={(v) => set("includeFake", v)}>
           {t("includeFake")}
         </Checkbox>
+        <a className="btn btn-outline ms-auto" href={exportHref(filters)} download>
+          {t("exportCsv")}
+        </a>
       </div>
 
       {query.isPending && <p>{t("loading")}</p>}
