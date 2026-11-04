@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { base, Id, IdempotencyKey, Inches, Ounces } from "./base";
 import { ShipToStatus } from "./carriers";
+import { RealOrders, RealOrdersInput } from "./rate-lab-real-orders";
 
 // Rate Lab (SPEC-rate-lab): test addresses and parcels, and the groups that tag them. Runs join
 // this file in their own tickets.
@@ -419,4 +420,14 @@ export const rateLab = {
     })
     .input(byId)
     .output(LabGroup),
+
+  realOrders: base
+    .route({
+      method: "GET",
+      path: "/rate-lab/real-orders",
+      tags,
+      summary: "What real orders paid for labels, and what else they were offered",
+    })
+    .input(RealOrdersInput)
+    .output(RealOrders),
 };

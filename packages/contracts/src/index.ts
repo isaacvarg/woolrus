@@ -32,6 +32,7 @@ export * from "./picking";
 export * from "./priority-rules";
 export * from "./qa";
 export * from "./rate-lab";
+export * from "./rate-lab-real-orders";
 export * from "./settings";
 export * from "./shipping";
 export * from "./stations";
