@@ -101,8 +101,8 @@ export async function previewLabRun(
   return preview(db, PreviewLabRunInput.parse(input).selection);
 }
 
-const runInclude = { startedBy: { select: { id: true, name: true } } } as const;
-type RunRow = Prisma.RateLabRunGetPayload<{ include: typeof runInclude }>;
+export const labRunInclude = { startedBy: { select: { id: true, name: true } } } as const;
+export type LabRunRecord = Prisma.RateLabRunGetPayload<{ include: typeof labRunInclude }>;
 
 const isUniqueViolation = (error: unknown) =>
   error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
@@ -161,8 +161,8 @@ export async function startLabRun(
     if (isUniqueViolation(error)) throw new AppError("CONFLICT", "errors.rateLab.runActive");
     throw error;
   }
-  const rows = await toRows(db, [
-    await db.rateLabRun.findUniqueOrThrow({ where: { id }, include: runInclude }),
+  const rows = await labRunRows(db, [
+    await db.rateLabRun.findUniqueOrThrow({ where: { id }, include: labRunInclude }),
   ]);
   return rows[0] as LabRunRow;
 }
@@ -187,7 +187,7 @@ function decodeCursor(cursor: string): Cursor {
 }
 
 /** Runs as the list shows them, with the chosen groups' names. */
-async function toRows(db: Db, runs: RunRow[]): Promise<LabRunRow[]> {
+export async function labRunRows(db: Db, runs: LabRunRecord[]): Promise<LabRunRow[]> {
   const withSelection = runs.map((run) => ({
     run,
     selection: LabRunSelection.catch(LabRunSelection.parse({})).parse(run.selection),
@@ -243,14 +243,14 @@ export async function listLabRuns(
         ],
       }),
     },
-    include: runInclude,
+    include: labRunInclude,
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     take: limit + 1,
   });
   const page = runs.slice(0, limit);
   const last = page.at(-1);
   return {
-    rows: await toRows(db, page),
+    rows: await labRunRows(db, page),
     nextCursor: runs.length > limit && last ? encodeCursor(last) : null,
   };
 }

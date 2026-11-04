@@ -36,6 +36,7 @@ import {
   getBatch,
   getEmailSender,
   getIssue,
+  getLabRun,
   getOrder,
   getOrderHistory,
   getOrderShipping,
@@ -691,6 +692,7 @@ export const router = implementer.router({
     trendSeries: api.rateLab.trendSeries.handler(({ input, context }) =>
       labTrendSeries(db, context.actor, input),
     ),
+    run: api.rateLab.run.handler(({ input, context }) => getLabRun(db, context.actor, input)),
   },
 });
 

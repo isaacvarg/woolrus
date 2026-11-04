@@ -71,6 +71,7 @@ export * from "./rate-history/log";
 export * from "./rate-lab/catalog";
 export * from "./rate-lab/parcels";
 export * from "./rate-lab/real-orders";
+export * from "./rate-lab/run-detail";
 export * from "./rate-lab/runs";
 export * from "./rate-lab/trends";
 export * from "./settings/crypto";

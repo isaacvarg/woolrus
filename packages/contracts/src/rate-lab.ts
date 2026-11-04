@@ -2,6 +2,7 @@ import { z } from "zod";
 import { base, Id, IdempotencyKey, Inches, Ounces } from "./base";
 import { ShipToStatus } from "./carriers";
 import { RealOrders, RealOrdersInput } from "./rate-lab-real-orders";
+import { LabCombination, LabRunInsights } from "./rate-lab-run";
 import {
   LabTrendGrid,
   LabTrendGridInput,
@@ -358,6 +359,15 @@ export const LabRunPage = z.object({
 });
 export type LabRunPage = z.infer<typeof LabRunPage>;
 
+/** A run's page: its header, its selection as chosen (for Run again), quotes and insights. */
+export const LabRunDetail = z.object({
+  run: LabRunRow,
+  selection: LabRunSelection,
+  combinations: z.array(LabCombination),
+  insights: LabRunInsights,
+});
+export type LabRunDetail = z.infer<typeof LabRunDetail>;
+
 const byId = z.object({ id: Id });
 const tags = ["Rate Lab"];
 
@@ -556,4 +566,14 @@ export const rateLab = {
     })
     .input(LabTrendSeriesInput)
     .output(LabTrendSeries),
+
+  run: base
+    .route({
+      method: "GET",
+      path: "/rate-lab/runs/{id}",
+      tags,
+      summary: "A run with its quotes and insights",
+    })
+    .input(byId)
+    .output(LabRunDetail),
 };
