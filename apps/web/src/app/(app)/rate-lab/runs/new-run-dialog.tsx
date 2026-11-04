@@ -40,6 +40,8 @@ export function NewRunDialog({ onClose }: { onClose: () => void }) {
   const preview = useQuery({
     ...orpc.rateLab.previewRun.queryOptions({ input: { selection } }),
     placeholderData: (previous) => previous,
+    // Always fresh on open: an admin may have just changed the cap.
+    staleTime: 0,
   });
 
   const start = useMutation(

@@ -6,7 +6,15 @@ import type { ProviderId, RateRequest } from "../adapters/shipping/provider";
 import { queues } from "../jobs";
 import { loadSettings } from "../settings/service";
 import { createLabGroup } from "./catalog";
-import { listLabRuns, previewLabRun, runLabRun, startLabRun } from "./runs";
+import {
+  cancelLabRun,
+  LAB_CONCURRENCY,
+  LAB_STALL_MS,
+  listLabRuns,
+  previewLabRun,
+  runLabRun,
+  startLabRun,
+} from "./runs";
 
 const db: Db = testDb();
 afterAll(() => db.$disconnect());
@@ -555,5 +563,179 @@ describe("listLabRuns", () => {
     expect(next.nextCursor).toBeNull();
 
     await expect(listLabRuns(db, shipper, {})).rejects.toMatchObject({ kind: "FORBIDDEN" });
+  });
+});
+
+describe("cancelLabRun", () => {
+  it("cancels a queued run at once, and its job then quotes nothing, audited", async () => {
+    const { providers, sent } = await fakes();
+    await address("A");
+    await parcel("P");
+    const { lab, run } = await started(providers);
+    expect(await cancelLabRun(db, lab, { id: run.id })).toMatchObject({
+      id: run.id,
+      status: "CANCELLED",
+      finishedAt: expect.any(Date),
+    });
+    expect(await runLabRun(db, providers, { runId: run.id })).toEqual({ status: "skipped" });
+    expect(sent).toEqual([]);
+    expect(await db.rateFetch.count()).toBe(0);
+    const audit = await db.auditEvent.findMany({
+      where: { entityId: run.id },
+      orderBy: { at: "asc" },
+    });
+    expect(audit.map((e) => [e.action, e.actorId, e.before, e.after])).toEqual([
+      ["start", lab.userId, null, expect.anything()],
+      ["cancel", lab.userId, { status: "QUEUED" }, { status: "CANCELLED" }],
+    ]);
+  });
+
+  it("stops a running run between combinations, keeping the ones it finished (SC 7)", async () => {
+    const { providers, shipStation } = await fakes();
+    for (const title of ["A", "B", "C"]) await address(title);
+    for (const title of ["P", "Q", "R"]) await parcel(title);
+    const { lab, run } = await started(providers);
+    // The first quote asks to cancel, and every quote waits for that: the combinations already
+    // going finish, and no new one starts.
+    const getRates = shipStation.getRates.bind(shipStation);
+    let cancelled: ReturnType<typeof cancelLabRun> | undefined;
+    shipStation.getRates = async (request) => {
+      cancelled ??= cancelLabRun(db, lab, { id: run.id });
+      expect(await cancelled).toMatchObject({ status: "RUNNING", cancelRequested: true });
+      return getRates(request);
+    };
+    expect(await runLabRun(db, providers, { runId: run.id })).toEqual({ status: "CANCELLED" });
+    const done = await db.rateLabRun.findUniqueOrThrow({ where: { id: run.id } });
+    expect(done).toMatchObject({
+      status: "CANCELLED",
+      cancelRequestedAt: expect.any(Date),
+      finishedAt: expect.any(Date),
+    });
+    expect(done.completedCombinations).toBeGreaterThanOrEqual(1);
+    expect(done.completedCombinations).toBeLessThanOrEqual(LAB_CONCURRENCY);
+    expect(await db.rateFetch.count({ where: { labRunId: run.id } })).toBe(
+      done.completedCombinations,
+    );
+  });
+
+  it("asks once: a second cancel of a running run changes nothing", async () => {
+    const { providers } = await fakes();
+    await address("A");
+    await parcel("P");
+    const { lab, run } = await started(providers);
+    await db.rateLabRun.update({ where: { id: run.id }, data: { status: "RUNNING" } });
+    await cancelLabRun(db, lab, { id: run.id });
+    const first = await db.rateLabRun.findUniqueOrThrow({ where: { id: run.id } });
+    await cancelLabRun(db, lab, { id: run.id });
+    expect(await db.rateLabRun.findUniqueOrThrow({ where: { id: run.id } })).toEqual(first);
+    expect(await db.auditEvent.count({ where: { entityId: run.id, action: "cancel" } })).toBe(1);
+  });
+
+  it("refuses a finished run or one that doesn't exist", async () => {
+    const { providers } = await fakes();
+    await address("A");
+    await parcel("P");
+    const { lab, run } = await started(providers);
+    await runLabRun(db, providers, { runId: run.id });
+    await expect(cancelLabRun(db, lab, { id: run.id })).rejects.toMatchObject({
+      kind: "CONFLICT",
+      messageKey: "errors.rateLab.runNotActive",
+    });
+    await expect(
+      cancelLabRun(db, lab, { id: "00000000-0000-4000-8000-000000000000" }),
+    ).rejects.toMatchObject({ kind: "NOT_FOUND" });
+  });
+
+  it("is forbidden without the Rate Lab role, and changes nothing", async () => {
+    const { providers } = await fakes();
+    await address("A");
+    await parcel("P");
+    const { run } = await started(providers);
+    const { shipper } = await people();
+    await expect(cancelLabRun(db, shipper, { id: run.id })).rejects.toMatchObject({
+      kind: "FORBIDDEN",
+    });
+    expect(await db.rateLabRun.findUniqueOrThrow({ where: { id: run.id } })).toMatchObject({
+      status: "QUEUED",
+      cancelRequestedAt: null,
+    });
+    expect(await db.auditEvent.count({ where: { action: "cancel" } })).toBe(0);
+  });
+});
+
+describe("stuck runs", () => {
+  const ago = (ms: number) => new Date(Date.now() - ms);
+
+  it("a running run with an old heartbeat is failed as stalled and no longer blocks a new run (SC 5)", async () => {
+    const { providers } = await fakes();
+    await address("A");
+    await parcel("P");
+    const { lab, run } = await started(providers);
+    await db.rateLabRun.update({
+      where: { id: run.id },
+      data: {
+        status: "RUNNING",
+        startedAt: ago(LAB_STALL_MS * 2),
+        heartbeatAt: ago(LAB_STALL_MS + 1000),
+      },
+    });
+    const next = await startLabRun(
+      db,
+      lab,
+      { idempotencyKey: idempotencyKey(), selection: all },
+      { providers },
+    );
+    expect(next.status).toBe("QUEUED");
+    expect(await db.rateLabRun.findUniqueOrThrow({ where: { id: run.id } })).toMatchObject({
+      status: "FAILED",
+      error: "errors.rateLab.stalled",
+      finishedAt: expect.any(Date),
+    });
+  });
+
+  it("uses the start time when there's no heartbeat, and leaves a fresh run alone", async () => {
+    const { providers } = await fakes();
+    await address("A");
+    await parcel("P");
+    const { lab, run } = await started(providers);
+    await db.rateLabRun.update({
+      where: { id: run.id },
+      data: { status: "RUNNING", startedAt: ago(LAB_STALL_MS - 60_000), heartbeatAt: null },
+    });
+    await expect(
+      startLabRun(db, lab, { idempotencyKey: idempotencyKey(), selection: all }, { providers }),
+    ).rejects.toMatchObject({ messageKey: "errors.rateLab.runActive" });
+    expect((await listLabRuns(db, lab, {})).rows[0]?.status).toBe("RUNNING");
+
+    await db.rateLabRun.update({
+      where: { id: run.id },
+      data: { startedAt: ago(LAB_STALL_MS + 1000) },
+    });
+    expect((await listLabRuns(db, lab, {})).rows[0]).toMatchObject({
+      id: run.id,
+      status: "FAILED",
+      error: "errors.rateLab.stalled",
+    });
+  });
+
+  it("a worker that wakes after its run was failed as stalled doesn't overwrite that", async () => {
+    const { providers, shipStation } = await fakes();
+    await address("A");
+    await parcel("P");
+    await parcel("Q");
+    const { run } = await started(providers);
+    const getRates = shipStation.getRates.bind(shipStation);
+    shipStation.getRates = async (request) => {
+      await db.rateLabRun.update({
+        where: { id: run.id },
+        data: { status: "FAILED", error: "errors.rateLab.stalled" },
+      });
+      return getRates(request);
+    };
+    expect(await runLabRun(db, providers, { runId: run.id })).toEqual({ status: "FAILED" });
+    expect(await db.rateLabRun.findUniqueOrThrow({ where: { id: run.id } })).toMatchObject({
+      status: "FAILED",
+      error: "errors.rateLab.stalled",
+    });
   });
 });

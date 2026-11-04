@@ -4,6 +4,7 @@ import {
   archiveLabAddress,
   archiveLabGroup,
   archiveLabParcel,
+  cancelLabRun,
   clearPin,
   clearProviderCredentials,
   clearSecret,
@@ -683,6 +684,9 @@ export const router = implementer.router({
       startLabRun(db, context.actor, input, { providers: await createShippingProviders(db) }),
     ),
     runs: api.rateLab.runs.handler(({ input, context }) => listLabRuns(db, context.actor, input)),
+    cancelRun: api.rateLab.cancelRun.handler(({ input, context }) =>
+      cancelLabRun(db, context.actor, input),
+    ),
   },
 });
 

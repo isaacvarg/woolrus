@@ -249,6 +249,14 @@
         "freeHint": "For orders where the customer paid nothing for shipping.",
         "save": "Save",
         "saved": "Label cost check saved."
+      },
+      "rateLab": {
+        "title": "Rate Lab",
+        "intro": "How many address × parcel combinations one Rate Lab run may quote. Each combination asks every enabled provider for rates.",
+        "cap": "Combination cap",
+        "capHint": "From 1 to 2000.",
+        "save": "Save",
+        "saved": "Rate Lab cap saved."
       }
     }
   },
@@ -1361,7 +1369,9 @@
       "noProviders": "No shipping provider is enabled. Turn one on in Settings → Shipping first.",
       "runActive": "Another run is queued or running. Wait for it to finish.",
       "noQuotes": "No provider returned a quote for any combination.",
-      "runFailed": "The run stopped on an unexpected error."
+      "runFailed": "The run stopped on an unexpected error.",
+      "stalled": "The run stopped responding for 10 minutes and was marked failed.",
+      "runNotActive": "This run has already finished."
     }
   },
   "emails": {
@@ -1851,7 +1861,11 @@
       "counting": "Counting…",
       "overCap": "That's over the cap of {cap} combinations set in Settings.",
       "cancel": "Cancel",
-      "start": "Start run"
+      "start": "Start run",
+      "cancelRun": "Cancel run",
+      "cancelRunLabel": "Cancel the run started {startedAt}",
+      "cancelled": "Run cancelled.",
+      "cancelAsked": "Stopping after the combinations in progress."
     }
   },
   "charts": {

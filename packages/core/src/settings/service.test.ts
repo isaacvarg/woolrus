@@ -41,6 +41,7 @@ describe("settings service", () => {
       labelCostConfirmRatio: 2,
       labelCostConfirmFreeCents: 1500,
       wooTrackingEnabled: false,
+      rateLabMaxCombinations: 250,
       secrets: {
         wooConsumerKey: { configured: false },
         wooConsumerSecret: { configured: false },
@@ -157,6 +158,20 @@ describe("settings service", () => {
         stageSlaMinutes: { QA: 30 },
       });
     }
+  });
+
+  it("lets only an admin change the Rate Lab cap, audited (SPEC-rate-lab)", async () => {
+    const admin = await createActor(db, ["ADMIN"]);
+    const lab = await createActor(db, ["SHIPPER", "RATE_LAB"]);
+    await expect(updateSettings(db, lab, { rateLabMaxCombinations: 10 })).rejects.toMatchObject({
+      kind: "FORBIDDEN",
+    });
+    const updated = await updateSettings(db, admin, { rateLabMaxCombinations: 10 });
+    expect(updated.rateLabMaxCombinations).toBe(10);
+    expect((await db.settings.findFirstOrThrow()).rateLabMaxCombinations).toBe(10);
+    const audit = await db.auditEvent.findFirstOrThrow({ where: { entityType: "Settings" } });
+    expect(audit.before).toEqual({ rateLabMaxCombinations: 250 });
+    expect(audit.after).toEqual({ rateLabMaxCombinations: 10 });
   });
 
   it.each(nonAdmins)("forbids %s from reading or updating admin settings", async (role) => {
