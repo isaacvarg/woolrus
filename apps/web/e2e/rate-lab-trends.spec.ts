@@ -135,14 +135,12 @@ test("Trends shows a cell per combination, and a cell opens its chart", async ({
     .click();
   await expect(page).toHaveURL("/rate-lab/trends");
 
-  await page
-    .getByRole("group", { name: "Address groups" })
-    .getByRole("checkbox", { name: addressGroup.name })
-    .check();
-  await page
-    .getByRole("group", { name: "Parcel groups" })
-    .getByRole("checkbox", { name: parcelGroup.name })
-    .check();
+  // Only this test's groups, so other tests' addresses and parcels stay out of the heatmap.
+  for (const name of [addressGroup.name, parcelGroup.name]) {
+    const box = page.getByRole("checkbox", { name });
+    await page.locator("label", { has: box }).click();
+    await expect(box).toBeChecked();
+  }
 
   const heatmap = page.getByRole("table", { name: "Cheapest price by address and parcel" });
   await expect(heatmap.getByRole("columnheader", { name: `${prefix} Box` })).toBeVisible();
