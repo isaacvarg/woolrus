@@ -34,6 +34,8 @@ export const queues = {
   labelsReconcile: "labels.reconcile",
   /** Push a shipped order's tracking and Completed status to WooCommerce (SPEC-shipping "Woo push"). */
   wooPush: "woo.push",
+  /** Quote a Rate Lab suite run's addresses × parcels (SPEC-rate-lab "Runs"). */
+  rateLabRun: "rateLab.run",
 } as const;
 export type QueueName = (typeof queues)[keyof typeof queues];
 
@@ -64,6 +66,7 @@ export type JobPayloads = {
   [queues.labelsPurchase]: { orderId: string; requestedById: string };
   [queues.labelsReconcile]: Record<string, never>;
   [queues.wooPush]: { orderId: string };
+  [queues.rateLabRun]: { runId: string };
 };
 
 /** What can cause an order's rate fetch (Rate Lab runs have their own trigger). */
@@ -103,6 +106,8 @@ export const queueOptions: Record<QueueName, QueueSettings> = {
   [queues.labelsPurchase]: { ...keep, retryLimit: 4, retryDelay: 15, retryBackoff: true },
   // WooCommerce down or rate-limiting: 9 attempts over several hours; then the order shows a push error.
   [queues.wooPush]: { ...keep, retryLimit: 8, retryDelay: 60, retryBackoff: true },
+  // A run never retries itself: a re-run is a new run (SPEC-rate-lab decision 7).
+  [queues.rateLabRun]: { ...keep, retryLimit: 0 },
 };
 
 /** pg-boss keeps its tables in their own schema, separate from Prisma's. */

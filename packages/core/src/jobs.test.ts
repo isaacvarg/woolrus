@@ -19,6 +19,12 @@ describe("woo.push", () => {
   });
 });
 
+describe("rateLab.run", () => {
+  it("never retries: a re-run is a new run", () => {
+    expect(queueOptions[queues.rateLabRun].retryLimit).toBe(0);
+  });
+});
+
 describe("isFinalAttempt", () => {
   it("is false while retries remain and true on the last run", () => {
     const retryLimit = queueOptions[queues.ratesFetch].retryLimit ?? -1;

@@ -272,6 +272,86 @@ export type CreateLabGroupInput = z.input<typeof CreateLabGroupInput>;
 export const RenameLabGroupInput = z.object({ id: Id, name: GroupName });
 export type RenameLabGroupInput = z.input<typeof RenameLabGroupInput>;
 
+// Suite runs: addresses × parcels through every enabled provider (SPEC-rate-lab "Runs").
+
+const Ids = z.array(Id).max(500).default([]);
+
+/** What a run quotes. Empty lists on a side mean every active item of that side. */
+export const LabRunSelection = z.object({
+  addressGroupIds: Ids,
+  addressIds: Ids,
+  parcelGroupIds: Ids,
+  parcelIds: Ids,
+});
+export type LabRunSelection = z.infer<typeof LabRunSelection>;
+
+export const PreviewLabRunInput = z.object({ selection: LabRunSelection });
+export type PreviewLabRunInput = z.input<typeof PreviewLabRunInput>;
+
+export const LabRunPreview = z.object({
+  addresses: z.number().int(),
+  parcels: z.number().int(),
+  combinations: z.number().int(),
+  cap: z.number().int(),
+  overCap: z.boolean(),
+});
+export type LabRunPreview = z.infer<typeof LabRunPreview>;
+
+export const StartLabRunInput = z.object({
+  idempotencyKey: IdempotencyKey,
+  selection: LabRunSelection,
+});
+export type StartLabRunInput = z.input<typeof StartLabRunInput>;
+
+export const RateLabRunKind = z.enum(["SUITE", "ONE_OFF"]);
+export const RateLabRunStatus = z.enum([
+  "QUEUED",
+  "RUNNING",
+  "SUCCEEDED",
+  "PARTIAL",
+  "FAILED",
+  "CANCELLED",
+]);
+export type RateLabRunStatus = z.infer<typeof RateLabRunStatus>;
+
+/** The side of a selection as the runs list shows it: the groups, and how many items were picked. */
+const SelectionSide = z.object({ groups: z.array(LabGroupRef), items: z.number().int() });
+
+export const LabRunRow = z.object({
+  id: Id,
+  kind: RateLabRunKind,
+  status: RateLabRunStatus,
+  startedBy: z.object({ id: Id, name: z.string() }).nullable(),
+  createdAt: z.date(),
+  startedAt: z.date().nullable(),
+  finishedAt: z.date().nullable(),
+  combinations: z.number().int(),
+  completedCombinations: z.number().int(),
+  quoteCount: z.number().int(),
+  failureCount: z.number().int(),
+  fake: z.boolean(),
+  /** Message key of a whole-run failure. */
+  error: z.string().nullable(),
+  addresses: SelectionSide,
+  parcels: SelectionSide,
+});
+export type LabRunRow = z.infer<typeof LabRunRow>;
+
+export const LAB_RUNS_PAGE_MAX = 100;
+
+export const ListLabRunsInput = z.object({
+  /** `nextCursor` of the previous page. Opaque. */
+  cursor: z.string().max(500).optional(),
+  limit: z.coerce.number().int().min(1).max(LAB_RUNS_PAGE_MAX).default(25),
+});
+export type ListLabRunsInput = z.input<typeof ListLabRunsInput>;
+
+export const LabRunPage = z.object({
+  rows: z.array(LabRunRow),
+  nextCursor: z.string().nullable(),
+});
+export type LabRunPage = z.infer<typeof LabRunPage>;
+
 const byId = z.object({ id: Id });
 const tags = ["Rate Lab"];
 
@@ -430,4 +510,24 @@ export const rateLab = {
     })
     .input(RealOrdersInput)
     .output(RealOrders),
+
+  previewRun: base
+    .route({
+      method: "POST",
+      path: "/rate-lab/runs/preview",
+      tags,
+      summary: "Count the combinations a run would quote",
+    })
+    .input(PreviewLabRunInput)
+    .output(LabRunPreview),
+
+  startRun: base
+    .route({ method: "POST", path: "/rate-lab/runs", tags, summary: "Start a suite run" })
+    .input(StartLabRunInput)
+    .output(LabRunRow),
+
+  runs: base
+    .route({ method: "GET", path: "/rate-lab/runs", tags, summary: "Suite runs, newest first" })
+    .input(ListLabRunsInput)
+    .output(LabRunPage),
 };

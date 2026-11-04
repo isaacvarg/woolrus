@@ -1355,7 +1355,13 @@
       "boxOrSize": "Pick a box or type a size, not both.",
       "boxInvalid": "Pick a box that exists and isn't archived.",
       "itemNotPhysical": "Contents can only be physical products from the catalog.",
-      "itemDuplicate": "Each product can be listed once; change its quantity instead."
+      "itemDuplicate": "Each product can be listed once; change its quantity instead.",
+      "emptySelection": "Pick at least one address and one parcel that aren't archived.",
+      "overCap": "{combinations} combinations is over the cap of {cap}. Pick fewer addresses or parcels, or raise the cap in Settings.",
+      "noProviders": "No shipping provider is enabled. Turn one on in Settings → Shipping first.",
+      "runActive": "Another run is queued or running. Wait for it to finish.",
+      "noQuotes": "No provider returned a quote for any combination.",
+      "runFailed": "The run stopped on an unexpected error."
     }
   },
   "emails": {
@@ -1809,6 +1815,43 @@
         "purchased": "Bought on",
         "quotes": "Quotes"
       }
+    },
+    "runs": {
+      "title": "Suite runs",
+      "newRun": "New run",
+      "empty": "No runs yet. Press New run to quote your test addresses against your test parcels.",
+      "startedAt": "Started",
+      "startedBy": "Started by",
+      "duration": "Duration",
+      "status": "Status",
+      "combinations": "Combinations",
+      "quotes": "Quotes",
+      "failures": "Failures",
+      "groups": "Groups",
+      "status_QUEUED": "Queued",
+      "status_RUNNING": "Running",
+      "status_SUCCEEDED": "Succeeded",
+      "status_PARTIAL": "Partial",
+      "status_FAILED": "Failed",
+      "status_CANCELLED": "Cancelled",
+      "fake": "Fake",
+      "progress": "{done} / {total}",
+      "progressLabel": "Combinations quoted",
+      "addresses": "Addresses",
+      "parcels": "Parcels",
+      "allAddresses": "All addresses",
+      "allParcels": "All parcels",
+      "picked": "{count, plural, one {# picked} other {# picked}}",
+      "loadMore": "Load more",
+      "allHint": "Pick groups or items on each side. Nothing picked on a side runs all of it.",
+      "addressGroups": "Address groups",
+      "parcelGroups": "Parcel groups",
+      "none": "None yet.",
+      "count": "{addresses, plural, one {# address} other {# addresses}} × {parcels, plural, one {# parcel} other {# parcels}} = {combinations, plural, one {# combination} other {# combinations}}",
+      "counting": "Counting…",
+      "overCap": "That's over the cap of {cap} combinations set in Settings.",
+      "cancel": "Cancel",
+      "start": "Start run"
     }
   },
   "charts": {

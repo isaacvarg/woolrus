@@ -1,0 +1,559 @@
+import type { Db, Prisma } from "@woolrus/db";
+import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { createActor, resetDb, testDb } from "../../test/db";
+import { createFakeShippingProvider } from "../adapters/shipping/fake";
+import type { ProviderId, RateRequest } from "../adapters/shipping/provider";
+import { queues } from "../jobs";
+import { loadSettings } from "../settings/service";
+import { createLabGroup } from "./catalog";
+import { listLabRuns, previewLabRun, runLabRun, startLabRun } from "./runs";
+
+const db: Db = testDb();
+afterAll(() => db.$disconnect());
+beforeEach(async () => {
+  await resetDb(db);
+  await db.$executeRaw`DELETE FROM pgboss.job WHERE name = ${queues.rateLabRun}`;
+  await setShipFrom();
+});
+
+let key = 0;
+const idempotencyKey = () => `key-${String(++key).padStart(8, "0")}`;
+let wooId = 0;
+
+const shipFrom = {
+  name: "Warehouse",
+  phone: "512-555-0000",
+  address1: "100 Dock Rd",
+  city: "Austin",
+  state: "TX",
+  postalCode: "78702",
+  country: "US",
+};
+
+async function setShipFrom(address: unknown = shipFrom) {
+  await loadSettings(db);
+  await db.settings.updateMany({
+    data: { shipFromAddress: address as Prisma.InputJsonValue },
+  });
+}
+
+/** Stores a fake's catalog as a sync would, with only `enabled` service codes on. */
+async function catalog(provider: ProviderId, enabled: string[]) {
+  for (const carrier of await createFakeShippingProvider(provider).listCarriers()) {
+    await db.shippingCarrier.create({
+      data: {
+        provider,
+        externalId: carrier.externalId,
+        code: carrier.externalId,
+        name: carrier.name,
+        enabled: carrier.services.some((s) => enabled.includes(s.code)),
+        services: {
+          create: carrier.services.map((s) => ({
+            code: s.code,
+            name: s.name,
+            domestic: s.domestic,
+            international: s.international,
+            enabled: enabled.includes(s.code),
+            providerData: s.providerData as Prisma.InputJsonObject,
+          })),
+        },
+      },
+    });
+  }
+}
+
+/** Both fakes with one domestic and one international service each on (saver/economy stay off). */
+async function fakes(options: { latencyMs?: number } = {}) {
+  await catalog("SHIPSTATION", ["demo_ground", "demo_express_intl"]);
+  await catalog("BRIDGE_SOURCE", ["GND", "EXPINTL"]);
+  const sent: RateRequest[] = [];
+  const make = (id: ProviderId) => {
+    const provider = createFakeShippingProvider(id, options);
+    const getRates = provider.getRates.bind(provider);
+    provider.getRates = (request: RateRequest) => {
+      sent.push(request);
+      return getRates(request);
+    };
+    provider.purchaseLabel = vi.fn(provider.purchaseLabel.bind(provider));
+    return provider;
+  };
+  const shipStation = make("SHIPSTATION");
+  const bridge = make("BRIDGE_SOURCE");
+  return { shipStation, bridge, providers: [shipStation, bridge], sent };
+}
+
+function address(title: string, fields: { country?: string; archived?: boolean } = {}) {
+  const value = {
+    name: title,
+    address1: "1 Main St",
+    city: fields.country === "CA" ? "Toronto" : "Denver",
+    state: fields.country === "CA" ? "ON" : "CO",
+    postalCode: fields.country === "CA" ? "M5V 2T6" : "80202",
+    country: fields.country ?? "US",
+  };
+  return db.rateLabAddress.create({
+    data: {
+      title,
+      original: value,
+      address: value,
+      residential: true,
+      checkStatus: "VERIFIED",
+      archivedAt: fields.archived ? new Date() : null,
+    },
+  });
+}
+
+function parcel(
+  title: string,
+  fields: { archived?: boolean; items?: { productId: string; quantity: number }[] } = {},
+) {
+  return db.rateLabParcel.create({
+    data: {
+      title,
+      lengthIn: 10,
+      widthIn: 8,
+      heightIn: 4,
+      weightOz: 20,
+      archivedAt: fields.archived ? new Date() : null,
+      items: { create: fields.items ?? [] },
+    },
+  });
+}
+
+function product(name: string, customs: { hsCode?: string; countryOfOrigin?: string } = {}) {
+  return db.product.create({
+    data: {
+      wooProductId: ++wooId,
+      type: "simple",
+      name,
+      sku: name.toUpperCase(),
+      physical: true,
+      priceCents: 1500,
+      hsCode: customs.hsCode ?? null,
+      countryOfOrigin: customs.countryOfOrigin ?? null,
+      rawPayload: {},
+      syncedAt: new Date(),
+    },
+  });
+}
+
+const all = { addressGroupIds: [], addressIds: [], parcelGroupIds: [], parcelIds: [] };
+
+async function people() {
+  const admin = await createActor(db, ["ADMIN"]);
+  const lab = await createActor(db, ["SHIPPER", "RATE_LAB"]);
+  const shipper = await createActor(db, ["SHIPPER"]);
+  return { admin, lab, shipper };
+}
+
+/** A queued run of `selection`, started by a Rate Lab user. */
+async function started(providers: Awaited<ReturnType<typeof fakes>>["providers"], selection = all) {
+  const { lab } = await people();
+  const run = await startLabRun(
+    db,
+    lab,
+    { idempotencyKey: idempotencyKey(), selection },
+    { providers },
+  );
+  return { lab, run };
+}
+
+describe("previewLabRun", () => {
+  it("counts addresses × parcels, each item once, never archived items or groups (SC 3, 4)", async () => {
+    const { admin, lab } = await people();
+    const west = await createLabGroup(db, admin, {
+      idempotencyKey: idempotencyKey(),
+      kind: "ADDRESS",
+      name: "West",
+    });
+    const rural = await createLabGroup(db, admin, {
+      idempotencyKey: idempotencyKey(),
+      kind: "ADDRESS",
+      name: "Rural",
+    });
+    const old = await createLabGroup(db, admin, {
+      idempotencyKey: idempotencyKey(),
+      kind: "ADDRESS",
+      name: "Old",
+    });
+    const ranch = await address("Ranch");
+    const denver = await address("Denver");
+    const gone = await address("Gone", { archived: true });
+    const lonely = await address("Lonely");
+    for (const [a, g] of [
+      [ranch, west],
+      [ranch, rural],
+      [denver, west],
+      [gone, west],
+      [lonely, old],
+    ] as const) {
+      await db.rateLabAddressGroup.create({ data: { addressId: a.id, groupId: g.id } });
+    }
+    await db.rateLabGroup.update({ where: { id: old.id }, data: { archivedAt: new Date() } });
+    await parcel("Small");
+    await parcel("Medium");
+    await parcel("Retired", { archived: true });
+
+    // All × all: active items only.
+    expect(await previewLabRun(db, lab, { selection: all })).toEqual({
+      addresses: 3,
+      parcels: 2,
+      combinations: 6,
+      cap: 250,
+      overCap: false,
+    });
+    // Ranch is in both groups and also picked by id: still one address.
+    const picked = await previewLabRun(db, lab, {
+      selection: { ...all, addressGroupIds: [west.id, rural.id, old.id], addressIds: [ranch.id] },
+    });
+    expect(picked).toMatchObject({ addresses: 2, parcels: 2, combinations: 4 });
+    // Only an archived group, or an archived item by id: nothing.
+    const archived = await previewLabRun(db, lab, {
+      selection: { ...all, addressGroupIds: [old.id], addressIds: [gone.id] },
+    });
+    expect(archived).toMatchObject({ addresses: 0, combinations: 0 });
+  });
+
+  it("says when it's over the cap; forbidden without the Rate Lab role", async () => {
+    const { lab, shipper } = await people();
+    await db.settings.updateMany({ data: { rateLabMaxCombinations: 3 } });
+    await address("A");
+    await address("B");
+    await parcel("P");
+    await parcel("Q");
+    expect(await previewLabRun(db, lab, { selection: all })).toMatchObject({
+      combinations: 4,
+      cap: 3,
+      overCap: true,
+    });
+    await expect(previewLabRun(db, shipper, { selection: all })).rejects.toMatchObject({
+      kind: "FORBIDDEN",
+    });
+  });
+});
+
+describe("startLabRun", () => {
+  it("queues the run with a ship-from snapshot and its job, audited", async () => {
+    const { providers } = await fakes();
+    await address("A");
+    await parcel("P");
+    const { lab, run } = await started(providers);
+    expect(run).toMatchObject({
+      kind: "SUITE",
+      status: "QUEUED",
+      startedBy: { id: lab.userId },
+      combinations: 1,
+      completedCombinations: 0,
+      addresses: { groups: [], items: 0 },
+      parcels: { groups: [], items: 0 },
+    });
+    const stored = await db.rateLabRun.findUniqueOrThrow({ where: { id: run.id } });
+    expect(stored.shipFrom).toMatchObject({ postalCode: "78702" });
+    const jobs = await db.$queryRaw<{ data: { runId: string } }[]>`
+      SELECT data FROM pgboss.job WHERE name = ${queues.rateLabRun}`;
+    expect(jobs.map((j) => j.data)).toEqual([{ runId: run.id }]);
+    const audit = await db.auditEvent.findMany({ where: { entityId: run.id } });
+    expect(audit.map((e) => [e.entityType, e.action])).toEqual([["RateLabRun", "start"]]);
+  });
+
+  it("refuses an empty selection, over the cap (with both numbers), no provider, no ship-from; creating nothing (SC 4)", async () => {
+    const { providers } = await fakes();
+    const { lab } = await people();
+    const start = (p = providers) =>
+      startLabRun(db, lab, { idempotencyKey: idempotencyKey(), selection: all }, { providers: p });
+
+    await expect(start()).rejects.toMatchObject({ messageKey: "errors.rateLab.emptySelection" });
+
+    await address("A");
+    await address("B");
+    await parcel("P");
+    await db.settings.updateMany({ data: { rateLabMaxCombinations: 1 } });
+    await expect(start()).rejects.toMatchObject({
+      messageKey: "errors.rateLab.overCap",
+      params: { combinations: 2, cap: 1 },
+    });
+
+    await db.settings.updateMany({ data: { rateLabMaxCombinations: 250 } });
+    await expect(start([])).rejects.toMatchObject({ messageKey: "errors.rateLab.noProviders" });
+
+    await setShipFrom(null);
+    await expect(start()).rejects.toMatchObject({ messageKey: "errors.carriers.noShipFrom" });
+
+    expect(await db.rateLabRun.count()).toBe(0);
+    expect(await db.auditEvent.count({ where: { entityType: "RateLabRun" } })).toBe(0);
+  });
+
+  it("is forbidden without the Rate Lab role", async () => {
+    const { providers } = await fakes();
+    const { shipper } = await people();
+    await address("A");
+    await parcel("P");
+    await expect(
+      startLabRun(db, shipper, { idempotencyKey: idempotencyKey(), selection: all }, { providers }),
+    ).rejects.toMatchObject({ kind: "FORBIDDEN" });
+  });
+
+  it("refuses a second suite run while one is queued or running (SC 5)", async () => {
+    const { providers } = await fakes();
+    await address("A");
+    await parcel("P");
+    const { lab, run } = await started(providers);
+    const again = () =>
+      startLabRun(db, lab, { idempotencyKey: idempotencyKey(), selection: all }, { providers });
+    await expect(again()).rejects.toMatchObject({
+      kind: "CONFLICT",
+      messageKey: "errors.rateLab.runActive",
+    });
+    await db.rateLabRun.update({ where: { id: run.id }, data: { status: "RUNNING" } });
+    await expect(again()).rejects.toMatchObject({ messageKey: "errors.rateLab.runActive" });
+    await db.rateLabRun.update({ where: { id: run.id }, data: { status: "SUCCEEDED" } });
+    await expect(again()).resolves.toMatchObject({ status: "QUEUED" });
+  });
+
+  it("the one-active-run index itself refuses a second active suite run, not a one-off (SC 5)", async () => {
+    const insert = (kind: "SUITE" | "ONE_OFF", status: "QUEUED" | "RUNNING") =>
+      db.$executeRaw`
+        INSERT INTO rate_lab_runs (id, kind, status, selection, ship_from, combinations,
+          ad_hoc_address)
+        VALUES (gen_random_uuid(), ${kind}::rate_lab_run_kind, ${status}::rate_lab_run_status,
+          '{}', '{}', 1, ${kind === "ONE_OFF" ? "{}" : null}::jsonb)`;
+    await insert("SUITE", "QUEUED");
+    await expect(insert("SUITE", "RUNNING")).rejects.toThrow(/rate_lab_runs_one_active_suite/);
+    await expect(insert("ONE_OFF", "RUNNING")).resolves.toBe(1);
+  });
+
+  it("replays the same key without a second run", async () => {
+    const { providers } = await fakes();
+    await address("A");
+    await parcel("P");
+    const { lab } = await people();
+    const input = { idempotencyKey: idempotencyKey(), selection: all };
+    const first = await startLabRun(db, lab, input, { providers });
+    const second = await startLabRun(db, lab, input, { providers });
+    expect(second.id).toBe(first.id);
+    expect(await db.rateLabRun.count()).toBe(1);
+  });
+});
+
+describe("the rateLab.run job", () => {
+  it("logs a 3 × 2 run as 6 lab fetches with only enabled services, counts them and locks what it quoted (SC 6)", async () => {
+    const { providers, sent } = await fakes();
+    const addresses = [await address("A"), await address("B"), await address("C")];
+    const parcels = [await parcel("P"), await parcel("Q")];
+    const { run } = await started(providers);
+
+    expect(await runLabRun(db, providers, { runId: run.id })).toEqual({ status: "SUCCEEDED" });
+
+    const fetches = await db.rateFetch.findMany({ include: { quotes: true } });
+    expect(fetches).toHaveLength(6);
+    for (const fetch of fetches) {
+      expect(fetch).toMatchObject({ source: "LAB", trigger: "LAB_RUN", labRunId: run.id });
+      // One domestic service on per provider.
+      expect(fetch.quotes.map((q) => q.serviceCode).sort()).toEqual(["GND", "demo_ground"]);
+      expect(fetch.quotes.every((q) => q.fake)).toBe(true);
+    }
+    const pairs = fetches.map((f) => `${f.labAddressId}/${f.labParcelId}`).sort();
+    expect(pairs).toEqual(addresses.flatMap((a) => parcels.map((p) => `${a.id}/${p.id}`)).sort());
+    // Every request was a quick one, with the enabled domestic services only.
+    expect(sent.every((r) => r.quick === true)).toBe(true);
+    expect(new Set(sent.flatMap((r) => r.services.map((s) => s.code)))).toEqual(
+      new Set(["demo_ground", "GND"]),
+    );
+
+    const done = await db.rateLabRun.findUniqueOrThrow({ where: { id: run.id } });
+    expect(done).toMatchObject({
+      status: "SUCCEEDED",
+      combinations: 6,
+      completedCombinations: 6,
+      quoteCount: 12,
+      failureCount: 0,
+      fake: true,
+      error: null,
+    });
+    expect(done.startedAt).not.toBeNull();
+    expect(done.finishedAt).not.toBeNull();
+    expect(await db.rateLabAddress.count({ where: { lockedAt: null } })).toBe(0);
+    expect(await db.rateLabParcel.count({ where: { lockedAt: null } })).toBe(0);
+  });
+
+  it("ends partial when one provider times out, with the failures counted (SC 7)", async () => {
+    const { providers, shipStation } = await fakes();
+    await address("A");
+    await parcel("P");
+    await parcel("Q");
+    shipStation.failNext("timeout", 2);
+    const { run } = await started(providers);
+    expect(await runLabRun(db, providers, { runId: run.id })).toEqual({ status: "PARTIAL" });
+    expect(await db.rateLabRun.findUniqueOrThrow({ where: { id: run.id } })).toMatchObject({
+      status: "PARTIAL",
+      completedCombinations: 2,
+      quoteCount: 2,
+      failureCount: 2,
+    });
+    const errors = (await db.rateFetch.findMany()).map((f) => f.providerErrors);
+    expect(errors).toEqual([
+      [expect.objectContaining({ provider: "SHIPSTATION" })],
+      [expect.objectContaining({ provider: "SHIPSTATION" })],
+    ]);
+  });
+
+  it("ends failed when no provider quotes anything (SC 7)", async () => {
+    const { providers, shipStation, bridge } = await fakes();
+    await address("A");
+    await parcel("P");
+    shipStation.failNext(500);
+    bridge.failNext(500);
+    const { run } = await started(providers);
+    expect(await runLabRun(db, providers, { runId: run.id })).toEqual({ status: "FAILED" });
+    expect(await db.rateLabRun.findUniqueOrThrow({ where: { id: run.id } })).toMatchObject({
+      status: "FAILED",
+      quoteCount: 0,
+      failureCount: 2,
+      error: "errors.rateLab.noQuotes",
+    });
+    expect(await db.rateFetch.count()).toBe(1);
+  });
+
+  it("logs an international parcel without contents as customs-incomplete and asks no provider (SC 8)", async () => {
+    const { providers, shipStation, bridge } = await fakes();
+    await address("Toronto", { country: "CA" });
+    await parcel("Empty");
+    const { run } = await started(providers);
+    expect(await runLabRun(db, providers, { runId: run.id })).toEqual({ status: "FAILED" });
+    expect(shipStation.requests).toEqual([]);
+    expect(bridge.requests).toEqual([]);
+    const fetch = await db.rateFetch.findFirstOrThrow();
+    expect(fetch).toMatchObject({ international: true, labRunId: run.id });
+    expect(fetch.providerErrors).toEqual([
+      expect.objectContaining({ provider: null, messageKey: "errors.shipping.customsIncomplete" }),
+    ]);
+    expect(await db.rateLabRun.findUniqueOrThrow({ where: { id: run.id } })).toMatchObject({
+      completedCombinations: 1,
+      failureCount: 1,
+    });
+  });
+
+  it("logs incomplete customs data the same way, naming the product (SC 8)", async () => {
+    const { providers, shipStation } = await fakes();
+    const soap = await product("Soap");
+    await address("Toronto", { country: "CA" });
+    await parcel("Soap box", { items: [{ productId: soap.id, quantity: 2 }] });
+    const { run } = await started(providers);
+    await runLabRun(db, providers, { runId: run.id });
+    expect(shipStation.requests).toEqual([]);
+    const fetch = await db.rateFetch.findFirstOrThrow();
+    expect(fetch.providerErrors).toEqual([
+      expect.objectContaining({
+        messageKey: "errors.shipping.customsIncomplete",
+        params: { products: "Soap" },
+      }),
+    ]);
+  });
+
+  it("declares an international parcel's contents with buildCustoms (SC 8)", async () => {
+    const { providers, sent } = await fakes();
+    const soap = await product("Soap", { hsCode: "340111", countryOfOrigin: "US" });
+    await address("Toronto", { country: "CA" });
+    await parcel("Soap box", { items: [{ productId: soap.id, quantity: 2 }] });
+    const { run } = await started(providers);
+    expect(await runLabRun(db, providers, { runId: run.id })).toEqual({ status: "SUCCEEDED" });
+    expect(sent.length).toBeGreaterThan(0);
+    for (const request of sent) {
+      expect(request.customs?.items).toEqual([
+        expect.objectContaining({
+          sku: "SOAP",
+          quantity: 2,
+          valueCents: 3000,
+          hsCode: "340111",
+          countryOfOrigin: "US",
+        }),
+      ]);
+      expect(request.items).toEqual([{ sku: "SOAP", name: "Soap", quantity: 2 }]);
+      expect(request.services.map((s) => s.code)).toEqual(
+        expect.arrayContaining([expect.stringMatching(/INTL|intl/)]),
+      );
+    }
+    const quotes = await db.rateQuote.findMany();
+    expect(quotes.map((q) => q.serviceCode).sort()).toEqual(["EXPINTL", "demo_express_intl"]);
+  });
+
+  it("never buys a label (SC 9)", async () => {
+    const { providers, shipStation, bridge } = await fakes();
+    await address("A");
+    await address("Toronto", { country: "CA" });
+    await parcel("P");
+    const { run } = await started(providers);
+    await runLabRun(db, providers, { runId: run.id });
+    expect(shipStation.purchaseLabel).not.toHaveBeenCalled();
+    expect(bridge.purchaseLabel).not.toHaveBeenCalled();
+    expect(await db.shippingLabel.count()).toBe(0);
+  });
+
+  it("runs only items still active, and leaves a run that isn't queued alone", async () => {
+    const { providers } = await fakes();
+    await address("A");
+    const retiring = await address("B");
+    await parcel("P");
+    const { run } = await started(providers);
+    await db.rateLabAddress.update({
+      where: { id: retiring.id },
+      data: { archivedAt: new Date() },
+    });
+    await runLabRun(db, providers, { runId: run.id });
+    expect(await db.rateLabRun.findUniqueOrThrow({ where: { id: run.id } })).toMatchObject({
+      combinations: 1,
+      completedCombinations: 1,
+    });
+    expect(await runLabRun(db, providers, { runId: run.id })).toEqual({ status: "skipped" });
+    expect(await db.rateFetch.count()).toBe(1);
+  });
+});
+
+describe("listLabRuns", () => {
+  it("lists suite runs newest first with who started them and the groups picked, paged", async () => {
+    const { providers } = await fakes();
+    const { admin, lab, shipper } = await people();
+    const west = await createLabGroup(db, admin, {
+      idempotencyKey: idempotencyKey(),
+      kind: "ADDRESS",
+      name: "West",
+    });
+    const a = await address("A");
+    await db.rateLabAddressGroup.create({ data: { addressId: a.id, groupId: west.id } });
+    const p = await parcel("P");
+    const first = await startLabRun(
+      db,
+      lab,
+      { idempotencyKey: idempotencyKey(), selection: all },
+      { providers },
+    );
+    await runLabRun(db, providers, { runId: first.id });
+    const second = await startLabRun(
+      db,
+      lab,
+      {
+        idempotencyKey: idempotencyKey(),
+        selection: { ...all, addressGroupIds: [west.id], parcelIds: [p.id] },
+      },
+      { providers },
+    );
+
+    const page = await listLabRuns(db, lab, { limit: 1 });
+    expect(page.rows).toEqual([
+      expect.objectContaining({
+        id: second.id,
+        status: "QUEUED",
+        startedBy: { id: lab.userId, name: expect.any(String) },
+        addresses: { groups: [{ id: west.id, name: "West", archived: false }], items: 0 },
+        parcels: { groups: [], items: 1 },
+      }),
+    ]);
+    const next = await listLabRuns(db, lab, { cursor: page.nextCursor ?? undefined });
+    expect(next.rows.map((r) => [r.id, r.status, r.quoteCount])).toEqual([
+      [first.id, "SUCCEEDED", 2],
+    ]);
+    expect(next.nextCursor).toBeNull();
+
+    await expect(listLabRuns(db, shipper, {})).rejects.toMatchObject({ kind: "FORBIDDEN" });
+  });
+});

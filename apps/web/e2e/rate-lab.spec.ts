@@ -1,7 +1,10 @@
 import { expect, type Page, test } from "@playwright/test";
+import { createFakeShippingProvider, runLabRun } from "@woolrus/core";
 import { createDb } from "@woolrus/db";
 import { signInAs, signInAsUser } from "./support/auth";
 import { openNav } from "./support/nav";
+import { demoService } from "./support/qa";
+import { ensureShipFrom } from "./support/rates";
 import { withSettingsLock } from "./support/settings-lock";
 import { findUserRow } from "./support/users";
 
@@ -229,4 +232,125 @@ test("a Rate Lab user adds a parcel from a box with contents and one with a type
   await db.box.update({ where: { id: box.id }, data: { lengthIn: 14 } });
   await page.reload();
   await expect(jar).toContainText("12 × 10 × 8");
+});
+
+test("a Rate Lab user starts a run on the fakes, sees progress and sees it finish", async ({
+  page,
+}, info) => {
+  desktopOnly(info.project.name);
+  test.setTimeout(120_000);
+  const value = (title: string) => ({
+    name: title,
+    address1: "1 Main St",
+    city: "Denver",
+    state: "CO",
+    postalCode: "80202",
+    country: "US",
+  });
+  const addressGroup = await db.rateLabGroup.create({
+    data: { kind: "ADDRESS", name: `${prefix} Run addresses` },
+  });
+  const parcelGroup = await db.rateLabGroup.create({
+    data: { kind: "PARCEL", name: `${prefix} Run parcels` },
+  });
+  for (const title of [`${prefix} Run A`, `${prefix} Run B`]) {
+    await db.rateLabAddress.create({
+      data: {
+        title,
+        original: value(title),
+        address: value(title),
+        residential: true,
+        checkStatus: "VERIFIED",
+        groups: { create: { groupId: addressGroup.id } },
+      },
+    });
+  }
+  await db.rateLabParcel.create({
+    data: {
+      title: `${prefix} Run parcel`,
+      lengthIn: 10,
+      widthIn: 8,
+      heightIn: 4,
+      weightOz: 20,
+      groups: { create: { groupId: parcelGroup.id } },
+    },
+  });
+  const runIds: string[] = [];
+
+  await withSettingsLock(async () => {
+    await ensureShipFrom();
+    const { carrier, service, created } = await demoService();
+    const before = await db.shippingProviderAccount.findUnique({
+      where: { provider: "SHIPSTATION" },
+    });
+    await db.shippingCarrier.update({ where: { id: carrier.id }, data: { enabled: true } });
+    await db.carrierService.update({ where: { id: service.id }, data: { enabled: true } });
+    const admin = await (await page.context().browser()?.newContext())?.newPage();
+    if (!admin) throw new Error("no browser");
+    try {
+      await signInAs(admin, ["ADMIN"]);
+      await ok(
+        admin.request.put(`${api}/providers/SHIPSTATION/credentials`, {
+          data: { credentials: { apiKey: "e2e-rate-lab" } },
+        }),
+      );
+      await ok(
+        admin.request.post(`${api}/providers/SHIPSTATION/enabled`, { data: { enabled: true } }),
+      );
+
+      await signInAs(page, ["QA", "RATE_LAB"]);
+      await page.goto("/rate-lab/runs");
+      await page.getByRole("button", { name: "New run" }).click();
+      const dialog = page.getByRole("dialog", { name: "New run" });
+      await dialog.getByText(`${prefix} Run addresses`).click();
+      await dialog.getByText(`${prefix} Run parcels`).click();
+      await expect(dialog.getByTestId("lab-run-count")).toHaveText(
+        "2 addresses × 1 parcel = 2 combinations",
+      );
+      await dialog.getByRole("button", { name: "Start run" }).click();
+      await expect(dialog).toBeHidden();
+
+      const row = page.getByTestId("lab-run-row").first();
+      await expect(row).toContainText("Queued");
+      await expect(row).toContainText(`${prefix} Run addresses`);
+      const run = await db.rateLabRun.findFirstOrThrow({
+        where: { kind: "SUITE", status: "QUEUED" },
+        orderBy: { createdAt: "desc" },
+      });
+      runIds.push(run.id);
+
+      // CI starts no worker: the job runs here, against a slow fake so its progress shows.
+      const job = runLabRun(db, [createFakeShippingProvider("SHIPSTATION", { latencyMs: 6_000 })], {
+        runId: run.id,
+      });
+      await expect(row).toContainText("Running", { timeout: 15_000 });
+      await expect(row.getByRole("progressbar", { name: "Combinations quoted" })).toBeVisible();
+      expect(await job).toEqual({ status: "SUCCEEDED" });
+      await expect(row).toContainText("Succeeded", { timeout: 15_000 });
+      await expect(row).toContainText("Fake");
+    } finally {
+      await db.$executeRaw`DELETE FROM pgboss.job WHERE name = 'rateLab.run'
+        AND data->>'runId' = ANY(${runIds})`;
+      await db.rateLabRun.deleteMany({ where: { id: { in: runIds } } });
+      await admin.request.delete(`${api}/providers/SHIPSTATION/credentials`);
+      await db.shippingProviderAccount.updateMany({
+        where: { provider: "SHIPSTATION" },
+        data: { enabled: before?.enabled ?? false },
+      });
+      if (created) {
+        await db.carrierService.deleteMany({ where: { carrierId: carrier.id } });
+        await db.shippingCarrier.deleteMany({ where: { id: carrier.id } });
+      } else {
+        await db.shippingCarrier.update({
+          where: { id: carrier.id },
+          data: { enabled: carrier.enabled },
+        });
+        await db.carrierService.update({
+          where: { id: service.id },
+          data: { enabled: service.enabled },
+        });
+      }
+      await admin.context().close();
+    }
+  });
 });

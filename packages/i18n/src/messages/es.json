@@ -1355,7 +1355,13 @@
       "boxOrSize": "Elige una caja o escribe un tamaño, no ambos.",
       "boxInvalid": "Elige una caja que exista y no esté archivada.",
       "itemNotPhysical": "El contenido solo puede ser productos físicos del catálogo.",
-      "itemDuplicate": "Cada producto puede aparecer una vez; cambia su cantidad."
+      "itemDuplicate": "Cada producto puede aparecer una vez; cambia su cantidad.",
+      "emptySelection": "Elige al menos una dirección y un paquete que no estén archivados.",
+      "overCap": "{combinations} combinaciones supera el límite de {cap}. Elige menos direcciones o paquetes, o sube el límite en Configuración.",
+      "noProviders": "No hay ningún proveedor de envío activado. Activa uno en Configuración → Envíos primero.",
+      "runActive": "Ya hay otra prueba en cola o en curso. Espera a que termine.",
+      "noQuotes": "Ningún proveedor devolvió una cotización para ninguna combinación.",
+      "runFailed": "La prueba se detuvo por un error inesperado."
     }
   },
   "emails": {
@@ -1809,6 +1815,43 @@
         "purchased": "Comprada el",
         "quotes": "Cotizaciones"
       }
+    },
+    "runs": {
+      "title": "Pruebas",
+      "newRun": "Nueva prueba",
+      "empty": "Aún no hay pruebas. Pulsa Nueva prueba para cotizar tus direcciones de prueba con tus paquetes de prueba.",
+      "startedAt": "Inicio",
+      "startedBy": "Iniciada por",
+      "duration": "Duración",
+      "status": "Estado",
+      "combinations": "Combinaciones",
+      "quotes": "Cotizaciones",
+      "failures": "Fallos",
+      "groups": "Grupos",
+      "status_QUEUED": "En cola",
+      "status_RUNNING": "En curso",
+      "status_SUCCEEDED": "Completada",
+      "status_PARTIAL": "Parcial",
+      "status_FAILED": "Fallida",
+      "status_CANCELLED": "Cancelada",
+      "fake": "Simulada",
+      "progress": "{done} / {total}",
+      "progressLabel": "Combinaciones cotizadas",
+      "addresses": "Direcciones",
+      "parcels": "Paquetes",
+      "allAddresses": "Todas las direcciones",
+      "allParcels": "Todos los paquetes",
+      "picked": "{count, plural, one {# elegida} other {# elegidas}}",
+      "loadMore": "Cargar más",
+      "allHint": "Elige grupos o elementos de cada lado. Si no eliges nada en un lado, se usa todo.",
+      "addressGroups": "Grupos de direcciones",
+      "parcelGroups": "Grupos de paquetes",
+      "none": "Aún no hay ninguno.",
+      "count": "{addresses, plural, one {# dirección} other {# direcciones}} × {parcels, plural, one {# paquete} other {# paquetes}} = {combinations, plural, one {# combinación} other {# combinaciones}}",
+      "counting": "Contando…",
+      "overCap": "Supera el límite de {cap} combinaciones fijado en Configuración.",
+      "cancel": "Cancelar",
+      "start": "Iniciar prueba"
     }
   },
   "charts": {

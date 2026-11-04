@@ -212,7 +212,8 @@ fetch for it.
    empty); same for parcels. Zero on either side → `errors.rateLab.emptySelection`.
 2. `combinations = addresses × parcels`. Over `Settings.rateLabMaxCombinations` → `errors.rateLab.overCap
    { combinations, cap }`, nothing created.
-3. No enabled provider → `errors.rateLab.noProviders`. Ship-from not set → `errors.settings.shipFromMissing`.
+3. No enabled provider → `errors.rateLab.noProviders`. Ship-from not set → `errors.carriers.noShipFrom` (the rate
+   fetch's key).
 4. Insert the run (`QUEUED`, ship-from snapshot) and enqueue `rateLab.run { runId }` in the same transaction. The
    one-active-run index turns a second start into `errors.rateLab.runActive`. Audited.
 
@@ -228,7 +229,8 @@ each one:
   selection as `rates.fetch` (decision 3).
 - International with no contents or incomplete customs → logged as a failed combination with
   `errors.shipping.customsIncomplete`, no provider called.
-- Call each enabled provider's `getRates` in parallel within `PROVIDER_TIMEOUT_MS`; never retry inside a run.
+- Call each enabled provider's `getRates` in parallel within `PROVIDER_TIMEOUT_MS`, as quick quotes (open question
+  1); never retry inside a run.
 - `logRateFetch` (source `LAB`, the run, address and parcel ids, lane, parcel, quotes, errors, fake flags), then
   increment `completedCombinations`, `quoteCount` and `failureCount` (a combination counts as one failure per
   provider that errored), and bump `heartbeatAt`.
@@ -439,7 +441,10 @@ fakes with slightly drifting prices, so Trends has lines in dev.
 
 ## Open questions
 
-1. **ShipStation shipments from quotes:** ShipStation v2's `POST /v2/rates` with an inline shipment may create a
-   shipment record in the ShipStation account. If so, every lab combination leaves one there. To check against the
-   v2 reference when the job ticket is built. If it does, we either accept it (they're never labelled) or pass a
-   flag that avoids it, if the API has one.
+1. ~~**ShipStation shipments from quotes:**~~ Answered (2026-11-03, #148): yes. ShipStation v2's `POST /v2/rates`
+   with an inline shipment creates a pending shipment record per call, so every lab combination would leave one in
+   the account. **Decision (user):** Rate Lab asks for Quick Rates (`rate_options.rate_type: "quick"`), which store
+   nothing and still quote international shipments with customs; their rates have no rate id and can't be bought,
+   which Rate Lab never does. `RateRequest.quick` carries it; the ShipStation adapter maps it, Bridge Source has no
+   equivalent and needs none, and order rates are unchanged. (`/v2/rates/estimate` was ruled out: it can't filter by
+   service code.)
