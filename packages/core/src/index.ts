@@ -70,6 +70,7 @@ export * from "./qa/verify";
 export * from "./rate-history/log";
 export * from "./rate-lab/catalog";
 export * from "./rate-lab/parcels";
+export * from "./rate-lab/runs";
 export * from "./settings/crypto";
 export { encryptionKey } from "./settings/env";
 export * from "./settings/format";

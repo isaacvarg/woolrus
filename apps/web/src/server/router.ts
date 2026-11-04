@@ -58,6 +58,7 @@ import {
   listLabGroups,
   listLabParcelProducts,
   listLabParcels,
+  listLabRuns,
   listNotes,
   listOrders,
   listPriorityRules,
@@ -81,6 +82,7 @@ import {
   packUnits,
   permissionsFor,
   pickLine,
+  previewLabRun,
   pushErrors,
   queueCounts,
   reactivateUser,
@@ -125,6 +127,7 @@ import {
   setVerified,
   setWeight,
   shipOrders,
+  startLabRun,
   stationStatus,
   stuckLabels,
   substitute,
@@ -669,6 +672,13 @@ export const router = implementer.router({
     archiveGroup: api.rateLab.archiveGroup.handler(({ input, context }) =>
       archiveLabGroup(db, context.actor, input),
     ),
+    previewRun: api.rateLab.previewRun.handler(({ input, context }) =>
+      previewLabRun(db, context.actor, input),
+    ),
+    startRun: api.rateLab.startRun.handler(async ({ input, context }) =>
+      startLabRun(db, context.actor, input, { providers: await createShippingProviders(db) }),
+    ),
+    runs: api.rateLab.runs.handler(({ input, context }) => listLabRuns(db, context.actor, input)),
   },
 });
 

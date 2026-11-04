@@ -17,6 +17,7 @@ import {
   recordWorkerHeartbeat,
   runEmailJob,
   runLabelsPurchaseJob,
+  runLabRunJob,
   runRatesFetchJob,
   runStorageDeleteJob,
   runWooPushJob,
@@ -244,6 +245,16 @@ await boss.work(
   { ...META, localConcurrency: 2 },
   runJob<JobPayloads[typeof queues.wooPush]>(queues.wooPush, async (job) => ({
     ...(await runWooPushJob(db, job.data, { finalAttempt: isFinalAttempt(job) })),
+  })),
+);
+
+// Rate Lab suite runs (SPEC-rate-lab "Runs"): one at a time (the database allows one active run),
+// never retried; the job works through its combinations three at a time itself.
+await boss.work(
+  queues.rateLabRun,
+  META,
+  runJob<JobPayloads[typeof queues.rateLabRun]>(queues.rateLabRun, async (job) => ({
+    ...(await runLabRunJob(db, job.data)),
   })),
 );
 
