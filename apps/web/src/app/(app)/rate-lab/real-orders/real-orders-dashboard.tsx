@@ -18,10 +18,16 @@ import {
 } from "recharts";
 import { money } from "@/app/(app)/qa/[orderId]/money";
 import { ChartFigure } from "@/components/charts/chart-figure";
-import { type ChartColors, seriesColor, useChartColors } from "@/components/charts/theme";
+import {
+  type ChartColors,
+  seriesColor,
+  useChartAnimation,
+  useChartColors,
+} from "@/components/charts/theme";
 import { Checkbox, SelectField, TextField } from "@/components/ui/fields";
 import { useErrorMessage } from "@/lib/errors";
 import { orpc } from "@/lib/orpc";
+import { ReportLink, reportQuery } from "../report-link";
 
 const ALL = "all";
 /** The lane chart draws this many lanes, the busiest; its table lists every one. */
@@ -30,7 +36,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 const day = (at: Date) => at.toISOString().slice(0, 10);
 
-type Filters = {
+export type Filters = {
   from: string;
   to: string;
   carrierId: string;
@@ -41,7 +47,7 @@ type Filters = {
   includeFake: boolean;
 };
 
-function initialFilters(): Filters {
+export function initialFilters(): Filters {
   const today = new Date();
   return {
     from: day(new Date(today.getTime() - 29 * DAY_MS)),
@@ -57,7 +63,7 @@ function initialFilters(): Filters {
 
 const chosen = (value: string) => (value === ALL ? undefined : value);
 
-function toInput(f: Filters): RealOrdersInput {
+export function toInput(f: Filters): RealOrdersInput {
   return {
     from: f.from || undefined,
     to: f.to || undefined,
@@ -162,9 +168,14 @@ export function RealOrdersDashboard() {
         <Checkbox isSelected={filters.includeFake} onChange={(v) => set("includeFake", v)}>
           {t("includeFake")}
         </Checkbox>
-        <a className="btn btn-outline ms-auto" href={exportHref(filters)} download>
-          {t("exportCsv")}
-        </a>
+        <div className="ms-auto flex flex-wrap gap-2">
+          <a className="btn btn-outline" href={exportHref(filters)} download>
+            {t("exportCsv")}
+          </a>
+          <ReportLink
+            href={`/rate-lab/real-orders/report?${reportQuery({ ...toInput(filters) })}`}
+          />
+        </div>
       </div>
 
       {query.isPending && <p>{t("loading")}</p>}
@@ -183,45 +194,23 @@ export function RealOrdersDashboard() {
   );
 }
 
-function Dashboard({ data }: { data: RealOrders }) {
-  const t = useTranslations("rateLab.realOrders");
+/** Money and share formatters the dashboard and its report share. */
+export function useFigures() {
   const format = useFormatter();
+  return {
+    cents: (value: number) => money(format, value),
+    percent: (part: number, whole: number) =>
+      format.number(whole === 0 ? 0 : part / whole, { style: "percent", maximumFractionDigits: 1 }),
+  };
+}
+
+function Dashboard({ data }: { data: RealOrders }) {
   const colors = useChartColors();
-  const cents = (value: number) => money(format, value);
-  const percent = (part: number, whole: number) =>
-    format.number(whole === 0 ? 0 : part / whole, { style: "percent", maximumFractionDigits: 1 });
-  const { choice, costVsCharged } = data;
+  const { cents, percent } = useFigures();
 
   return (
     <>
-      <section
-        aria-label={t("summary")}
-        className="stats stats-vertical w-full bg-base-100 shadow-sm lg:stats-horizontal"
-      >
-        <Tile title={t("tiles.packages")} value={format.number(choice.packages)} />
-        <Tile
-          title={t("tiles.onCheapest")}
-          value={percent(choice.onCheapest, choice.packages)}
-          desc={t("tiles.ofPackages", { count: choice.onCheapest })}
-        />
-        <Tile
-          title={t("tiles.notCheapest")}
-          value={percent(choice.notCheapest, choice.packages)}
-          desc={t("tiles.ofPackages", { count: choice.notCheapest })}
-        />
-        <Tile title={t("tiles.overspend")} value={cents(choice.overspendCents)} />
-        <Tile
-          title={t("tiles.costVsCharged")}
-          value={cents(costVsCharged.costCents)}
-          desc={t("tiles.charged", { charged: cents(costVsCharged.chargedCents) })}
-        />
-        <Tile
-          title={t("tiles.ordersOver")}
-          value={format.number(costVsCharged.overCount)}
-          desc={t("tiles.ofOrders", { orders: costVsCharged.orders })}
-        />
-      </section>
-
+      <Summary data={data} />
       <div className="grid gap-4 lg:grid-cols-2">
         <ReasonChart data={data} colors={colors} cents={cents} />
         <CarrierChart data={data} colors={colors} cents={cents} percent={percent} />
@@ -231,6 +220,44 @@ function Dashboard({ data }: { data: RealOrders }) {
       <OverTable data={data} cents={cents} />
       <Alternatives data={data} cents={cents} />
     </>
+  );
+}
+
+/** The headline numbers. */
+export function Summary({ data, narrow = false }: { data: RealOrders; narrow?: boolean }) {
+  const t = useTranslations("rateLab.realOrders");
+  const format = useFormatter();
+  const { cents, percent } = useFigures();
+  const { choice, costVsCharged } = data;
+
+  return (
+    <section
+      aria-label={t("summary")}
+      className={`stats w-full bg-base-100 shadow-sm ${narrow ? "stats-vertical grid-cols-3" : "stats-vertical lg:stats-horizontal"}`}
+    >
+      <Tile title={t("tiles.packages")} value={format.number(choice.packages)} />
+      <Tile
+        title={t("tiles.onCheapest")}
+        value={percent(choice.onCheapest, choice.packages)}
+        desc={t("tiles.ofPackages", { count: choice.onCheapest })}
+      />
+      <Tile
+        title={t("tiles.notCheapest")}
+        value={percent(choice.notCheapest, choice.packages)}
+        desc={t("tiles.ofPackages", { count: choice.notCheapest })}
+      />
+      <Tile title={t("tiles.overspend")} value={cents(choice.overspendCents)} />
+      <Tile
+        title={t("tiles.costVsCharged")}
+        value={cents(costVsCharged.costCents)}
+        desc={t("tiles.charged", { charged: cents(costVsCharged.chargedCents) })}
+      />
+      <Tile
+        title={t("tiles.ordersOver")}
+        value={format.number(costVsCharged.overCount)}
+        desc={t("tiles.ofOrders", { orders: costVsCharged.orders })}
+      />
+    </section>
   );
 }
 
@@ -244,7 +271,7 @@ function Tile({ title, value, desc }: { title: string; value: string; desc?: str
   );
 }
 
-type Cents = (value: number) => string;
+export type Cents = (value: number) => string;
 
 /** Shared axis, grid and tooltip styling, in the theme's colours. */
 function axes(colors: ChartColors, cents?: Cents) {
@@ -261,7 +288,7 @@ function axes(colors: ChartColors, cents?: Cents) {
   };
 }
 
-function ReasonChart({
+export function ReasonChart({
   data,
   colors,
   cents,
@@ -270,6 +297,7 @@ function ReasonChart({
   colors: ChartColors;
   cents: Cents;
 }) {
+  const animate = useChartAnimation();
   const t = useTranslations("rateLab.realOrders");
   const format = useFormatter();
   const rows = data.choice.byReason.map((r) => ({
@@ -289,6 +317,7 @@ function ReasonChart({
             <YAxis type="category" dataKey="name" tick={tick} width={140} />
             {tooltip}
             <Bar
+              isAnimationActive={animate}
               dataKey="overspendCents"
               name={t("columns.overspend")}
               fill={seriesColor(colors, 0)}
@@ -326,7 +355,7 @@ function ReasonChart({
   );
 }
 
-function CarrierChart({
+export function CarrierChart({
   data,
   colors,
   cents,
@@ -337,6 +366,7 @@ function CarrierChart({
   cents: Cents;
   percent: (part: number, whole: number) => string;
 }) {
+  const animate = useChartAnimation();
   const t = useTranslations("rateLab.realOrders");
   const format = useFormatter();
   const { grid, tooltip, tick } = axes(colors, cents);
@@ -351,7 +381,12 @@ function CarrierChart({
             <XAxis dataKey="name" tick={tick} />
             <YAxis tick={tick} width={88} tickFormatter={(v) => cents(Number(v))} />
             {tooltip}
-            <Bar dataKey="spendCents" name={t("columns.spend")} fill={seriesColor(colors, 1)} />
+            <Bar
+              isAnimationActive={animate}
+              dataKey="spendCents"
+              name={t("columns.spend")}
+              fill={seriesColor(colors, 1)}
+            />
           </BarChart>
         </ResponsiveContainer>
       }
@@ -382,7 +417,7 @@ function CarrierChart({
   );
 }
 
-function ServiceTable({
+export function ServiceTable({
   data,
   cents,
   percent,
@@ -424,7 +459,7 @@ function ServiceTable({
   );
 }
 
-function LaneChart({
+export function LaneChart({
   lanes,
   colors,
   cents,
@@ -433,6 +468,7 @@ function LaneChart({
   colors: ChartColors;
   cents: Cents;
 }) {
+  const animate = useChartAnimation();
   const t = useTranslations("rateLab.realOrders");
   const format = useFormatter();
   const totals = new Map<string, number>();
@@ -467,6 +503,7 @@ function LaneChart({
             <Legend wrapperStyle={{ color: colors.text }} />
             {charted.map((name, i) => (
               <Line
+                isAnimationActive={animate}
                 key={name}
                 type="monotone"
                 dataKey={name}

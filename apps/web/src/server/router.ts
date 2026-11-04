@@ -51,8 +51,10 @@ import {
   issueBadge,
   issueCounts,
   keepOriginalAddress,
+  labRunTrends,
   labTrendGrid,
   labTrendSeries,
+  labTrendsReport,
   linkBarcode,
   listBoxes,
   listFailedJobs,
@@ -710,6 +712,12 @@ export const router = implementer.router({
     run: api.rateLab.run.handler(({ input, context }) => getLabRun(db, context.actor, input)),
     cancelRun: api.rateLab.cancelRun.handler(({ input, context }) =>
       cancelLabRun(db, context.actor, input),
+    ),
+    runTrends: api.rateLab.runTrends.handler(({ input, context }) =>
+      labRunTrends(db, context.actor, input),
+    ),
+    trendsReport: api.rateLab.trendsReport.handler(({ input, context }) =>
+      labTrendsReport(db, context.actor, input),
     ),
   },
 });

@@ -1,6 +1,6 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
+import { createContext, useContext, useSyncExternalStore } from "react";
 
 // Chart colours come from daisyUI's CSS variables, so Recharts' SVG follows the light, dark and
 // contrast themes. The theme is `<html data-theme>`, or the system's colour scheme when unset.
@@ -57,3 +57,8 @@ export function useChartColors(): ChartColors {
 
 export const seriesColor = (colors: ChartColors, index: number) =>
   colors.series[index % colors.series.length] as string;
+
+/** Report pages turn chart animation off, so printing never catches a line half drawn. */
+export const ChartAnimation = createContext(true);
+
+export const useChartAnimation = () => useContext(ChartAnimation);

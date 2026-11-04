@@ -1978,6 +1978,28 @@
       "saveHint": "It's saved unlocked, as typed. Add groups and a description on its own tab.",
       "cancel": "Cancel",
       "save": "Save"
+    },
+    "report": {
+      "pdfReport": "PDF report",
+      "print": "Print or save as PDF",
+      "printHint": "Choose “Save as PDF” in the print dialog. A4 and Letter both fit.",
+      "loading": "Preparing the report…",
+      "printedAt": "Printed {at}",
+      "runTitle": "Rate Lab run report",
+      "insights": "Insights",
+      "trendsTitle": "Price trend per combination",
+      "trendsHint": "The cheapest price in each of the combination's last {count} suite runs, up to this run.",
+      "trendFigures": "{runs, plural, one {# run} other {# runs}}: latest {latest}, low {low}, high {high}",
+      "noTrends": "No saved address × parcel in this run has suite-run history.",
+      "trendsReportTitle": "Rate Lab trends report",
+      "filtersAll": "All addresses and parcels",
+      "filtersSome": "Filtered by groups, carriers or dates",
+      "charts": "Price per carrier service",
+      "omitted": "{count, plural, one {# more combination was} other {# more combinations were}} left out: the report charts the first {max}.",
+      "noCharts": "No combination in these filters has quotes.",
+      "realOrdersTitle": "Rate Lab real orders report",
+      "range": "{from} to {to}",
+      "realOrdersCharts": "Charts"
     }
   },
   "charts": {

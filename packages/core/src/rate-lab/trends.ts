@@ -1,4 +1,8 @@
 import {
+  LAB_RUN_TREND_RUNS,
+  LAB_TRENDS_REPORT_MAX,
+  type LabRunTrend,
+  LabRunTrendsInput,
   type LabTrendCell,
   type LabTrendGrid,
   LabTrendGridInput,
@@ -6,6 +10,7 @@ import {
   type LabTrendPrice,
   type LabTrendSeries,
   LabTrendSeriesInput,
+  type LabTrendsReport,
 } from "@woolrus/contracts";
 import { type DbTx, Prisma } from "@woolrus/db";
 import type { z } from "zod";
@@ -42,6 +47,8 @@ type Filters = {
   includeFake: boolean;
   /** Only each combination's newest this many runs. */
   latest?: number;
+  /** Only runs at or before this time. */
+  until?: Date;
 };
 
 /**
@@ -67,6 +74,7 @@ async function loadQuotes(db: DbTx, f: Filters): Promise<QuoteRow[]> {
         ${f.includeFake ? Prisma.empty : Prisma.sql`AND NOT f.fake`}
         ${f.from ? Prisma.sql`AND ${at} >= ${new Date(f.from)}` : Prisma.empty}
         ${f.to ? Prisma.sql`AND ${at} < ${new Date(Date.parse(f.to) + DAY_MS)}` : Prisma.empty}
+        ${f.until ? Prisma.sql`AND ${at} <= ${f.until}` : Prisma.empty}
         AND EXISTS (SELECT 1 FROM rate_quotes q WHERE q.fetch_id = f.id ${carriers})
     ), ranked AS (
       SELECT *, row_number() OVER (
@@ -115,6 +123,45 @@ function cheapest(quotes: QuoteRow[], carriers: Map<string, string>): LabTrendPr
     serviceName: best.serviceName,
     quoteOnly: best.quoteOnly,
   };
+}
+
+/** One combination's rows as a line per carrier service, a point per suite run. */
+function toSeries(
+  rows: QuoteRow[],
+  names: Map<string, string>,
+  address: LabTrendSeries["address"],
+  parcel: LabTrendSeries["parcel"],
+): LabTrendSeries {
+  const runs = [...groupBy(rows, (r) => r.runId).values()].map((quotes) => {
+    const first = quotes[0] as QuoteRow;
+    return { runId: first.runId, at: first.at };
+  });
+  const lines: LabTrendLine[] = [...groupBy(rows, (r) => r.serviceId)].map(
+    ([serviceId, quotes]) => {
+      const last = quotes.at(-1) as QuoteRow;
+      // One point per run: rows come cheapest first within a run, so its first quote wins.
+      const points = [...groupBy(quotes, (q) => q.runId).values()].map((perRun) => {
+        const q = perRun[0] as QuoteRow;
+        return {
+          runId: q.runId,
+          at: q.at,
+          amountCents: q.amountCents,
+          deliveryDays: q.deliveryDays,
+        };
+      });
+      return {
+        serviceId,
+        carrierName: names.get(last.carrierId) ?? "",
+        serviceName: last.serviceName,
+        points,
+      };
+    },
+  );
+  lines.sort(
+    (a, b) =>
+      a.carrierName.localeCompare(b.carrierName) || a.serviceName.localeCompare(b.serviceName),
+  );
+  return { address, parcel, runs, lines };
 }
 
 const groupFilter = (groupIds: string[]) =>
@@ -216,39 +263,90 @@ export async function labTrendSeries(
   });
   const names = await carrierNames(db, rows);
 
-  const runs = [...groupBy(rows, (r) => r.runId).values()].map((quotes) => {
-    const first = quotes[0] as QuoteRow;
-    return { runId: first.runId, at: first.at };
-  });
-  const lines: LabTrendLine[] = [...groupBy(rows, (r) => r.serviceId)].map(
-    ([serviceId, quotes]) => {
-      const last = quotes.at(-1) as QuoteRow;
-      // One point per run: rows come cheapest first within a run, so its first quote wins.
-      const points = [...groupBy(quotes, (q) => q.runId).values()].map((perRun) => {
-        const q = perRun[0] as QuoteRow;
-        return {
-          runId: q.runId,
-          at: q.at,
-          amountCents: q.amountCents,
-          deliveryDays: q.deliveryDays,
-        };
-      });
-      return {
-        serviceId,
-        carrierName: names.get(last.carrierId) ?? "",
-        serviceName: last.serviceName,
-        points,
-      };
-    },
-  );
-  lines.sort(
-    (a, b) =>
-      a.carrierName.localeCompare(b.carrierName) || a.serviceName.localeCompare(b.serviceName),
-  );
   const titled = (row: typeof address) => ({
     id: row.id,
     title: row.title,
     archived: row.archivedAt !== null,
   });
-  return { address: titled(address), parcel: titled(parcel), runs, lines };
+  return toSeries(rows, names, titled(address), titled(parcel));
+}
+
+/**
+ * The run report's small charts (`ratelab.use`): each saved address × parcel of the run, with its
+ * cheapest price in each of its last LAB_RUN_TREND_RUNS suite runs up to this run's time.
+ */
+export async function labRunTrends(
+  db: DbTx,
+  actor: Actor,
+  input: z.input<typeof LabRunTrendsInput>,
+): Promise<LabRunTrend[]> {
+  assertCan(actor, "ratelab.use");
+  const parsed = LabRunTrendsInput.safeParse(input);
+  if (!parsed.success) throw notFound();
+  const run = await db.rateLabRun.findUnique({
+    where: { id: parsed.data.id },
+    select: { startedAt: true, createdAt: true, fake: true },
+  });
+  if (!run) throw notFound();
+  const fetches = await db.rateFetch.findMany({
+    where: { labRunId: parsed.data.id, labAddressId: { not: null }, labParcelId: { not: null } },
+    select: { labAddressId: true, labParcelId: true },
+  });
+  const keys = new Set(fetches.map((f) => `${f.labAddressId}|${f.labParcelId}`));
+  const rows = (
+    await loadQuotes(db, {
+      addressIds: [...new Set(fetches.map((f) => f.labAddressId as string))],
+      parcelIds: [...new Set(fetches.map((f) => f.labParcelId as string))],
+      carrierIds: [],
+      // A fake run's report charts its own (fake) prices.
+      includeFake: run.fake,
+      latest: LAB_RUN_TREND_RUNS,
+      until: run.startedAt ?? run.createdAt,
+    })
+  ).filter((r) => keys.has(`${r.addressId}|${r.parcelId}`));
+  const names = await carrierNames(db, rows);
+
+  const trends = new Map<string, LabTrendPrice[]>();
+  for (const quotes of groupBy(rows, (r) => r.fetchId).values()) {
+    const first = quotes[0] as QuoteRow;
+    const key = `${first.addressId}:${first.parcelId}`;
+    trends.set(key, [...(trends.get(key) ?? []), cheapest(quotes, names)]);
+  }
+  return [...trends].map(([key, prices]) => ({ key, prices }));
+}
+
+/**
+ * The Trends report (`ratelab.use`): the heatmap for these filters, and the series of each
+ * combination with data, in grid order, up to LAB_TRENDS_REPORT_MAX.
+ */
+export async function labTrendsReport(
+  db: DbTx,
+  actor: Actor,
+  input: z.input<typeof LabTrendGridInput>,
+): Promise<LabTrendsReport> {
+  const grid = await labTrendGrid(db, actor, input);
+  const filters = LabTrendGridInput.parse(input);
+  const withData = grid.cells.filter((c) => c.latest);
+  const charted = withData.slice(0, LAB_TRENDS_REPORT_MAX);
+  const rows = await loadQuotes(db, {
+    ...filters,
+    addressIds: [...new Set(charted.map((c) => c.addressId))],
+    parcelIds: [...new Set(charted.map((c) => c.parcelId))],
+  });
+  const names = await carrierNames(db, rows);
+  const byCombination = groupBy(rows, (r) => `${r.addressId}|${r.parcelId}`);
+  const titled = (list: { id: string; title: string }[]) =>
+    new Map(list.map((x) => [x.id, { ...x, archived: false }]));
+  // The grid lists active addresses and parcels only.
+  const addresses = titled(grid.addresses);
+  const parcels = titled(grid.parcels);
+  const series = charted.map((c) =>
+    toSeries(
+      byCombination.get(`${c.addressId}|${c.parcelId}`) ?? [],
+      names,
+      addresses.get(c.addressId) as LabTrendSeries["address"],
+      parcels.get(c.parcelId) as LabTrendSeries["parcel"],
+    ),
+  );
+  return { grid, series, omitted: withData.length - charted.length };
 }

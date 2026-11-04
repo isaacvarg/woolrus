@@ -21,15 +21,16 @@ import {
 } from "recharts";
 import { money } from "@/app/(app)/qa/[orderId]/money";
 import { ChartFigure } from "@/components/charts/chart-figure";
-import { seriesColor, useChartColors } from "@/components/charts/theme";
+import { seriesColor, useChartAnimation, useChartColors } from "@/components/charts/theme";
 import { Button, Checkbox, TextField } from "@/components/ui/fields";
 import { useErrorMessage } from "@/lib/errors";
 import { orpc } from "@/lib/orpc";
+import { ReportLink, reportQuery } from "../report-link";
 
 /** A move this large either way gets the strong colour, as run insights flag it (PRICE_MOVE_PCT). */
 const BIG_MOVE = 0.1;
 
-type Filters = {
+export type Filters = {
   addressGroupIds: string[];
   parcelGroupIds: string[];
   carrierIds: string[];
@@ -40,7 +41,7 @@ type Filters = {
 
 type ListKey = "addressGroupIds" | "parcelGroupIds" | "carrierIds";
 
-const toInput = (f: Filters): LabTrendGridInput => ({
+export const toInput = (f: Filters): LabTrendGridInput => ({
   ...f,
   from: f.from || undefined,
   to: f.to || undefined,
@@ -137,6 +138,10 @@ export function TrendsView() {
           <Checkbox isSelected={filters.includeFake} onChange={(v) => set("includeFake", v)}>
             {t("includeFake")}
           </Checkbox>
+          <ReportLink
+            className="ms-auto"
+            href={`/rate-lab/trends/report?${reportQuery(filters)}`}
+          />
         </div>
       </div>
 
@@ -168,14 +173,15 @@ export function TrendsView() {
  * Addresses down the side, parcels across the top. A real table, so screen readers get the
  * headers with each cell; each cell's price and % are text, and its colour only repeats the %.
  */
-function Heatmap({
+export function Heatmap({
   grid,
-  picked,
+  picked = null,
   onPick,
 }: {
   grid: LabTrendGrid;
-  picked: Picked | null;
-  onPick: (picked: Picked) => void;
+  picked?: Picked | null;
+  /** Without it (the report) cells are text, not buttons. */
+  onPick?: (picked: Picked) => void;
 }) {
   const t = useTranslations("rateLab.trends");
   const format = useFormatter();
@@ -189,6 +195,19 @@ function Heatmap({
 
   const content = (cell: LabTrendCell) => {
     if (!cell.latest) return <span className="opacity-60">{t("noData")}</span>;
+    if (!onPick) {
+      return (
+        <div className="flex flex-col">
+          <span className="font-semibold">{money(format, cell.latest.amountCents)}</span>
+          <span className="text-xs">
+            {cell.change === null ? t("first") : percent(cell.change)}
+          </span>
+          <span className="text-xs opacity-70">
+            {cell.latest.carrierName} {cell.latest.serviceName}
+          </span>
+        </div>
+      );
+    }
     const isPicked = picked?.addressId === cell.addressId && picked.parcelId === cell.parcelId;
     return (
       <Button
@@ -218,8 +237,11 @@ function Heatmap({
         {t("heatmap")}
       </h2>
       <p className="text-sm opacity-70">{t("heatmapHint")}</p>
-      <div className="overflow-x-auto">
-        <table aria-labelledby="lab-trends-heatmap" className="table table-sm">
+      <div className="overflow-x-auto print:overflow-visible">
+        <table
+          aria-labelledby="lab-trends-heatmap"
+          className="table table-sm print:table-fixed print:break-words print:[&_th]:whitespace-normal"
+        >
           <thead>
             <tr>
               <th scope="col">{t("address")}</th>
@@ -310,7 +332,8 @@ function SeriesChart({
   );
 }
 
-function SeriesFigure({ series }: { series: LabTrendSeries }) {
+export function SeriesFigure({ series }: { series: LabTrendSeries }) {
+  const animate = useChartAnimation();
   const t = useTranslations("rateLab.trends");
   const format = useFormatter();
   const colors = useChartColors();
@@ -369,6 +392,7 @@ function SeriesFigure({ series }: { series: LabTrendSeries }) {
             <Legend wrapperStyle={{ color: colors.text }} />
             {series.lines.map((line, i) => (
               <Line
+                isAnimationActive={animate}
                 key={line.serviceId}
                 type="monotone"
                 dataKey={line.serviceId}
