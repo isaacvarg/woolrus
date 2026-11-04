@@ -1852,6 +1852,39 @@
       "overCap": "That's over the cap of {cap} combinations set in Settings.",
       "cancel": "Cancel",
       "start": "Start run"
+    },
+    "trends": {
+      "addressGroups": "Address groups",
+      "parcelGroups": "Parcel groups",
+      "carriers": "Carriers",
+      "none": "None yet.",
+      "from": "From",
+      "to": "To",
+      "includeFake": "Include fake data",
+      "loading": "Loading…",
+      "empty": "No active test addresses or parcels match these filters.",
+      "heatmap": "Cheapest price by address and parcel",
+      "heatmapHint": "Each cell is the latest suite run's cheapest price, with its change since the run before. Pick a cell to see its prices over time.",
+      "address": "Address",
+      "noData": "No runs",
+      "first": "First run",
+      "sincePrevious": "since the previous run",
+      "cheapestBy": "Cheapest: {carrier} {service}",
+      "scale": "Colour scale",
+      "scaleSteps": {
+        "bigDrop": "Down 10% or more",
+        "drop": "Down",
+        "same": "No change or first run",
+        "rise": "Up",
+        "bigRise": "Up 10% or more"
+      },
+      "close": "Close chart",
+      "chartTitle": "{address} × {parcel}",
+      "chartNote": "One line per carrier service, one point per suite run.",
+      "archived": "{title} (archived)",
+      "noSeries": "No suite run quoted this combination in these filters.",
+      "run": "Run",
+      "days": "{count, plural, one {# day} other {# days}}"
     }
   },
   "charts": {

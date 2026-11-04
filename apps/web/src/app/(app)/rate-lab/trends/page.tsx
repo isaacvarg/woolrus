@@ -1,5 +1,5 @@
-import { ComingSoon } from "../coming-soon";
+import { TrendsView } from "./trends-view";
 
 export default function RateLabTrendsPage() {
-  return <ComingSoon />;
+  return <TrendsView />;
 }
