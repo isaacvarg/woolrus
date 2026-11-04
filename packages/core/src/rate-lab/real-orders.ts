@@ -19,8 +19,11 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_DAYS = 30;
 const OVER_MAX = 50;
 
+/** Parsed dashboard filters. */
+export type RealOrdersFilters = z.output<typeof RealOrdersInput>;
+
 /** One active label in the range, with its bought quote and its fetch's cheapest. */
-type LabelRow = {
+export type RealOrderRow = {
   labelId: string;
   purchasedAt: Date;
   reason: RateSelectionReason | null;
@@ -43,7 +46,7 @@ type LabelRow = {
   chargedCents: number;
 };
 
-type Names = {
+export type RealOrderNames = {
   carriers: Map<string, string>;
   services: Map<string, { name: string; carrierId: string }>;
   boxes: Map<string, string>;
@@ -58,8 +61,12 @@ function range(input: { from?: string; to?: string }, now: Date): Range {
   return { from, to };
 }
 
-async function loadRows(db: DbTx, { from, to }: Range, includeFake: boolean): Promise<LabelRow[]> {
-  return db.$queryRaw<LabelRow[]>`
+async function loadRows(
+  db: DbTx,
+  { from, to }: Range,
+  includeFake: boolean,
+): Promise<RealOrderRow[]> {
+  return db.$queryRaw<RealOrderRow[]>`
     SELECT l.id AS "labelId", l.purchased_at AS "purchasedAt", l.selection_reason AS "reason",
            COALESCE(l.cost_cents, l.quoted_amount_cents, q.amount_cents)::int AS "costCents",
            q.id AS "quoteId", q.fetch_id AS "fetchId", q.amount_cents AS "amountCents",
@@ -79,7 +86,7 @@ async function loadRows(db: DbTx, { from, to }: Range, includeFake: boolean): Pr
       ${includeFake ? Prisma.empty : Prisma.sql`AND NOT f.fake`}`;
 }
 
-async function loadNames(db: DbTx, rows: LabelRow[]): Promise<Names> {
+async function loadNames(db: DbTx, rows: RealOrderRow[]): Promise<RealOrderNames> {
   const [carriers, services, boxes] = await Promise.all([
     db.shippingCarrier.findMany({
       where: { id: { in: [...new Set(rows.map((r) => r.carrierId))] } },
@@ -119,7 +126,7 @@ function weekOf(at: Date): string {
   return monday.toISOString().slice(0, 10);
 }
 
-const overspend = (row: LabelRow) =>
+const overspend = (row: RealOrderRow) =>
   row.cheapest || row.cheapestCents === null ? 0 : Math.max(0, row.amountCents - row.cheapestCents);
 
 function groupBy<K, T>(rows: readonly T[], key: (row: T) => K): Map<K, T[]> {
@@ -133,7 +140,7 @@ function groupBy<K, T>(rows: readonly T[], key: (row: T) => K): Map<K, T[]> {
   return groups;
 }
 
-function choice(rows: LabelRow[]): RealOrders["choice"] {
+function choice(rows: RealOrderRow[]): RealOrders["choice"] {
   const picked = rows.filter((r) => !r.cheapest);
   const byReason: RealOrdersReason[] = [...groupBy(picked, (r) => r.reason)].map(
     ([reason, group]) => ({
@@ -160,11 +167,11 @@ const bySpend = (
   b: { spendCents: number; name: string },
 ) => b.spendCents - a.spendCents || a.name.localeCompare(b.name);
 
-function laneCost(rows: LabelRow[]): RealOrdersLaneWeek[] {
+function laneCost(rows: RealOrderRow[]): RealOrdersLaneWeek[] {
   const lanes = groupBy(rows, (r) => `${r.country}|${r.state ?? ""}|${weekOf(r.purchasedAt)}`);
   return [...lanes.values()]
     .map((group) => {
-      const first = group[0] as LabelRow;
+      const first = group[0] as RealOrderRow;
       const costs = group.map((r) => r.costCents);
       return {
         country: first.country,
@@ -183,10 +190,10 @@ function laneCost(rows: LabelRow[]): RealOrdersLaneWeek[] {
     );
 }
 
-function costVsCharged(rows: LabelRow[]): RealOrders["costVsCharged"] {
+function costVsCharged(rows: RealOrderRow[]): RealOrders["costVsCharged"] {
   const orders: RealOrdersOrderCost[] = [...groupBy(rows, (r) => r.orderId)].map(
     ([orderId, group]) => {
-      const first = group[0] as LabelRow;
+      const first = group[0] as RealOrderRow;
       return {
         orderId,
         number: first.orderNumber,
@@ -209,8 +216,8 @@ function costVsCharged(rows: LabelRow[]): RealOrders["costVsCharged"] {
 
 async function alternatives(
   db: DbTx,
-  rows: LabelRow[],
-  names: Names,
+  rows: RealOrderRow[],
+  names: RealOrderNames,
   limit: number,
 ): Promise<RealOrdersPackage[]> {
   const newest = [...rows]
@@ -247,7 +254,7 @@ async function alternatives(
   }));
 }
 
-function options(rows: LabelRow[], names: Names): RealOrders["options"] {
+function options(rows: RealOrderRow[], names: RealOrderNames): RealOrders["options"] {
   const lanes = new Map(
     rows.flatMap((r) =>
       r.state ? [[`${r.country}|${r.state}`, { country: r.country, state: r.state }]] : [],
@@ -267,17 +274,10 @@ function options(rows: LabelRow[], names: Names): RealOrders["options"] {
 }
 
 /**
- * The Real orders dashboard (`report.read`): what QA chose against the cheapest, carrier and service
- * share, lane cost per week, label cost against shipping charged, and each package's alternatives.
+ * The labels the dashboard reads, before (`all`) and after (`rows`) its filters, with their names.
+ * Callers check `report.read`; the CSV export shares it so both read the same packages.
  */
-export async function realOrders(
-  db: DbTx,
-  actor: Actor,
-  input: z.input<typeof RealOrdersInput>,
-  { now = new Date() }: { now?: Date } = {},
-): Promise<RealOrders> {
-  assertCan(actor, "report.read");
-  const filters = RealOrdersInput.parse(input);
+export async function realOrderRows(db: DbTx, filters: RealOrdersFilters, now: Date) {
   const { from, to } = range(filters, now);
   const all = await loadRows(db, { from, to }, filters.includeFake);
   const names = await loadNames(db, all);
@@ -289,6 +289,22 @@ export async function realOrders(
       (!filters.state || r.state === filters.state) &&
       (!filters.boxId || r.boxId === filters.boxId),
   );
+  return { from, to, all, rows, names };
+}
+
+/**
+ * The Real orders dashboard (`report.read`): what QA chose against the cheapest, carrier and service
+ * share, lane cost per week, label cost against shipping charged, and each package's alternatives.
+ */
+export async function realOrders(
+  db: DbTx,
+  actor: Actor,
+  input: z.input<typeof RealOrdersInput>,
+  { now = new Date() }: { now?: Date } = {},
+): Promise<RealOrders> {
+  assertCan(actor, "report.read");
+  const filters = RealOrdersInput.parse(input);
+  const { from, to, all, rows, names } = await realOrderRows(db, filters, now);
   const share = <K extends "carrierId" | "serviceId">(key: K) =>
     [...groupBy(rows, (r) => r[key])].map(([id, group]) => ({
       id,
