@@ -36,6 +36,7 @@ import {
   getBatch,
   getEmailSender,
   getIssue,
+  getLabRun,
   getOrder,
   getOrderHistory,
   getOrderShipping,
@@ -683,6 +684,7 @@ export const router = implementer.router({
       startLabRun(db, context.actor, input, { providers: await createShippingProviders(db) }),
     ),
     runs: api.rateLab.runs.handler(({ input, context }) => listLabRuns(db, context.actor, input)),
+    run: api.rateLab.run.handler(({ input, context }) => getLabRun(db, context.actor, input)),
   },
 });
 

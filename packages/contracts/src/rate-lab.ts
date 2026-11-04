@@ -2,6 +2,7 @@ import { z } from "zod";
 import { base, Id, IdempotencyKey, Inches, Ounces } from "./base";
 import { ShipToStatus } from "./carriers";
 import { RealOrders, RealOrdersInput } from "./rate-lab-real-orders";
+import { LabCombination, LabRunInsights } from "./rate-lab-run";
 
 // Rate Lab (SPEC-rate-lab): test addresses and parcels, and the groups that tag them. Runs join
 // this file in their own tickets.
@@ -352,6 +353,15 @@ export const LabRunPage = z.object({
 });
 export type LabRunPage = z.infer<typeof LabRunPage>;
 
+/** A run's page: its header, its selection as chosen (for Run again), quotes and insights. */
+export const LabRunDetail = z.object({
+  run: LabRunRow,
+  selection: LabRunSelection,
+  combinations: z.array(LabCombination),
+  insights: LabRunInsights,
+});
+export type LabRunDetail = z.infer<typeof LabRunDetail>;
+
 const byId = z.object({ id: Id });
 const tags = ["Rate Lab"];
 
@@ -530,4 +540,14 @@ export const rateLab = {
     .route({ method: "GET", path: "/rate-lab/runs", tags, summary: "Suite runs, newest first" })
     .input(ListLabRunsInput)
     .output(LabRunPage),
+
+  run: base
+    .route({
+      method: "GET",
+      path: "/rate-lab/runs/{id}",
+      tags,
+      summary: "A run with its quotes and insights",
+    })
+    .input(byId)
+    .output(LabRunDetail),
 };

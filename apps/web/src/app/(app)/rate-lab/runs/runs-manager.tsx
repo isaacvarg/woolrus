@@ -2,6 +2,7 @@
 
 import { useInfiniteQuery } from "@tanstack/react-query";
 import type { LabRunRow, RateLabRunStatus } from "@woolrus/contracts";
+import Link from "next/link";
 import { useFormatter, useTranslations } from "next-intl";
 import { useState } from "react";
 import { Button } from "@/components/ui/fields";
@@ -13,7 +14,7 @@ import { NewRunDialog } from "./new-run-dialog";
 const ACTIVE_REFRESH_MS = 3_000;
 const IDLE_REFRESH_MS = 30_000;
 
-const statusBadge: Record<RateLabRunStatus, string> = {
+export const statusBadge: Record<RateLabRunStatus, string> = {
   QUEUED: "badge-ghost",
   RUNNING: "badge-info",
   SUCCEEDED: "badge-success",
@@ -22,12 +23,13 @@ const statusBadge: Record<RateLabRunStatus, string> = {
   CANCELLED: "badge-neutral",
 };
 
-const isActive = (row: LabRunRow) => row.status === "QUEUED" || row.status === "RUNNING";
+export const isActive = (row: LabRunRow) => row.status === "QUEUED" || row.status === "RUNNING";
 
 /** Message keys from the server, translated when known (an older key just shows as is). */
-function useMessage() {
+export function useMessage() {
   const t = useTranslations();
-  return (key: string) => (t.has(key) ? t(key as never) : key);
+  return (key: string, params?: Record<string, string | number>) =>
+    t.has(key) ? t(key as never, params as never) : key;
 }
 
 export function RunsManager() {
@@ -91,10 +93,12 @@ export function RunsManager() {
             {rows.map((row) => (
               <tr key={row.id} data-testid="lab-run-row">
                 <td>
-                  {format.dateTime(row.startedAt ?? row.createdAt, {
-                    dateStyle: "short",
-                    timeStyle: "medium",
-                  })}
+                  <Link href={`/rate-lab/runs/${row.id}`} className="link link-hover">
+                    {format.dateTime(row.startedAt ?? row.createdAt, {
+                      dateStyle: "short",
+                      timeStyle: "medium",
+                    })}
+                  </Link>
                 </td>
                 <td>{row.startedBy?.name ?? "—"}</td>
                 <td>{duration(row, format)}</td>
@@ -151,7 +155,15 @@ export function RunsManager() {
 }
 
 /** One side of the selection: its groups and how many items were picked, or "All …". */
-function Side({ label, all, side }: { label: string; all: string; side: LabRunRow["addresses"] }) {
+export function Side({
+  label,
+  all,
+  side,
+}: {
+  label: string;
+  all: string;
+  side: LabRunRow["addresses"];
+}) {
   const t = useTranslations("rateLab.runs");
   if (side.groups.length === 0 && side.items === 0) return <div>{all}</div>;
   return (
@@ -165,7 +177,7 @@ function Side({ label, all, side }: { label: string; all: string; side: LabRunRo
   );
 }
 
-function duration(row: LabRunRow, format: ReturnType<typeof useFormatter>): string {
+export function duration(row: LabRunRow, format: ReturnType<typeof useFormatter>): string {
   if (!row.startedAt || !row.finishedAt) return "—";
   const seconds = (row.finishedAt.getTime() - row.startedAt.getTime()) / 1000;
   return seconds < 60
