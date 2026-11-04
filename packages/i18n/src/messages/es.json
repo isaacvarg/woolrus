@@ -1145,7 +1145,8 @@
       "usZip": "Usa un código postal de 5 dígitos (o ZIP+4).",
       "email": "Ingresa un correo electrónico válido.",
       "emailFrom": "Usa una dirección como no-reply@example.com o Woolrus '<'no-reply@example.com>.",
-      "country": "Usa el código de país de 2 letras, p. ej. US."
+      "country": "Usa el código de país de 2 letras, p. ej. US.",
+      "dateRange": "La fecha final debe ser igual o posterior a la inicial."
     },
     "settings": {
       "encryptionKeyMissing": "No se pueden guardar secretos: falta la clave de cifrado del servidor o no es válida. Pide a quien administra el servidor que configure SETTINGS_ENCRYPTION_KEY.",
@@ -1687,6 +1688,79 @@
       "cancel": "Cancelar",
       "close": "Cerrar",
       "empty": "Aún no hay grupos."
+    },
+    "realOrders": {
+      "from": "Desde",
+      "to": "Hasta",
+      "carrier": "Transportista",
+      "service": "Servicio",
+      "country": "País",
+      "state": "Estado",
+      "box": "Caja",
+      "all": "Todos",
+      "includeFake": "Incluir datos de prueba",
+      "loading": "Cargando…",
+      "empty": "No hay etiquetas compradas en este periodo.",
+      "summary": "Resumen",
+      "tiles": {
+        "packages": "Paquetes",
+        "onCheapest": "Con la más barata",
+        "notCheapest": "No la más barata",
+        "overspend": "Sobrecoste",
+        "costVsCharged": "Coste de etiquetas",
+        "charged": "frente a {charged} cobrado",
+        "ordersOver": "Pedidos que costaron más de lo cobrado",
+        "ofPackages": "{count, plural, one {# paquete} other {# paquetes}}",
+        "ofOrders": "de {orders, plural, one {# pedido} other {# pedidos}}"
+      },
+      "reasonChart": "Sobrecoste por motivo",
+      "reasonNone": "Sin motivo",
+      "allCheapest": "Todos los paquetes usaron la tarifa más barata.",
+      "reasons": {
+        "FASTER_DELIVERY": "Entrega más rápida",
+        "CUSTOMER_REQUESTED": "Pedido por el cliente",
+        "CARRIER_RELIABILITY": "Fiabilidad del transportista",
+        "CHEAPEST_UNAVAILABLE": "La más barata no estaba disponible o falló",
+        "OTHER": "Otro"
+      },
+      "carrierChart": "Gasto por transportista",
+      "serviceTable": "Reparto por servicio",
+      "laneChart": "Coste mediano de etiqueta por ruta, por semana",
+      "laneNote": "El gráfico muestra {count, plural, one {la ruta con más envíos} other {las # rutas con más envíos}}; la tabla incluye todas.",
+      "overTitle": "Pedidos cuyas etiquetas costaron más de lo cobrado",
+      "overNote": "Se muestran los {shown} mayores de {total}.",
+      "overNone": "Ningún pedido costó más de lo cobrado.",
+      "alternatives": "Alternativas",
+      "alternativesNote": "Se muestran los {shown} paquetes más recientes de {total}.",
+      "packageOf": "#{order} · paquete {number}",
+      "days": "{count, plural, one {# día} other {# días}}",
+      "bought": "Comprada",
+      "cheapest": "Más barata",
+      "quoteOnly": "Solo cotización",
+      "columns": {
+        "reason": "Motivo",
+        "packages": "Paquetes",
+        "overspend": "Sobrecoste",
+        "carrier": "Transportista",
+        "service": "Servicio",
+        "share": "Proporción",
+        "spend": "Gasto",
+        "lane": "Ruta",
+        "week": "Semana del",
+        "median": "Mediana",
+        "mean": "Media",
+        "order": "Pedido",
+        "cost": "Coste de etiquetas",
+        "charged": "Cobrado",
+        "gap": "Diferencia",
+        "package": "Paquete",
+        "purchased": "Comprada el",
+        "quotes": "Cotizaciones"
+      }
     }
+  },
+  "charts": {
+    "showData": "Ver los datos",
+    "hideData": "Ocultar los datos"
   }
 }

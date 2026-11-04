@@ -1145,7 +1145,8 @@
       "usZip": "Use a 5-digit ZIP code (or ZIP+4).",
       "email": "Enter a valid email address.",
       "emailFrom": "Use an address like no-reply@example.com or Woolrus '<'no-reply@example.com>.",
-      "country": "Use the 2-letter country code, e.g. US."
+      "country": "Use the 2-letter country code, e.g. US.",
+      "dateRange": "The end date must be on or after the start date."
     },
     "settings": {
       "encryptionKeyMissing": "Secrets can't be saved: the server's encryption key is missing or invalid. Ask whoever runs the server to set SETTINGS_ENCRYPTION_KEY.",
@@ -1687,6 +1688,79 @@
       "cancel": "Cancel",
       "close": "Close",
       "empty": "No groups yet."
+    },
+    "realOrders": {
+      "from": "From",
+      "to": "To",
+      "carrier": "Carrier",
+      "service": "Service",
+      "country": "Country",
+      "state": "State",
+      "box": "Box",
+      "all": "All",
+      "includeFake": "Include fake data",
+      "loading": "Loading…",
+      "empty": "No bought labels in this range.",
+      "summary": "Summary",
+      "tiles": {
+        "packages": "Packages",
+        "onCheapest": "On the cheapest",
+        "notCheapest": "Not the cheapest",
+        "overspend": "Overspend",
+        "costVsCharged": "Label cost",
+        "charged": "vs. {charged} charged",
+        "ordersOver": "Orders costing more than charged",
+        "ofPackages": "{count, plural, one {# package} other {# packages}}",
+        "ofOrders": "of {orders, plural, one {# order} other {# orders}}"
+      },
+      "reasonChart": "Overspend by reason",
+      "reasonNone": "No reason given",
+      "allCheapest": "Every package was on the cheapest rate.",
+      "reasons": {
+        "FASTER_DELIVERY": "Faster delivery",
+        "CUSTOMER_REQUESTED": "Customer requested",
+        "CARRIER_RELIABILITY": "Carrier reliability",
+        "CHEAPEST_UNAVAILABLE": "Cheapest unavailable or failed",
+        "OTHER": "Other"
+      },
+      "carrierChart": "Spend by carrier",
+      "serviceTable": "Share by service",
+      "laneChart": "Median label cost per lane, by week",
+      "laneNote": "The chart shows the {count, plural, one {busiest lane} other {# busiest lanes}}; the table lists every lane.",
+      "overTitle": "Orders where labels cost more than was charged",
+      "overNote": "Showing the {shown} largest of {total}.",
+      "overNone": "No order cost more than was charged.",
+      "alternatives": "Alternatives",
+      "alternativesNote": "Showing the newest {shown} of {total} packages.",
+      "packageOf": "#{order} · package {number}",
+      "days": "{count, plural, one {# day} other {# days}}",
+      "bought": "Bought",
+      "cheapest": "Cheapest",
+      "quoteOnly": "Quote only",
+      "columns": {
+        "reason": "Reason",
+        "packages": "Packages",
+        "overspend": "Overspend",
+        "carrier": "Carrier",
+        "service": "Service",
+        "share": "Share",
+        "spend": "Spend",
+        "lane": "Lane",
+        "week": "Week of",
+        "median": "Median",
+        "mean": "Mean",
+        "order": "Order",
+        "cost": "Label cost",
+        "charged": "Charged",
+        "gap": "Difference",
+        "package": "Package",
+        "purchased": "Bought on",
+        "quotes": "Quotes"
+      }
     }
+  },
+  "charts": {
+    "showData": "Show the data",
+    "hideData": "Hide the data"
   }
 }

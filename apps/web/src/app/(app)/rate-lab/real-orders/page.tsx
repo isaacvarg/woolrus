@@ -1,7 +1,7 @@
 import { can } from "@woolrus/core";
 import { getTranslations } from "next-intl/server";
 import { currentActor } from "@/server/actor";
-import { ComingSoon } from "../coming-soon";
+import { RealOrdersDashboard } from "./real-orders-dashboard";
 
 // Real orders reads real packages' costs: report.read (Admin) on top of Rate Lab.
 export default async function RateLabRealOrdersPage() {
@@ -14,5 +14,5 @@ export default async function RateLabRealOrdersPage() {
       </p>
     );
   }
-  return <ComingSoon />;
+  return <RealOrdersDashboard />;
 }

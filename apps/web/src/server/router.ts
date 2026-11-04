@@ -79,6 +79,7 @@ import {
   pushErrors,
   queueCounts,
   reactivateUser,
+  realOrders,
   recheckAddress,
   recheckLabAddress,
   refreshRates,
@@ -640,6 +641,9 @@ export const router = implementer.router({
     ),
     archiveGroup: api.rateLab.archiveGroup.handler(({ input, context }) =>
       archiveLabGroup(db, context.actor, input),
+    ),
+    realOrders: api.rateLab.realOrders.handler(({ input, context }) =>
+      realOrders(db, context.actor, input),
     ),
   },
 });
