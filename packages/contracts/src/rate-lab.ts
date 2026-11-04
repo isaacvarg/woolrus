@@ -2,6 +2,12 @@ import { z } from "zod";
 import { base, Id, IdempotencyKey, Inches, Ounces } from "./base";
 import { ShipToStatus } from "./carriers";
 import { RealOrders, RealOrdersInput } from "./rate-lab-real-orders";
+import {
+  LabTrendGrid,
+  LabTrendGridInput,
+  LabTrendSeries,
+  LabTrendSeriesInput,
+} from "./rate-lab-trends";
 
 // Rate Lab (SPEC-rate-lab): test addresses and parcels, and the groups that tag them. Runs join
 // this file in their own tickets.
@@ -530,4 +536,24 @@ export const rateLab = {
     .route({ method: "GET", path: "/rate-lab/runs", tags, summary: "Suite runs, newest first" })
     .input(ListLabRunsInput)
     .output(LabRunPage),
+
+  trendGrid: base
+    .route({
+      method: "GET",
+      path: "/rate-lab/trends",
+      tags,
+      summary: "Latest cheapest price per test address × parcel, and its change",
+    })
+    .input(LabTrendGridInput)
+    .output(LabTrendGrid),
+
+  trendSeries: base
+    .route({
+      method: "GET",
+      path: "/rate-lab/trends/series",
+      tags,
+      summary: "One address × parcel's prices per carrier service across suite runs",
+    })
+    .input(LabTrendSeriesInput)
+    .output(LabTrendSeries),
 };

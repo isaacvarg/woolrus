@@ -1852,6 +1852,39 @@
       "overCap": "Supera el límite de {cap} combinaciones fijado en Configuración.",
       "cancel": "Cancelar",
       "start": "Iniciar prueba"
+    },
+    "trends": {
+      "addressGroups": "Grupos de direcciones",
+      "parcelGroups": "Grupos de paquetes",
+      "carriers": "Transportistas",
+      "none": "Todavía no hay.",
+      "from": "Desde",
+      "to": "Hasta",
+      "includeFake": "Incluir datos de prueba",
+      "loading": "Cargando…",
+      "empty": "Ninguna dirección o paquete de prueba activo coincide con estos filtros.",
+      "heatmap": "Precio más barato por dirección y paquete",
+      "heatmapHint": "Cada celda es el precio más barato de la última prueba, con su cambio desde la prueba anterior. Elige una celda para ver sus precios a lo largo del tiempo.",
+      "address": "Dirección",
+      "noData": "Sin pruebas",
+      "first": "Primera prueba",
+      "sincePrevious": "desde la prueba anterior",
+      "cheapestBy": "Más barato: {carrier} {service}",
+      "scale": "Escala de colores",
+      "scaleSteps": {
+        "bigDrop": "Baja 10 % o más",
+        "drop": "Baja",
+        "same": "Sin cambio o primera prueba",
+        "rise": "Sube",
+        "bigRise": "Sube 10 % o más"
+      },
+      "close": "Cerrar gráfico",
+      "chartTitle": "{address} × {parcel}",
+      "chartNote": "Una línea por servicio de transportista, un punto por prueba.",
+      "archived": "{title} (archivado)",
+      "noSeries": "Ninguna prueba cotizó esta combinación con estos filtros.",
+      "run": "Prueba",
+      "days": "{count, plural, one {# día} other {# días}}"
     }
   },
   "charts": {
