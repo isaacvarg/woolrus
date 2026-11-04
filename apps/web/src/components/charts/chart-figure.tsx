@@ -33,7 +33,7 @@ export function ChartFigure({
           {title}
         </h2>
         <Button
-          className="btn-ghost btn-xs"
+          className="btn-ghost btn-xs print:hidden"
           aria-expanded={showTable}
           aria-controls={tableId}
           onPress={() => setShowTable((shown) => !shown)}

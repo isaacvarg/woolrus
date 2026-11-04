@@ -4,10 +4,13 @@ import { ShipToStatus } from "./carriers";
 import { RealOrders, RealOrdersInput } from "./rate-lab-real-orders";
 import { LabCombination, LabRunInsights } from "./rate-lab-run";
 import {
+  LabRunTrend,
+  LabRunTrendsInput,
   LabTrendGrid,
   LabTrendGridInput,
   LabTrendSeries,
   LabTrendSeriesInput,
+  LabTrendsReport,
 } from "./rate-lab-trends";
 
 // Rate Lab (SPEC-rate-lab): test addresses and parcels, and the groups that tag them. Runs join
@@ -592,4 +595,24 @@ export const rateLab = {
     })
     .input(CancelLabRunInput)
     .output(LabRunRow),
+
+  runTrends: base
+    .route({
+      method: "GET",
+      path: "/rate-lab/runs/{id}/trends",
+      tags,
+      summary: "Each combination's cheapest price over its last 10 suite runs, for the run report",
+    })
+    .input(LabRunTrendsInput)
+    .output(z.array(LabRunTrend)),
+
+  trendsReport: base
+    .route({
+      method: "GET",
+      path: "/rate-lab/trends/report",
+      tags,
+      summary: "The heatmap and up to 60 combinations' series, for the Trends report",
+    })
+    .input(LabTrendGridInput)
+    .output(LabTrendsReport),
 };

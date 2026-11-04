@@ -16,6 +16,7 @@ import { money } from "@/app/(app)/qa/[orderId]/money";
 import { Button, SelectField } from "@/components/ui/fields";
 import { useErrorMessage } from "@/lib/errors";
 import { orpc } from "@/lib/orpc";
+import { ReportLink } from "../../report-link";
 import { duration, isActive, Side, statusBadge, useMessage } from "../runs-manager";
 
 /** A queued or running run refreshes like the runs list does. */
@@ -25,7 +26,7 @@ const ALL = "all";
 type Format = ReturnType<typeof useFormatter>;
 
 /** "Address × Parcel", or the lane and "Typed in" for a one-off's typed address or parcel. */
-function useCombinationName() {
+export function useCombinationName() {
   const t = useTranslations("rateLab.run");
   return (c: LabCombination) => {
     const lane = c.lane.state ? `${c.lane.country}-${c.lane.state}` : c.lane.country;
@@ -83,7 +84,14 @@ function Loaded({ detail }: { detail: LabRunDetail }) {
   );
 }
 
-function Header({ detail: { run, selection } }: { detail: LabRunDetail }) {
+/** The run's summary; the report prints it without the buttons. */
+export function Header({
+  detail: { run, selection },
+  actions = true,
+}: {
+  detail: LabRunDetail;
+  actions?: boolean;
+}) {
   const t = useTranslations("rateLab.run");
   const tr = useTranslations("rateLab.runs");
   const format = useFormatter();
@@ -121,9 +129,10 @@ function Header({ detail: { run, selection } }: { detail: LabRunDetail }) {
         </h2>
         <span className={`badge ${statusBadge[run.status]}`}>{tr(`status_${run.status}`)}</span>
         {run.fake && <span className="badge badge-outline">{tr("fake")}</span>}
-        {run.kind === "SUITE" && (
+        {actions && <ReportLink className="ms-auto" href={`/rate-lab/runs/${run.id}/report`} />}
+        {actions && run.kind === "SUITE" && (
           <Button
-            className="btn-outline ms-auto"
+            className="btn-outline"
             isPending={again.isPending}
             onPress={() => again.mutate({ idempotencyKey, selection })}
           >
@@ -184,7 +193,7 @@ function quoteText(t: ReturnType<typeof useTranslations>, format: Format, q: Lab
   return `${q.carrierName} ${q.serviceName}: ${money(format, q.amountCents)}${days}`;
 }
 
-function PicksCard({
+export function PicksCard({
   combinations,
   picks,
 }: {
@@ -206,7 +215,7 @@ function PicksCard({
   };
   return (
     <Card title={t("picksTitle")} hint={t("picksHint")}>
-      <div className="max-h-96 overflow-auto">
+      <div className="max-h-96 overflow-auto print:max-h-none print:overflow-visible">
         <table className="table table-sm" aria-label={t("picksTitle")}>
           <thead>
             <tr>
@@ -243,7 +252,13 @@ function PicksCard({
   );
 }
 
-function MovesCard({ detail, nameOf }: { detail: LabRunDetail; nameOf: (key: string) => string }) {
+export function MovesCard({
+  detail,
+  nameOf,
+}: {
+  detail: LabRunDetail;
+  nameOf: (key: string) => string;
+}) {
   const t = useTranslations("rateLab.run");
   const format = useFormatter();
   const { moves } = detail.insights;
@@ -256,7 +271,7 @@ function MovesCard({ detail, nameOf }: { detail: LabRunDetail; nameOf: (key: str
       ) : moves.length === 0 ? (
         <p>{t("noMoves")}</p>
       ) : (
-        <div className="max-h-96 overflow-auto">
+        <div className="max-h-96 overflow-auto print:max-h-none print:overflow-visible">
           <table className="table table-sm" aria-label={t("movesTitle")}>
             <thead>
               <tr>
@@ -295,7 +310,7 @@ function MovesCard({ detail, nameOf }: { detail: LabRunDetail; nameOf: (key: str
   );
 }
 
-function WinsCard({ detail }: { detail: LabRunDetail }) {
+export function WinsCard({ detail }: { detail: LabRunDetail }) {
   const t = useTranslations("rateLab.run");
   const { carrierWins } = detail.insights;
   return (
@@ -333,7 +348,7 @@ function useProviderName() {
     provider ? t(`settings.shipping.names.${provider}`) : tr("noProvider");
 }
 
-function FailuresCard({
+export function FailuresCard({
   detail,
   nameOf,
 }: {
@@ -375,12 +390,15 @@ type RowStatus = "PURCHASABLE" | "QUOTE_ONLY" | "ERROR";
 const rowStatuses: RowStatus[] = ["PURCHASABLE", "QUOTE_ONLY", "ERROR"];
 
 /** Every quote and provider error, grouped by address × parcel, filtered by carrier, provider, status. */
-function QuoteTable({
+export function QuoteTable({
   combinations,
   picks,
+  filterable = true,
 }: {
   combinations: LabCombination[];
   picks: Map<string, LabPick>;
+  /** The report prints every row, so it has no filters. */
+  filterable?: boolean;
 }) {
   const t = useTranslations("rateLab.run");
   const format = useFormatter();
@@ -432,39 +450,41 @@ function QuoteTable({
   return (
     <section className="space-y-3">
       <h3 className="text-lg font-semibold">{t("quotesTitle")}</h3>
-      <div className="flex flex-wrap gap-4">
-        <div className="w-56">
-          <SelectField
-            label={t("carrier")}
-            selectedKey={carrier}
-            onSelectionChange={(v) => setCarrier(String(v))}
-            options={[{ id: ALL, label: t("all") }, ...carriers]}
-          />
+      {filterable && (
+        <div className="flex flex-wrap gap-4">
+          <div className="w-56">
+            <SelectField
+              label={t("carrier")}
+              selectedKey={carrier}
+              onSelectionChange={(v) => setCarrier(String(v))}
+              options={[{ id: ALL, label: t("all") }, ...carriers]}
+            />
+          </div>
+          <div className="w-56">
+            <SelectField
+              label={t("provider")}
+              selectedKey={provider}
+              onSelectionChange={(v) => setProvider(String(v))}
+              options={[
+                { id: ALL, label: t("all") },
+                ...providers.map((p) => ({ id: p, label: providerName(p) })),
+              ]}
+            />
+          </div>
+          <div className="w-56">
+            <SelectField
+              label={t("status")}
+              selectedKey={status}
+              onSelectionChange={(v) => setStatus(String(v))}
+              options={[
+                { id: ALL, label: t("all") },
+                ...rowStatuses.map((s) => ({ id: s, label: t(`row_${s}`) })),
+              ]}
+            />
+          </div>
         </div>
-        <div className="w-56">
-          <SelectField
-            label={t("provider")}
-            selectedKey={provider}
-            onSelectionChange={(v) => setProvider(String(v))}
-            options={[
-              { id: ALL, label: t("all") },
-              ...providers.map((p) => ({ id: p, label: providerName(p) })),
-            ]}
-          />
-        </div>
-        <div className="w-56">
-          <SelectField
-            label={t("status")}
-            selectedKey={status}
-            onSelectionChange={(v) => setStatus(String(v))}
-            options={[
-              { id: ALL, label: t("all") },
-              ...rowStatuses.map((s) => ({ id: s, label: t(`row_${s}`) })),
-            ]}
-          />
-        </div>
-      </div>
-      <div className="overflow-x-auto rounded-box bg-base-100 shadow-sm">
+      )}
+      <div className="overflow-x-auto rounded-box bg-base-100 shadow-sm print:overflow-visible">
         <table className="table" aria-label={t("quotesTitle")}>
           <thead>
             <tr>

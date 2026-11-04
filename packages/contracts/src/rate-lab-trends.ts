@@ -107,3 +107,31 @@ export const LabTrendSeries = z.object({
   lines: z.array(LabTrendLine),
 });
 export type LabTrendSeries = z.infer<typeof LabTrendSeries>;
+
+// Print-ready reports (SPEC-rate-lab "Exports", decision 10): the pages print what these return.
+
+/** A run report's small chart: each combination's cheapest price over its last this many suite runs. */
+export const LAB_RUN_TREND_RUNS = 10;
+/** The Trends report charts at most this many combinations and says how many it left out. */
+export const LAB_TRENDS_REPORT_MAX = 60;
+
+export const LabRunTrendsInput = z.object({ id: Id });
+export type LabRunTrendsInput = z.input<typeof LabRunTrendsInput>;
+
+/** One saved address × parcel of a run, and its cheapest price per suite run up to that run. */
+export const LabRunTrend = z.object({
+  /** The combination's `addressId:parcelId` key, as run detail has it. */
+  key: z.string(),
+  /** Oldest first, at most LAB_RUN_TREND_RUNS. */
+  prices: z.array(LabTrendPrice),
+});
+export type LabRunTrend = z.infer<typeof LabRunTrend>;
+
+export const LabTrendsReport = z.object({
+  grid: LabTrendGrid,
+  /** A chart per combination with data, in grid order, at most LAB_TRENDS_REPORT_MAX. */
+  series: z.array(LabTrendSeries),
+  /** Combinations with data left out beyond the cap. */
+  omitted: z.number().int(),
+});
+export type LabTrendsReport = z.infer<typeof LabTrendsReport>;

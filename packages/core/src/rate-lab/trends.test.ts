@@ -1,10 +1,10 @@
 import type { Db, Prisma } from "@woolrus/db";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { createActor, resetDb, testDb } from "../../test/db";
-import { labTrendGrid, labTrendSeries } from "./trends";
+import { labRunTrends, labTrendGrid, labTrendSeries, labTrendsReport } from "./trends";
 
 // SPEC-rate-lab "Trends" (criteria 10, 12): the heatmap's latest cell and change, and the series
-// points, over seeded suite runs.
+// points, over seeded suite runs. Also the print reports' reads ("Exports").
 
 const db: Db = testDb();
 afterAll(() => db.$disconnect());
@@ -361,5 +361,104 @@ describe("labTrendSeries", () => {
         parcelId: s.box.id,
       }),
     ).rejects.toThrowError("errors.forbidden");
+  });
+});
+
+describe("labRunTrends", () => {
+  it("gives each saved combination its cheapest price per suite run up to the run", async () => {
+    const s = await seed();
+    const actor = await createActor(db, ["RATE_LAB"]);
+    // A later run doesn't show in run 2's report.
+    const later = await run("2026-10-22T10:00:00Z");
+    await fetch(later.id, s.ranch.id, s.box.id, [{ service: s.ground, amountCents: 5000 }]);
+
+    const trends = await labRunTrends(db, actor, { id: s.r2.id });
+    const prices = (a: string, p: string) =>
+      trends.find((t) => t.key === `${a}:${p}`)?.prices.map((x) => [x.runId, x.amountCents]);
+    expect(trends.map((t) => t.key).sort()).toEqual(
+      [`${s.ranch.id}:${s.box.id}`, `${s.ranch.id}:${s.tube.id}`].sort(),
+    );
+    expect(prices(s.ranch.id, s.box.id)).toEqual([
+      [s.r1.id, 1000],
+      [s.r2.id, 1100],
+    ]);
+    expect(prices(s.ranch.id, s.tube.id)).toEqual([[s.r2.id, 700]]);
+  });
+
+  it("stops at the last 10 suite runs", async () => {
+    const s = await seed();
+    const actor = await createActor(db, ["RATE_LAB"]);
+    let last = s.r3;
+    for (let day = 16; day < 28; day++) {
+      last = await run(`2026-10-${day}T10:00:00Z`);
+      await fetch(last.id, s.city.id, s.box.id, [{ service: s.ground, amountCents: 800 + day }]);
+    }
+    const trends = await labRunTrends(db, actor, { id: last.id });
+    const prices = trends.find((t) => t.key === `${s.city.id}:${s.box.id}`)?.prices ?? [];
+    expect(prices).toHaveLength(10);
+    expect(prices.at(-1)).toMatchObject({ runId: last.id, amountCents: 827 });
+    expect(prices[0]).toMatchObject({ amountCents: 818 });
+  });
+
+  it("is not found for an unknown run and forbidden without the role", async () => {
+    const s = await seed();
+    await expect(
+      labRunTrends(db, await createActor(db, ["RATE_LAB"]), { id: s.box.id }),
+    ).rejects.toThrowError("errors.notFound");
+    await expect(
+      labRunTrends(db, await createActor(db, ["SHIPPER"]), { id: s.r3.id }),
+    ).rejects.toThrowError("errors.forbidden");
+  });
+});
+
+describe("labTrendsReport", () => {
+  it("gives the grid and a series per combination with data", async () => {
+    const s = await seed();
+    const actor = await createActor(db, ["RATE_LAB"]);
+    const report = await labTrendsReport(db, actor, {});
+
+    expect(report.grid.cells).toHaveLength(4);
+    expect(report.omitted).toBe(0);
+    // City × tube has no data, so three charts in grid order.
+    expect(report.series.map((x) => [x.address.title, x.parcel.title])).toEqual([
+      ["City flat", "Medium box"],
+      ["Rural ranch", "Medium box"],
+      ["Rural ranch", "Poster tube"],
+    ]);
+    const ranchBox = report.series[1];
+    expect(ranchBox?.runs.map((r) => r.runId)).toEqual([s.r1.id, s.r2.id, s.r3.id]);
+    expect(ranchBox).toEqual(
+      await labTrendSeries(db, actor, { addressId: s.ranch.id, parcelId: s.box.id }),
+    );
+
+    const usps = await labTrendsReport(db, actor, { carrierIds: [s.usps.carrier.id] });
+    expect(usps.series.map((x) => x.lines.map((l) => l.carrierName))).toEqual([
+      ["USPS", "USPS"],
+      ["USPS"],
+    ]);
+  });
+
+  it("charts at most 60 combinations and counts the rest", async () => {
+    const s = await seed();
+    const actor = await createActor(db, ["RATE_LAB"]);
+    for (let i = 0; i < 31; i++) {
+      const p = await parcel(`Parcel ${String(i).padStart(2, "0")}`);
+      for (const a of [s.ranch, s.city]) {
+        await fetch(s.r3.id, a.id, p.id, [{ service: s.ground, amountCents: 500 + i }]);
+      }
+    }
+    const report = await labTrendsReport(db, actor, {});
+    // 62 new combinations plus the 3 seeded ones with data.
+    expect(report.series).toHaveLength(60);
+    expect(report.omitted).toBe(5);
+  });
+
+  it("is forbidden without the role", async () => {
+    await expect(labTrendsReport(db, await createActor(db, ["QA"]), {})).rejects.toThrowError(
+      "errors.forbidden",
+    );
+    await expect(
+      labTrendsReport(db, await createActor(db, ["PACKER", "RATE_LAB"]), {}),
+    ).resolves.toBeTruthy();
   });
 });

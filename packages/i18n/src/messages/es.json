@@ -1945,6 +1945,28 @@
       "deliveryDays": "Días",
       "marks": "Marcas",
       "noRows": "Ninguna cotización coincide con estos filtros."
+    },
+    "report": {
+      "pdfReport": "Informe PDF",
+      "print": "Imprimir o guardar como PDF",
+      "printHint": "Elige «Guardar como PDF» en el diálogo de impresión. Caben A4 y Carta.",
+      "loading": "Preparando el informe…",
+      "printedAt": "Impreso el {at}",
+      "runTitle": "Informe de ejecución de Rate Lab",
+      "insights": "Conclusiones",
+      "trendsTitle": "Tendencia de precio por combinación",
+      "trendsHint": "El precio más bajo en cada una de las últimas {count} ejecuciones de suite de la combinación, hasta esta ejecución.",
+      "trendFigures": "{runs, plural, one {# ejecución} other {# ejecuciones}}: último {latest}, mínimo {low}, máximo {high}",
+      "noTrends": "Ninguna dirección × paquete guardados de esta ejecución tiene historial de suite.",
+      "trendsReportTitle": "Informe de tendencias de Rate Lab",
+      "filtersAll": "Todas las direcciones y paquetes",
+      "filtersSome": "Filtrado por grupos, transportistas o fechas",
+      "charts": "Precio por servicio de transportista",
+      "omitted": "{count, plural, one {Se omitió # combinación más} other {Se omitieron # combinaciones más}}: el informe muestra las primeras {max}.",
+      "noCharts": "Ninguna combinación de estos filtros tiene cotizaciones.",
+      "realOrdersTitle": "Informe de pedidos reales de Rate Lab",
+      "range": "Del {from} al {to}",
+      "realOrdersCharts": "Gráficos"
     }
   },
   "charts": {
