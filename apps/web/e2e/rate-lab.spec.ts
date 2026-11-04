@@ -15,7 +15,10 @@ const api = "/api/v1/shipping";
 
 test.afterAll(async () => {
   await db.rateLabAddress.deleteMany({ where: { title: { startsWith: prefix } } });
+  await db.rateLabParcel.deleteMany({ where: { title: { startsWith: prefix } } });
   await db.rateLabGroup.deleteMany({ where: { name: { startsWith: prefix } } });
+  await db.product.deleteMany({ where: { name: { startsWith: prefix } } });
+  await db.box.deleteMany({ where: { name: { startsWith: prefix } } });
 });
 
 const desktopOnly = (projectName: string) =>
@@ -146,4 +149,84 @@ test("an admin gives a user Rate Lab; they add an address, see it corrected, tag
   } finally {
     await lab.context().close();
   }
+});
+
+test("a Rate Lab user adds a parcel from a box with contents and one with a typed size, in a group", async ({
+  page,
+}, info) => {
+  desktopOnly(info.project.name);
+  test.setTimeout(90_000);
+  const box = await db.box.create({
+    data: { name: `${prefix} Medium`, lengthIn: 12, widthIn: 10, heightIn: 8 },
+  });
+  const wooProductId = 1_000_000_000 + Math.floor(Math.random() * 1_000_000_000);
+  await db.product.create({
+    data: {
+      wooProductId,
+      type: "simple",
+      name: `${prefix} Glass jar candle`,
+      rawPayload: {},
+      syncedAt: new Date(),
+    },
+  });
+
+  await signInAs(page, ["PACKER", "RATE_LAB"]);
+  await page.goto("/rate-lab/parcels");
+
+  await page.getByRole("button", { name: "Manage groups" }).click();
+  const groups = page.getByRole("dialog", { name: "Parcel groups" });
+  await groups.getByLabel("Group name").fill(`${prefix} Fragile`);
+  await groups.getByRole("button", { name: "Add group" }).click();
+  await expect(groups.getByText(`${prefix} Fragile`)).toBeVisible();
+  await groups.getByRole("button", { name: "Close" }).click();
+
+  // From a box: its inner size is copied; the contents are for customs.
+  await page.getByRole("button", { name: "Add parcel" }).click();
+  const fromBox = page.getByRole("dialog", { name: "Add parcel" });
+  await fromBox.getByLabel("Title").fill(`${prefix} Medium jar`);
+  await fromBox.getByLabel("What it tests").fill("Dimensional weight on the Medium box");
+  await fromBox.getByRole("button", { name: /Box/ }).click();
+  await page.getByRole("option", { name: `${prefix} Medium` }).click();
+  await expect(fromBox.getByTestId("lab-parcel-box-size")).toContainText("12 × 10 × 8");
+  await fromBox.getByLabel("Weight (lb)").fill("3");
+  await fromBox.getByLabel("Find a product").fill(`${prefix} Glass`);
+  await fromBox.getByRole("button", { name: `Add ${prefix} Glass jar candle` }).click();
+  await expect(fromBox.getByLabel(`Quantity of ${prefix} Glass jar candle`)).toHaveValue("1");
+  await fromBox.getByText(`${prefix} Fragile`).click();
+  await fromBox.getByRole("button", { name: "Save" }).click();
+  await expect(fromBox).toBeHidden();
+
+  const jar = page.getByRole("row", { name: new RegExp(`${prefix} Medium jar`) });
+  await expect(jar).toContainText(`${prefix} Medium`);
+  await expect(jar).toContainText("12 × 10 × 8");
+  await expect(jar).toContainText(`1 × ${prefix} Glass jar candle`);
+  await expect(jar).toContainText(`${prefix} Fragile`);
+
+  // A typed size, in the same group.
+  await page.getByRole("button", { name: "Add parcel" }).click();
+  const typed = page.getByRole("dialog", { name: "Add parcel" });
+  await typed.getByLabel("Title").fill(`${prefix} Poly mailer`);
+  await typed.getByText("Typed size").click();
+  await typed.getByLabel("Length (in)").fill("10");
+  await typed.getByLabel("Width (in)").fill("13");
+  await typed.getByLabel("Height (in)").fill("1");
+  await typed.getByLabel("Weight (lb)").fill("0");
+  await typed.getByLabel("Weight (oz)").fill("6");
+  await typed.getByText(`${prefix} Fragile`).click();
+  await typed.getByRole("button", { name: "Save" }).click();
+  await expect(typed).toBeHidden();
+
+  const mailer = page.getByRole("row", { name: new RegExp(`${prefix} Poly mailer`) });
+  await expect(mailer).toContainText("10 × 13 × 1");
+  await expect(mailer).toContainText("None");
+
+  // The group filter finds both.
+  await page.getByRole("button", { name: /Group/ }).click();
+  await page.getByRole("option", { name: `${prefix} Fragile` }).click();
+  await expect(page.getByTestId("lab-parcel-row")).toHaveCount(2);
+
+  // A later box edit doesn't change the parcel.
+  await db.box.update({ where: { id: box.id }, data: { lengthIn: 14 } });
+  await page.reload();
+  await expect(jar).toContainText("12 × 10 × 8");
 });

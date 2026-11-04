@@ -1,8 +1,8 @@
 import { z } from "zod";
-import { base, Id, IdempotencyKey } from "./base";
+import { base, Id, IdempotencyKey, Inches, Ounces } from "./base";
 import { ShipToStatus } from "./carriers";
 
-// Rate Lab (SPEC-rate-lab): test addresses and the groups that tag them. Parcels and runs join
+// Rate Lab (SPEC-rate-lab): test addresses and parcels, and the groups that tag them. Runs join
 // this file in their own tickets.
 
 const text = (max: number) => z.string().trim().min(1).max(max);
@@ -142,6 +142,117 @@ export type UpdateLabAddressInput = z.input<typeof UpdateLabAddressInput>;
 export const DuplicateLabAddressInput = z.object({ idempotencyKey: IdempotencyKey, id: Id });
 export type DuplicateLabAddressInput = z.input<typeof DuplicateLabAddressInput>;
 
+// Parcels: a size (from a box, or typed), a weight and optional contents (decision 4).
+
+export const LabParcelItem = z.object({
+  product: z.object({ id: Id, name: z.string(), sku: z.string().nullable() }),
+  quantity: z.number().int(),
+});
+export type LabParcelItem = z.infer<typeof LabParcelItem>;
+
+/**
+ * `box` is the box it was made from: its inner size was copied then, and a later box edit doesn't
+ * change the parcel. `locked`: a run has quoted it, so size, weight and contents are frozen.
+ */
+export const LabParcel = z.object({
+  id: Id,
+  title: z.string(),
+  description: z.string().nullable(),
+  box: z.object({ id: Id, name: z.string() }).nullable(),
+  lengthIn: z.number(),
+  widthIn: z.number(),
+  heightIn: z.number(),
+  weightOz: z.number(),
+  items: z.array(LabParcelItem),
+  locked: z.boolean(),
+  archived: z.boolean(),
+  groups: z.array(LabGroupRef),
+  lastQuotedAt: z.date().nullable(),
+});
+export type LabParcel = z.infer<typeof LabParcel>;
+
+/** A box (its inner size is copied) or a typed size, never both. */
+export const LabParcelSize = z
+  .object({
+    boxId: Id.nullable().default(null),
+    lengthIn: Inches.nullable().default(null),
+    widthIn: Inches.nullable().default(null),
+    heightIn: Inches.nullable().default(null),
+  })
+  .superRefine((size, ctx) => {
+    const typed = (["lengthIn", "widthIn", "heightIn"] as const).filter((d) => size[d] !== null);
+    if (size.boxId !== null) {
+      if (typed.length > 0) {
+        ctx.addIssue({ code: "custom", path: ["boxId"], message: "errors.rateLab.boxOrSize" });
+      }
+      return;
+    }
+    for (const dimension of ["lengthIn", "widthIn", "heightIn"] as const) {
+      if (size[dimension] === null) {
+        ctx.addIssue({ code: "custom", path: [dimension], message: "errors.field.required" });
+      }
+    }
+  });
+export type LabParcelSize = z.input<typeof LabParcelSize>;
+
+/** Each product once, 1–999 of it. Only physical products are accepted (checked by the service). */
+export const LabParcelItems = z
+  .array(z.object({ productId: Id, quantity: z.number().int().min(1).max(999) }))
+  .max(50)
+  .superRefine((items, ctx) => {
+    const seen = new Set<string>();
+    items.forEach((item, index) => {
+      if (seen.has(item.productId)) {
+        ctx.addIssue({
+          code: "custom",
+          path: [index, "productId"],
+          message: "errors.rateLab.itemDuplicate",
+        });
+      }
+      seen.add(item.productId);
+    });
+  });
+export type LabParcelItems = z.input<typeof LabParcelItems>;
+
+export const ListLabParcelsInput = ListLabAddressesInput;
+export type ListLabParcelsInput = z.input<typeof ListLabParcelsInput>;
+
+export const CreateLabParcelInput = z.object({
+  idempotencyKey: IdempotencyKey,
+  title: Title,
+  description: Description.default(null),
+  size: LabParcelSize,
+  weightOz: Ounces,
+  items: LabParcelItems.default([]),
+  groupIds: GroupIds.default([]),
+});
+export type CreateLabParcelInput = z.input<typeof CreateLabParcelInput>;
+
+/**
+ * Only the fields present change. Size, weight and items are refused once locked, unless they're
+ * unchanged. The parcel's own box keeps the size it copied; picking another box copies its size.
+ */
+export const UpdateLabParcelInput = z.object({
+  id: Id,
+  title: Title.optional(),
+  description: Description.optional(),
+  size: LabParcelSize.optional(),
+  weightOz: Ounces.optional(),
+  items: LabParcelItems.optional(),
+  groupIds: GroupIds.optional(),
+});
+export type UpdateLabParcelInput = z.input<typeof UpdateLabParcelInput>;
+
+export const DuplicateLabParcelInput = DuplicateLabAddressInput;
+export type DuplicateLabParcelInput = z.input<typeof DuplicateLabParcelInput>;
+
+/** A physical product a parcel can hold. */
+export const LabParcelProduct = LabParcelItem.shape.product;
+export type LabParcelProduct = z.infer<typeof LabParcelProduct>;
+
+export const ListLabParcelProductsInput = z.object({ search: z.string().trim().max(80) });
+export type ListLabParcelProductsInput = z.input<typeof ListLabParcelProductsInput>;
+
 export const ListLabGroupsInput = z.object({
   kind: RateLabGroupKind,
   includeArchived: z.boolean().default(false),
@@ -228,6 +339,61 @@ export const rateLab = {
     })
     .input(byId)
     .output(LabAddress),
+
+  parcels: base
+    .route({ method: "GET", path: "/rate-lab/parcels", tags, summary: "List test parcels" })
+    .input(ListLabParcelsInput)
+    .output(z.array(LabParcel)),
+
+  createParcel: base
+    .route({ method: "POST", path: "/rate-lab/parcels", tags, summary: "Add a test parcel" })
+    .input(CreateLabParcelInput)
+    .output(LabParcel),
+
+  updateParcel: base
+    .route({ method: "PATCH", path: "/rate-lab/parcels/{id}", tags, summary: "Edit a test parcel" })
+    .input(UpdateLabParcelInput)
+    .output(LabParcel),
+
+  duplicateParcel: base
+    .route({
+      method: "POST",
+      path: "/rate-lab/parcels/{id}/duplicate",
+      tags,
+      summary: "Copy a test parcel, unlocked",
+    })
+    .input(DuplicateLabParcelInput)
+    .output(LabParcel),
+
+  archiveParcel: base
+    .route({
+      method: "POST",
+      path: "/rate-lab/parcels/{id}/archive",
+      tags,
+      summary: "Archive a test parcel",
+    })
+    .input(byId)
+    .output(LabParcel),
+
+  unarchiveParcel: base
+    .route({
+      method: "POST",
+      path: "/rate-lab/parcels/{id}/unarchive",
+      tags,
+      summary: "Unarchive a test parcel",
+    })
+    .input(byId)
+    .output(LabParcel),
+
+  parcelProducts: base
+    .route({
+      method: "GET",
+      path: "/rate-lab/parcel-products",
+      tags,
+      summary: "Find physical products to put in a test parcel",
+    })
+    .input(ListLabParcelProductsInput)
+    .output(z.array(LabParcelProduct)),
 
   groups: base
     .route({ method: "GET", path: "/rate-lab/groups", tags, summary: "List groups of a kind" })

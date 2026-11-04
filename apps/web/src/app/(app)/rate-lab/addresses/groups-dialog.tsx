@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { LabGroup } from "@woolrus/contracts";
+import type { LabGroup, RateLabGroupKind } from "@woolrus/contracts";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { Form } from "react-aria-components";
@@ -10,13 +10,19 @@ import { Button, TextField } from "@/components/ui/fields";
 import { useErrorMessage } from "@/lib/errors";
 import { orpc } from "@/lib/orpc";
 
-/** Address groups: add, rename and archive. Archived groups drop out of this list and the filters. */
-export function GroupsDialog({ onClose }: { onClose: () => void }) {
+/** Groups of one kind: add, rename and archive. Archived groups drop out of this list and the filters. */
+export function GroupsDialog({
+  kind = "ADDRESS",
+  onClose,
+}: {
+  kind?: RateLabGroupKind;
+  onClose: () => void;
+}) {
   const t = useTranslations("rateLab.groups");
   const errorMessage = useErrorMessage();
   const queryClient = useQueryClient();
   const groups = useQuery(
-    orpc.rateLab.groups.queryOptions({ input: { kind: "ADDRESS", includeArchived: false } }),
+    orpc.rateLab.groups.queryOptions({ input: { kind, includeArchived: false } }),
   );
   const [name, setName] = useState("");
   const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
@@ -37,14 +43,18 @@ export function GroupsDialog({ onClose }: { onClose: () => void }) {
 
   return (
     <>
-      <Dialog title={t("title")} isOpen onOpenChange={(open) => !open && onClose()}>
+      <Dialog
+        title={kind === "PARCEL" ? t("parcelTitle") : t("title")}
+        isOpen
+        onOpenChange={(open) => !open && onClose()}
+      >
         {(close) => (
           <div className="space-y-4">
             <Form
               className="flex items-end gap-2"
               onSubmit={(event) => {
                 event.preventDefault();
-                create.mutate({ idempotencyKey, kind: "ADDRESS", name });
+                create.mutate({ idempotencyKey, kind, name });
               }}
             >
               <div className="grow">

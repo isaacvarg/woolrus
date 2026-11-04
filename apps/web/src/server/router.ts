@@ -3,6 +3,7 @@ import {
   archiveBox,
   archiveLabAddress,
   archiveLabGroup,
+  archiveLabParcel,
   clearPin,
   clearProviderCredentials,
   clearSecret,
@@ -16,6 +17,7 @@ import {
   createLabAddress,
   createLabelPrint,
   createLabGroup,
+  createLabParcel,
   createManifest,
   createNote,
   createPriorityRule,
@@ -29,6 +31,7 @@ import {
   deletePriorityRule,
   dismissFailedJob,
   duplicateLabAddress,
+  duplicateLabParcel,
   finishBatch,
   getBatch,
   getEmailSender,
@@ -53,6 +56,8 @@ import {
   listIssues,
   listLabAddresses,
   listLabGroups,
+  listLabParcelProducts,
+  listLabParcels,
   listNotes,
   listOrders,
   listPriorityRules,
@@ -128,6 +133,7 @@ import {
   testStoreConnection,
   touchStation,
   unarchiveLabAddress,
+  unarchiveLabParcel,
   undoVoid,
   unlockWithBadge,
   unlockWithPin,
@@ -136,6 +142,7 @@ import {
   updateBox,
   updateIssue,
   updateLabAddress,
+  updateLabParcel,
   updateNote,
   updatePreferences,
   updatePriorityRule,
@@ -628,6 +635,27 @@ export const router = implementer.router({
     ),
     unarchiveAddress: api.rateLab.unarchiveAddress.handler(({ input, context }) =>
       unarchiveLabAddress(db, context.actor, input),
+    ),
+    parcels: api.rateLab.parcels.handler(({ input, context }) =>
+      listLabParcels(db, context.actor, input),
+    ),
+    createParcel: api.rateLab.createParcel.handler(({ input, context }) =>
+      createLabParcel(db, context.actor, input),
+    ),
+    updateParcel: api.rateLab.updateParcel.handler(({ input, context }) =>
+      updateLabParcel(db, context.actor, input),
+    ),
+    duplicateParcel: api.rateLab.duplicateParcel.handler(({ input, context }) =>
+      duplicateLabParcel(db, context.actor, input),
+    ),
+    archiveParcel: api.rateLab.archiveParcel.handler(({ input, context }) =>
+      archiveLabParcel(db, context.actor, input),
+    ),
+    unarchiveParcel: api.rateLab.unarchiveParcel.handler(({ input, context }) =>
+      unarchiveLabParcel(db, context.actor, input),
+    ),
+    parcelProducts: api.rateLab.parcelProducts.handler(({ input, context }) =>
+      listLabParcelProducts(db, context.actor, input),
     ),
     groups: api.rateLab.groups.handler(({ input, context }) =>
       listLabGroups(db, context.actor, input),

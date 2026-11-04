@@ -20,6 +20,7 @@ import { withIdempotency } from "../idempotency";
 import { type Actor, assertCan } from "../permissions";
 
 // Rate Lab's test addresses and the groups that tag them (SPEC-rate-lab "Addresses and parcels").
+// Parcels are in parcels.ts.
 
 export type CatalogDeps = {
   providers: ShippingProvider[];
@@ -40,6 +41,18 @@ type GroupRow = { id: string; kind: RateLabGroupKind; name: string; archivedAt: 
 
 const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name);
 
+/** An item's groups as it shows them, by name. */
+export function groupRefs(groups: { group: GroupRow }[]) {
+  return groups
+    .map(({ group }) => ({ id: group.id, name: group.name, archived: group.archivedAt !== null }))
+    .sort(byName);
+}
+
+/** A copy's title: "… (copy)", cut to fit the 80 characters a title takes. */
+export function copyTitle(title: string): string {
+  return `${title.slice(0, TITLE_MAX - COPY_SUFFIX.length).trimEnd()}${COPY_SUFFIX}`;
+}
+
 function toLabGroup(group: GroupRow): LabGroup {
   return { id: group.id, kind: group.kind, name: group.name, archived: group.archivedAt !== null };
 }
@@ -57,9 +70,7 @@ function toLabAddress(row: AddressRow, lastQuotedAt: Date | null): LabAddress {
     checkedAt: row.checkedAt,
     locked: row.lockedAt !== null,
     archived: row.archivedAt !== null,
-    groups: row.groups
-      .map(({ group }) => ({ id: group.id, name: group.name, archived: group.archivedAt !== null }))
-      .sort(byName),
+    groups: groupRefs(row.groups),
     lastQuotedAt,
   };
 }
@@ -115,15 +126,18 @@ function sameAddress(a: unknown, b: unknown): boolean {
 }
 
 /**
- * The address groups to set: each must exist and be an address group. An archived group stays on
- * an address already in it, but nothing new joins it.
+ * The groups to set: each must exist and be of `kind`. An archived group stays on an item already
+ * in it, but nothing new joins it.
  */
-async function resolveGroups(tx: DbTx, groupIds: string[], keep: Set<string> = new Set()) {
+export async function resolveGroups(
+  tx: DbTx,
+  kind: RateLabGroupKind,
+  groupIds: string[],
+  keep: Set<string> = new Set(),
+) {
   if (groupIds.length === 0) return;
   const groups = await tx.rateLabGroup.findMany({ where: { id: { in: groupIds } } });
-  const usable = groups.filter(
-    (g) => g.kind === "ADDRESS" && (g.archivedAt === null || keep.has(g.id)),
-  );
+  const usable = groups.filter((g) => g.kind === kind && (g.archivedAt === null || keep.has(g.id)));
   if (usable.length !== groupIds.length) {
     throw new AppError("BAD_REQUEST", "errors.rateLab.groupInvalid", {
       groupIds: "errors.rateLab.groupInvalid",
@@ -172,7 +186,7 @@ export async function createLabAddress(
       "rateLab.createAddress",
       actor,
       async () => {
-        await resolveGroups(tx, groupIds);
+        await resolveGroups(tx, "ADDRESS", groupIds);
         const row = await tx.rateLabAddress.create({
           data: {
             title,
@@ -222,7 +236,7 @@ export async function updateLabAddress(
     if (moved && current.lockedAt) throw new AppError("CONFLICT", "errors.rateLab.locked");
     const before = toLabAddress(current, null);
     if (groupIds) {
-      await resolveGroups(tx, groupIds, new Set(current.groups.map((g) => g.groupId)));
+      await resolveGroups(tx, "ADDRESS", groupIds, new Set(current.groups.map((g) => g.groupId)));
     }
     await tx.rateLabAddress.update({
       where: { id },
@@ -307,7 +321,7 @@ export async function duplicateLabAddress(
           include: addressInclude,
         });
         if (!source) throw notFound();
-        const title = `${source.title.slice(0, TITLE_MAX - COPY_SUFFIX.length).trimEnd()}${COPY_SUFFIX}`;
+        const title = copyTitle(source.title);
         const copy = await tx.rateLabAddress.create({
           data: {
             title,
