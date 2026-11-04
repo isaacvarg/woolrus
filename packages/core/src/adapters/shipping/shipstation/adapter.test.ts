@@ -283,6 +283,17 @@ describe("ShipStation adapter", () => {
       expect(JSON.stringify(calls.at(-1)?.body)).not.toContain("customs");
     });
 
+    it("asks for quick rates when the request is quick, so no shipment is left in the account", async () => {
+      const { provider, calls } = setup();
+      await provider.getRates({ ...request, quick: true });
+      const body = calls.at(-1)?.body as { rate_options: Record<string, unknown> };
+      expect(body.rate_options.rate_type).toBe("quick");
+
+      await provider.getRates(request);
+      expect(calls.at(-1)?.body).toMatchObject({ rate_options: {} });
+      expect(JSON.stringify(calls.at(-1)?.body)).not.toContain("rate_type");
+    });
+
     it("maps the declaration to the shipment's customs block", async () => {
       const { provider, calls } = setup();
       await provider.getRates({
