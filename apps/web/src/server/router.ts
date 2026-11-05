@@ -682,9 +682,6 @@ export const router = implementer.router({
     archiveGroup: api.rateLab.archiveGroup.handler(({ input, context }) =>
       archiveLabGroup(db, context.actor, input),
     ),
-    realOrders: api.rateLab.realOrders.handler(({ input, context }) =>
-      realOrders(db, context.actor, input),
-    ),
     previewRun: api.rateLab.previewRun.handler(({ input, context }) =>
       previewLabRun(db, context.actor, input),
     ),
@@ -692,6 +689,13 @@ export const router = implementer.router({
       startLabRun(db, context.actor, input, { providers: await createShippingProviders(db) }),
     ),
     runs: api.rateLab.runs.handler(({ input, context }) => listLabRuns(db, context.actor, input)),
+    run: api.rateLab.run.handler(({ input, context }) => getLabRun(db, context.actor, input)),
+    cancelRun: api.rateLab.cancelRun.handler(({ input, context }) =>
+      cancelLabRun(db, context.actor, input),
+    ),
+    runTrends: api.rateLab.runTrends.handler(({ input, context }) =>
+      labRunTrends(db, context.actor, input),
+    ),
     quoteOneOff: api.rateLab.quoteOneOff.handler(async ({ input, context }) =>
       quoteOneOff(db, context.actor, input, { providers: await createShippingProviders(db) }),
     ),
@@ -709,15 +713,11 @@ export const router = implementer.router({
     trendSeries: api.rateLab.trendSeries.handler(({ input, context }) =>
       labTrendSeries(db, context.actor, input),
     ),
-    run: api.rateLab.run.handler(({ input, context }) => getLabRun(db, context.actor, input)),
-    cancelRun: api.rateLab.cancelRun.handler(({ input, context }) =>
-      cancelLabRun(db, context.actor, input),
-    ),
-    runTrends: api.rateLab.runTrends.handler(({ input, context }) =>
-      labRunTrends(db, context.actor, input),
-    ),
     trendsReport: api.rateLab.trendsReport.handler(({ input, context }) =>
       labTrendsReport(db, context.actor, input),
+    ),
+    realOrders: api.rateLab.realOrders.handler(({ input, context }) =>
+      realOrders(db, context.actor, input),
     ),
   },
 });

@@ -1,12 +1,12 @@
 import { z } from "zod";
-import { Id } from "./base";
+import { Id, QueryBoolean, queryIds } from "./base";
 
 // Rate Lab's Trends (SPEC-rate-lab "Trends"): how prices for the same test address and parcel move
 // across suite runs. Its routes join `rateLab` in `rate-lab.ts`.
 
 /** A calendar day, YYYY-MM-DD, read in UTC. */
 const Day = z.iso.date();
-const Ids = z.array(Id).max(50).default([]);
+const Ids = queryIds(50).default([]);
 
 const TrendFilters = z.object({
   /** Only quotes from these carriers; empty = all. */
@@ -16,7 +16,7 @@ const TrendFilters = z.object({
   /** Inclusive. */
   to: Day.optional(),
   /** Fake providers' quotes are left out unless asked (SPEC-rate-history decision 6). */
-  includeFake: z.boolean().default(false),
+  includeFake: QueryBoolean.default(false),
 });
 
 const validRange = {

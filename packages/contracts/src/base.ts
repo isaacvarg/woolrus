@@ -73,6 +73,27 @@ export function toFieldErrors(issues: readonly Issue[]): Record<string, ErrorCod
 
 export const Id = z.uuid();
 
+// GET inputs: over /api/v1 every query parameter arrives as text, while the RPC client sends real
+// booleans and arrays. Numbers use `z.coerce.number<number>()`, which keeps their input type a
+// number for typed callers.
+
+/** "true" or "1" from a query string: how pages and route handlers read a flag. */
+export const isQueryTrue = (value: unknown): boolean =>
+  value === true || value === "true" || value === "1";
+
+/** A boolean in a GET input: a real boolean over RPC, "true"/"false" (or "1"/"0") over /api/v1. */
+export const QueryBoolean = z.union([
+  z.boolean(),
+  z.enum(["true", "false", "1", "0"]).transform(isQueryTrue),
+]);
+
+/**
+ * A list of ids in a GET input, at most `max`. Over /api/v1 a lone `?ids=a` arrives as a plain
+ * string; repeated (`?ids=a&ids=b`) or bracketed (`?ids[]=a`) ones arrive as an array.
+ */
+export const queryIds = (max: number) =>
+  z.union([Id.transform((id) => [id]), z.array(Id).max(max)]);
+
 /**
  * Header-free idempotency: mutations that create things take a client-generated key so a
  * replayed request returns the original result (flaky Wi-Fi, future offline Android client).

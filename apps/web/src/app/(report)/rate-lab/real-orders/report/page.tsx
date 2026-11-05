@@ -1,3 +1,4 @@
+import { isQueryTrue } from "@woolrus/contracts";
 import { can } from "@woolrus/core";
 import { getTranslations } from "next-intl/server";
 import { currentActor } from "@/server/actor";
@@ -8,15 +9,16 @@ type Search = Record<string, string | string[] | undefined>;
 
 const one = (value: Search[string]) => (typeof value === "string" && value ? value : undefined);
 
-// The Real orders report: Rate Lab and `report.read`, like Real orders. The filters come from the
-// screen's link.
+// The Real orders report: `report.read`, the one rule for Real orders data (SPEC-rate-lab
+// "Permissions"), as the procedure and the CSV export check it. The filters come from the screen's
+// link.
 export default async function RateLabRealOrdersReportPage({
   searchParams,
 }: {
   searchParams: Promise<Search>;
 }) {
   const actor = await currentActor();
-  if (!actor || !can(actor, "ratelab.use") || !can(actor, "report.read")) {
+  if (!actor || !can(actor, "report.read")) {
     return <Forbidden message={(await getTranslations())("errors.forbidden")} />;
   }
   const search = await searchParams;
@@ -30,7 +32,7 @@ export default async function RateLabRealOrdersReportPage({
         country: one(search.country),
         state: one(search.state),
         boxId: one(search.boxId),
-        includeFake: search.includeFake === "1",
+        includeFake: isQueryTrue(search.includeFake),
       }}
       autoPrint={search.print === "1"}
     />

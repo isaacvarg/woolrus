@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { Id } from "./base";
+import { Id, QueryBoolean } from "./base";
 import { RateSelectionReason } from "./carriers";
 
 // Rate Lab's Real orders dashboard (SPEC-rate-lab "Real orders"): what real packages paid, from
@@ -8,6 +8,22 @@ import { RateSelectionReason } from "./carriers";
 /** A calendar day, YYYY-MM-DD, read in UTC. */
 const Day = z.iso.date();
 
+/** The longest range Real orders reads, in days, both ends included: a leap year. */
+export const REAL_ORDERS_MAX_DAYS = 366;
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Whether `from`–`to` spans at most REAL_ORDERS_MAX_DAYS. Without `to` the range runs to today, as
+ * core reads it; without `from` it is core's last 30 days.
+ */
+function withinMaxSpan({ from, to }: { from?: string; to?: string }): boolean {
+  if (!from) return true;
+  const end = to ? Date.parse(to) : Date.parse(new Date().toISOString().slice(0, 10));
+  return (end - Date.parse(from)) / DAY_MS + 1 <= REAL_ORDERS_MAX_DAYS;
+}
+
+/** The dashboard's input; the CSV export and the PDF report parse the same one. */
 export const RealOrdersInput = z
   .object({
     /** Inclusive. Without both, the range is the last 30 days. */
@@ -25,14 +41,16 @@ export const RealOrdersInput = z
     state: z.string().trim().toUpperCase().max(60).optional(),
     boxId: Id.optional(),
     /** Fake providers' quotes are left out unless asked (SPEC-rate-history decision 6). */
-    includeFake: z.boolean().default(false),
-    /** How many packages the alternatives table shows, newest first. */
-    alternativesLimit: z.number().int().min(1).max(500).default(100),
+    includeFake: QueryBoolean.default(false),
+    /** How many packages the alternatives table shows, newest first; 0 for none (the report). */
+    // Coerced: over /api/v1 it arrives as a query string.
+    alternativesLimit: z.coerce.number<number>().int().min(0).max(500).default(100),
   })
   .refine((input) => !input.from || !input.to || input.from <= input.to, {
     path: ["to"],
     message: "errors.field.dateRange",
-  });
+  })
+  .refine(withinMaxSpan, { path: ["from"], message: "errors.field.dateRangeTooLong" });
 export type RealOrdersInput = z.input<typeof RealOrdersInput>;
 
 const Count = z.number().int().nonnegative();

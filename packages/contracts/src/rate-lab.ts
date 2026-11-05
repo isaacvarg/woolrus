@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { base, Id, IdempotencyKey, Inches, Ounces } from "./base";
+import { base, Id, IdempotencyKey, Inches, Ounces, QueryBoolean, queryIds } from "./base";
 import { RateError, ShippingProviderId, ShipToStatus } from "./carriers";
 import { RealOrders, RealOrdersInput } from "./rate-lab-real-orders";
 import { LabCombination, LabRunInsights } from "./rate-lab-run";
@@ -13,8 +13,8 @@ import {
   LabTrendsReport,
 } from "./rate-lab-trends";
 
-// Rate Lab (SPEC-rate-lab): test addresses and parcels, and the groups that tag them. Runs join
-// this file in their own tickets.
+// Rate Lab (SPEC-rate-lab): test addresses and parcels, the groups that tag them, suite runs and
+// one-off quotes. Trends and Real orders keep their schemas in their own files.
 
 const text = (max: number) => z.string().trim().min(1).max(max);
 /** Blank means absent, so an empty form field doesn't fail `min(1)`. */
@@ -125,8 +125,8 @@ const GroupIds = z
 
 export const ListLabAddressesInput = z.object({
   /** Addresses in any of these groups; empty = all. */
-  groupIds: z.array(Id).max(50).default([]),
-  includeArchived: z.boolean().default(false),
+  groupIds: queryIds(50).default([]),
+  includeArchived: QueryBoolean.default(false),
   search: z.string().trim().max(80).default(""),
 });
 export type ListLabAddressesInput = z.input<typeof ListLabAddressesInput>;
@@ -266,7 +266,7 @@ export type ListLabParcelProductsInput = z.input<typeof ListLabParcelProductsInp
 
 export const ListLabGroupsInput = z.object({
   kind: RateLabGroupKind,
-  includeArchived: z.boolean().default(false),
+  includeArchived: QueryBoolean.default(false),
 });
 export type ListLabGroupsInput = z.input<typeof ListLabGroupsInput>;
 
@@ -616,16 +616,6 @@ export const rateLab = {
     .input(byId)
     .output(LabGroup),
 
-  realOrders: base
-    .route({
-      method: "GET",
-      path: "/rate-lab/real-orders",
-      tags,
-      summary: "What real orders paid for labels, and what else they were offered",
-    })
-    .input(RealOrdersInput)
-    .output(RealOrders),
-
   previewRun: base
     .route({
       method: "POST",
@@ -645,55 +635,6 @@ export const rateLab = {
     .route({ method: "GET", path: "/rate-lab/runs", tags, summary: "Suite runs, newest first" })
     .input(ListLabRunsInput)
     .output(LabRunPage),
-
-  quoteOneOff: base
-    .route({
-      method: "POST",
-      path: "/rate-lab/quote",
-      tags,
-      summary: "Quote a typed address against saved or typed parcels, inline",
-    })
-    .input(QuoteOneOffInput)
-    .output(LabOneOff),
-
-  saveOneOffAddress: base
-    .route({
-      method: "POST",
-      path: "/rate-lab/runs/{runId}/save-address",
-      tags,
-      summary: "Save a one-off's address as a test address",
-    })
-    .input(SaveOneOffAddressInput)
-    .output(LabAddress),
-
-  saveOneOffParcel: base
-    .route({
-      method: "POST",
-      path: "/rate-lab/runs/{runId}/save-parcel",
-      tags,
-      summary: "Save a one-off's typed parcel as a test parcel",
-    })
-    .input(SaveOneOffParcelInput)
-    .output(LabParcel),
-  trendGrid: base
-    .route({
-      method: "GET",
-      path: "/rate-lab/trends",
-      tags,
-      summary: "Latest cheapest price per test address × parcel, and its change",
-    })
-    .input(LabTrendGridInput)
-    .output(LabTrendGrid),
-
-  trendSeries: base
-    .route({
-      method: "GET",
-      path: "/rate-lab/trends/series",
-      tags,
-      summary: "One address × parcel's prices per carrier service across suite runs",
-    })
-    .input(LabTrendSeriesInput)
-    .output(LabTrendSeries),
 
   run: base
     .route({
@@ -725,6 +666,56 @@ export const rateLab = {
     .input(LabRunTrendsInput)
     .output(z.array(LabRunTrend)),
 
+  quoteOneOff: base
+    .route({
+      method: "POST",
+      path: "/rate-lab/quote",
+      tags,
+      summary: "Quote a typed address against saved or typed parcels, inline",
+    })
+    .input(QuoteOneOffInput)
+    .output(LabOneOff),
+
+  saveOneOffAddress: base
+    .route({
+      method: "POST",
+      path: "/rate-lab/runs/{runId}/save-address",
+      tags,
+      summary: "Save a one-off's address as a test address",
+    })
+    .input(SaveOneOffAddressInput)
+    .output(LabAddress),
+
+  saveOneOffParcel: base
+    .route({
+      method: "POST",
+      path: "/rate-lab/runs/{runId}/save-parcel",
+      tags,
+      summary: "Save a one-off's typed parcel as a test parcel",
+    })
+    .input(SaveOneOffParcelInput)
+    .output(LabParcel),
+
+  trendGrid: base
+    .route({
+      method: "GET",
+      path: "/rate-lab/trends",
+      tags,
+      summary: "Latest cheapest price per test address × parcel, and its change",
+    })
+    .input(LabTrendGridInput)
+    .output(LabTrendGrid),
+
+  trendSeries: base
+    .route({
+      method: "GET",
+      path: "/rate-lab/trends/series",
+      tags,
+      summary: "One address × parcel's prices per carrier service across suite runs",
+    })
+    .input(LabTrendSeriesInput)
+    .output(LabTrendSeries),
+
   trendsReport: base
     .route({
       method: "GET",
@@ -734,4 +725,14 @@ export const rateLab = {
     })
     .input(LabTrendGridInput)
     .output(LabTrendsReport),
+
+  realOrders: base
+    .route({
+      method: "GET",
+      path: "/rate-lab/real-orders",
+      tags,
+      summary: "What real orders paid for labels, and what else they were offered",
+    })
+    .input(RealOrdersInput)
+    .output(RealOrders),
 };
