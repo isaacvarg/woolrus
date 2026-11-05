@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { toFieldErrors } from "./base";
+import { isQueryTrue, QueryBoolean, queryIds, toFieldErrors } from "./base";
 
 function issuesOf(schema: z.ZodType, input: unknown) {
   const result = schema.safeParse(input);
@@ -58,5 +58,29 @@ describe("toFieldErrors", () => {
 
   it("drops issues without a path (the form-level message covers them)", () => {
     expect(toFieldErrors([{ message: "nope" }])).toEqual({});
+  });
+});
+
+// GET inputs read the same over RPC (real values) and /api/v1 (query-string text).
+describe("query inputs", () => {
+  it("reads a boolean or its text", () => {
+    for (const yes of [true, "true", "1"]) expect(QueryBoolean.parse(yes)).toBe(true);
+    for (const no of [false, "false", "0"]) expect(QueryBoolean.parse(no)).toBe(false);
+    for (const bad of ["yes", "", 1, null]) expect(QueryBoolean.safeParse(bad).success).toBe(false);
+  });
+
+  it("reads a flag from a page's or route's query", () => {
+    expect([true, "true", "1"].map(isQueryTrue)).toEqual([true, true, true]);
+    expect([false, "false", "0", "yes", undefined, null].map(isQueryTrue)).toEqual(
+      Array(6).fill(false),
+    );
+  });
+
+  it("reads a lone id as a list, and caps the list", () => {
+    const a = "01a1a7e8-1159-7098-b4a5-fc9b8586869b";
+    expect(queryIds(2).parse(a)).toEqual([a]);
+    expect(queryIds(2).parse([a, a])).toEqual([a, a]);
+    expect(queryIds(2).safeParse([a, a, a]).success).toBe(false);
+    expect(queryIds(2).safeParse("nope").success).toBe(false);
   });
 });

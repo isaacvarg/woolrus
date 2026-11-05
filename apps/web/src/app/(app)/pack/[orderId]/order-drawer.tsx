@@ -4,12 +4,12 @@ import { useQuery } from "@tanstack/react-query";
 import type { PackPackage } from "@woolrus/contracts";
 import { useFormatter, useTranslations } from "next-intl";
 import { Dialog as AriaDialog, Heading, Modal, ModalOverlay } from "react-aria-components";
-import { formatAddress } from "@/app/(app)/orders/[id]/address";
 import { HistoryPanel } from "@/app/(app)/orders/[id]/history-panel";
 import { NoteComposer } from "@/components/notes/note-composer";
 import { NoteList } from "@/components/notes/note-list";
 import { Dialog, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/fields";
+import { formatAddress } from "@/lib/address";
 import { useErrorMessage } from "@/lib/errors";
 import { orpc } from "@/lib/orpc";
 

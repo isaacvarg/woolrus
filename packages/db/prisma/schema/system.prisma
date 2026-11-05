@@ -43,6 +43,9 @@ model Settings {
   /// ...or more than this much when the customer paid nothing for shipping. Null = off.
   labelCostConfirmFreeCents Int?     @default(1500) @map("label_cost_confirm_free_cents")
 
+  /// Most address × parcel combinations one Rate Lab run may quote, 1–2000 (SPEC-rate-lab decision 11).
+  rateLabMaxCombinations Int @default(250) @map("rate_lab_max_combinations")
+
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   @@map("settings")

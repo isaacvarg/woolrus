@@ -18,9 +18,9 @@ reads the quotes `rate-history` keeps from real packages: what was chosen, what 
 
 - **SRS:** FR-REP-03 (spend by carrier and service; label cost vs. shipping charged), FR-REP-04 (CSV export) for
   its own reports. New: rate testing.
-- **Users:** Admin and Shipper run tests, get one-off quotes and read runs and trends (`ratelab.use`). Admins
-  manage test addresses, parcels and groups (`ratelab.manage`) and read Real orders (`report.read`, Admin only
-  today).
+- **Users:** anyone given the **Rate Lab** role (any user, next to their other roles; decision 13) runs tests, gets
+  one-off quotes, reads runs and trends (`ratelab.use`) and manages test addresses, parcels and groups
+  (`ratelab.manage`). Admins have both. Real orders needs `report.read` (Admin only today).
 - **Why now:** M4 shipped labels. Before we change carrier accounts or box sizes, we want to measure prices
   rather than guess, and see what real orders actually paid.
 
@@ -73,7 +73,10 @@ reads the quotes `rate-history` keeps from real packages: what was chosen, what 
 
 ### Permissions (`packages/core/src/permissions.ts`)
 
-New: `ratelab.use` (Admin, Shipper), `ratelab.manage` (Admin). Real orders uses the existing `report.read`.
+New role `RATE_LAB` (Prisma `Role`, i18n label, assignable on Users like any other role) granting the new
+`ratelab.use` and `ratelab.manage`; Admins have both through `ADMIN`. No other role gets them, so a Shipper or QA
+user sees Rate Lab only once the role is ticked. The two permissions stay separate so `manage` could move to a
+narrower role later. Real orders uses the existing `report.read`.
 
 ### Data (`packages/db/prisma/schema/rate-lab.prisma`, new file)
 
@@ -181,6 +184,8 @@ Hand-written SQL at the end of the migration:
 - One active run: a partial unique index on `rate_lab_runs ((true)) WHERE kind = 'SUITE' AND status IN ('QUEUED','RUNNING')`.
 - Group names unique per kind, case-insensitive: `UNIQUE (kind, lower(name))`.
 - `ad_hoc_*` only on `ONE_OFF` runs.
+- One running one-off per person (later migration `20261105190000_rate_lab_one_off_per_user`): a partial unique
+  index on `rate_lab_runs (started_by_id) WHERE kind = 'ONE_OFF' AND status = 'RUNNING'`.
 
 ### Addresses and parcels (`packages/core/src/rate-lab/catalog.ts`)
 
@@ -209,7 +214,8 @@ fetch for it.
    empty); same for parcels. Zero on either side → `errors.rateLab.emptySelection`.
 2. `combinations = addresses × parcels`. Over `Settings.rateLabMaxCombinations` → `errors.rateLab.overCap
    { combinations, cap }`, nothing created.
-3. No enabled provider → `errors.rateLab.noProviders`. Ship-from not set → `errors.settings.shipFromMissing`.
+3. No enabled provider → `errors.rateLab.noProviders`. Ship-from not set → `errors.carriers.noShipFrom` (the rate
+   fetch's key).
 4. Insert the run (`QUEUED`, ship-from snapshot) and enqueue `rateLab.run { runId }` in the same transaction. The
    one-active-run index turns a second start into `errors.rateLab.runActive`. Audited.
 
@@ -225,7 +231,8 @@ each one:
   selection as `rates.fetch` (decision 3).
 - International with no contents or incomplete customs → logged as a failed combination with
   `errors.shipping.customsIncomplete`, no provider called.
-- Call each enabled provider's `getRates` in parallel within `PROVIDER_TIMEOUT_MS`; never retry inside a run.
+- Call each enabled provider's `getRates` in parallel within `PROVIDER_TIMEOUT_MS`, as quick quotes (open question
+  1); never retry inside a run.
 - `logRateFetch` (source `LAB`, the run, address and parcel ids, lane, parcel, quotes, errors, fake flags), then
   increment `completedCombinations`, `quoteCount` and `failureCount` (a combination counts as one failure per
   provider that errored), and bump `heartbeatAt`.
@@ -246,11 +253,18 @@ becomes `CANCELLED` at once. Audited.
 `quoteOneOff({ address, parcelIds?, parcelGroupIds?, adHocParcels? })` (`ratelab.use`): at least one parcel; total
 parcels ≤ 20. It checks the address (not stored as a test address), creates a `ONE_OFF` run and runs it **inline** in
 the request: one-offs are small, and the person is waiting. The one-active-run rule doesn't apply to `ONE_OFF`
-(the index covers `SUITE` only). It returns the run id; the Quote tab shows its quotes. One-off fetches are excluded
-from Trends (decision 12).
+(the index covers `SUITE` only), but a person has **one one-off running at a time**: each quotes through every
+enabled provider on the shared credentials, so a loop of them could exhaust a carrier's API quota. A second one
+while the first is quoting is refused (`errors.rateLab.oneOffActive`, CONFLICT) before any provider is asked; a
+partial unique index decides it, so two at once can't race. Stalled runs are recovered first, so a one-off whose
+request died (no heartbeat for `LAB_STALL_MS`; each combination bumps it) doesn't hold the slot. It returns the run id, the address check (typed vs. quoted) and each parcel's
+quotes and provider errors, which the Quote tab shows. Saved parcels it quotes are locked like a run's; a typed
+parcel has no contents, so an international one logs `customsIncomplete`. One-off fetches are excluded from Trends
+(decision 12).
 
 `saveOneOffAddress({ runId, title, groupIds })` and `saveOneOffParcel({ runId, index, title, groupIds })`
-(`ratelab.manage`) create a test address or parcel from it.
+(`ratelab.manage`) create a test address or parcel from it: the address is checked again as a new one, and a
+parcel keeps its box only while that box is active and still the size quoted.
 
 **PII:** a one-off address may be a real customer's. The PII purge (`operations`, edit to SPEC-operations) also
 clears `adHocAddress` on one-off runs older than `Settings.piiRetentionDays`; the lane in its fetches stays.
@@ -321,43 +335,55 @@ where noted. Filters: date range, carrier, service, destination country/state, b
 
 ### UI (`apps/web/src/app/(app)/rate-lab/`)
 
-- **Sidebar:** a **Rate Lab** entry for `ratelab.use` (Admin, Shipper), next to Manifests. The layout has tabs:
+- **Sidebar:** a **Rate Lab** entry for `ratelab.use` (Admin, Rate Lab role), next to Manifests. The layout has tabs:
   **Runs · Addresses · Parcels · Quote · Trends · Real orders** (Real orders only with `report.read`).
 - **Runs:** a table modelled on `sync/sync-runs.tsx`: started at, started by, duration, status badge, combinations,
   quotes, failures, groups. **New run** dialog with group/item pickers and the live combination count (red and
   disabled over the cap). A running run shows a progress bar (`completed / combinations`) and **Cancel**; the list
   polls every 3 s while a run is active. Rows open `/rate-lab/runs/[id]`.
-- **Run detail:** summary header, insight cards, then a TanStack table of quotes grouped by address × parcel
-  (cheapest and fastest marked by text badges, not colour alone), filters by carrier, provider and status;
-  **Export CSV**, **PDF report**, **Run again** (same selection).
-- **Addresses / Parcels:** tables with group filters and an archived toggle; forms in a drawer; a lock icon and
-  "Used in runs: physical fields locked. Duplicate to change." on locked items. The address form shows typed vs.
-  corrected like the order's ship-to.
+- **Run detail:** summary header, insight cards, then a plain table of quotes grouped by address × parcel (one
+  `<tbody>` per combination; no TanStack table, it needs no sorting or paging), with cheapest and fastest marked
+  by text badges, not colour alone, and filters by carrier, provider and status; **Export CSV**, **PDF report**,
+  **Run again** (same selection). While the run is queued or running the page refreshes every 3 s.
+- **Addresses / Parcels:** tables with group filters, a title search and an archived toggle; forms in a modal
+  dialog (the dialog scrolls, not the form); a lock icon and "Used in runs: physical fields locked. Duplicate to
+  change." on locked items. The address form shows typed vs. corrected like the order's ship-to. The Quote tab
+  reuses the same address fields and parcel size fields.
 - **Quote:** the address form plus a parcel picker (saved parcels, groups, **Add parcel** by hand); results are
   a table per parcel; **Save as test address** / **Save parcel** for Admins.
 - **Trends:** filters; the heatmap (a CSS grid, colour scale plus the % in text); clicking a cell opens the Recharts
   line chart below; **PDF report**.
-- **Real orders:** date range (default 30 days) and filters; stat tiles; Recharts bar charts (reason, carrier share)
-  and a line chart (lane cost over time); the alternatives table; **Export CSV**, **PDF report**.
+- **Real orders:** date range (default 30 days) and filters (picking a carrier or country starts its service or
+  state over); stat tiles; Recharts bar charts of overspend by reason and of spend by carrier (carrier share is
+  in that chart's table and the service table), and a line chart of lane cost over time (the five busiest lanes;
+  its table lists every lane); the alternatives table; **Export CSV**, **PDF report**.
 - **Settings → Shipping:** a "Rate Lab" card with the combination cap.
 - Charts read theme colours from daisyUI CSS variables, so they work in light and dark; every chart has a table
-  or text equivalent for screen readers. All strings in `en` and `es`.
+  or text equivalent for screen readers, shown on screen with **Show data** and always printed in the reports.
+  Amounts use the quote's currency where the data carries one (Quote tab, run detail), USD otherwise
+  (assumption 2). All strings in `en` and `es`.
 
 ### Dev data
 
 `pnpm db:seed` adds 6 test addresses (2 corrected by the ShipStation fake's "Street" rule, 1 Canadian), 4 parcels
 (2 from seeded boxes, 1 with contents for customs), and groups, plus 3 finished `SUITE` runs a week apart from the
-fakes with slightly drifting prices, so Trends has lines in dev.
+fakes with slightly drifting prices, so Trends has lines in dev (`packages/db/prisma/seed-rate-lab.ts`). Like the
+demo orders it is skipped when `NODE_ENV=production`, has fixed ids so re-seeding adds nothing, and writes the runs
+only with `SHIPPING_PROVIDERS=fake` (without it the addresses stay `UNCHECKED`). The seeded catalog has only domestic
+services on, so the Canadian combinations log what a real run would: `customsIncomplete` for parcels without
+contents and `noCarriers` for the one with them; the runs end `PARTIAL`. Demo Ground Saver rises over 10% in the
+latest run, so its insights flag a move. Runs are fake, so Trends shows them with **Include fake data**.
+`core/src/rate-lab/demo-lab.test.ts` holds the seed to a real run on the fakes.
 
 ### Files expected to change
 
-`packages/db/prisma/schema/{rate-lab,shipping,system}.prisma` + one migration, `packages/db/prisma/seed*.ts`,
+`packages/db/prisma/schema/{rate-lab,shipping,system,auth}.prisma` + one migration, `packages/db/prisma/seed*.ts`,
 `packages/core/src/rate-lab/**` (+ tests), `packages/core/src/permissions.ts`, `packages/core/src/jobs.ts`,
 `packages/core/src/operations/pii-purge.ts`, `packages/core/src/settings/**`, `packages/core/src/index.ts`,
 `apps/worker/src/**`, `packages/contracts/src/{rate-lab,settings,index}.ts`, `apps/web/src/server/router.ts`,
 `apps/web/src/app/(app)/rate-lab/**`, `apps/web/src/app/api/rate-lab/**`, `apps/web/src/app/(app)/layout.tsx`,
 `apps/web/src/app/(app)/settings/shipping/**`, `apps/web/package.json` (Recharts), `packages/i18n/src/messages/{en,es}.json`,
-`apps/web/e2e/rate-lab.spec.ts`, `docs/specs/SPEC-operations.md` (purge edit).
+`apps/web/e2e/rate-lab*.spec.ts` (the full journey is `rate-lab-journey.spec.ts`), `docs/specs/SPEC-operations.md` (purge edit).
 
 ## Success criteria
 
@@ -382,7 +408,8 @@ fakes with slightly drifting prices, so Trends has lines in dev.
    with contents, the request carries a declaration built by `buildCustoms`.
 9. **Never buys:** a spy on the fakes proves no `purchaseLabel` call in any lab path.
 10. **One-off:** returns quotes for each parcel inline; is excluded from Trends; **Save as test address** creates
-    an unlocked address with the typed original; the PII purge clears `adHocAddress` after the retention period
+    an unlocked address with the typed original; a person's second one-off while one runs is refused (another
+    person's isn't), and one that finished, failed or stalled frees the slot; the PII purge clears `adHocAddress` after the retention period
     and keeps the fetches.
 11. **Insights:** unit tests on `runInsights`: cheapest prefers purchasable, fastest tie-break, a 10% move flagged
     and a 9.9% one not, new and missing services, carrier wins, failures per provider; comparison uses the most
@@ -392,14 +419,16 @@ fakes with slightly drifting prices, so Trends has lines in dev.
 13. **Real orders:** on seeded labels, the cheapest-pick %, overspend (with the reason split), carrier share, lane
     cost and cost-vs-charged figures are exact; voided labels are excluded.
 14. **CSV:** column set and quoting; a title starting with `=` is escaped; forbidden without the permission.
-15. **Permissions:** every procedure and both CSV routes have allowed and forbidden tests (a Shipper can run but
-    not edit addresses; a Shipper can't read Real orders; a Picker can't open Rate Lab).
+15. **Permissions:** every procedure and both CSV routes have allowed and forbidden tests (a Rate Lab user can run
+    and edit addresses but can't read Real orders; a Shipper or QA user without the role can't open Rate Lab; a
+    Picker given the role can).
 16. **Performance:** a 250-combination run against fakes at 1 s latency finishes in under 2 minutes; `run` loads
     a 250-combination × 10-quote run in under 500 ms p95; Real orders over 10,000 packages loads in under 1 s.
-17. **E2E (desktop), fake providers:** an admin adds two addresses and two parcels in a group → a shipper starts a
-    run, sees progress, opens the finished run and sees insights → exports CSV (download received) → opens the PDF
-    report page → does a one-off quote → Trends shows a cell per combination. A Picker doesn't see Rate Lab. The
-    run report page has no nav and fits the print width (checked with `page.emulateMedia({ media: "print" })`).
+17. **E2E (desktop), fake providers:** an admin adds two addresses and two parcels in a group → a Rate Lab user
+    starts a run, sees progress, opens the finished run and sees insights → exports CSV (download received) → opens
+    the PDF report page → does a one-off quote → Trends shows a cell per combination. A user without the Rate Lab
+    role doesn't see it. The run report page has no nav and fits the print width (checked with
+    `page.emulateMedia({ media: "print" })`).
 18. Green: `pnpm lint && pnpm typecheck && pnpm test && pnpm build`, `migrate:check`, plus Playwright.
 
 ## Assumptions
@@ -428,13 +457,16 @@ fakes with slightly drifting prices, so Trends has lines in dev.
 11. **Run cap** counts combinations, set on Settings → Shipping, default 250.
 12. **One-off quotes** are saved as `ONE_OFF` runs, kept out of Trends, and can be saved as test addresses and
     parcels.
-13. **Permissions:** `ratelab.use` for Admin and Shipper, `ratelab.manage` and Real orders (`report.read`) for Admin.
+13. **Permissions:** a `RATE_LAB` role, tacked onto any user next to their other roles, grants `ratelab.use` and
+    `ratelab.manage`; Admins have both. Real orders stays `report.read` (Admin). (Revised 2026-11-03: was Admin and
+    Shipper for `use`, Admin for `manage`; QA needs access too, granted per user.)
 
 ## Open questions
 
-1. **ShipStation shipments from quotes:** ShipStation v2's `POST /v2/rates` with an inline shipment may create a
-   shipment record in the ShipStation account. If so, every lab combination leaves one there. To check against the
-   v2 reference when the job ticket is built. If it does, we either accept it (they're never labelled) or pass a
-   flag that avoids it, if the API has one.
-2. **QA role access:** QA picks rates every day but isn't in `ratelab.use` (decided: Admin and Shipper). Should QA
-   see Rate Lab too?
+1. ~~**ShipStation shipments from quotes:**~~ Answered (2026-11-03, #148): yes. ShipStation v2's `POST /v2/rates`
+   with an inline shipment creates a pending shipment record per call, so every lab combination would leave one in
+   the account. **Decision (user):** Rate Lab asks for Quick Rates (`rate_options.rate_type: "quick"`), which store
+   nothing and still quote international shipments with customs; their rates have no rate id and can't be bought,
+   which Rate Lab never does. `RateRequest.quick` carries it; the ShipStation adapter maps it, Bridge Source has no
+   equivalent and needs none, and order rates are unchanged. (`/v2/rates/estimate` was ruled out: it can't filter by
+   service code.)

@@ -82,6 +82,18 @@ describe("permissions", () => {
       expect(can(actor([role]), "label.writeOff")).toBe(false);
   });
 
+  it("gives Rate Lab to Admin and the Rate Lab role only", () => {
+    for (const permission of ["ratelab.use", "ratelab.manage"] as const) {
+      expect(can(actor(["ADMIN"]), permission)).toBe(true);
+      expect(can(actor(["RATE_LAB"]), permission)).toBe(true);
+      expect(can(actor(["PICKER", "RATE_LAB"]), permission)).toBe(true);
+      for (const role of ["PICKER", "PACKER", "QA", "SHIPPER"] as const) {
+        expect(can(actor([role]), permission)).toBe(false);
+      }
+    }
+    expect(can(actor(["RATE_LAB"]), "report.read")).toBe(false);
+  });
+
   it("gives the shipping actor no user and no station", () => {
     expect(shippingActor).toMatchObject({ userId: null, stationId: null, system: "shipping" });
   });

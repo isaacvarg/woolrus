@@ -1,5 +1,6 @@
 import { createDb } from "../src/index";
 import { seedDemoOrders } from "./seed-orders";
+import { seedRateLab } from "./seed-rate-lab";
 
 const db = createDb();
 
@@ -34,10 +35,12 @@ async function main() {
   console.log(`Seeded settings and ${boxes.length} boxes`);
 
   // Demo data is for the dev stack only (SPEC-workflow "Dev data"); with the fake shipping
-  // providers it carries their rates too (SPEC-carriers "Dev data").
+  // providers it carries their rates too (SPEC-carriers "Dev data"), and Rate Lab's runs
+  // (SPEC-rate-lab "Dev data").
   if (process.env.NODE_ENV !== "production") {
     const fakeShipping = process.env.SHIPPING_PROVIDERS === "fake";
     console.log(`Seeded ${await seedDemoOrders(db, { fakeShipping })} demo orders`);
+    console.log(`Seeded Rate Lab data and ${await seedRateLab(db, { fakeShipping })} lab runs`);
   }
 }
 

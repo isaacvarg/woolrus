@@ -1,0 +1,167 @@
+// Rate Lab (SPEC-rate-lab): test addresses and parcels in groups, and runs that quote every
+// address against every parcel. The quotes themselves are rate-history's RateFetch / RateQuote.
+
+enum RateLabGroupKind {
+  ADDRESS
+  PARCEL
+
+  @@map("rate_lab_group_kind")
+}
+
+enum RateLabRunKind {
+  SUITE
+  ONE_OFF
+
+  @@map("rate_lab_run_kind")
+}
+
+enum RateLabRunStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  PARTIAL
+  FAILED
+  CANCELLED
+
+  @@map("rate_lab_run_status")
+}
+
+/// A tag for addresses or parcels, by kind (decision 2). Name unique per kind, case-insensitively
+/// (hand-written index).
+model RateLabGroup {
+  id         String           @id @default(uuid(7)) @db.Uuid
+  kind       RateLabGroupKind
+  name       String
+  archivedAt DateTime?        @map("archived_at") @db.Timestamptz(3)
+  createdAt  DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt  DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  addresses RateLabAddressGroup[]
+  parcels   RateLabParcelGroup[]
+
+  @@map("rate_lab_groups")
+}
+
+model RateLabAddress {
+  id            String       @id @default(uuid(7)) @db.Uuid
+  title         String
+  description   String?
+  /// ShipAddress as typed.
+  original      Json
+  /// ShipAddress used for quotes: the corrected one when the check corrected it.
+  address       Json
+  residential   Boolean
+  checkStatus   ShipToStatus @map("check_status")
+  checkMessages Json         @default("[]") @map("check_messages")
+  checkedAt     DateTime?    @map("checked_at") @db.Timestamptz(3)
+  /// Set by the first run that quotes it; address fields are then read-only (decision 5).
+  lockedAt      DateTime?    @map("locked_at") @db.Timestamptz(3)
+  archivedAt    DateTime?    @map("archived_at") @db.Timestamptz(3)
+  createdById   String?      @map("created_by_id") @db.Uuid
+  createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  createdBy User?                 @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  groups    RateLabAddressGroup[]
+  fetches   RateFetch[]
+
+  @@map("rate_lab_addresses")
+}
+
+model RateLabAddressGroup {
+  addressId String @map("address_id") @db.Uuid
+  groupId   String @map("group_id") @db.Uuid
+
+  address RateLabAddress @relation(fields: [addressId], references: [id], onDelete: Cascade)
+  group   RateLabGroup   @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@id([addressId, groupId])
+  @@index([groupId])
+  @@map("rate_lab_address_groups")
+}
+
+model RateLabParcel {
+  id          String    @id @default(uuid(7)) @db.Uuid
+  title       String
+  description String?
+  /// The box it was made from; size copied below (a later box edit doesn't change the parcel).
+  boxId       String?   @map("box_id") @db.Uuid
+  lengthIn    Decimal   @map("length_in") @db.Decimal(8, 2)
+  widthIn     Decimal   @map("width_in") @db.Decimal(8, 2)
+  heightIn    Decimal   @map("height_in") @db.Decimal(8, 2)
+  weightOz    Decimal   @map("weight_oz") @db.Decimal(10, 2)
+  lockedAt    DateTime? @map("locked_at") @db.Timestamptz(3)
+  archivedAt  DateTime? @map("archived_at") @db.Timestamptz(3)
+  createdById String?   @map("created_by_id") @db.Uuid
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  box       Box?                 @relation(fields: [boxId], references: [id], onDelete: SetNull)
+  createdBy User?                @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  groups    RateLabParcelGroup[]
+  items     RateLabParcelItem[]
+  fetches   RateFetch[]
+
+  @@map("rate_lab_parcels")
+}
+
+model RateLabParcelGroup {
+  parcelId String @map("parcel_id") @db.Uuid
+  groupId  String @map("group_id") @db.Uuid
+
+  parcel RateLabParcel @relation(fields: [parcelId], references: [id], onDelete: Cascade)
+  group  RateLabGroup  @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@id([parcelId, groupId])
+  @@index([groupId])
+  @@map("rate_lab_parcel_groups")
+}
+
+/// What's in a parcel, for customs and the shipment's items (decision 4).
+model RateLabParcelItem {
+  id        String @id @default(uuid(7)) @db.Uuid
+  parcelId  String @map("parcel_id") @db.Uuid
+  productId String @map("product_id") @db.Uuid
+  quantity  Int
+
+  parcel  RateLabParcel @relation(fields: [parcelId], references: [id], onDelete: Cascade)
+  product Product       @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@unique([parcelId, productId])
+  @@map("rate_lab_parcel_items")
+}
+
+/// One suite run queued or running at a time, and one running one-off per person (hand-written
+/// partial unique indexes).
+model RateLabRun {
+  id                   String           @id @default(uuid(7)) @db.Uuid
+  kind                  RateLabRunKind
+  status                RateLabRunStatus @default(QUEUED)
+  startedById           String?          @map("started_by_id") @db.Uuid
+  /// { addressGroupIds, addressIds, parcelGroupIds, parcelIds } as chosen; empty lists = all active.
+  selection             Json
+  /// Ship-from at the time of the run (decision 8).
+  shipFrom              Json             @map("ship_from")
+  /// ONE_OFF only (hand-written check): the address typed. Cleared by the PII purge.
+  adHocAddress          Json?            @map("ad_hoc_address")
+  /// ONE_OFF only: parcels typed in, as { lengthIn, widthIn, heightIn, weightOz, boxId? }[].
+  adHocParcels          Json?            @map("ad_hoc_parcels")
+  combinations          Int
+  completedCombinations Int              @default(0) @map("completed_combinations")
+  quoteCount            Int              @default(0) @map("quote_count")
+  failureCount          Int              @default(0) @map("failure_count")
+  fake                  Boolean          @default(false)
+  cancelRequestedAt     DateTime?        @map("cancel_requested_at") @db.Timestamptz(3)
+  /// Message key when the whole run failed.
+  error                 String?
+  createdAt             DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  startedAt             DateTime?        @map("started_at") @db.Timestamptz(3)
+  finishedAt            DateTime?        @map("finished_at") @db.Timestamptz(3)
+  heartbeatAt           DateTime?        @map("heartbeat_at") @db.Timestamptz(3)
+
+  startedBy User?       @relation(fields: [startedById], references: [id], onDelete: SetNull)
+  fetches   RateFetch[]
+
+  @@index([createdAt(sort: Desc)])
+  @@map("rate_lab_runs")
+}

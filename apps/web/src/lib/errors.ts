@@ -3,7 +3,8 @@
 import { ORPCError } from "@orpc/client";
 import { useTranslations } from "next-intl";
 
-function errorData(
+/** The API error's data (message key, fields, params), or undefined for anything else. */
+export function errorData(
   error: unknown,
 ): { messageKey?: unknown; fields?: unknown; params?: unknown } | undefined {
   return error instanceof ORPCError
@@ -34,6 +35,16 @@ export function useErrorMessage() {
     }
     return t("errors.internal");
   };
+}
+
+/**
+ * A message key stored by the server (a sync or Rate Lab run's error, a logged rate error),
+ * translated when known; a key from an older build that no longer exists shows as is.
+ */
+export function useMessage() {
+  const t = useTranslations();
+  return (key: string, params?: Record<string, string | number>): string =>
+    t.has(key) ? t(key as never, params ? revive(params) : undefined) : key;
 }
 
 /**

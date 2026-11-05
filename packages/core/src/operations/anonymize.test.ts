@@ -272,7 +272,7 @@ describe("purgePii (SPEC-operations 'PII anonymization')", () => {
     });
 
     const result = await purgePii(db, { now });
-    expect(result).toEqual({ orders: 0, webhooks: 0, idempotency: 1, failed: 0 });
+    expect(result).toEqual({ orders: 0, webhooks: 0, labRuns: 0, idempotency: 1, failed: 0 });
     expect((await reload(order.id)).piiRedactedAt).toBeNull();
     expect((await db.inboundWebhook.findUniqueOrThrow({ where: { id: hook.id } })).payload).toEqual(
       { id: 1 },
@@ -299,6 +299,7 @@ describe("purgePii (SPEC-operations 'PII anonymization')", () => {
     expect(await purgePii(db, { now, dryRun: true })).toEqual({
       orders: 1,
       webhooks: 1,
+      labRuns: 0,
       idempotency: 1,
       failed: 0,
     });

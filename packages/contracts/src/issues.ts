@@ -72,7 +72,8 @@ export const IssueListInput = z.object({
   /** Order-number prefix or part of the customer's name. */
   search: z.string().trim().max(100).optional(),
   cursor: z.string().max(500).optional(),
-  limit: z.number().int().min(1).max(100).default(50),
+  // Coerced: over /api/v1 it arrives as a query string.
+  limit: z.coerce.number<number>().int().min(1).max(100).default(50),
 });
 export type IssueListInput = z.input<typeof IssueListInput>;
 

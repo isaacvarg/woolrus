@@ -66,3 +66,10 @@
 body:has([data-toast-clearance]) .toast-bottom {
   bottom: 5.5rem;
 }
+
+/* Report pages print their heatmap colours and badges: browsers drop backgrounds by default. */
+@media print {
+  .lab-report {
+    print-color-adjust: exact;
+  }
+}

@@ -279,6 +279,9 @@ export class ShipStationAdapter implements ShippingProvider {
         carrier_ids: unique(request.services.map((s) => s.carrierExternalId)),
         service_codes: unique(request.services.map((s) => s.code)),
         preferred_currency: "usd",
+        // Quick rates store no shipment, so a lab quote leaves nothing in the account; their rates
+        // have no rate id and can't be bought.
+        ...(request.quick && { rate_type: "quick" }),
       },
       shipment: {
         validate_address: "no_validation",

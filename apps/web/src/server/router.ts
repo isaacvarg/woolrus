@@ -1,6 +1,10 @@
 import {
   addPackage,
   archiveBox,
+  archiveLabAddress,
+  archiveLabGroup,
+  archiveLabParcel,
+  cancelLabRun,
   clearPin,
   clearProviderCredentials,
   clearSecret,
@@ -11,7 +15,10 @@ import {
   createBatch,
   createBox,
   createInvitation,
+  createLabAddress,
   createLabelPrint,
+  createLabGroup,
+  createLabParcel,
   createManifest,
   createNote,
   createPriorityRule,
@@ -24,10 +31,13 @@ import {
   deletePackage,
   deletePriorityRule,
   dismissFailedJob,
+  duplicateLabAddress,
+  duplicateLabParcel,
   finishBatch,
   getBatch,
   getEmailSender,
   getIssue,
+  getLabRun,
   getOrder,
   getOrderHistory,
   getOrderShipping,
@@ -41,11 +51,20 @@ import {
   issueBadge,
   issueCounts,
   keepOriginalAddress,
+  labRunTrends,
+  labTrendGrid,
+  labTrendSeries,
+  labTrendsReport,
   linkBarcode,
   listBoxes,
   listFailedJobs,
   listInvitations,
   listIssues,
+  listLabAddresses,
+  listLabGroups,
+  listLabParcelProducts,
+  listLabParcels,
+  listLabRuns,
   listNotes,
   listOrders,
   listPriorityRules,
@@ -69,13 +88,18 @@ import {
   packUnits,
   permissionsFor,
   pickLine,
+  previewLabRun,
   pushErrors,
   queueCounts,
+  quoteOneOff,
   reactivateUser,
+  realOrders,
   recheckAddress,
+  recheckLabAddress,
   refreshRates,
   registerStation,
   removeFromBatch,
+  renameLabGroup,
   renameStation,
   reopenIssue,
   reorderPriorityRules,
@@ -92,6 +116,8 @@ import {
   revokeBadge,
   revokeInvitation,
   revokeStation,
+  saveOneOffAddress,
+  saveOneOffParcel,
   scan,
   scanBatch,
   scanIntoPackage,
@@ -111,6 +137,7 @@ import {
   setVerified,
   setWeight,
   shipOrders,
+  startLabRun,
   stationStatus,
   stuckLabels,
   substitute,
@@ -118,6 +145,8 @@ import {
   testProvider,
   testStoreConnection,
   touchStation,
+  unarchiveLabAddress,
+  unarchiveLabParcel,
   undoVoid,
   unlockWithBadge,
   unlockWithPin,
@@ -125,6 +154,8 @@ import {
   unpickLine,
   updateBox,
   updateIssue,
+  updateLabAddress,
+  updateLabParcel,
   updateNote,
   updatePreferences,
   updatePriorityRule,
@@ -595,6 +626,99 @@ export const router = implementer.router({
         ),
       },
     },
+  },
+  rateLab: {
+    addresses: api.rateLab.addresses.handler(({ input, context }) =>
+      listLabAddresses(db, context.actor, input),
+    ),
+    createAddress: api.rateLab.createAddress.handler(async ({ input, context }) =>
+      createLabAddress(db, context.actor, input, { providers: await createShippingProviders(db) }),
+    ),
+    updateAddress: api.rateLab.updateAddress.handler(async ({ input, context }) =>
+      updateLabAddress(db, context.actor, input, { providers: await createShippingProviders(db) }),
+    ),
+    recheckAddress: api.rateLab.recheckAddress.handler(async ({ input, context }) =>
+      recheckLabAddress(db, context.actor, input, { providers: await createShippingProviders(db) }),
+    ),
+    duplicateAddress: api.rateLab.duplicateAddress.handler(({ input, context }) =>
+      duplicateLabAddress(db, context.actor, input),
+    ),
+    archiveAddress: api.rateLab.archiveAddress.handler(({ input, context }) =>
+      archiveLabAddress(db, context.actor, input),
+    ),
+    unarchiveAddress: api.rateLab.unarchiveAddress.handler(({ input, context }) =>
+      unarchiveLabAddress(db, context.actor, input),
+    ),
+    parcels: api.rateLab.parcels.handler(({ input, context }) =>
+      listLabParcels(db, context.actor, input),
+    ),
+    createParcel: api.rateLab.createParcel.handler(({ input, context }) =>
+      createLabParcel(db, context.actor, input),
+    ),
+    updateParcel: api.rateLab.updateParcel.handler(({ input, context }) =>
+      updateLabParcel(db, context.actor, input),
+    ),
+    duplicateParcel: api.rateLab.duplicateParcel.handler(({ input, context }) =>
+      duplicateLabParcel(db, context.actor, input),
+    ),
+    archiveParcel: api.rateLab.archiveParcel.handler(({ input, context }) =>
+      archiveLabParcel(db, context.actor, input),
+    ),
+    unarchiveParcel: api.rateLab.unarchiveParcel.handler(({ input, context }) =>
+      unarchiveLabParcel(db, context.actor, input),
+    ),
+    parcelProducts: api.rateLab.parcelProducts.handler(({ input, context }) =>
+      listLabParcelProducts(db, context.actor, input),
+    ),
+    groups: api.rateLab.groups.handler(({ input, context }) =>
+      listLabGroups(db, context.actor, input),
+    ),
+    createGroup: api.rateLab.createGroup.handler(({ input, context }) =>
+      createLabGroup(db, context.actor, input),
+    ),
+    renameGroup: api.rateLab.renameGroup.handler(({ input, context }) =>
+      renameLabGroup(db, context.actor, input),
+    ),
+    archiveGroup: api.rateLab.archiveGroup.handler(({ input, context }) =>
+      archiveLabGroup(db, context.actor, input),
+    ),
+    previewRun: api.rateLab.previewRun.handler(({ input, context }) =>
+      previewLabRun(db, context.actor, input),
+    ),
+    startRun: api.rateLab.startRun.handler(async ({ input, context }) =>
+      startLabRun(db, context.actor, input, { providers: await createShippingProviders(db) }),
+    ),
+    runs: api.rateLab.runs.handler(({ input, context }) => listLabRuns(db, context.actor, input)),
+    run: api.rateLab.run.handler(({ input, context }) => getLabRun(db, context.actor, input)),
+    cancelRun: api.rateLab.cancelRun.handler(({ input, context }) =>
+      cancelLabRun(db, context.actor, input),
+    ),
+    runTrends: api.rateLab.runTrends.handler(({ input, context }) =>
+      labRunTrends(db, context.actor, input),
+    ),
+    quoteOneOff: api.rateLab.quoteOneOff.handler(async ({ input, context }) =>
+      quoteOneOff(db, context.actor, input, { providers: await createShippingProviders(db) }),
+    ),
+    saveOneOffAddress: api.rateLab.saveOneOffAddress.handler(async ({ input, context }) =>
+      saveOneOffAddress(db, context.actor, input, {
+        providers: await createShippingProviders(db),
+      }),
+    ),
+    saveOneOffParcel: api.rateLab.saveOneOffParcel.handler(({ input, context }) =>
+      saveOneOffParcel(db, context.actor, input),
+    ),
+    trendGrid: api.rateLab.trendGrid.handler(({ input, context }) =>
+      labTrendGrid(db, context.actor, input),
+    ),
+    trendSeries: api.rateLab.trendSeries.handler(({ input, context }) =>
+      labTrendSeries(db, context.actor, input),
+    ),
+    trendsReport: api.rateLab.trendsReport.handler(({ input, context }) =>
+      labTrendsReport(db, context.actor, input),
+    ),
+    realOrders: api.rateLab.realOrders.handler(({ input, context }) =>
+      realOrders(db, context.actor, input),
+    ),
   },
 });
 

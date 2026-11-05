@@ -707,7 +707,10 @@ describe("the migration's check constraints (SC 10)", () => {
 
   it("rejects a LAB fetch with an order id, and an ORDER fetch with lab ids", async () => {
     const { order } = await createOrder(db, { status: "QA" });
-    const labRunId = crypto.randomUUID();
+    // A real run: rate-lab's migration made lab_run_id a foreign key.
+    const { id: labRunId } = await db.rateLabRun.create({
+      data: { kind: "SUITE", status: "SUCCEEDED", selection: {}, shipFrom: {}, combinations: 1 },
+    });
 
     const { packages } = await createOrder(db, { status: "QA", packages: [{}] });
     const refused = /rate_fetches_source_ids/;

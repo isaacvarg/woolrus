@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { base, Id } from "./base";
 
-export const Role = z.enum(["ADMIN", "PICKER", "PACKER", "QA", "SHIPPER"]);
+export const Role = z.enum(["ADMIN", "PICKER", "PACKER", "QA", "SHIPPER", "RATE_LAB"]);
 export type Role = z.infer<typeof Role>;
 
 export const Locale = z.enum(["en", "es"]);

@@ -131,6 +131,11 @@ export type RateRequest = {
   customs?: CustomsDeclaration;
   /** Only enabled carriers and services (FR-SHIP-02). */
   services: { carrierExternalId: string; code: string; providerData: ProviderData }[];
+  /**
+   * Quotes only, never bought: the provider keeps nothing about the request. Rate Lab sets it, as
+   * ShipStation otherwise leaves a pending shipment in the account per quote (SPEC-rate-lab).
+   */
+  quick?: boolean;
 };
 
 export type ProviderRate = {

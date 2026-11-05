@@ -88,6 +88,10 @@ export const permissions = [
   "product.manage",
   /** The failed-jobs page: see, retry and dismiss background jobs that gave up. */
   "ops.jobs",
+  /** Rate Lab: run price tests, get one-off quotes, read runs and trends (SPEC-rate-lab). */
+  "ratelab.use",
+  /** Rate Lab: manage test addresses, parcels and groups. */
+  "ratelab.manage",
 ] as const;
 export type Permission = (typeof permissions)[number];
 
@@ -114,6 +118,8 @@ export const rolePermissions: Record<Role, readonly Permission[]> = {
     "note.customer",
   ],
   SHIPPER: [...everyone, "label.print", "order.ship", "order.repack", "note.customer"],
+  // Ticked on any user next to their other roles (SPEC-rate-lab decision 13); no other role has it.
+  RATE_LAB: [...everyone, "ratelab.use", "ratelab.manage"],
 };
 
 export function permissionsFor(roles: readonly Role[]): Permission[] {

@@ -21,8 +21,15 @@ export async function installJobs(connectionString: string): Promise<void> {
   }
 }
 
-/** `createQueue` leaves an existing queue alone, so retention reaches queues made before it existed. */
+/**
+ * `createQueue` leaves an existing queue alone, so retention and expiry are updated too: they then
+ * reach queues made before they were set.
+ */
 export async function createQueue(boss: PgBoss, name: QueueName): Promise<void> {
+  const { deleteAfterSeconds, expireInSeconds } = queueOptions[name];
   await boss.createQueue(name, queueOptions[name]);
-  await boss.updateQueue(name, { deleteAfterSeconds: queueOptions[name].deleteAfterSeconds });
+  await boss.updateQueue(name, {
+    deleteAfterSeconds,
+    ...(expireInSeconds !== undefined && { expireInSeconds }),
+  });
 }

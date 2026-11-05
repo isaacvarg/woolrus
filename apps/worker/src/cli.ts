@@ -30,9 +30,9 @@ if (command === "install-jobs") {
 // `pnpm pii:purge [--dry-run]`: the daily PII purge from a shell; a dry run only prints the counts.
 if (command === "purge-pii") {
   const dryRun = flags.includes("--dry-run");
-  const { orders, webhooks, idempotency, failed } = await purgePii(db, { dryRun });
+  const { orders, webhooks, labRuns, idempotency, failed } = await purgePii(db, { dryRun });
   console.log(
-    `pii: ${dryRun ? "would anonymize" : "anonymized"} ${orders} orders, ${dryRun ? "would redact" : "redacted"} ${webhooks} webhook payloads, ${dryRun ? "would delete" : "deleted"} ${idempotency} idempotency records${failed > 0 ? `; ${failed} orders failed` : ""}`,
+    `pii: ${dryRun ? "would anonymize" : "anonymized"} ${orders} orders, ${dryRun ? "would redact" : "redacted"} ${webhooks} webhook payloads, ${dryRun ? "would clear" : "cleared"} ${labRuns} one-off quote addresses, ${dryRun ? "would delete" : "deleted"} ${idempotency} idempotency records${failed > 0 ? `; ${failed} orders failed` : ""}`,
   );
   await db.$disconnect();
   process.exit(failed > 0 ? 1 : 0);

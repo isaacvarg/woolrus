@@ -42,6 +42,16 @@ describe("UpdateSettingsInput", () => {
     ).toEqual({});
   });
 
+  it("takes a Rate Lab combination cap of 1–2000", () => {
+    expect(fieldErrors({ rateLabMaxCombinations: 1 })).toEqual({});
+    expect(fieldErrors({ rateLabMaxCombinations: 2000 })).toEqual({});
+    for (const cap of [0, 2001, 2.5, null]) {
+      expect(Object.keys(fieldErrors({ rateLabMaxCombinations: cap }))).toEqual([
+        "rateLabMaxCombinations",
+      ]);
+    }
+  });
+
   it("normalizes the state code to upper case", () => {
     const result = UpdateSettingsInput.parse({ shipFromAddress: { ...address, state: " tx " } });
     expect(result.shipFromAddress?.state).toBe("TX");

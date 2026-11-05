@@ -5,7 +5,8 @@ import { operationsActor } from "../permissions";
 import { lockWooOrder } from "../sync/order-lock";
 
 // PII anonymization (SPEC-operations "PII anonymization", NFR-SEC-06). Finished orders older than
-// `Settings.piiRetentionDays` lose the customer's identity but stay usable for metrics.
+// `Settings.piiRetentionDays` lose the customer's identity but stay usable for metrics, and Rate Lab
+// one-off quotes lose the address that was typed.
 
 export const PII_BATCH_SIZE = 200;
 /** One order's transaction: its audit history is rewritten row by row, which can pass Prisma's 5 s default. */
@@ -21,6 +22,8 @@ const OPEN_RETURN = { notIn: ["CLOSED", "REJECTED"] satisfies ReturnStatus[] };
 export type PurgeResult = {
   orders: number;
   webhooks: number;
+  /** Rate Lab one-off runs whose typed address was cleared. */
+  labRuns: number;
   idempotency: number;
   /** Orders whose anonymization threw; the next run tries them again. */
   failed: number;
@@ -54,7 +57,7 @@ export async function purgePii(
   });
   const days = settings?.piiRetentionDays ?? null;
   const idempotencyCutoff = new Date(now.getTime() - IDEMPOTENCY_KEEP_DAYS * DAY_MS);
-  const result: PurgeResult = { orders: 0, webhooks: 0, idempotency: 0, failed: 0 };
+  const result: PurgeResult = { orders: 0, webhooks: 0, labRuns: 0, idempotency: 0, failed: 0 };
 
   if (days !== null) {
     const cutoff = new Date(now.getTime() - days * DAY_MS);
@@ -64,9 +67,16 @@ export async function purgePii(
       OR: [{ processedAt: { lt: cutoff } }, { processedAt: null, receivedAt: { lt: cutoff } }],
       NOT: { payload: { equals: { redacted: true } } },
     };
+    // A one-off quote's typed address may be a customer's; its fetches only ever kept the lane.
+    const labRuns: Prisma.RateLabRunWhereInput = {
+      kind: "ONE_OFF",
+      createdAt: { lt: cutoff },
+      NOT: { adHocAddress: { equals: Prisma.AnyNull } },
+    };
     if (dryRun) {
       result.orders = await db.order.count({ where: eligible(cutoff) });
       result.webhooks = await db.inboundWebhook.count({ where: webhooks });
+      result.labRuns = await db.rateLabRun.count({ where: labRuns });
     } else {
       // Anonymized orders leave `eligible`, so the loop ends; an order that fails stays eligible and is
       // skipped for the rest of this run instead of being re-picked first every batch.
@@ -106,6 +116,9 @@ export async function purgePii(
           where: webhooks,
           data: { payload: { redacted: true } },
         })
+      ).count;
+      result.labRuns = (
+        await db.rateLabRun.updateMany({ where: labRuns, data: { adHocAddress: Prisma.DbNull } })
       ).count;
     }
   }

@@ -10,6 +10,7 @@ import { packing } from "./packing";
 import { pickBatches, picking } from "./picking";
 import { priorityRules } from "./priority-rules";
 import { qa } from "./qa";
+import { rateLab } from "./rate-lab";
 import { settings } from "./settings";
 import { shipping } from "./shipping";
 import { station, stations } from "./stations";
@@ -30,6 +31,10 @@ export * from "./packing";
 export * from "./picking";
 export * from "./priority-rules";
 export * from "./qa";
+export * from "./rate-lab";
+export * from "./rate-lab-real-orders";
+export * from "./rate-lab-run";
+export * from "./rate-lab-trends";
 export * from "./settings";
 export * from "./shipping";
 export * from "./stations";
@@ -62,5 +67,6 @@ export const contract = {
   carriers,
   operations,
   shipping,
+  rateLab,
 };
 export type Contract = typeof contract;

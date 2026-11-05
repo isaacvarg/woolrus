@@ -29,8 +29,9 @@ model Product {
   createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  variations ProductVariation[]
-  orderItems OrderItem[]
+  variations     ProductVariation[]
+  orderItems     OrderItem[]
+  labParcelItems RateLabParcelItem[]
 
   @@index([sku])
   @@index([barcode])

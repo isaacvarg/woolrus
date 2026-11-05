@@ -7,7 +7,7 @@ import { useFormatter, useTranslations } from "next-intl";
 import { Fragment, useState } from "react";
 import { Button } from "@/components/ui/fields";
 import { toast } from "@/components/ui/toast";
-import { useErrorMessage } from "@/lib/errors";
+import { useErrorMessage, useMessage } from "@/lib/errors";
 import { orpc } from "@/lib/orpc";
 
 /** While a run is going or was just queued, the log refreshes quickly; otherwise now and then. */
@@ -24,11 +24,6 @@ const statusBadge: Record<SyncRunStatus, string> = {
 };
 
 /** Message keys from the server, translated when known (an older key just shows as is). */
-function useMessage() {
-  const t = useTranslations();
-  return (key: string) => (t.has(key) ? t(key as never) : key);
-}
-
 export function SyncRuns() {
   const t = useTranslations("sync");
   const format = useFormatter();

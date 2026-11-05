@@ -96,6 +96,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               <Link href="/manifests">{t("nav.manifests")}</Link>
             </li>
           )}
+          {can(actor, "ratelab.use") && (
+            <li>
+              <Link href="/rate-lab">{t("nav.rateLab")}</Link>
+            </li>
+          )}
           {can(actor, "product.manage") && (
             <li>
               <Link href="/settings/customs">{t("nav.customs")}</Link>

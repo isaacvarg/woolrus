@@ -250,7 +250,9 @@ const address = (
 const dimensionColumns = (p: DemoProduct) =>
   p.dims ? { lengthIn: p.dims[0], widthIn: p.dims[1], heightIn: p.dims[2] } : {};
 
-async function upsertProducts(db: Db): Promise<Map<string, { id: string; physical: boolean }>> {
+export async function upsertProducts(
+  db: Db,
+): Promise<Map<string, { id: string; physical: boolean }>> {
   const bySku = new Map<string, { id: string; physical: boolean }>();
   for (const [i, p] of products.entries()) {
     const physical = p.physical ?? true;
@@ -343,7 +345,7 @@ const fakeCatalogs: FakeCatalog[] = [
   },
 ];
 
-type FakeServiceRow = DemoService & {
+export type FakeServiceRow = DemoService & {
   provider: ShippingProviderId;
   carrierExternalId: string;
   carrierCode: string;
@@ -354,7 +356,7 @@ type FakeServiceRow = DemoService & {
  * The fakes' carriers and services as a sync stores them, with the domestic ones on. Re-running
  * keeps whatever was switched since.
  */
-async function upsertFakeCatalogs(db: Db): Promise<FakeServiceRow[]> {
+export async function upsertFakeCatalogs(db: Db): Promise<FakeServiceRow[]> {
   const rows: FakeServiceRow[] = [];
   for (const { provider, providerData, carriers } of fakeCatalogs) {
     for (const { externalId, code, name, services } of carriers) {
@@ -395,7 +397,7 @@ async function upsertFakeCatalogs(db: Db): Promise<FakeServiceRow[]> {
 }
 
 /** A demo ship-from, so Refresh rates works once a fake provider is turned on. */
-const demoShipFrom = {
+export const demoShipFrom = {
   name: "Woolrus Warehouse",
   phone: "512-555-0100",
   address1: "100 Dock Rd",
@@ -409,12 +411,24 @@ const demoShipFrom = {
 const RATE_TTL_HOURS = 24;
 const providerOrder: ShippingProviderId[] = ["SHIPSTATION", "BRIDGE_SOURCE"];
 
-/** What each fake quotes for a package of `weightOz`, cheapest first, as core's rate fetch stores it. */
-function fakeRates(services: FakeServiceRow[], weightOz: number, shipmentId: string, now: Date) {
+/**
+ * What each fake quotes for a package of `weightOz`, cheapest first, as core's rate fetch stores it.
+ * `drift` scales a service's price, for history from before today's prices (Rate Lab's dev runs).
+ */
+export function fakeRates(
+  services: FakeServiceRow[],
+  weightOz: number,
+  shipmentId: string,
+  now: Date,
+  drift: (row: FakeServiceRow) => number = () => 1,
+) {
   const day = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
   return services
-    .map(({ provider, carrierExternalId, carrierCode, carrierId, serviceId, service }) => {
-      const amountCents = service.baseCents + service.perOzCents * Math.ceil(weightOz);
+    .map((row) => {
+      const { provider, carrierExternalId, carrierCode, carrierId, serviceId, service } = row;
+      const amountCents = Math.round(
+        (service.baseCents + service.perOzCents * Math.ceil(weightOz)) * drift(row),
+      );
       // ShipStation quotes with a rate id and a delivery estimate; Bridge Source with neither.
       const shipStation = provider === "SHIPSTATION";
       return {
@@ -452,7 +466,7 @@ function fakeRates(services: FakeServiceRow[], weightOz: number, shipmentId: str
 }
 
 /** What the fake ShipStation's address check answers: any "Street" becomes "St". */
-function fakeShipTo(original: Prisma.InputJsonObject, now: Date) {
+export function fakeShipTo(original: Prisma.InputJsonObject, now: Date) {
   const street = String(original.address1);
   const fixed = street.replace(/\bStreet\b/g, "St");
   const corrected = fixed !== street;

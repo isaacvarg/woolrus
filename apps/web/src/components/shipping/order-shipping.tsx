@@ -4,10 +4,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { OrderAddress, PackageShipping, RateError, ShipToView } from "@woolrus/contracts";
 import { useFormatter, useTranslations } from "next-intl";
 import type { ReactNode } from "react";
-import { formatAddress } from "@/app/(app)/orders/[id]/address";
 import { Button } from "@/components/ui/fields";
 import { toast } from "@/components/ui/toast";
+import { formatAddress } from "@/lib/address";
 import { useErrorMessage } from "@/lib/errors";
+import { money } from "@/lib/money";
 import { client, orpc } from "@/lib/orpc";
 
 // An order's ship-to and each package's rates, read-only (SPEC-carriers "UI"). The order detail
@@ -212,11 +213,13 @@ export function ShipTo({ shipTo, actions }: { shipTo: ShipToView; actions?: Reac
   );
 }
 
-function useRateErrorText() {
+export function useRateErrorText() {
   const t = useTranslations();
   return (error: RateError) => {
+    // Keys like errors.shipping.customsIncomplete name things ({products}); without their params
+    // next-intl can't format them and shows the raw key.
     const reason = t.has(error.messageKey as never)
-      ? t(error.messageKey as never)
+      ? t(error.messageKey as never, error.params as never)
       : t("errors.internal");
     return error.provider
       ? t("orderShipping.providerError", {
@@ -304,7 +307,7 @@ export function PackageRates({ pkg }: { pkg: PackageShipping }) {
                     )}
                   </td>
                   <td className="text-end tabular-nums">
-                    {price(format, rate.amountCents, rate.currency)}
+                    {money(format, rate.amountCents, rate.currency)}
                   </td>
                   <td>
                     {rate.deliveryDays !== null
@@ -340,16 +343,4 @@ export function PackageRates({ pkg }: { pkg: PackageShipping }) {
       )}
     </div>
   );
-}
-
-/**
- * The amount in its currency. A code that isn't ISO 4217-shaped (a provider's typo) can't be
- * formatted, and next-intl's fallback would drop the currency, so it shows the number and the code.
- */
-function price(format: ReturnType<typeof useFormatter>, cents: number, currency: string): string {
-  if (/^[A-Z]{3}$/.test(currency)) {
-    return format.number(cents / 100, { style: "currency", currency });
-  }
-  const amount = format.number(cents / 100, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  return `${amount} ${currency}`;
 }
