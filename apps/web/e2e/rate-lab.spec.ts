@@ -1,9 +1,9 @@
 import { expect, type Page, test } from "@playwright/test";
-import { createFakeShippingProvider, runLabRun } from "@woolrus/core";
 import { createDb } from "@woolrus/db";
 import { signInAs, signInAsUser } from "./support/auth";
 import { openNav } from "./support/nav";
 import { demoService } from "./support/qa";
+import { gatedLabRun, runIdOf, runIdOfPage } from "./support/rate-lab";
 import { ensureShipFrom } from "./support/rates";
 import { withSettingsLock } from "./support/settings-lock";
 import { findUserRow } from "./support/users";
@@ -276,6 +276,7 @@ test("a Rate Lab user starts a run on the fakes, sees progress and sees it finis
     },
   });
   const runIds: string[] = [];
+  const jobs: ReturnType<typeof gatedLabRun>[] = [];
 
   await withSettingsLock(async () => {
     await ensureShipFrom();
@@ -313,50 +314,47 @@ test("a Rate Lab user starts a run on the fakes, sees progress and sees it finis
       // Other specs' runs may be listed too: this one is the row naming its groups.
       const row = page.getByTestId("lab-run-row").filter({ hasText: `${prefix} Run addresses` });
       await expect(row).toContainText("Queued");
-      const run = await db.rateLabRun.findFirstOrThrow({
-        where: { kind: "SUITE", status: "QUEUED" },
-        orderBy: { createdAt: "desc" },
-      });
-      runIds.push(run.id);
+      const runId = await runIdOf(row);
+      runIds.push(runId);
 
-      // CI starts no worker: the job runs here, against a slow fake so its progress shows.
-      const job = runLabRun(db, [createFakeShippingProvider("SHIPSTATION", { latencyMs: 6_000 })], {
-        runId: run.id,
-      });
+      // The job runs here, its quotes held until the progress has shown.
+      const first = gatedLabRun(db, runId);
+      jobs.push(first);
+      await first.inFlight(2);
       await expect(row).toContainText("Running", { timeout: 15_000 });
       await expect(row.getByRole("progressbar", { name: "Combinations quoted" })).toBeVisible();
-      expect(await job).toEqual({ status: "SUCCEEDED" });
+      first.release();
+      expect(await first.job).toEqual({ status: "SUCCEEDED" });
       await expect(row).toContainText("Succeeded", { timeout: 15_000 });
       await expect(row).toContainText("Fake");
 
       // Run again: the same selection as a new run, whose page follows it while it goes.
       await row.getByRole("link").first().click();
-      await expect(page).toHaveURL(`/rate-lab/runs/${run.id}`);
+      await expect(page).toHaveURL(`/rate-lab/runs/${runId}`);
       await page.getByRole("button", { name: "Run again" }).click();
-      await expect(page).not.toHaveURL(`/rate-lab/runs/${run.id}`);
-      const again = await db.rateLabRun.findFirstOrThrow({
-        where: { kind: "SUITE", id: { not: run.id }, createdAt: { gte: run.createdAt } },
-        orderBy: { createdAt: "desc" },
-      });
-      runIds.push(again.id);
-      await expect(page).toHaveURL(`/rate-lab/runs/${again.id}`);
+      const againId = await runIdOfPage(page, runId);
+      runIds.push(againId);
+      const run = await db.rateLabRun.findUniqueOrThrow({ where: { id: runId } });
+      const again = await db.rateLabRun.findUniqueOrThrow({ where: { id: againId } });
+      expect(again.kind).toBe("SUITE");
       expect(again.selection).toEqual(run.selection);
       await expect(page.getByText("Queued", { exact: true })).toBeVisible();
-      const rerun = runLabRun(
-        db,
-        [createFakeShippingProvider("SHIPSTATION", { latencyMs: 6_000 })],
-        { runId: again.id },
-      );
-      // No reload: the page polls while the run is queued or running.
+      const rerun = gatedLabRun(db, againId);
+      jobs.push(rerun);
+      // Both combinations are being quoted, none logged yet. No reload: the page polls while the
+      // run is queued or running.
+      await rerun.inFlight(2);
       await expect(page.getByText("Running", { exact: true })).toBeVisible({ timeout: 15_000 });
       await expect(page.getByText("0 / 2")).toBeVisible();
-      expect(await rerun).toEqual({ status: "SUCCEEDED" });
+      rerun.release();
+      expect(await rerun.job).toEqual({ status: "SUCCEEDED" });
       await expect(page.getByText("Succeeded", { exact: true })).toBeVisible({ timeout: 15_000 });
       await expect(page.getByTestId("lab-quote-row")).not.toHaveCount(0);
       await expect(page.getByRole("table", { name: "Cheapest and fastest" })).toContainText(
         `${prefix} Run B`,
       );
     } finally {
+      for (const job of jobs) await job.settle();
       await db.$executeRaw`DELETE FROM pgboss.job WHERE name = 'rateLab.run'
         AND data->>'runId' = ANY(${runIds})`;
       await db.rateLabRun.deleteMany({ where: { id: { in: runIds } } });
@@ -438,6 +436,7 @@ test("an admin lowers the run cap; a Rate Lab user is held to it, then cancels a
     await db.carrierService.update({ where: { id: service.id }, data: { enabled: true } });
     const admin = await (await page.context().browser()?.newContext())?.newPage();
     if (!admin) throw new Error("no browser");
+    let run: ReturnType<typeof gatedLabRun> | undefined;
     try {
       await signInAs(admin, ["ADMIN"]);
       await ok(
@@ -478,29 +477,31 @@ test("an admin lowers the run cap; a Rate Lab user is held to it, then cancels a
       await expect(dialog).not.toContainText("over the cap");
       await dialog.getByRole("button", { name: "Start run" }).click();
       await expect(dialog).toBeHidden();
-      const run = await db.rateLabRun.findFirstOrThrow({
-        where: { kind: "SUITE", status: "QUEUED" },
-        orderBy: { createdAt: "desc" },
-      });
-      runIds.push(run.id);
-
-      // CI starts no worker: the job runs here. Three of the four combinations are quoted at once,
-      // slowly, so the cancel lands while they're going and the fourth never starts.
-      const job = runLabRun(db, [createFakeShippingProvider("SHIPSTATION", { latencyMs: 6_000 })], {
-        runId: run.id,
-      });
       const row = page.getByTestId("lab-run-row").filter({ hasText: `${prefix} Cancel addresses` });
+      await expect(row).toContainText("Queued");
+      const runId = await runIdOf(row);
+      runIds.push(runId);
+
+      // The job runs here. Three of the four combinations are quoted at once, held until the
+      // cancel is in, so the cancel lands while they're going and the fourth never starts.
+      run = gatedLabRun(db, runId);
+      await run.inFlight(3);
       await expect(row).toContainText("Running", { timeout: 15_000 });
       await row.getByRole("button", { name: /^Cancel the run started/ }).click();
       await expect(page.getByText("Run cancelled.")).toBeVisible();
       await expect(row).toContainText("Stopping after the combinations in progress.");
-      expect(await job).toEqual({ status: "CANCELLED" });
+      const asked = await db.rateLabRun.findUniqueOrThrow({ where: { id: runId } });
+      expect(asked.cancelRequestedAt).not.toBeNull();
+      expect(asked.completedCombinations).toBe(0);
+      run.release();
+      expect(await run.job).toEqual({ status: "CANCELLED" });
       await expect(row).toContainText("Cancelled", { timeout: 15_000 });
       await expect(row.getByRole("button", { name: /^Cancel the run started/ })).toHaveCount(0);
-      const done = await db.rateLabRun.findUniqueOrThrow({ where: { id: run.id } });
+      const done = await db.rateLabRun.findUniqueOrThrow({ where: { id: runId } });
       expect(done.completedCombinations).toBe(3);
-      expect(await db.rateFetch.count({ where: { labRunId: run.id } })).toBe(3);
+      expect(await db.rateFetch.count({ where: { labRunId: runId } })).toBe(3);
     } finally {
+      await run?.settle();
       await db.settings.updateMany({ data: { rateLabMaxCombinations: capBefore } });
       await db.$executeRaw`DELETE FROM pgboss.job WHERE name = 'rateLab.run'
         AND data->>'runId' = ANY(${runIds})`;
