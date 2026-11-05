@@ -19,12 +19,16 @@ const api = "/api/v1/shipping";
 const runIds: string[] = [];
 const startedAt = new Date();
 
-test.afterAll(async () => {
+/** The run and its job, and the one-off's run: their fetches hold on to carriers, addresses and parcels. */
+async function deleteRuns() {
   await db.$executeRaw`DELETE FROM pgboss.job WHERE name = 'rateLab.run'
     AND data->>'runId' = ANY(${runIds})`;
-  // Runs (and their fetches) first: fetches hold on to the addresses and parcels.
   await db.rateLabRun.deleteMany({ where: { id: { in: runIds } } });
   await db.rateLabRun.deleteMany({ where: { kind: "ONE_OFF", createdAt: { gte: startedAt } } });
+}
+
+test.afterAll(async () => {
+  await deleteRuns();
   await db.rateLabAddress.deleteMany({ where: { title: { startsWith: prefix } } });
   await db.rateLabParcel.deleteMany({ where: { title: { startsWith: prefix } } });
   await db.rateLabGroup.deleteMany({ where: { name: { startsWith: prefix } } });
@@ -233,6 +237,8 @@ test("Rate Lab end to end: set up, run, read, export, quote and trend; hidden wi
         for (const cell of await cells.all()) await expect(cell).toContainText("$");
       }
     } finally {
+      // Before the carrier cleanup, and so a failed run can't stay queued and block other specs.
+      await deleteRuns();
       await admin.request.delete(`${api}/providers/SHIPSTATION/credentials`);
       await db.shippingProviderAccount.updateMany({
         where: { provider: "SHIPSTATION" },
