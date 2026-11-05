@@ -335,21 +335,27 @@ where noted. Filters: date range, carrier, service, destination country/state, b
   quotes, failures, groups. **New run** dialog with group/item pickers and the live combination count (red and
   disabled over the cap). A running run shows a progress bar (`completed / combinations`) and **Cancel**; the list
   polls every 3 s while a run is active. Rows open `/rate-lab/runs/[id]`.
-- **Run detail:** summary header, insight cards, then a TanStack table of quotes grouped by address × parcel
-  (cheapest and fastest marked by text badges, not colour alone), filters by carrier, provider and status;
-  **Export CSV**, **PDF report**, **Run again** (same selection).
-- **Addresses / Parcels:** tables with group filters and an archived toggle; forms in a drawer; a lock icon and
-  "Used in runs: physical fields locked. Duplicate to change." on locked items. The address form shows typed vs.
-  corrected like the order's ship-to.
+- **Run detail:** summary header, insight cards, then a plain table of quotes grouped by address × parcel (one
+  `<tbody>` per combination; no TanStack table, it needs no sorting or paging), with cheapest and fastest marked
+  by text badges, not colour alone, and filters by carrier, provider and status; **Export CSV**, **PDF report**,
+  **Run again** (same selection). While the run is queued or running the page refreshes every 3 s.
+- **Addresses / Parcels:** tables with group filters, a title search and an archived toggle; forms in a modal
+  dialog (the dialog scrolls, not the form); a lock icon and "Used in runs: physical fields locked. Duplicate to
+  change." on locked items. The address form shows typed vs. corrected like the order's ship-to. The Quote tab
+  reuses the same address fields and parcel size fields.
 - **Quote:** the address form plus a parcel picker (saved parcels, groups, **Add parcel** by hand); results are
   a table per parcel; **Save as test address** / **Save parcel** for Admins.
 - **Trends:** filters; the heatmap (a CSS grid, colour scale plus the % in text); clicking a cell opens the Recharts
   line chart below; **PDF report**.
-- **Real orders:** date range (default 30 days) and filters; stat tiles; Recharts bar charts (reason, carrier share)
-  and a line chart (lane cost over time); the alternatives table; **Export CSV**, **PDF report**.
+- **Real orders:** date range (default 30 days) and filters (picking a carrier or country starts its service or
+  state over); stat tiles; Recharts bar charts of overspend by reason and of spend by carrier (carrier share is
+  in that chart's table and the service table), and a line chart of lane cost over time (the five busiest lanes;
+  its table lists every lane); the alternatives table; **Export CSV**, **PDF report**.
 - **Settings → Shipping:** a "Rate Lab" card with the combination cap.
 - Charts read theme colours from daisyUI CSS variables, so they work in light and dark; every chart has a table
-  or text equivalent for screen readers. All strings in `en` and `es`.
+  or text equivalent for screen readers, shown on screen with **Show data** and always printed in the reports.
+  Amounts use the quote's currency where the data carries one (Quote tab, run detail), USD otherwise
+  (assumption 2). All strings in `en` and `es`.
 
 ### Dev data
 
