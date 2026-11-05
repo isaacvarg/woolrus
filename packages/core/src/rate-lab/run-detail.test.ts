@@ -237,6 +237,102 @@ describe("getLabRun", () => {
     ]);
   });
 
+  it("compares each service with the latest earlier run that had it, fake with fake only", async () => {
+    await catalog("SHIPSTATION", ["demo_ground", "demo_express"]);
+    const ground = await db.carrierService.findFirstOrThrow({ where: { code: "demo_ground" } });
+    const express = await db.carrierService.findFirstOrThrow({ where: { code: "demo_express" } });
+    const home = await address("Home");
+    const box = await parcel("Box");
+    const day = (n: number) => new Date(Date.UTC(2026, 9, n));
+    const quote = (service: typeof ground, amountCents: number, fake: boolean) => ({
+      provider: "SHIPSTATION" as const,
+      carrierId: service.carrierId,
+      serviceId: service.id,
+      carrierCode: "demo",
+      serviceCode: service.code,
+      serviceName: service.name,
+      amountCents,
+      currency: "USD",
+      guaranteed: false,
+      quoteOnly: false,
+      cheapest: false,
+      fake,
+    });
+    /** A suite run on `day(n)` with one fetch for Home × Box quoting `prices` per service. */
+    const suite = async (n: number, fake: boolean, prices: [typeof ground, number][]) => {
+      const run = await db.rateLabRun.create({
+        data: {
+          kind: "SUITE",
+          status: "SUCCEEDED",
+          selection: all,
+          shipFrom,
+          combinations: 1,
+          createdAt: day(n),
+          fake,
+        },
+      });
+      await db.rateFetch.create({
+        data: {
+          source: "LAB",
+          trigger: "LAB_RUN",
+          labRunId: run.id,
+          labAddressId: home.id,
+          labParcelId: box.id,
+          destCountry: "US",
+          destState: "CO",
+          residential: true,
+          international: false,
+          lengthIn: 10,
+          widthIn: 8,
+          heightIn: 4,
+          weightOz: 20,
+          fake,
+          quotes: { create: prices.map(([service, cents]) => quote(service, cents, fake)) },
+        },
+      });
+      return run;
+    };
+
+    await suite(1, true, [
+      [ground, 1000],
+      [express, 2000],
+    ]);
+    // A partial run: Express didn't answer.
+    const partial = await suite(2, true, [[ground, 1000]]);
+    const real = await suite(3, false, [
+      [ground, 5000],
+      [express, 9000],
+    ]);
+    const current = await suite(4, true, [
+      [ground, 1000],
+      [express, 2400],
+    ]);
+    const realCurrent = await suite(5, false, [[ground, 5500]]);
+
+    const lab = await createActor(db, ["RATE_LAB"]);
+    const key = `${home.id}:${box.id}`;
+    const detail = await getLabRun(db, lab, { id: current.id });
+    expect(detail.combinations[0]?.comparedWith).toEqual({ runId: partial.id, createdAt: day(2) });
+    // Express against day 1 (not NEW); the real run on day 3 never counts.
+    expect(detail.insights.moves).toEqual([
+      expect.objectContaining({
+        combinationKey: key,
+        kind: "CHANGED",
+        serviceId: express.id,
+        previousCents: 2000,
+        currentCents: 2400,
+        changePct: 20,
+      }),
+    ]);
+
+    const realDetail = await getLabRun(db, lab, { id: realCurrent.id });
+    expect(realDetail.combinations[0]?.comparedWith).toEqual({ runId: real.id, createdAt: day(3) });
+    expect(realDetail.insights.moves).toEqual([
+      expect.objectContaining({ kind: "CHANGED", serviceId: ground.id, previousCents: 5000 }),
+      expect.objectContaining({ kind: "MISSING", serviceId: express.id, previousCents: 9000 }),
+    ]);
+  });
+
   it("Run again starts a new run with the same selection", async () => {
     const providers = await fakes();
     const lab = await createActor(db, ["RATE_LAB"]);

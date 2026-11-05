@@ -60,10 +60,28 @@ const service = (q: LabQuote) => ({
   serviceName: q.serviceName,
 });
 
-/** Moves of `PRICE_MOVE_PCT` or more, and services that came or went, against the compared run. */
-function moves(current: InsightCombination, previous: InsightCombination): LabPriceMove[] {
+/**
+ * What a combination is compared with: earlier `SUITE` runs whose fetch had the same fake flag
+ * (SPEC-rate-history decision 6).
+ */
+export type ComparedCombination = {
+  /** The quotes of the most recent earlier run with the combination; MISSING is measured on it. */
+  lastRun: LabQuote[];
+  /**
+   * Each service's quotes in the most recent earlier run that had that service, so a service a
+   * partial run missed is compared with the run before it rather than read as new.
+   */
+  byService: LabQuote[];
+};
+
+/**
+ * Moves of `PRICE_MOVE_PCT` or more, and services that came or went. A move from a free price has
+ * no percentage (`changePct: null`).
+ */
+function moves(current: InsightCombination, previous: ComparedCombination): LabPriceMove[] {
   const now = byService(current.quotes);
-  const before = byService(previous.quotes);
+  const before = byService(previous.byService);
+  const last = byService(previous.lastRun);
   const changed: LabPriceMove[] = [];
   const added: LabPriceMove[] = [];
   for (const [serviceId, quote] of now) {
@@ -79,16 +97,16 @@ function moves(current: InsightCombination, previous: InsightCombination): LabPr
     }
     const delta = quote.amountCents - was.amountCents;
     // In whole cents, so 10% is flagged and 9.9% isn't, with no rounding in between.
-    if (Math.abs(delta) * 100 >= PRICE_MOVE_PCT * was.amountCents) {
+    if (delta !== 0 && Math.abs(delta) * 100 >= PRICE_MOVE_PCT * was.amountCents) {
       changed.push({
         ...base,
         kind: "CHANGED",
         previousCents: was.amountCents,
-        changePct: (delta / was.amountCents) * 100,
+        changePct: was.amountCents > 0 ? (delta / was.amountCents) * 100 : null,
       });
     }
   }
-  const missing: LabPriceMove[] = [...before]
+  const missing: LabPriceMove[] = [...last]
     .filter(([serviceId]) => !now.has(serviceId))
     .map(([, was]) => ({
       combinationKey: current.key,
@@ -103,12 +121,12 @@ function moves(current: InsightCombination, previous: InsightCombination): LabPr
 
 /**
  * The run page's insight cards: each combination's cheapest and fastest, price moves against
- * `previous` (by combination key: the most recent earlier suite run with it), how often each
- * carrier service was cheapest, and failures per provider.
+ * `previous` (by combination key), how often each carrier service was cheapest, and failures per
+ * provider.
  */
 export function runInsights(
   combinations: readonly InsightCombination[],
-  previous: ReadonlyMap<string, InsightCombination>,
+  previous: ReadonlyMap<string, ComparedCombination>,
 ): LabRunInsights {
   const picks = combinations.map(pick);
 
