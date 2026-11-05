@@ -298,7 +298,8 @@ model ShippingLabel {
   @@index([packageId])
   @@index([rateQuoteId])
   @@index([trackingNumber])
-  @@index([status])
+  /// Rate Lab's Real orders reads active labels by purchase date; status alone is its prefix.
+  @@index([status, purchasedAt])
   @@map("shipping_labels")
 }
 
