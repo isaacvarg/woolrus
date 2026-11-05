@@ -24,6 +24,14 @@ test.afterAll(async () => {
 });
 
 /** Types `code` the way an HID scanner does: a fast burst of keys, then Enter. */
+/** Takes one unit out of a package through its items dialog. */
+async function takeOne(page: Page, number: number) {
+  await page.getByRole("button", { name: `Remove items from package ${number}` }).click();
+  const dialog = page.getByRole("dialog", { name: `Remove items from package ${number}` });
+  await dialog.getByRole("button", { name: `Take one E2E item out of package ${number}` }).click();
+  await dialog.getByRole("button", { name: "Back" }).click();
+}
+
 async function scanCode(page: Page, code: string) {
   await page.keyboard.type(code, { delay: 5 });
   await page.keyboard.press("Enter");
@@ -119,9 +127,7 @@ test("pick, pack into two boxes, weigh, confirm a re-weigh and finish to the nex
   await custom.getByRole("button", { name: "Use this size" }).click();
   await expect(packages).toHaveCount(2);
   await page.getByRole("button", { name: "Put one E2E item in the selected package" }).click();
-  await expect(page.getByTestId("pack-where")).toHaveText("2 in #1 · 1 in #2");
-  await expect(page.getByTestId("pack-unassigned")).toHaveText("1 item unassigned");
-  await expect(page.getByTestId("pack-unweighed")).toHaveText("2 packages without a weight");
+  await expect(page.getByTestId("pack-where")).toHaveText(/^2 @\s*1\s*•\s*1 @\s*2$/);
   await expect(page.getByRole("button", { name: "Done, next order" })).toHaveCount(0);
   await page.getByRole("button", { name: "Put one E2E item in the selected package" }).click();
   await expect(page.getByTestId("pack-all-packed")).toBeVisible();
@@ -129,7 +135,8 @@ test("pick, pack into two boxes, weigh, confirm a re-weigh and finish to the nex
   await expect(page.getByRole("button", { name: "Done, next order" })).toHaveCount(0);
 
   // Over package 1's 40 oz max: refused until a reason is given.
-  const one = packages.first();
+  const one = packages.filter({ hasText: "Package 1" });
+  await one.getByRole("button", { name: "Select package 1" }).click();
   await one.getByLabel("lb", { exact: true }).fill("3");
   await one.getByLabel("oz", { exact: true }).fill("0");
   await one.getByRole("button", { name: "Save weight" }).click();
@@ -139,21 +146,22 @@ test("pick, pack into two boxes, weigh, confirm a re-weigh and finish to the nex
   await over.getByLabel("Reason").fill("Dense kit, carrier agreed");
   await over.getByRole("button", { name: "Save with reason" }).click();
   await expect(over).toBeHidden();
-  await expect(page.getByTestId("pack-unweighed")).toHaveText("1 package without a weight");
+  await expect(one.getByTestId("pack-weight")).toHaveText("3 lb");
   progress("overweight saved with a reason");
 
   // Weigh the other; the gate is met and the Done buttons appear.
-  const two = packages.nth(1);
+  const two = packages.filter({ hasText: "Package 2" });
+  await two.getByRole("button", { name: "Select package 2" }).click();
   await two.getByLabel("lb", { exact: true }).fill("1");
   await two.getByLabel("oz", { exact: true }).fill("0");
   await two.getByRole("button", { name: "Save weight" }).click();
-  await expect(page.getByTestId("pack-unweighed")).toHaveText("0 packages without a weight");
+  await expect(two.getByTestId("pack-weight")).toHaveText("1 lb");
   await expect(page.getByRole("button", { name: "Done, next order" })).toBeVisible();
   progress("gate met, Done buttons shown");
 
   // Swap a unit in the weighed package: it asks to re-weigh; confirming clears it.
   await clearToasts(page);
-  await page.getByRole("button", { name: "Take one E2E item out of package 2" }).click();
+  await takeOne(page, 2);
   await page.getByRole("button", { name: "Put one E2E item in the selected package" }).click();
   await expect(two.getByTestId("pack-stale")).toBeVisible();
   await clearToasts(page);
@@ -163,7 +171,7 @@ test("pick, pack into two boxes, weigh, confirm a re-weigh and finish to the nex
 
   // A flagged weight left unconfirmed gets a note for QA when the order finishes.
   await clearToasts(page);
-  await page.getByRole("button", { name: "Take one E2E item out of package 2" }).click();
+  await takeOne(page, 2);
   await page.getByRole("button", { name: "Put one E2E item in the selected package" }).click();
   await expect(two.getByTestId("pack-stale")).toBeVisible();
 

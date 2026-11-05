@@ -62,7 +62,8 @@ test("a packer voids a boxed unit from the pack screen and sees the re-weigh fla
 
   const card = page.getByTestId("pack-item");
   await expect(card.getByTestId("pack-left")).toHaveText("1 left");
-  await card.getByRole("button", { name: "Void" }).click();
+  await card.getByRole("button", { name: "Actions for E2E item" }).click();
+  await page.getByRole("menuitem", { name: "Void" }).click();
   const dialog = page.getByRole("dialog", { name: "Void E2E item" });
   await dialog.getByRole("textbox", { name: "How many to void" }).fill("2");
   await dialog.getByRole("radio", { name: "Damaged" }).click();
@@ -381,10 +382,8 @@ test("a packer reports a packaging issue on a package, linked to it", async ({ p
   await signInAs(page, ["PACKER"]);
   await page.goto(`/pack/${order.id}`);
 
-  await page
-    .getByTestId("pack-package")
-    .getByRole("button", { name: "Report packaging issue" })
-    .click();
+  await page.getByRole("button", { name: "Actions for package 1" }).click();
+  await page.getByRole("menuitem", { name: "Report packaging issue" }).click();
   const dialog = page.getByRole("dialog", { name: "Report an issue" });
   await dialog.getByRole("combobox", { name: "Type" }).selectOption("PACKAGING_DAMAGE");
   await dialog.getByRole("textbox", { name: "What went wrong" }).fill("Box crushed");
