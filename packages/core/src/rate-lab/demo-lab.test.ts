@@ -44,6 +44,14 @@ beforeEach(async () => {
         maxWeightOz: 320,
         tareWeightOz: 5,
       },
+      {
+        name: "Large box",
+        lengthIn: 14,
+        widthIn: 12,
+        heightIn: 8,
+        maxWeightOz: 800,
+        tareWeightOz: 9,
+      },
     ],
   });
 });
@@ -90,7 +98,7 @@ describe("seedRateLab", () => {
     expect(await seedRateLab(db, { now, fakeShipping: true })).toBe(3);
 
     const addresses = await db.rateLabAddress.findMany({ include: { groups: true } });
-    expect(addresses).toHaveLength(6);
+    expect(addresses).toHaveLength(20);
     expect(addresses.filter((a) => a.checkStatus === "CORRECTED")).toHaveLength(2);
     expect(
       addresses.filter((a) => (a.original as { country: string }).country === "CA"),
@@ -98,15 +106,16 @@ describe("seedRateLab", () => {
     expect(addresses.every((a) => a.groups.length > 0 && a.lockedAt)).toBe(true);
 
     const parcels = await db.rateLabParcel.findMany({ include: { items: true, groups: true } });
-    expect(parcels).toHaveLength(4);
-    expect(parcels.filter((p) => p.boxId)).toHaveLength(2);
+    expect(parcels).toHaveLength(12);
+    expect(Math.max(...parcels.map((p) => Number(p.weightOz)))).toBe(800);
+    expect(parcels.filter((p) => p.boxId)).toHaveLength(6);
     expect(parcels.filter((p) => p.items.length > 0)).toHaveLength(1);
     expect(parcels.every((p) => p.groups.length > 0 && p.lockedAt)).toBe(true);
 
     const runs = await db.rateLabRun.findMany({ orderBy: { startedAt: "asc" } });
     expect(
       runs.map((r) => [r.kind, r.status, r.fake, r.combinations, r.completedCombinations]),
-    ).toEqual(Array(3).fill(["SUITE", "PARTIAL", true, 24, 24]));
+    ).toEqual(Array(3).fill(["SUITE", "PARTIAL", true, 240, 240]));
     const [first, second, third] = runs.map((r) => r.startedAt?.getTime() ?? 0);
     expect([(second ?? 0) - (first ?? 0), (third ?? 0) - (second ?? 0)]).toEqual([
       7 * 86_400_000,
@@ -145,7 +154,7 @@ describe("seedRateLab", () => {
     expect(await seedRateLab(db, { now })).toBe(0);
     expect(await db.rateLabRun.count()).toBe(0);
     const addresses = await db.rateLabAddress.findMany();
-    expect(addresses.map((a) => a.checkStatus)).toEqual(Array(6).fill("UNCHECKED"));
+    expect(addresses.map((a) => a.checkStatus)).toEqual(Array(20).fill("UNCHECKED"));
   });
 
   it("logs the latest run as a run on both fakes would", async () => {
@@ -164,18 +173,18 @@ describe("seedRateLab", () => {
     expect(await runLabRun(db, fakes, { runId: started.id })).toEqual({ status: "PARTIAL" });
 
     const seededLog = await logged(seeded.id);
-    expect(Object.keys(seededLog)).toHaveLength(24);
+    expect(Object.keys(seededLog)).toHaveLength(240);
     expect(seededLog).toEqual(await logged(started.id));
     const real = await db.rateLabRun.findUniqueOrThrow({ where: { id: started.id } });
     expect([seeded.quoteCount, seeded.failureCount]).toEqual([real.quoteCount, real.failureCount]);
-  });
+  }, 60_000);
 
   it("gives Trends a moving cell per domestic combination and the latest run a flagged move", async () => {
     await seedRateLab(db, { now, fakeShipping: true });
     const grid = await labTrendGrid(db, lab, { includeFake: true });
-    expect(grid.cells).toHaveLength(24);
+    expect(grid.cells).toHaveLength(240);
     const quoted = grid.cells.filter((c) => c.latest && c.previous);
-    expect(quoted).toHaveLength(20);
+    expect(quoted).toHaveLength(228);
     expect(quoted.every((c) => c.change !== 0)).toBe(true);
     // Fake data stays hidden unless asked.
     const hidden = await labTrendGrid(db, lab, {});

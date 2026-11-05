@@ -30,7 +30,11 @@ type DemoAddress = {
   country: string;
 };
 
-// Two with "Street" (the fake ShipStation abbreviates it), one Canadian; with a company is commercial.
+// The first six are the fakes' fixtures: two with "Street" (the fake ShipStation abbreviates it), one
+// Canadian. The rest are real US street addresses (city halls, courthouses and landmarks, so no private
+// homes) spread coast to coast, with Alaska, Hawaii and rural spots, so carriers can really quote and
+// validate them. None says "Street", so the fake corrects exactly two. A company makes it commercial;
+// without one the seed marks it residential, which a real check on save or Re-check overwrites.
 // biome-ignore format: one address per line reads as a table
 const addresses: DemoAddress[] = [
   { id: id(1, 1), title: "Austin house", groups: ["Residential"], name: "Ana Ruiz", address1: "210 Elm Street", city: "Austin", state: "TX", postalCode: "78704", country: "US" },
@@ -39,6 +43,20 @@ const addresses: DemoAddress[] = [
   { id: id(1, 4), title: "Montana ranch", groups: ["Residential"], name: "Lee Hart", address1: "12 Ranch Rd", city: "Bozeman", state: "MT", postalCode: "59715", country: "US" },
   { id: id(1, 5), title: "Miami studio", groups: ["Business"], name: "Rita Gomez", company: "Knit Lab Miami", address1: "900 Biscayne Blvd", city: "Miami", state: "FL", postalCode: "33132", country: "US" },
   { id: id(1, 6), title: "Toronto", groups: ["International"], name: "Chris Tremblay", address1: "100 Queen St W", city: "Toronto", state: "ON", postalCode: "M5H 2N2", country: "CA" },
+  { id: id(1, 7), title: "Boston city hall", groups: ["Business", "Northeast"], name: "Maya Brooks", company: "Boston City Hall", address1: "1 City Hall Sq", city: "Boston", state: "MA", postalCode: "02201", country: "US" },
+  { id: id(1, 8), title: "Manhattan office", groups: ["Business", "Northeast"], name: "Dan Weiss", company: "Empire State Building", address1: "20 W 34th St", city: "New York", state: "NY", postalCode: "10118", country: "US" },
+  { id: id(1, 9), title: "Bar Harbor town hall", groups: ["Residential", "Northeast", "Rural/remote"], name: "Ellen Frost", address1: "93 Cottage St", city: "Bar Harbor", state: "ME", postalCode: "04609", country: "US" },
+  { id: id(1, 10), title: "Atlanta city hall", groups: ["Business", "Southeast"], name: "Terrance Cole", company: "Atlanta City Hall", address1: "55 Trinity Ave SW", city: "Atlanta", state: "GA", postalCode: "30303", country: "US" },
+  { id: id(1, 11), title: "New Orleans city hall", groups: ["Residential", "Southeast"], name: "Camille Boudreaux", address1: "1300 Perdido St", city: "New Orleans", state: "LA", postalCode: "70112", country: "US" },
+  { id: id(1, 12), title: "Chicago Loop tower", groups: ["Business", "Midwest"], name: "Priya Nair", company: "Willis Tower", address1: "233 S Wacker Dr", city: "Chicago", state: "IL", postalCode: "60606", country: "US" },
+  { id: id(1, 13), title: "Minneapolis city hall", groups: ["Residential", "Midwest"], name: "Nils Larsen", address1: "350 S 5th St", city: "Minneapolis", state: "MN", postalCode: "55415", country: "US" },
+  { id: id(1, 14), title: "Denver capitol area", groups: ["Business", "Mountain"], name: "Hannah Ortiz", company: "Colorado State Capitol", address1: "200 E Colfax Ave", city: "Denver", state: "CO", postalCode: "80203", country: "US" },
+  { id: id(1, 15), title: "Salt Lake city and county", groups: ["Residential", "Mountain"], name: "Josh Tanner", address1: "451 S State St", city: "Salt Lake City", state: "UT", postalCode: "84111", country: "US" },
+  { id: id(1, 16), title: "Phoenix city hall", groups: ["Business", "Southwest"], name: "Marco Silva", company: "Phoenix City Hall", address1: "200 W Washington St", city: "Phoenix", state: "AZ", postalCode: "85003", country: "US" },
+  { id: id(1, 17), title: "Marfa courthouse", groups: ["Residential", "Southwest", "Rural/remote"], name: "Rosa Delgado", address1: "300 N Highland Ave", city: "Marfa", state: "TX", postalCode: "79843", country: "US" },
+  { id: id(1, 18), title: "Portland city hall", groups: ["Business", "West"], name: "Kai Nakamura", company: "Portland City Hall", address1: "1221 SW 4th Ave", city: "Portland", state: "OR", postalCode: "97204", country: "US" },
+  { id: id(1, 19), title: "Anchorage city hall", groups: ["Residential", "Alaska & Hawaii", "Rural/remote"], name: "Sigrid Olsen", address1: "632 W 6th Ave", city: "Anchorage", state: "AK", postalCode: "99501", country: "US" },
+  { id: id(1, 20), title: "Honolulu Hale", groups: ["Business", "Alaska & Hawaii"], name: "Leilani Kahale", company: "Honolulu Hale", address1: "530 S King St", city: "Honolulu", state: "HI", postalCode: "96813", country: "US" },
 ];
 
 type DemoParcel = {
@@ -59,6 +77,16 @@ const parcels: DemoParcel[] = [
   { id: id(2, 2), title: "Beanie kit", groups: ["Everyday"], box: "Medium box", size: [10, 8, 4], weightOz: 15 },
   { id: id(2, 3), title: "Scarf gift", groups: ["Customs"], size: [10, 6, 2], weightOz: 13, items: [["SCARF-CA-HS", 2]] },
   { id: id(2, 4), title: "Pattern books", groups: ["Heavy"], size: [12, 9, 3], weightOz: 44 },
+  // Up to the 50 lb (800 oz) carrier limit: envelope to full Large box, plus the shapes that bill by
+  // dimensional weight or size (bulky and light, long and thin, small and dense).
+  { id: id(2, 5), title: "Padded envelope, 4 oz", groups: ["Light"], size: [9, 6, 1], weightOz: 4 },
+  { id: id(2, 6), title: "Medium box, 10 lb", groups: ["Mid weight"], box: "Medium box", size: [10, 8, 4], weightOz: 160 },
+  { id: id(2, 7), title: "Medium box, 20 lb (full)", groups: ["Mid weight"], box: "Medium box", size: [10, 8, 4], weightOz: 320 },
+  { id: id(2, 8), title: "Large box, 30 lb", groups: ["Heavy"], box: "Large box", size: [14, 12, 8], weightOz: 480 },
+  { id: id(2, 9), title: "Large box, 50 lb (full)", groups: ["Heavy"], box: "Large box", size: [14, 12, 8], weightOz: 800 },
+  { id: id(2, 10), title: "Dense cube, 40 lb", groups: ["Heavy"], size: [10, 10, 10], weightOz: 640 },
+  { id: id(2, 11), title: "Bulky and light, 5 lb", groups: ["Oversize"], size: [24, 18, 18], weightOz: 80 },
+  { id: id(2, 12), title: "Long tube, 3 lb", groups: ["Oversize"], size: [36, 6, 6], weightOz: 48 },
 ];
 
 const RUN_WEEKS_AGO = [2, 1, 0];
@@ -315,7 +343,7 @@ async function seedRuns(db: Db, now: Date) {
           data: { lockedAt: startedAt },
         });
       },
-      { timeout: 30_000 },
+      { timeout: 120_000 },
     );
     created += 1;
   }

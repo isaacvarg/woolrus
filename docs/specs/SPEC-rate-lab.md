@@ -365,9 +365,10 @@ where noted. Filters: date range, carrier, service, destination country/state, b
 
 ### Dev data
 
-`pnpm db:seed` adds 6 test addresses (2 corrected by the ShipStation fake's "Street" rule, 1 Canadian), 4 parcels
-(2 from seeded boxes, 1 with contents for customs), and groups, plus 3 finished `SUITE` runs a week apart from the
-fakes with slightly drifting prices, so Trends has lines in dev (`packages/db/prisma/seed-rate-lab.ts`). Like the
+`pnpm db:seed` adds 20 test addresses (2 corrected by the ShipStation fake's "Street" rule, 1 Canadian, 14 real US
+addresses coast to coast incl. Alaska, Hawaii and rural spots, grouped by region), 12 parcels (6 from seeded boxes,
+1 with contents for customs, 4 oz to 50 lb, plus bulky, long and dense shapes), and groups, plus 3 finished `SUITE` runs a week apart from the
+fakes with slightly drifting prices, so Trends has lines in dev (`packages/db/prisma/seed-rate-lab.ts`). 20 × 12 = 240 combinations stays under the default cap of 250. Like the
 demo orders it is skipped when `NODE_ENV=production`, has fixed ids so re-seeding adds nothing, and writes the runs
 only with `SHIPPING_PROVIDERS=fake` (without it the addresses stay `UNCHECKED`). The seeded catalog has only domestic
 services on, so the Canadian combinations log what a real run would: `customsIncomplete` for parcels without
