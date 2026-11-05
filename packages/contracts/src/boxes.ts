@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { base, Id, IdempotencyKey, Inches, Ounces } from "./base";
+import { base, Id, IdempotencyKey, Inches, Ounces, QueryBoolean } from "./base";
 
 export const Box = z.object({
   id: Id,
@@ -51,7 +51,7 @@ export type UpdateBoxInput = z.infer<typeof UpdateBoxInput>;
 export const boxes = {
   list: base
     .route({ method: "GET", path: "/boxes", tags: ["Boxes"], summary: "List box sizes" })
-    .input(z.object({ includeArchived: z.boolean().default(false) }))
+    .input(z.object({ includeArchived: QueryBoolean.default(false) }))
     .output(z.array(Box)),
 
   create: base
