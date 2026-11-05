@@ -1,18 +1,21 @@
+import type { LabRunSelection } from "@woolrus/contracts";
 import type { Db, Prisma } from "@woolrus/db";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { createActor, resetDb, testDb } from "../../test/db";
 import { createFakeShippingProvider } from "../adapters/shipping/fake";
 import type { ProviderId, RateRequest } from "../adapters/shipping/provider";
-import { queues } from "../jobs";
+import { queues, RATE_LAB_RUN_EXPIRE_SECONDS } from "../jobs";
 import { loadSettings } from "../settings/service";
 import { createLabGroup } from "./catalog";
 import {
   cancelLabRun,
   LAB_CONCURRENCY,
+  LAB_QUEUED_STALL_MS,
   LAB_STALL_MS,
   listLabRuns,
   previewLabRun,
   runLabRun,
+  runLabRunJob,
   startLabRun,
 } from "./runs";
 
@@ -155,7 +158,10 @@ async function people() {
 }
 
 /** A queued run of `selection`, started by a Rate Lab user. */
-async function started(providers: Awaited<ReturnType<typeof fakes>>["providers"], selection = all) {
+async function started(
+  providers: Awaited<ReturnType<typeof fakes>>["providers"],
+  selection: LabRunSelection = all,
+) {
   const { lab } = await people();
   const run = await startLabRun(
     db,
@@ -257,9 +263,11 @@ describe("startLabRun", () => {
     });
     const stored = await db.rateLabRun.findUniqueOrThrow({ where: { id: run.id } });
     expect(stored.shipFrom).toMatchObject({ postalCode: "78702" });
-    const jobs = await db.$queryRaw<{ data: { runId: string } }[]>`
-      SELECT data FROM pgboss.job WHERE name = ${queues.rateLabRun}`;
+    const jobs = await db.$queryRaw<{ data: { runId: string }; expire_seconds: number }[]>`
+      SELECT data, expire_seconds FROM pgboss.job WHERE name = ${queues.rateLabRun}`;
     expect(jobs.map((j) => j.data)).toEqual([{ runId: run.id }]);
+    // A long run isn't failed by pg-boss's 15-minute default while it's still quoting.
+    expect(jobs.map((j) => j.expire_seconds)).toEqual([RATE_LAB_RUN_EXPIRE_SECONDS]);
     const audit = await db.auditEvent.findMany({ where: { entityId: run.id } });
     expect(audit.map((e) => [e.entityType, e.action])).toEqual([["RateLabRun", "start"]]);
   });
@@ -338,6 +346,20 @@ describe("startLabRun", () => {
     const input = { idempotencyKey: idempotencyKey(), selection: all };
     const first = await startLabRun(db, lab, input, { providers });
     const second = await startLabRun(db, lab, input, { providers });
+    expect(second.id).toBe(first.id);
+    expect(await db.rateLabRun.count()).toBe(1);
+  });
+
+  it("replays a double submit: two starts at once with the same key get the same run", async () => {
+    const { providers } = await fakes();
+    await address("A");
+    await parcel("P");
+    const { lab } = await people();
+    const input = { idempotencyKey: idempotencyKey(), selection: all };
+    const [first, second] = await Promise.all([
+      startLabRun(db, lab, input, { providers }),
+      startLabRun(db, lab, input, { providers }),
+    ]);
     expect(second.id).toBe(first.id);
     expect(await db.rateLabRun.count()).toBe(1);
   });
@@ -514,6 +536,124 @@ describe("the rateLab.run job", () => {
     });
     expect(await runLabRun(db, providers, { runId: run.id })).toEqual({ status: "skipped" });
     expect(await db.rateFetch.count()).toBe(1);
+  });
+
+  it("quotes what was selected at the start, not items added while it was queued", async () => {
+    const { admin } = await people();
+    const { providers } = await fakes();
+    const west = await createLabGroup(db, admin, {
+      idempotencyKey: idempotencyKey(),
+      kind: "ADDRESS",
+      name: "West",
+    });
+    const denver = await address("Denver");
+    await db.rateLabAddressGroup.create({ data: { addressId: denver.id, groupId: west.id } });
+    const small = await parcel("Small");
+    // The West group × every parcel (the empty-lists default).
+    const selection = { ...all, addressGroupIds: [west.id] };
+    const { lab, run } = await started(providers, selection);
+
+    const boulder = await address("Boulder");
+    await db.rateLabAddressGroup.create({ data: { addressId: boulder.id, groupId: west.id } });
+    await parcel("Large");
+
+    await runLabRun(db, providers, { runId: run.id });
+    const fetches = await db.rateFetch.findMany();
+    expect(fetches.map((f) => [f.labAddressId, f.labParcelId])).toEqual([[denver.id, small.id]]);
+    expect(await db.rateLabRun.findUniqueOrThrow({ where: { id: run.id } })).toMatchObject({
+      combinations: 1,
+      completedCombinations: 1,
+    });
+    // The list (and Run again) still read the selection as it was chosen.
+    expect((await listLabRuns(db, lab, {})).rows[0]).toMatchObject({
+      addresses: { groups: [{ id: west.id }], items: 0 },
+      parcels: { groups: [], items: 0 },
+    });
+    const again = await startLabRun(
+      db,
+      lab,
+      { idempotencyKey: idempotencyKey(), selection },
+      { providers },
+    );
+    expect(again.combinations).toBe(4);
+  });
+
+  it("stops picking combinations once its signal is aborted, and ends failed at once", async () => {
+    const { providers, shipStation } = await fakes();
+    for (const title of ["A", "B", "C"]) await address(title);
+    for (const title of ["P", "Q", "R"]) await parcel(title);
+    const { lab, run } = await started(providers);
+    const shutdown = new AbortController();
+    const getRates = shipStation.getRates.bind(shipStation);
+    shipStation.getRates = async (request) => {
+      shutdown.abort();
+      return getRates(request);
+    };
+    expect(await runLabRun(db, providers, { runId: run.id }, { signal: shutdown.signal })).toEqual({
+      status: "FAILED",
+    });
+    const done = await db.rateLabRun.findUniqueOrThrow({ where: { id: run.id } });
+    expect(done).toMatchObject({
+      status: "FAILED",
+      error: "errors.rateLab.runFailed",
+      finishedAt: expect.any(Date),
+    });
+    // The combinations already going were logged; no new one started.
+    expect(done.completedCombinations).toBeGreaterThanOrEqual(1);
+    expect(done.completedCombinations).toBeLessThanOrEqual(LAB_CONCURRENCY);
+    expect(await db.rateFetch.count()).toBe(done.completedCombinations);
+    // The one-active slot is free again.
+    await expect(
+      startLabRun(db, lab, { idempotencyKey: idempotencyKey(), selection: all }, { providers }),
+    ).resolves.toMatchObject({ status: "QUEUED" });
+  });
+
+  it("ends failed on an unexpected error, and a new run can start after it", async () => {
+    const { providers } = await fakes();
+    await address("A");
+    await parcel("P");
+    const { lab, run } = await started(providers);
+    // Logging a combination's quotes fails (the database went away mid-run, say).
+    const transaction = vi
+      .spyOn(db, "$transaction")
+      .mockRejectedValue(new Error("connection lost"));
+    try {
+      await expect(runLabRun(db, providers, { runId: run.id })).rejects.toThrow("connection lost");
+    } finally {
+      transaction.mockRestore();
+    }
+    expect(await db.rateLabRun.findUniqueOrThrow({ where: { id: run.id } })).toMatchObject({
+      status: "FAILED",
+      error: "errors.rateLab.runFailed",
+      finishedAt: expect.any(Date),
+    });
+    await expect(
+      startLabRun(db, lab, { idempotencyKey: idempotencyKey(), selection: all }, { providers }),
+    ).resolves.toMatchObject({ status: "QUEUED" });
+  });
+
+  it("fails a queued run whose providers can't be built, rather than leave it queued", async () => {
+    const { providers } = await fakes();
+    await address("A");
+    await parcel("P");
+    const { run } = await started(providers);
+    vi.stubEnv("SETTINGS_ENCRYPTION_KEY", Buffer.alloc(32, 7).toString("base64"));
+    try {
+      // A saved credential that no longer decrypts.
+      await db.shippingProviderAccount.create({
+        data: { provider: "SHIPSTATION", enabled: true, credentialsEnc: "not-a-sealed-secret" },
+      });
+      await expect(runLabRunJob(db, { runId: run.id })).rejects.toThrow();
+    } finally {
+      vi.unstubAllEnvs();
+    }
+    expect(await db.rateLabRun.findUniqueOrThrow({ where: { id: run.id } })).toMatchObject({
+      status: "FAILED",
+      error: "errors.rateLab.runFailed",
+      startedAt: null,
+      finishedAt: expect.any(Date),
+    });
+    expect(await db.rateFetch.count()).toBe(0);
   });
 });
 
@@ -716,6 +856,40 @@ describe("stuck runs", () => {
       status: "FAILED",
       error: "errors.rateLab.stalled",
     });
+  });
+
+  it("a run still queued past its job's expiry is failed as never started; a waiting one is left alone", async () => {
+    const { providers } = await fakes();
+    await address("A");
+    await parcel("P");
+    const { lab, run } = await started(providers);
+    // Waiting a while (the worker is restarting, say) is fine.
+    await db.rateLabRun.update({
+      where: { id: run.id },
+      data: { createdAt: ago(LAB_STALL_MS * 2) },
+    });
+    expect((await listLabRuns(db, lab, {})).rows[0]?.status).toBe("QUEUED");
+
+    // Past the job's expiry, nothing will ever pick it up.
+    expect(LAB_QUEUED_STALL_MS).toBeGreaterThan(RATE_LAB_RUN_EXPIRE_SECONDS * 1000);
+    await db.rateLabRun.update({
+      where: { id: run.id },
+      data: { createdAt: ago(LAB_QUEUED_STALL_MS + 1000) },
+    });
+    const next = await startLabRun(
+      db,
+      lab,
+      { idempotencyKey: idempotencyKey(), selection: all },
+      { providers },
+    );
+    expect(next.status).toBe("QUEUED");
+    expect(await db.rateLabRun.findUniqueOrThrow({ where: { id: run.id } })).toMatchObject({
+      status: "FAILED",
+      error: "errors.rateLab.notStarted",
+      finishedAt: expect.any(Date),
+    });
+    // Its job, if it ever runs, leaves the failed run alone.
+    expect(await runLabRun(db, providers, { runId: run.id })).toEqual({ status: "skipped" });
   });
 
   it("a worker that wakes after its run was failed as stalled doesn't overwrite that", async () => {

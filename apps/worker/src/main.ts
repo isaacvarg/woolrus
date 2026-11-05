@@ -249,12 +249,17 @@ await boss.work(
 );
 
 // Rate Lab suite runs (SPEC-rate-lab "Runs"): one at a time (the database allows one active run),
-// never retried; the job works through its combinations three at a time itself.
+// never retried; the job works through its combinations three at a time itself. A run stops
+// starting combinations when its job expires or the worker shuts down, and ends failed, so the next
+// run isn't blocked until the stall check.
+const labRunsStopping = new AbortController();
 await boss.work(
   queues.rateLabRun,
   META,
   runJob<JobPayloads[typeof queues.rateLabRun]>(queues.rateLabRun, async (job) => ({
-    ...(await runLabRunJob(db, job.data)),
+    ...(await runLabRunJob(db, job.data, {
+      signal: AbortSignal.any([job.signal, labRunsStopping.signal]),
+    })),
   })),
 );
 
@@ -265,6 +270,9 @@ async function shutdown(signal: string) {
   if (stopping) return;
   stopping = true;
   log.info({ signal }, "worker stopping");
+  // Before the stop's grace starts: a lab run finishes the combinations it's quoting (each within
+  // the provider timeout) and ends failed inside the grace, rather than being cut off mid-run.
+  labRunsStopping.abort();
   await boss.stop({ graceful: true, timeout: 30_000 });
   await db.$disconnect();
   process.exit(0);

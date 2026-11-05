@@ -77,8 +77,16 @@ export const JOB_RETENTION_SECONDS = 30 * 24 * 60 * 60;
 
 const keep = { deleteAfterSeconds: JOB_RETENTION_SECONDS };
 
+/**
+ * How long a `rateLab.run` job may run before pg-boss fails it (and aborts its signal): 4 hours. The
+ * longest run is the cap's ceiling (2000 combinations) with every combination waiting out the
+ * provider timeout (20 s), three at a time: about 3 h 42 min. pg-boss's own limit is 24 hours.
+ */
+export const RATE_LAB_RUN_EXPIRE_SECONDS = 4 * 60 * 60;
+
 type QueueSettings = {
   deleteAfterSeconds: number;
+  expireInSeconds?: number;
   retryLimit?: number;
   retryDelay?: number;
   retryBackoff?: boolean;
@@ -87,7 +95,7 @@ type QueueSettings = {
 /**
  * Per-queue policy, set when the queue is created; every job sent to it inherits it. Every queue
  * keeps finished jobs for `JOB_RETENTION_SECONDS`; the retry settings are for queues that retry.
- * The rest keep pg-boss's retry defaults.
+ * The rest keep pg-boss's retry defaults, and its 15-minute expiry unless `expireInSeconds` says.
  */
 export const queueOptions: Record<QueueName, QueueSettings> = {
   ...(Object.fromEntries(Object.values(queues).map((name) => [name, keep])) as Record<
@@ -106,8 +114,9 @@ export const queueOptions: Record<QueueName, QueueSettings> = {
   [queues.labelsPurchase]: { ...keep, retryLimit: 4, retryDelay: 15, retryBackoff: true },
   // WooCommerce down or rate-limiting: 9 attempts over several hours; then the order shows a push error.
   [queues.wooPush]: { ...keep, retryLimit: 8, retryDelay: 60, retryBackoff: true },
-  // A run never retries itself: a re-run is a new run (SPEC-rate-lab decision 7).
-  [queues.rateLabRun]: { ...keep, retryLimit: 0 },
+  // A run never retries itself: a re-run is a new run (SPEC-rate-lab decision 7). It can take hours,
+  // well past pg-boss's 15-minute default expiry.
+  [queues.rateLabRun]: { ...keep, retryLimit: 0, expireInSeconds: RATE_LAB_RUN_EXPIRE_SECONDS },
 };
 
 /** pg-boss keeps its tables in their own schema, separate from Prisma's. */

@@ -11,14 +11,14 @@ import {
   StartLabRunInput,
 } from "@woolrus/contracts";
 import { type Db, type DbTx, Prisma } from "@woolrus/db";
-import type { z } from "zod";
+import { z } from "zod";
 import type { ShippingProvider } from "../adapters/shipping/provider";
 import { type AdapterFactories, createShippingProviders } from "../adapters/shipping/registry";
 import { recordAudit } from "../audit";
 import { enqueue } from "../enqueue";
 import { AppError, notFound } from "../errors";
-import { withIdempotency } from "../idempotency";
-import { type JobPayloads, queues } from "../jobs";
+import { storedResult, withIdempotency } from "../idempotency";
+import { type JobPayloads, queues, RATE_LAB_RUN_EXPIRE_SECONDS } from "../jobs";
 import { type Actor, assertCan } from "../permissions";
 import { loadSettings } from "../settings/service";
 import { toNumber } from "../units";
@@ -34,6 +34,13 @@ export const LAB_CONCURRENCY = 3;
 
 /** A running run with no heartbeat for this long has lost its worker (SPEC-rate-lab "Stuck runs"). */
 export const LAB_STALL_MS = 10 * 60_000;
+
+/**
+ * A queued run older than this has lost its job: past the job's expiry pg-boss has failed it (a
+ * run is never retried), so nothing will pick the run up. Anything shorter could fail a run whose
+ * job is legitimately waiting, e.g. for the worker to come back.
+ */
+export const LAB_QUEUED_STALL_MS = RATE_LAB_RUN_EXPIRE_SECONDS * 1000 + LAB_STALL_MS;
 
 type Selection = z.output<typeof LabRunSelection>;
 
@@ -53,6 +60,18 @@ const parcelInclude = {
   items: { include: { product: true }, orderBy: { product: { name: "asc" } } },
 } as const satisfies Prisma.RateLabParcelInclude;
 
+/**
+ * The ids a run resolved its selection to when it started, kept beside the selection as chosen
+ * (`selection.resolved`): the job quotes these, never items that joined the selection while the
+ * run was queued. `LabRunSelection` strips it, so the run list and Run again see the selection as
+ * chosen. Runs started before it existed have none and resolve the selection again.
+ */
+const ResolvedSelection = z.object({
+  resolved: z
+    .object({ addressIds: z.array(z.string()), parcelIds: z.array(z.string()) })
+    .optional(),
+});
+
 /** The addresses and parcels a selection runs, each once (SC 3). */
 async function resolveSelection(db: Db | DbTx, selection: Selection) {
   const [addresses, parcels] = await Promise.all([
@@ -69,17 +88,35 @@ async function resolveSelection(db: Db | DbTx, selection: Selection) {
   return { addresses, parcels };
 }
 
-async function preview(db: Db | DbTx, selection: Selection): Promise<LabRunPreview> {
-  const { addresses, parcels } = await resolveSelection(db, selection);
+/** The resolved ids still active: an item archived since the start is no longer run. */
+async function resolveIds(db: Db, ids: { addressIds: string[]; parcelIds: string[] }) {
+  const [addresses, parcels] = await Promise.all([
+    db.rateLabAddress.findMany({
+      where: { id: { in: ids.addressIds }, archivedAt: null },
+      orderBy: [{ title: "asc" }, { id: "asc" }],
+    }),
+    db.rateLabParcel.findMany({
+      where: { id: { in: ids.parcelIds }, archivedAt: null },
+      include: parcelInclude,
+      orderBy: [{ title: "asc" }, { id: "asc" }],
+    }),
+  ]);
+  return { addresses, parcels };
+}
+
+/** The selection's counts, and the addresses and parcels behind them. */
+async function preview(db: Db | DbTx, selection: Selection) {
+  const resolved = await resolveSelection(db, selection);
   const cap = (await loadSettings(db as DbTx)).rateLabMaxCombinations;
-  const combinations = addresses.length * parcels.length;
-  return {
-    addresses: addresses.length,
-    parcels: parcels.length,
+  const combinations = resolved.addresses.length * resolved.parcels.length;
+  const counts: LabRunPreview = {
+    addresses: resolved.addresses.length,
+    parcels: resolved.parcels.length,
     combinations,
     cap,
     overCap: combinations > cap,
   };
+  return { counts, ...resolved };
 }
 
 /** The counts for the New run dialog: addresses × parcels, and whether that's over the cap. */
@@ -89,7 +126,7 @@ export async function previewLabRun(
   input: PreviewLabRunInput,
 ): Promise<LabRunPreview> {
   assertCan(actor, "ratelab.use");
-  return preview(db, PreviewLabRunInput.parse(input).selection);
+  return (await preview(db, PreviewLabRunInput.parse(input).selection)).counts;
 }
 
 export const labRunInclude = { startedBy: { select: { id: true, name: true } } } as const;
@@ -101,17 +138,22 @@ const isUniqueViolation = (error: unknown) =>
 /**
  * Fails every running run whose heartbeat (or start, before the first one) is older than
  * `LAB_STALL_MS`: its worker is gone, and the run would otherwise hold the one-active-run slot.
+ * Likewise a run still queued after `LAB_QUEUED_STALL_MS`, whose job is gone.
  */
 export async function recoverStalledLabRuns(db: Db | DbTx, now = new Date()): Promise<number> {
   const before = new Date(now.getTime() - LAB_STALL_MS);
-  const { count } = await db.rateLabRun.updateMany({
+  const running = await db.rateLabRun.updateMany({
     where: {
       status: "RUNNING",
       OR: [{ heartbeatAt: { lt: before } }, { heartbeatAt: null, startedAt: { lt: before } }],
     },
     data: { status: "FAILED", error: "errors.rateLab.stalled", finishedAt: now },
   });
-  return count;
+  const queued = await db.rateLabRun.updateMany({
+    where: { status: "QUEUED", createdAt: { lt: new Date(now.getTime() - LAB_QUEUED_STALL_MS) } },
+    data: { status: "FAILED", error: "errors.rateLab.notStarted", finishedAt: now },
+  });
+  return running.count + queued.count;
 }
 
 /**
@@ -132,7 +174,7 @@ export async function startLabRun(
   try {
     ({ id } = await db.$transaction(async (tx) =>
       withIdempotency(tx, idempotencyKey, "rateLab.startRun", actor, async () => {
-        const counts = await preview(tx, selection);
+        const { counts, addresses, parcels } = await preview(tx, selection);
         if (counts.combinations === 0) {
           throw new AppError("BAD_REQUEST", "errors.rateLab.emptySelection");
         }
@@ -150,7 +192,13 @@ export async function startLabRun(
           data: {
             kind: "SUITE",
             startedById: actor.userId,
-            selection: selection as Prisma.InputJsonObject,
+            selection: {
+              ...selection,
+              resolved: {
+                addressIds: addresses.map((a) => a.id),
+                parcelIds: parcels.map((p) => p.id),
+              },
+            } as Prisma.InputJsonObject,
             shipFrom: shipFrom.data as Prisma.InputJsonObject,
             combinations: counts.combinations,
           },
@@ -166,8 +214,13 @@ export async function startLabRun(
       }),
     ));
   } catch (error) {
-    if (isUniqueViolation(error)) throw new AppError("CONFLICT", "errors.rateLab.runActive");
-    throw error;
+    if (!isUniqueViolation(error)) throw error;
+    // A double submit: the same key's other call took the slot first. Answer with its run.
+    const replay = await db.$transaction((tx) =>
+      storedResult<{ id: string }>(tx, idempotencyKey, "rateLab.startRun", actor),
+    );
+    if (!replay) throw new AppError("CONFLICT", "errors.rateLab.runActive");
+    ({ id } = replay);
   }
   const rows = await labRunRows(db, [
     await db.rateLabRun.findUniqueOrThrow({ where: { id }, include: labRunInclude }),
@@ -313,7 +366,11 @@ export async function cancelLabRun(
 
 type RunPayload = JobPayloads[typeof queues.rateLabRun];
 
-export type LabRunOptions = { timeoutMs?: number };
+/**
+ * `signal`: the job's, aborted when pg-boss expires it or the worker shuts down. The run then
+ * starts no new combination and ends FAILED once the ones it's quoting are logged.
+ */
+export type LabRunOptions = { timeoutMs?: number; signal?: AbortSignal };
 
 type Address = Awaited<ReturnType<typeof resolveSelection>>["addresses"][number];
 type Parcel = Awaited<ReturnType<typeof resolveSelection>>["parcels"][number];
@@ -321,14 +378,15 @@ type Parcel = Awaited<ReturnType<typeof resolveSelection>>["parcels"][number];
 /**
  * One `rateLab.run`: works through the run's combinations `LAB_CONCURRENCY` at a time, logs each as
  * a LAB fetch, locks what it quotes, and ends SUCCEEDED, PARTIAL or FAILED. Never retries, never
- * buys. A run that isn't queued any more (picked up already, or cancelled) is left alone. Between
- * combinations it stops when cancel was asked (ending CANCELLED) or the run was failed as stalled.
+ * buys. A run that isn't queued any more (picked up already, cancelled, or failed) is left alone.
+ * Between combinations it stops when cancel was asked (ending CANCELLED), the run was failed as
+ * stalled, or `signal` was aborted (ending FAILED, which frees the one-active slot).
  */
 export async function runLabRun(
   db: Db,
   providers: ShippingProvider[],
   { runId }: RunPayload,
-  { timeoutMs }: LabRunOptions = {},
+  { timeoutMs, signal }: LabRunOptions = {},
 ): Promise<{ status: string }> {
   const claimed = await db.rateLabRun.updateMany({
     where: { id: runId, kind: "SUITE", status: "QUEUED" },
@@ -338,8 +396,11 @@ export async function runLabRun(
   const run = await db.rateLabRun.findUniqueOrThrow({ where: { id: runId } });
   try {
     const shipFrom = ShipFromAddress.parse(run.shipFrom);
-    // Items archived since the start are no longer run, so the count is what's actually quoted.
-    const { addresses, parcels } = await resolveSelection(db, LabRunSelection.parse(run.selection));
+    // What the start resolved, minus items archived since: the count is what's actually quoted.
+    const { resolved } = ResolvedSelection.parse(run.selection);
+    const { addresses, parcels } = resolved
+      ? await resolveIds(db, resolved)
+      : await resolveSelection(db, LabRunSelection.parse(run.selection));
     const combinations = addresses.flatMap((address) =>
       parcels.map((parcel) => ({ address, parcel })),
     );
@@ -368,7 +429,10 @@ export async function runLabRun(
 
     let stopping = false;
     const goOn = async () => {
-      if (stopping) return false;
+      if (stopping || signal?.aborted) {
+        stopping = true;
+        return false;
+      }
       const current = await db.rateLabRun.findUniqueOrThrow({
         where: { id: runId },
         select: { status: true, cancelRequestedAt: true },
@@ -390,9 +454,14 @@ export async function runLabRun(
     const done = await db.rateLabRun.findUniqueOrThrow({ where: { id: runId } });
     // Failed as stalled meanwhile: that answer stands.
     if (done.status !== "RUNNING") return { status: done.status };
+    // Aborted (the job expired, or the worker is stopping) before every combination was quoted.
+    const aborted =
+      signal?.aborted === true &&
+      !done.cancelRequestedAt &&
+      done.completedCombinations < combinations.length;
     const status = done.cancelRequestedAt
       ? "CANCELLED"
-      : done.quoteCount === 0
+      : aborted || done.quoteCount === 0
         ? "FAILED"
         : done.failureCount > 0
           ? "PARTIAL"
@@ -401,7 +470,11 @@ export async function runLabRun(
       where: { id: runId, status: "RUNNING" },
       data: {
         status,
-        error: status === "FAILED" ? "errors.rateLab.noQuotes" : null,
+        error: aborted
+          ? "errors.rateLab.runFailed"
+          : status === "FAILED"
+            ? "errors.rateLab.noQuotes"
+            : null,
         fake: quoter.fakeProviders.size > 0,
         finishedAt: new Date(),
       },
