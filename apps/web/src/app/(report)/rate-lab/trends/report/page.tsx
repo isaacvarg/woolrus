@@ -1,3 +1,4 @@
+import { isQueryTrue } from "@woolrus/contracts";
 import { can } from "@woolrus/core";
 import { getTranslations } from "next-intl/server";
 import { currentActor } from "@/server/actor";
@@ -28,7 +29,7 @@ export default async function RateLabTrendsReportPage({
         carrierIds: list(search.carrierIds),
         from: one(search.from),
         to: one(search.to),
-        includeFake: search.includeFake === "1",
+        includeFake: isQueryTrue(search.includeFake),
       }}
       autoPrint={search.print === "1"}
     />

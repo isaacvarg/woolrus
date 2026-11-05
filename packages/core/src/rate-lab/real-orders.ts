@@ -302,6 +302,7 @@ export async function realOrders(
   input: z.input<typeof RealOrdersInput>,
   { now = new Date() }: { now?: Date } = {},
 ): Promise<RealOrders> {
+  // `report.read` alone (SPEC-rate-lab "Permissions"), as the CSV export and the PDF report check it.
   assertCan(actor, "report.read");
   const filters = RealOrdersInput.parse(input);
   const { from, to, all, rows, names } = await realOrderRows(db, filters, now);

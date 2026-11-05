@@ -27,7 +27,10 @@ export function RealOrdersReport({
   const t = useTranslations("rateLab.report");
   const format = useFormatter();
   const errorMessage = useErrorMessage();
-  const query = useQuery(orpc.rateLab.realOrders.queryOptions({ input }));
+  // The report never shows the alternatives table: skip loading its packages and quotes.
+  const query = useQuery(
+    orpc.rateLab.realOrders.queryOptions({ input: { ...input, alternativesLimit: 0 } }),
+  );
   const data = query.data;
   // `to` is exclusive (a midnight, or now): the range reads as the days it covers, in UTC.
   const day = (at: Date) => format.dateTime(at, { dateStyle: "medium", timeZone: "UTC" });
