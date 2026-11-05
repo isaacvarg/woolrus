@@ -1,5 +1,5 @@
 import type { LabRunSelection } from "@woolrus/contracts";
-import type { Db, Prisma } from "@woolrus/db";
+import type { Db, DbTx, Prisma } from "@woolrus/db";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { createActor, resetDb, testDb } from "../../test/db";
 import { createFakeShippingProvider } from "../adapters/shipping/fake";
@@ -14,6 +14,7 @@ import {
   LAB_STALL_MS,
   listLabRuns,
   previewLabRun,
+  recoverStalledLabRuns,
   runLabRun,
   runLabRunJob,
   startLabRun,
@@ -608,6 +609,50 @@ describe("the rateLab.run job", () => {
     ).resolves.toMatchObject({ status: "QUEUED" });
   });
 
+  it("ends succeeded when the signal is aborted only as the last combination is quoting", async () => {
+    const { providers, shipStation } = await fakes();
+    await address("A");
+    await parcel("P");
+    const { run } = await started(providers);
+    const shutdown = new AbortController();
+    const getRates = shipStation.getRates.bind(shipStation);
+    shipStation.getRates = async (request) => {
+      shutdown.abort();
+      return getRates(request);
+    };
+    // Every combination got quoted and logged, so the abort cost nothing: not a failure.
+    expect(await runLabRun(db, providers, { runId: run.id }, { signal: shutdown.signal })).toEqual({
+      status: "SUCCEEDED",
+    });
+    expect(await db.rateLabRun.findUniqueOrThrow({ where: { id: run.id } })).toMatchObject({
+      status: "SUCCEEDED",
+      error: null,
+      completedCombinations: 1,
+    });
+  });
+
+  it("ends cancelled, not failed, when cancel is asked and the signal aborted together", async () => {
+    const { providers, shipStation } = await fakes();
+    for (const title of ["A", "B", "C"]) await address(title);
+    for (const title of ["P", "Q"]) await parcel(title);
+    const { lab, run } = await started(providers);
+    const shutdown = new AbortController();
+    const getRates = shipStation.getRates.bind(shipStation);
+    let cancelled: ReturnType<typeof cancelLabRun> | undefined;
+    shipStation.getRates = async (request) => {
+      cancelled ??= cancelLabRun(db, lab, { id: run.id });
+      await cancelled;
+      shutdown.abort();
+      return getRates(request);
+    };
+    expect(await runLabRun(db, providers, { runId: run.id }, { signal: shutdown.signal })).toEqual({
+      status: "CANCELLED",
+    });
+    const done = await db.rateLabRun.findUniqueOrThrow({ where: { id: run.id } });
+    expect(done).toMatchObject({ status: "CANCELLED", error: null, finishedAt: expect.any(Date) });
+    expect(done.completedCombinations).toBeLessThan(6);
+  });
+
   it("ends failed on an unexpected error, and a new run can start after it", async () => {
     const { providers } = await fakes();
     await address("A");
@@ -706,6 +751,45 @@ describe("listLabRuns", () => {
   });
 });
 
+/**
+ * `db` whose transactions pause `ms` after reading a run with `findUniqueOrThrow`, widening the
+ * gap between a cancel's read and its write; `read` settles once the first such read is done.
+ */
+function slowRunReads(base: Db, ms: number) {
+  let readDone = () => {};
+  const read = new Promise<void>((resolve) => {
+    readDone = resolve;
+  });
+  const bound = <T extends object>(target: T, key: string | symbol) => {
+    const value = Reflect.get(target, key);
+    return typeof value === "function" ? value.bind(target) : value;
+  };
+  const wrapTx = (tx: DbTx) =>
+    new Proxy(tx, {
+      get(target, key) {
+        if (key !== "rateLabRun") return bound(target, key);
+        return new Proxy(target.rateLabRun, {
+          get(delegate, method) {
+            if (method !== "findUniqueOrThrow") return bound(delegate, method);
+            return async (args: Prisma.RateLabRunFindUniqueOrThrowArgs) => {
+              const row = await delegate.findUniqueOrThrow(args);
+              readDone();
+              await new Promise((resolve) => setTimeout(resolve, ms));
+              return row;
+            };
+          },
+        });
+      },
+    });
+  const slowDb = new Proxy(base, {
+    get(target, key) {
+      if (key !== "$transaction") return bound(target, key);
+      return (fn: (tx: DbTx) => Promise<unknown>) => target.$transaction((tx) => fn(wrapTx(tx)));
+    },
+  }) as Db;
+  return { db: slowDb, read };
+}
+
 describe("cancelLabRun", () => {
   it("cancels a queued run at once, and its job then quotes nothing, audited", async () => {
     const { providers, sent } = await fakes();
@@ -769,6 +853,90 @@ describe("cancelLabRun", () => {
     await cancelLabRun(db, lab, { id: run.id });
     expect(await db.rateLabRun.findUniqueOrThrow({ where: { id: run.id } })).toEqual(first);
     expect(await db.auditEvent.count({ where: { entityId: run.id, action: "cancel" } })).toBe(1);
+  });
+
+  it("wins every race with the job's claim on a queued run: cancelled, audited once, nothing quoted after", async () => {
+    const { providers } = await fakes({ latencyMs: 20 });
+    await address("A");
+    await parcel("P");
+    const { lab } = await people();
+    for (let i = 0; i < 20; i++) {
+      const run = await startLabRun(
+        db,
+        lab,
+        { idempotencyKey: idempotencyKey(), selection: all },
+        { providers },
+      );
+      await Promise.all([
+        cancelLabRun(db, lab, { id: run.id }),
+        runLabRun(db, providers, { runId: run.id }),
+      ]);
+      const done = await db.rateLabRun.findUniqueOrThrow({ where: { id: run.id } });
+      expect(done).toMatchObject({ status: "CANCELLED", finishedAt: expect.any(Date) });
+      const cancels = await db.auditEvent.findMany({
+        where: { entityId: run.id, action: "cancel" },
+      });
+      expect(cancels).toHaveLength(1);
+      // Cancelled while queued means the job never got to quote.
+      if ((cancels[0]?.before as { status?: string } | null)?.status === "QUEUED") {
+        expect(await db.rateFetch.count({ where: { labRunId: run.id } })).toBe(0);
+      }
+    }
+  });
+
+  it("holds the run while it cancels: a claim in between waits, so a queued run quotes nothing", async () => {
+    const { providers, sent } = await fakes({ latencyMs: 20 });
+    await address("A");
+    await parcel("P");
+    const { lab, run } = await started(providers);
+    const slow = slowRunReads(db, 200);
+    const cancelling = cancelLabRun(slow.db, lab, { id: run.id });
+    // The cancel has read the run as QUEUED; the job claims it now, before the cancel writes.
+    await slow.read;
+    const ran = runLabRun(db, providers, { runId: run.id });
+    await Promise.all([cancelling, ran]);
+    expect(await ran).toEqual({ status: "skipped" });
+    expect(sent).toEqual([]);
+    expect(await db.rateLabRun.findUniqueOrThrow({ where: { id: run.id } })).toMatchObject({
+      status: "CANCELLED",
+      finishedAt: expect.any(Date),
+    });
+  });
+
+  it("two cancels at once of a running run ask once, audited once", async () => {
+    const { providers } = await fakes();
+    await address("A");
+    await parcel("P");
+    const { lab } = await people();
+    const running = async () => {
+      const run = await startLabRun(
+        db,
+        lab,
+        { idempotencyKey: idempotencyKey(), selection: all },
+        { providers },
+      );
+      await db.rateLabRun.update({ where: { id: run.id }, data: { status: "RUNNING" } });
+      return run;
+    };
+    const cancels = (id: string) =>
+      db.auditEvent.count({ where: { entityId: id, action: "cancel" } });
+
+    const run = await running();
+    await Promise.all([
+      cancelLabRun(db, lab, { id: run.id }),
+      cancelLabRun(db, lab, { id: run.id }),
+    ]);
+    expect(await cancels(run.id)).toBe(1);
+
+    // Again with both reads slowed, so without the lock both would see it not yet asked.
+    await db.rateLabRun.update({ where: { id: run.id }, data: { status: "CANCELLED" } });
+    const next = await running();
+    const slow = slowRunReads(db, 100);
+    await Promise.all([
+      cancelLabRun(slow.db, lab, { id: next.id }),
+      cancelLabRun(slow.db, lab, { id: next.id }),
+    ]);
+    expect(await cancels(next.id)).toBe(1);
   });
 
   it("refuses a finished run or one that doesn't exist", async () => {
@@ -890,6 +1058,36 @@ describe("stuck runs", () => {
     });
     // Its job, if it ever runs, leaves the failed run alone.
     expect(await runLabRun(db, providers, { runId: run.id })).toEqual({ status: "skipped" });
+  });
+
+  it("a long but healthy run keeps its heartbeat fresh and isn't failed as stalled", async () => {
+    const { providers, shipStation } = await fakes();
+    await address("A");
+    for (const title of ["P", "Q", "R", "S", "T"]) await parcel(title);
+    const { run } = await started(providers);
+    // The first quote makes the run look old: started, and last heard from, past the stall limit.
+    // Every other quote waits for that, so each combination is logged after it.
+    const old = ago(LAB_STALL_MS * 2);
+    let backdate: Promise<unknown> | undefined;
+    const recovered: number[] = [];
+    let calls = 0;
+    const getRates = shipStation.getRates.bind(shipStation);
+    shipStation.getRates = async (request) => {
+      calls += 1;
+      backdate ??= db.rateLabRun.update({
+        where: { id: run.id },
+        data: { startedAt: old, heartbeatAt: old },
+      });
+      await backdate;
+      // Past the first LAB_CONCURRENCY quotes, some combination has been logged since then.
+      if (calls > LAB_CONCURRENCY) recovered.push(await recoverStalledLabRuns(db));
+      return getRates(request);
+    };
+    expect(await runLabRun(db, providers, { runId: run.id })).toEqual({ status: "SUCCEEDED" });
+    expect(recovered).toEqual([0, 0]);
+    const done = await db.rateLabRun.findUniqueOrThrow({ where: { id: run.id } });
+    expect(done).toMatchObject({ status: "SUCCEEDED", error: null, completedCombinations: 5 });
+    expect(done.heartbeatAt?.getTime()).toBeGreaterThan(Date.now() - LAB_STALL_MS);
   });
 
   it("a worker that wakes after its run was failed as stalled doesn't overwrite that", async () => {
