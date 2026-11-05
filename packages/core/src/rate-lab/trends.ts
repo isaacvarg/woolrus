@@ -16,12 +16,11 @@ import { type DbTx, Prisma } from "@woolrus/db";
 import type { z } from "zod";
 import { notFound } from "../errors";
 import { type Actor, assertCan } from "../permissions";
+import { DAY_MS, groupBy } from "./shared";
 
 // Rate Lab's Trends (SPEC-rate-lab "Trends"): the cheapest price of each test address × parcel in
 // its latest suite run against the run before, and one line per carrier service across the runs.
 // Only SUITE runs count (one-offs never do, decision 12); a run's time is when it started.
-
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** One quote of a suite run's fetch for a test address × parcel. */
 type QuoteRow = {
@@ -41,6 +40,8 @@ type QuoteRow = {
 type Filters = {
   addressIds: string[];
   parcelIds: string[];
+  /** Only these address × parcel pairs, rather than every address with every parcel. */
+  pairs?: { addressId: string; parcelId: string }[];
   carrierIds: string[];
   from?: string;
   to?: string;
@@ -56,8 +57,17 @@ type Filters = {
  * a quote in the filters, so a failed combination never hides the run before it.
  */
 async function loadQuotes(db: DbTx, f: Filters): Promise<QuoteRow[]> {
-  if (f.addressIds.length === 0 || f.parcelIds.length === 0) return [];
+  if (f.addressIds.length === 0 || f.parcelIds.length === 0 || f.pairs?.length === 0) return [];
   const at = Prisma.sql`COALESCE(r.started_at, r.created_at)`;
+  const combinations = f.pairs
+    ? Prisma.sql`(f.lab_address_id, f.lab_parcel_id) IN (
+        SELECT * FROM unnest(
+          ${f.pairs.map((p) => p.addressId)}::uuid[],
+          ${f.pairs.map((p) => p.parcelId)}::uuid[]
+        )
+      )`
+    : Prisma.sql`f.lab_address_id = ANY(${f.addressIds}::uuid[])
+        AND f.lab_parcel_id = ANY(${f.parcelIds}::uuid[])`;
   const carriers =
     f.carrierIds.length > 0
       ? Prisma.sql`AND q.carrier_id = ANY(${f.carrierIds}::uuid[])`
@@ -69,8 +79,7 @@ async function loadQuotes(db: DbTx, f: Filters): Promise<QuoteRow[]> {
       FROM rate_fetches f
       JOIN rate_lab_runs r ON r.id = f.lab_run_id
       WHERE r.kind = 'SUITE'
-        AND f.lab_address_id = ANY(${f.addressIds}::uuid[])
-        AND f.lab_parcel_id = ANY(${f.parcelIds}::uuid[])
+        AND ${combinations}
         ${f.includeFake ? Prisma.empty : Prisma.sql`AND NOT f.fake`}
         ${f.from ? Prisma.sql`AND ${at} >= ${new Date(f.from)}` : Prisma.empty}
         ${f.to ? Prisma.sql`AND ${at} < ${new Date(Date.parse(f.to) + DAY_MS)}` : Prisma.empty}
@@ -100,17 +109,6 @@ async function carrierNames(db: DbTx, rows: QuoteRow[]): Promise<Map<string, str
   return new Map(carriers.map((c) => [c.id, c.label ?? c.name]));
 }
 
-function groupBy<K, T>(rows: readonly T[], key: (row: T) => K): Map<K, T[]> {
-  const groups = new Map<K, T[]>();
-  for (const row of rows) {
-    const k = key(row);
-    const group = groups.get(k);
-    if (group) group.push(row);
-    else groups.set(k, [row]);
-  }
-  return groups;
-}
-
 /** A fetch's cheapest quote: purchasable first, as carriers' pre-selection picks. */
 function cheapest(quotes: QuoteRow[], carriers: Map<string, string>): LabTrendPrice {
   // Rows arrive by amount, so the first of each kind is its cheapest.
@@ -123,6 +121,21 @@ function cheapest(quotes: QuoteRow[], carriers: Map<string, string>): LabTrendPr
     serviceName: best.serviceName,
     quoteOnly: best.quoteOnly,
   };
+}
+
+/** Each combination's cheapest price per fetch, oldest first as the rows come, keyed by `key`. */
+function pricesByCombination(
+  rows: QuoteRow[],
+  names: Map<string, string>,
+  key: (row: QuoteRow) => string,
+): Map<string, LabTrendPrice[]> {
+  const fetches = [...groupBy(rows, (r) => r.fetchId).values()];
+  return new Map(
+    [...groupBy(fetches, (quotes) => key(quotes[0] as QuoteRow))].map(([k, perFetch]) => [
+      k,
+      perFetch.map((quotes) => cheapest(quotes, names)),
+    ]),
+  );
 }
 
 /** One combination's rows as a line per carrier service, a point per suite run. */
@@ -204,12 +217,7 @@ export async function labTrendGrid(
     latest: 2,
   });
   const names = await carrierNames(db, rows);
-  const prices = new Map<string, LabTrendPrice[]>();
-  for (const quotes of groupBy(rows, (r) => r.fetchId).values()) {
-    const first = quotes[0] as QuoteRow;
-    const key = `${first.addressId}|${first.parcelId}`;
-    prices.set(key, [...(prices.get(key) ?? []), cheapest(quotes, names)]);
-  }
+  const prices = pricesByCombination(rows, names, (r) => `${r.addressId}|${r.parcelId}`);
 
   const cells: LabTrendCell[] = addresses.flatMap((address) =>
     parcels.map((parcel) => {
@@ -292,26 +300,21 @@ export async function labRunTrends(
     where: { labRunId: parsed.data.id, labAddressId: { not: null }, labParcelId: { not: null } },
     select: { labAddressId: true, labParcelId: true },
   });
-  const keys = new Set(fetches.map((f) => `${f.labAddressId}|${f.labParcelId}`));
-  const rows = (
-    await loadQuotes(db, {
-      addressIds: [...new Set(fetches.map((f) => f.labAddressId as string))],
-      parcelIds: [...new Set(fetches.map((f) => f.labParcelId as string))],
-      carrierIds: [],
-      // A fake run's report charts its own (fake) prices.
-      includeFake: run.fake,
-      latest: LAB_RUN_TREND_RUNS,
-      until: run.startedAt ?? run.createdAt,
-    })
-  ).filter((r) => keys.has(`${r.addressId}|${r.parcelId}`));
+  const rows = await loadQuotes(db, {
+    addressIds: [...new Set(fetches.map((f) => f.labAddressId as string))],
+    parcelIds: [...new Set(fetches.map((f) => f.labParcelId as string))],
+    pairs: fetches.map((f) => ({
+      addressId: f.labAddressId as string,
+      parcelId: f.labParcelId as string,
+    })),
+    carrierIds: [],
+    // A fake run's report charts its own (fake) prices.
+    includeFake: run.fake,
+    latest: LAB_RUN_TREND_RUNS,
+    until: run.startedAt ?? run.createdAt,
+  });
   const names = await carrierNames(db, rows);
-
-  const trends = new Map<string, LabTrendPrice[]>();
-  for (const quotes of groupBy(rows, (r) => r.fetchId).values()) {
-    const first = quotes[0] as QuoteRow;
-    const key = `${first.addressId}:${first.parcelId}`;
-    trends.set(key, [...(trends.get(key) ?? []), cheapest(quotes, names)]);
-  }
+  const trends = pricesByCombination(rows, names, (r) => `${r.addressId}:${r.parcelId}`);
   return [...trends].map(([key, prices]) => ({ key, prices }));
 }
 
@@ -328,10 +331,12 @@ export async function labTrendsReport(
   const filters = LabTrendGridInput.parse(input);
   const withData = grid.cells.filter((c) => c.latest);
   const charted = withData.slice(0, LAB_TRENDS_REPORT_MAX);
+  // Only the charted pairs, in the grid's date window: not every address with every parcel.
   const rows = await loadQuotes(db, {
     ...filters,
     addressIds: [...new Set(charted.map((c) => c.addressId))],
     parcelIds: [...new Set(charted.map((c) => c.parcelId))],
+    pairs: charted.map(({ addressId, parcelId }) => ({ addressId, parcelId })),
   });
   const names = await carrierNames(db, rows);
   const byCombination = groupBy(rows, (r) => `${r.addressId}|${r.parcelId}`);
