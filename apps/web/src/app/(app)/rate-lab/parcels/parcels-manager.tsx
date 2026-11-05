@@ -1,10 +1,10 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { LabParcel } from "@woolrus/contracts";
 import { formatWeight } from "@woolrus/core/format";
 import { useLocale, useTranslations } from "next-intl";
-import { useState } from "react";
+import { useDeferredValue, useState } from "react";
 import { Button, Checkbox, SelectField, TextField } from "@/components/ui/fields";
 import { useErrorMessage } from "@/lib/errors";
 import { orpc } from "@/lib/orpc";
@@ -22,6 +22,8 @@ export function ParcelsManager({ canManage }: { canManage: boolean }) {
   const [showArchived, setShowArchived] = useState(false);
   const [groupId, setGroupId] = useState<string>(ALL);
   const [search, setSearch] = useState("");
+  // Typing renders at once; the list follows the deferred text and keeps its rows meanwhile.
+  const deferredSearch = useDeferredValue(search);
   // `false`: closed; `null`: adding; a parcel: editing it.
   const [editing, setEditing] = useState<LabParcel | null | false>(false);
   const [managingGroups, setManagingGroups] = useState(false);
@@ -37,8 +39,9 @@ export function ParcelsManager({ canManage }: { canManage: boolean }) {
       input: {
         includeArchived: showArchived,
         groupIds: groupId === ALL ? [] : [groupId],
-        search,
+        search: deferredSearch,
       },
+      placeholderData: keepPreviousData,
     }),
   );
 

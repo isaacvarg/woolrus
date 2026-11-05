@@ -53,17 +53,25 @@ export function NewRunDialog({ onClose }: { onClose: () => void }) {
     }),
   );
 
-  const toggle = (key: Key, id: string, on: boolean) =>
+  const toggle = (key: Key, id: string, on: boolean) => {
+    // A refusal was about the old selection; the new one gets its own answer.
+    start.reset();
     setSelection((current) => ({
       ...current,
       [key]: on ? [...current[key], id] : current[key].filter((x) => x !== id),
     }));
-  const picker = (key: Key, legend: string, options: { id: string; label: string }[]) => (
+  };
+  /** `options` undefined: still loading, so "None" isn't claimed yet. */
+  const picker = (
+    key: Key,
+    legend: string,
+    options: { id: string; label: string }[] | undefined,
+  ) => (
     <fieldset>
       <legend className="fieldset-legend">{legend}</legend>
-      {options.length === 0 && <p className="text-sm opacity-70">{t("none")}</p>}
+      {options?.length === 0 && <p className="text-sm opacity-70">{t("none")}</p>}
       <div className="flex max-h-40 flex-wrap gap-x-4 overflow-y-auto">
-        {options.map((option) => (
+        {options?.map((option) => (
           <Checkbox
             key={option.id}
             isSelected={selection[key].includes(option.id)}
@@ -76,12 +84,17 @@ export function NewRunDialog({ onClose }: { onClose: () => void }) {
     </fieldset>
   );
   const named = (rows: { id: string; name: string }[] | undefined) =>
-    (rows ?? []).map((r) => ({ id: r.id, label: r.name }));
+    rows?.map((r) => ({ id: r.id, label: r.name }));
   const titled = (rows: { id: string; title: string }[] | undefined) =>
-    (rows ?? []).map((r) => ({ id: r.id, label: r.title }));
+    rows?.map((r) => ({ id: r.id, label: r.title }));
 
   const counts = preview.data;
-  const canStart = counts !== undefined && counts.combinations > 0 && !counts.overCap;
+  // While the new selection's preview loads, `counts` is the previous one's: don't start on it.
+  const canStart =
+    counts !== undefined &&
+    !preview.isPlaceholderData &&
+    counts.combinations > 0 &&
+    !counts.overCap;
 
   return (
     <Dialog title={t("newRun")} isOpen onOpenChange={(open) => !open && onClose()}>

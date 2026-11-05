@@ -6,9 +6,9 @@ import { useFormatter, useTranslations } from "next-intl";
 import { useState } from "react";
 import { Button } from "@/components/ui/fields";
 import { toast } from "@/components/ui/toast";
+import { formatAddress } from "@/lib/address";
 import { useErrorMessage } from "@/lib/errors";
 import { client, orpc } from "@/lib/orpc";
-import { formatAddress } from "./address";
 import { ReasonDialog, type Unmet, unmetOf } from "./order-actions";
 
 /**

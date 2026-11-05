@@ -8,7 +8,7 @@ import type {
   LabTrendSeries,
 } from "@woolrus/contracts";
 import { useFormatter, useTranslations } from "next-intl";
-import { useState } from "react";
+import { type Ref, useEffect, useRef, useState } from "react";
 import {
   CartesianGrid,
   Legend,
@@ -19,11 +19,11 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { money } from "@/app/(app)/qa/[orderId]/money";
 import { ChartFigure } from "@/components/charts/chart-figure";
 import { seriesColor, useChartAnimation, useChartColors } from "@/components/charts/theme";
 import { Button, Checkbox, TextField } from "@/components/ui/fields";
 import { useErrorMessage } from "@/lib/errors";
+import { money } from "@/lib/money";
 import { orpc } from "@/lib/orpc";
 import { ReportLink, reportQuery } from "../report-link";
 
@@ -91,12 +91,17 @@ export function TrendsView() {
     placeholderData: (previous) => previous,
   });
 
-  const picker = (key: ListKey, legend: string, options: { id: string; name: string }[]) => (
+  /** `options` undefined: still loading, so "None" isn't claimed yet. */
+  const picker = (
+    key: ListKey,
+    legend: string,
+    options: { id: string; name: string }[] | undefined,
+  ) => (
     <fieldset>
       <legend className="fieldset-legend">{legend}</legend>
-      {options.length === 0 && <p className="text-sm opacity-70">{t("none")}</p>}
+      {options?.length === 0 && <p className="text-sm opacity-70">{t("none")}</p>}
       <div className="flex max-h-32 flex-wrap gap-x-4 overflow-y-auto">
-        {options.map((option) => (
+        {options?.map((option) => (
           <Checkbox
             key={option.id}
             isSelected={filters[key].includes(option.id)}
@@ -114,9 +119,9 @@ export function TrendsView() {
     <div className="space-y-6">
       <div className="space-y-2 rounded-box bg-base-100 p-4 shadow-sm">
         <div className="grid gap-4 lg:grid-cols-3">
-          {picker("addressGroupIds", t("addressGroups"), addressGroups.data ?? [])}
-          {picker("parcelGroupIds", t("parcelGroups"), parcelGroups.data ?? [])}
-          {picker("carrierIds", t("carriers"), data?.carriers ?? [])}
+          {picker("addressGroupIds", t("addressGroups"), addressGroups.data)}
+          {picker("parcelGroupIds", t("parcelGroups"), parcelGroups.data)}
+          {picker("carrierIds", t("carriers"), data?.carriers)}
         </div>
         <div className="flex flex-wrap items-end gap-4">
           <div className="w-40">
@@ -303,6 +308,8 @@ function SeriesChart({
 }) {
   const t = useTranslations("rateLab.trends");
   const errorMessage = useErrorMessage();
+  const heading = useRef<HTMLHeadingElement>(null);
+  const focused = useRef(false);
   const series = useQuery(
     orpc.rateLab.trendSeries.queryOptions({
       input: {
@@ -314,6 +321,15 @@ function SeriesChart({
       },
     }),
   );
+  // This mounts when a cell is picked (one per pick, by key): once the chart is there, move focus
+  // to its heading so the pick visibly lands somewhere below the grid. Later refetches (a filter
+  // change) leave focus where it is.
+  useEffect(() => {
+    if (series.data && !focused.current) {
+      focused.current = true;
+      heading.current?.focus();
+    }
+  }, [series.data]);
   return (
     <div className="space-y-2">
       <div className="flex justify-end">
@@ -327,18 +343,33 @@ function SeriesChart({
           {errorMessage(series.error)}
         </p>
       )}
-      {series.data && <SeriesFigure series={series.data} />}
+      {series.data && <SeriesFigure series={series.data} headingRef={heading} />}
     </div>
   );
 }
 
-export function SeriesFigure({ series }: { series: LabTrendSeries }) {
+export function SeriesFigure({
+  series,
+  headingRef,
+}: {
+  series: LabTrendSeries;
+  /** The chart's heading, for moving focus to it. */
+  headingRef?: Ref<HTMLHeadingElement>;
+}) {
   const animate = useChartAnimation();
   const t = useTranslations("rateLab.trends");
   const format = useFormatter();
   const colors = useChartColors();
   const cents = (value: number) => money(format, value);
-  const when = (at: Date) => format.dateTime(at, { dateStyle: "medium" });
+  // Runs are keyed by id (two on one day are two points); the axis shows the day, the tooltip and
+  // table the time too.
+  const day = (at: Date) => format.dateTime(at, { dateStyle: "medium" });
+  const when = (at: Date) => format.dateTime(at, { dateStyle: "medium", timeStyle: "short" });
+  const runAt = new Map(series.runs.map((run) => [run.runId, run.at]));
+  const runLabel = (runId: unknown, label: (at: Date) => string) => {
+    const at = runAt.get(String(runId));
+    return at ? label(at) : String(runId);
+  };
   const name = (line: LabTrendSeries["lines"][number]) => `${line.carrierName} ${line.serviceName}`;
   const titled = (item: { title: string; archived: boolean }) =>
     item.archived ? t("archived", { title: item.title }) : item.title;
@@ -348,7 +379,7 @@ export function SeriesFigure({ series }: { series: LabTrendSeries }) {
     ),
   );
   const points = series.runs.map((run) => ({
-    at: when(run.at),
+    runId: run.runId,
     ...Object.fromEntries(
       series.lines.flatMap((line) => {
         const point = amounts.get(`${line.serviceId}|${run.runId}`);
@@ -365,7 +396,9 @@ export function SeriesFigure({ series }: { series: LabTrendSeries }) {
   if (series.runs.length === 0) {
     return (
       <section aria-label={title} className="rounded-box bg-base-100 p-4 shadow-sm">
-        <h2 className="font-semibold">{title}</h2>
+        <h2 ref={headingRef} tabIndex={-1} className="font-semibold outline-none">
+          {title}
+        </h2>
         <p>{t("noSeries")}</p>
       </section>
     );
@@ -373,13 +406,14 @@ export function SeriesFigure({ series }: { series: LabTrendSeries }) {
   return (
     <ChartFigure
       title={title}
+      headingRef={headingRef}
       note={t("chartNote")}
       height={300}
       chart={
         <ResponsiveContainer width="100%" height="100%">
           <LineChart accessibilityLayer={false} data={points}>
             <CartesianGrid stroke={colors.grid} strokeDasharray="3 3" />
-            <XAxis dataKey="at" tick={tick} />
+            <XAxis dataKey="runId" tick={tick} tickFormatter={(runId) => runLabel(runId, day)} />
             <YAxis tick={tick} width={88} tickFormatter={(v) => cents(Number(v))} />
             <Tooltip
               contentStyle={{
@@ -388,6 +422,7 @@ export function SeriesFigure({ series }: { series: LabTrendSeries }) {
                 color: colors.text,
               }}
               formatter={(value) => cents(Number(value))}
+              labelFormatter={(runId) => runLabel(runId, when)}
             />
             <Legend wrapperStyle={{ color: colors.text }} />
             {series.lines.map((line, i) => (

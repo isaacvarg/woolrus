@@ -12,12 +12,12 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useFormatter, useTranslations } from "next-intl";
 import { useMemo, useState } from "react";
-import { money } from "@/app/(app)/qa/[orderId]/money";
 import { Button, SelectField } from "@/components/ui/fields";
-import { useErrorMessage } from "@/lib/errors";
+import { useErrorMessage, useMessage } from "@/lib/errors";
+import { money } from "@/lib/money";
 import { orpc } from "@/lib/orpc";
 import { ReportLink } from "../../report-link";
-import { duration, isActive, Side, statusBadge, useMessage } from "../runs-manager";
+import { duration, isActive, Side, statusBadge } from "../runs-manager";
 
 /** A queued or running run refreshes like the runs list does. */
 const ACTIVE_REFRESH_MS = 3_000;
@@ -201,7 +201,7 @@ function Card({
 /** A quote in one line: carrier, service, price and days. */
 function quoteText(t: ReturnType<typeof useTranslations>, format: Format, q: LabQuote) {
   const days = q.deliveryDays === null ? "" : `, ${t("days", { count: q.deliveryDays })}`;
-  return `${q.carrierName} ${q.serviceName}: ${money(format, q.amountCents)}${days}`;
+  return `${q.carrierName} ${q.serviceName}: ${money(format, q.amountCents, q.currency)}${days}`;
 }
 
 export function PicksCard({
@@ -274,7 +274,15 @@ export function MovesCard({
   const format = useFormatter();
   const { moves } = detail.insights;
   const compared = detail.combinations.some((c) => c.comparedWith);
-  const cents = (value: number | null) => (value === null ? "—" : money(format, value));
+  // Moves carry bare cents: show them in the currency the service quoted in this run (a service
+  // that went missing has no quote here, so it falls back to USD).
+  const currencies = new Map(
+    detail.combinations.flatMap((c) =>
+      c.quotes.map((q) => [`${c.key}:${q.serviceId}`, q.currency] as const),
+    ),
+  );
+  const cents = (value: number | null, currency?: string) =>
+    value === null ? "—" : money(format, value, currency);
   return (
     <Card title={t("movesTitle")} hint={t("movesHint")}>
       {!compared ? (
@@ -294,25 +302,28 @@ export function MovesCard({
               </tr>
             </thead>
             <tbody>
-              {moves.map((m) => (
-                <tr key={`${m.combinationKey}:${m.serviceId}`} data-testid="lab-price-move">
-                  <td>{nameOf(m.combinationKey)}</td>
-                  <td>
-                    {m.carrierName} {m.serviceName}
-                  </td>
-                  <td className="text-right tabular-nums">{cents(m.previousCents)}</td>
-                  <td className="text-right tabular-nums">{cents(m.currentCents)}</td>
-                  <td className="text-right tabular-nums">
-                    {m.kind === "CHANGED" && m.changePct !== null
-                      ? format.number(m.changePct / 100, {
-                          style: "percent",
-                          maximumFractionDigits: 1,
-                          signDisplay: "always",
-                        })
-                      : t(`move_${m.kind}`)}
-                  </td>
-                </tr>
-              ))}
+              {moves.map((m) => {
+                const currency = currencies.get(`${m.combinationKey}:${m.serviceId}`);
+                return (
+                  <tr key={`${m.combinationKey}:${m.serviceId}`} data-testid="lab-price-move">
+                    <td>{nameOf(m.combinationKey)}</td>
+                    <td>
+                      {m.carrierName} {m.serviceName}
+                    </td>
+                    <td className="text-right tabular-nums">{cents(m.previousCents, currency)}</td>
+                    <td className="text-right tabular-nums">{cents(m.currentCents, currency)}</td>
+                    <td className="text-right tabular-nums">
+                      {m.kind === "CHANGED" && m.changePct !== null
+                        ? format.number(m.changePct / 100, {
+                            style: "percent",
+                            maximumFractionDigits: 1,
+                            signDisplay: "always",
+                          })
+                        : t(`move_${m.kind}`)}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -528,7 +539,9 @@ export function QuoteTable({
                     <td>{providerName(q.provider)}</td>
                     <td>{q.carrierName}</td>
                     <td>{q.serviceName}</td>
-                    <td className="text-right tabular-nums">{money(format, q.amountCents)}</td>
+                    <td className="text-right tabular-nums">
+                      {money(format, q.amountCents, q.currency)}
+                    </td>
                     <td className="text-right tabular-nums">{q.deliveryDays ?? "—"}</td>
                     <td className="space-x-1">
                       {pick?.cheapestId === q.id && (

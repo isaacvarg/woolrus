@@ -17,9 +17,9 @@ import { useState } from "react";
 import { Button, SelectField, TextField } from "@/components/ui/fields";
 import { toast } from "@/components/ui/toast";
 import { useErrorMessage } from "@/lib/errors";
+import { money } from "@/lib/money";
 import { client, orpc } from "@/lib/orpc";
 import { hasLiveLabel } from "./live-label";
-import { money } from "./money";
 
 // The carriers' rates table of one package (SPEC-qa "Rate selection"): QA picks another service.
 

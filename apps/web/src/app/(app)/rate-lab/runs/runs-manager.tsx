@@ -7,7 +7,7 @@ import { useFormatter, useTranslations } from "next-intl";
 import { useState } from "react";
 import { Button } from "@/components/ui/fields";
 import { toast } from "@/components/ui/toast";
-import { useErrorMessage } from "@/lib/errors";
+import { useErrorMessage, useMessage } from "@/lib/errors";
 import { orpc } from "@/lib/orpc";
 import { NewRunDialog } from "./new-run-dialog";
 
@@ -25,13 +25,6 @@ export const statusBadge: Record<RateLabRunStatus, string> = {
 };
 
 export const isActive = (row: LabRunRow) => row.status === "QUEUED" || row.status === "RUNNING";
-
-/** Message keys from the server, translated when known (an older key just shows as is). */
-export function useMessage() {
-  const t = useTranslations();
-  return (key: string, params?: Record<string, string | number>) =>
-    t.has(key) ? t(key as never, params as never) : key;
-}
 
 export function RunsManager() {
   const t = useTranslations("rateLab.runs");

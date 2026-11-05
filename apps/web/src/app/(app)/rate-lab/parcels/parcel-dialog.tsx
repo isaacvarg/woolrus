@@ -8,26 +8,12 @@ import { useState } from "react";
 import { Form } from "react-aria-components";
 import { WeightInput } from "@/app/(app)/boxes/weight-input";
 import { Dialog } from "@/components/ui/dialog";
-import {
-  Button,
-  Checkbox,
-  NumberField,
-  Radio,
-  RadioGroup,
-  SelectField,
-  TextAreaField,
-  TextField,
-} from "@/components/ui/fields";
+import { Button, Checkbox, NumberField, TextAreaField, TextField } from "@/components/ui/fields";
 import { useErrorMessage, useFieldErrors } from "@/lib/errors";
 import { orpc } from "@/lib/orpc";
+import { ParcelSizeFields, type SizeSource, type TypedSize } from "../parcel-size-fields";
 
 type Item = { product: LabParcelProduct; quantity: number };
-type Side = "lengthIn" | "widthIn" | "heightIn";
-const sides: { key: Side; label: "length" | "width" | "height" }[] = [
-  { key: "lengthIn", label: "length" },
-  { key: "widthIn", label: "width" },
-  { key: "heightIn", label: "height" },
-];
 
 /**
  * Adds a test parcel, or edits `parcel`. The size comes from a box (its inner size is copied) or
@@ -53,9 +39,9 @@ export function ParcelDialog({
   const locked = parcel?.locked ?? false;
   const [title, setTitle] = useState(parcel?.title ?? "");
   const [description, setDescription] = useState(parcel?.description ?? "");
-  const [source, setSource] = useState<"box" | "typed">(parcel && !parcel.box ? "typed" : "box");
+  const [source, setSource] = useState<SizeSource>(parcel && !parcel.box ? "typed" : "box");
   const [boxId, setBoxId] = useState<string | null>(parcel?.box?.id ?? null);
-  const [typed, setTyped] = useState<Record<Side, number>>({
+  const [typed, setTyped] = useState<TypedSize>({
     lengthIn: parcel && !parcel.box ? parcel.lengthIn : Number.NaN,
     widthIn: parcel && !parcel.box ? parcel.widthIn : Number.NaN,
     heightIn: parcel && !parcel.box ? parcel.heightIn : Number.NaN,
@@ -119,7 +105,7 @@ export function ParcelDialog({
     >
       {(close) => (
         <Form
-          className="max-h-[70vh] space-y-2 overflow-y-auto"
+          className="space-y-2"
           validationErrors={fieldErrors(save.error)}
           onSubmit={(event) => {
             event.preventDefault();
@@ -149,27 +135,18 @@ export function ParcelDialog({
           )}
           <fieldset>
             <legend className="fieldset-legend">{t("sizeLegend")}</legend>
-            <RadioGroup
-              label={t("sizeSource")}
-              value={source}
-              onChange={(value) => setSource(value as "box" | "typed")}
+            <ParcelSizeFields
+              namePrefix="size"
+              source={source}
+              onSourceChange={setSource}
+              boxId={boxId}
+              onBoxChange={setBoxId}
+              boxOptions={boxOptions}
+              size={typed}
+              onSizeChange={setTyped}
               isDisabled={locked}
-            >
-              <Radio value="box">{t("fromBox")}</Radio>
-              <Radio value="typed">{t("typed")}</Radio>
-            </RadioGroup>
-            {source === "box" ? (
-              <>
-                <SelectField
-                  label={t("box")}
-                  name="size.boxId"
-                  isRequired
-                  isDisabled={locked}
-                  selectedKey={boxId}
-                  onSelectionChange={(key) => setBoxId(key === null ? null : String(key))}
-                  options={boxOptions}
-                />
-                {boxSize && (
+              boxHint={
+                boxSize && (
                   <p className="text-sm opacity-70" data-testid="lab-parcel-box-size">
                     {t("boxSize", {
                       length: boxSize.lengthIn,
@@ -177,24 +154,9 @@ export function ParcelDialog({
                       height: boxSize.heightIn,
                     })}
                   </p>
-                )}
-              </>
-            ) : (
-              <div className="grid grid-cols-3 gap-x-2">
-                {sides.map(({ key, label }) => (
-                  <NumberField
-                    key={key}
-                    label={t(label)}
-                    name={`size.${key}`}
-                    isRequired
-                    isDisabled={locked}
-                    minValue={0.01}
-                    value={typed[key]}
-                    onChange={(value) => setTyped({ ...typed, [key]: value })}
-                  />
-                ))}
-              </div>
-            )}
+                )
+              }
+            />
           </fieldset>
           {locked ? (
             <TextField
@@ -205,6 +167,8 @@ export function ParcelDialog({
           ) : (
             <WeightInput
               label={t("weightField")}
+              name="weightOz"
+              isRequired
               valueOz={weightOz}
               weightDisplay={weightDisplay}
               onChange={setWeightOz}

@@ -17,17 +17,26 @@ function toOunces(display: WeightDisplay, lb: number, oz: number): number | null
   return total > 0 ? total : null;
 }
 
-/** A weight entered in the display unit (`Settings.weightDisplay`) and reported in ounces. */
+/**
+ * A weight entered in the display unit (`Settings.weightDisplay`) and reported in ounces.
+ * `name` goes on the pounds field, so a server field error for the weight (`weightOz`,
+ * `adHocParcels.0.weightOz`) shows under it; `isRequired` asks for pounds only while nothing is
+ * typed, so "0 lb 8 oz" left as "8 oz" still counts.
+ */
 export function WeightInput({
   label,
   valueOz,
   weightDisplay,
   onChange,
+  name,
+  isRequired = false,
 }: {
   label: string;
   valueOz: number | null;
   weightDisplay: WeightDisplay;
   onChange: (oz: number | null) => void;
+  name?: string;
+  isRequired?: boolean;
 }) {
   const t = useTranslations("boxes");
   const split = valueOz === null ? null : splitPoundsOunces(valueOz);
@@ -43,7 +52,9 @@ export function WeightInput({
   return (
     <div className="grid grid-cols-2 gap-x-2">
       <NumberField
-        label={weightDisplay === "LB_DECIMAL" ? `${label} (${t("lb")})` : `${label} (${t("lb")})`}
+        label={`${label} (${t("lb")})`}
+        name={name}
+        isRequired={isRequired && valueOz === null}
         minValue={0}
         value={lb}
         onChange={(next) => {

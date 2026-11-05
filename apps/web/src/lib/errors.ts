@@ -38,6 +38,16 @@ export function useErrorMessage() {
 }
 
 /**
+ * A message key stored by the server (a sync or Rate Lab run's error, a logged rate error),
+ * translated when known; a key from an older build that no longer exists shows as is.
+ */
+export function useMessage() {
+  const t = useTranslations();
+  return (key: string, params?: Record<string, string | number>): string =>
+    t.has(key) ? t(key as never, params ? revive(params) : undefined) : key;
+}
+
+/**
  * Translated per-field messages from a validation error, keyed by field path ("shipFrom.state").
  * Pass the result to React Aria's `<Form validationErrors>`; fields match by their `name`.
  */
