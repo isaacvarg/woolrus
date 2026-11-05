@@ -268,6 +268,86 @@ describe("quoteOneOff", () => {
     await expect(quote()).resolves.toMatchObject({ status: "SUCCEEDED" });
   });
 
+  it("lets a person run one one-off at a time; someone else isn't blocked, and a finished one frees it", async () => {
+    const { providers, sent } = await fakes();
+    const { admin, lab } = await people();
+    // The first quote waits inside the provider until released, so it's RUNNING while the others go.
+    const [shipStation] = providers;
+    if (!shipStation) throw new Error("missing provider");
+    const getRates = shipStation.getRates;
+    let release = () => {};
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let hold = true;
+    let entered = () => {};
+    const inside = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    shipStation.getRates = async (request: RateRequest) => {
+      if (hold) {
+        hold = false;
+        entered();
+        await held;
+      }
+      return getRates(request);
+    };
+    const quote = (actor: typeof lab) =>
+      quoteOneOff(db, actor, { address: typed, adHocParcels: [typedParcel] }, { providers });
+
+    const first = quote(lab);
+    await inside;
+    const sentBefore = sent.length;
+    await expect(quote(lab)).rejects.toMatchObject({
+      kind: "CONFLICT",
+      messageKey: "errors.rateLab.oneOffActive",
+    });
+    // Refused before asking any provider, and without a run of its own.
+    expect(sent).toHaveLength(sentBefore);
+    expect(await db.rateLabRun.count({ where: { kind: "ONE_OFF", startedById: lab.userId } })).toBe(
+      1,
+    );
+    await expect(quote(admin)).resolves.toMatchObject({ status: "SUCCEEDED" });
+
+    release();
+    await expect(first).resolves.toMatchObject({ status: "SUCCEEDED" });
+    await expect(quote(lab)).resolves.toMatchObject({ status: "SUCCEEDED" });
+  });
+
+  it("frees the slot when a one-off fails, and recovers one its crashed request left running", async () => {
+    const { providers } = await fakes();
+    const { lab } = await people();
+    const [shipStation] = providers;
+    if (!shipStation) throw new Error("missing provider");
+    const getRates = shipStation.getRates;
+    shipStation.getRates = async () => null as unknown as Awaited<ReturnType<typeof getRates>>;
+    const quote = () =>
+      quoteOneOff(db, lab, { address: typed, adHocParcels: [typedParcel] }, { providers });
+    await expect(quote()).rejects.toThrow(TypeError);
+    shipStation.getRates = getRates;
+    await expect(quote()).resolves.toMatchObject({ status: "SUCCEEDED" });
+
+    // A request that died mid-quote: RUNNING, its last heartbeat past the stall limit.
+    const long = new Date(Date.now() - 11 * 60_000);
+    const crashed = await db.rateLabRun.create({
+      data: {
+        kind: "ONE_OFF",
+        status: "RUNNING",
+        startedById: lab.userId,
+        selection: {},
+        shipFrom,
+        combinations: 1,
+        startedAt: long,
+        heartbeatAt: long,
+      },
+    });
+    await expect(quote()).resolves.toMatchObject({ status: "SUCCEEDED" });
+    expect(await db.rateLabRun.findUniqueOrThrow({ where: { id: crashed.id } })).toMatchObject({
+      status: "FAILED",
+      error: "errors.rateLab.stalled",
+    });
+  });
+
   it("asks for quick quotes and never buys a label (SC 9)", async () => {
     const { providers, sent } = await fakes();
     const { lab } = await people();

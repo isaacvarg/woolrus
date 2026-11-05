@@ -1378,6 +1378,7 @@
       "oneOffTooMany": "{parcels} paquetes son más de los {max} que admite una cotización. Elige menos.",
       "oneOffPurged": "La purga de datos personales borró la dirección de esta cotización, así que no se puede guardar.",
       "oneOffParcelInvalid": "Ese paquete escrito no es parte de esta cotización.",
+      "oneOffActive": "Tu otra cotización sigue en curso. Espera a que termine.",
       "notStarted": "La prueba nunca empezó: el worker no la tomó, así que se marcó como fallida."
     }
   },

@@ -132,7 +132,7 @@ export async function previewLabRun(
 export const labRunInclude = { startedBy: { select: { id: true, name: true } } } as const;
 export type LabRunRecord = Prisma.RateLabRunGetPayload<{ include: typeof labRunInclude }>;
 
-const isUniqueViolation = (error: unknown) =>
+export const isUniqueViolation = (error: unknown) =>
   error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
 
 /**
