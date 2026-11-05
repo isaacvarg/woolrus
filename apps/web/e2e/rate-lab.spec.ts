@@ -310,9 +310,9 @@ test("a Rate Lab user starts a run on the fakes, sees progress and sees it finis
       await dialog.getByRole("button", { name: "Start run" }).click();
       await expect(dialog).toBeHidden();
 
-      const row = page.getByTestId("lab-run-row").first();
+      // Other specs' runs may be listed too: this one is the row naming its groups.
+      const row = page.getByTestId("lab-run-row").filter({ hasText: `${prefix} Run addresses` });
       await expect(row).toContainText("Queued");
-      await expect(row).toContainText(`${prefix} Run addresses`);
       const run = await db.rateLabRun.findFirstOrThrow({
         where: { kind: "SUITE", status: "QUEUED" },
         orderBy: { createdAt: "desc" },
@@ -328,6 +328,34 @@ test("a Rate Lab user starts a run on the fakes, sees progress and sees it finis
       expect(await job).toEqual({ status: "SUCCEEDED" });
       await expect(row).toContainText("Succeeded", { timeout: 15_000 });
       await expect(row).toContainText("Fake");
+
+      // Run again: the same selection as a new run, whose page follows it while it goes.
+      await row.getByRole("link").first().click();
+      await expect(page).toHaveURL(`/rate-lab/runs/${run.id}`);
+      await page.getByRole("button", { name: "Run again" }).click();
+      await expect(page).not.toHaveURL(`/rate-lab/runs/${run.id}`);
+      const again = await db.rateLabRun.findFirstOrThrow({
+        where: { kind: "SUITE", id: { not: run.id }, createdAt: { gte: run.createdAt } },
+        orderBy: { createdAt: "desc" },
+      });
+      runIds.push(again.id);
+      await expect(page).toHaveURL(`/rate-lab/runs/${again.id}`);
+      expect(again.selection).toEqual(run.selection);
+      await expect(page.getByText("Queued", { exact: true })).toBeVisible();
+      const rerun = runLabRun(
+        db,
+        [createFakeShippingProvider("SHIPSTATION", { latencyMs: 6_000 })],
+        { runId: again.id },
+      );
+      // No reload: the page polls while the run is queued or running.
+      await expect(page.getByText("Running", { exact: true })).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByText("0 / 2")).toBeVisible();
+      expect(await rerun).toEqual({ status: "SUCCEEDED" });
+      await expect(page.getByText("Succeeded", { exact: true })).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByTestId("lab-quote-row")).not.toHaveCount(0);
+      await expect(page.getByRole("table", { name: "Cheapest and fastest" })).toContainText(
+        `${prefix} Run B`,
+      );
     } finally {
       await db.$executeRaw`DELETE FROM pgboss.job WHERE name = 'rateLab.run'
         AND data->>'runId' = ANY(${runIds})`;
@@ -461,7 +489,7 @@ test("an admin lowers the run cap; a Rate Lab user is held to it, then cancels a
       const job = runLabRun(db, [createFakeShippingProvider("SHIPSTATION", { latencyMs: 6_000 })], {
         runId: run.id,
       });
-      const row = page.getByTestId("lab-run-row").first();
+      const row = page.getByTestId("lab-run-row").filter({ hasText: `${prefix} Cancel addresses` });
       await expect(row).toContainText("Running", { timeout: 15_000 });
       await row.getByRole("button", { name: /^Cancel the run started/ }).click();
       await expect(page.getByText("Run cancelled.")).toBeVisible();
@@ -574,6 +602,20 @@ test("a Rate Lab user quotes a typed address against a saved and a typed parcel,
       expect(address.lockedAt).toBeNull();
       expect(address.original).toMatchObject({ address1: "12 Prairie Street" });
       expect(address.address).toMatchObject({ address1: "12 Prairie St" });
+
+      // Abroad, a parcel without contents can't be declared: the message names it, no raw key.
+      await form.getByLabel("Address line 1").fill("100 King Street West");
+      await form.getByLabel("City").fill("Toronto");
+      await form.getByLabel("State or province").fill("ON");
+      await form.getByLabel("Postal code").fill("M5X 1A9");
+      await form.getByLabel("Country (2-letter code)").fill("CA");
+      await form.getByRole("button", { name: "Get quotes" }).click();
+      const abroad = results.getByTestId("parcel-quotes").first();
+      await expect(abroad).toContainText(
+        `This international package can't be rated: add the HS code and country of origin for ${prefix} Quote parcel in Settings → Customs.`,
+        { timeout: 30_000 },
+      );
+      await expect(results).not.toContainText("errors.shipping");
     } finally {
       // The one-off's fetches point at the saved parcel, so the run (and its fetches) go first.
       await db.rateLabRun.deleteMany({ where: { kind: "ONE_OFF", createdAt: { gte: startedAt } } });

@@ -7,41 +7,29 @@ import { useFormatter, useLocale, useTranslations } from "next-intl";
 import { useState } from "react";
 import { Form } from "react-aria-components";
 import { WeightInput } from "@/app/(app)/boxes/weight-input";
-import { ratePrice, ShipTo, useRateErrorText } from "@/components/shipping/order-shipping";
+import { ShipTo, useRateErrorText } from "@/components/shipping/order-shipping";
 import { Dialog } from "@/components/ui/dialog";
-import {
-  Button,
-  Checkbox,
-  NumberField,
-  Radio,
-  RadioGroup,
-  SelectField,
-  TextField,
-} from "@/components/ui/fields";
+import { Button, Checkbox, TextField } from "@/components/ui/fields";
 import { useErrorMessage, useFieldErrors } from "@/lib/errors";
+import { money } from "@/lib/money";
 import { orpc } from "@/lib/orpc";
+import { AddressFields, addressForm } from "../address-fields";
 import {
-  type AddressField,
-  addressFields,
-  requiredAddressFields,
-} from "../addresses/address-dialog";
+  blankSize,
+  ParcelSizeFields,
+  type SizeSource,
+  type TypedSize,
+} from "../parcel-size-fields";
 
 // The Quote tab (SPEC-rate-lab "One-off quotes"): a typed address against saved parcels, parcel
 // groups and parcels typed here; quotes come back in the same request, a table per parcel.
 
-type Side = "lengthIn" | "widthIn" | "heightIn";
-const sides: { key: Side; label: "length" | "width" | "height" }[] = [
-  { key: "lengthIn", label: "length" },
-  { key: "widthIn", label: "width" },
-  { key: "heightIn", label: "height" },
-];
-
 /** A parcel typed on this screen. `key` keeps each row's inputs its own when one is removed. */
 type TypedParcel = {
   key: string;
-  source: "box" | "typed";
+  source: SizeSource;
   boxId: string | null;
-  size: Record<Side, number>;
+  size: TypedSize;
   weightOz: number | null;
 };
 
@@ -49,7 +37,7 @@ const newParcel = (): TypedParcel => ({
   key: crypto.randomUUID(),
   source: "box",
   boxId: null,
-  size: { lengthIn: Number.NaN, widthIn: Number.NaN, heightIn: Number.NaN },
+  size: blankSize(),
   weightOz: null,
 });
 
@@ -62,17 +50,10 @@ const toggle = (set: Set<string>, id: string, on: boolean) => {
 
 export function QuoteScreen({ canManage }: { canManage: boolean }) {
   const t = useTranslations("rateLab.quote");
-  const tAddress = useTranslations("rateLab.addresses");
   const tParcel = useTranslations("rateLab.parcels");
   const errorMessage = useErrorMessage();
   const fieldErrors = useFieldErrors();
-  const [address, setAddress] = useState<Record<AddressField, string>>(
-    () =>
-      Object.fromEntries(addressFields.map((f) => [f, f === "country" ? "US" : ""])) as Record<
-        AddressField,
-        string
-      >,
-  );
+  const [address, setAddress] = useState(() => addressForm());
   const [parcelIds, setParcelIds] = useState(new Set<string>());
   const [groupIds, setGroupIds] = useState(new Set<string>());
   const [typed, setTyped] = useState<TypedParcel[]>([]);
@@ -112,20 +93,11 @@ export function QuoteScreen({ canManage }: { canManage: boolean }) {
           quote.mutate();
         }}
       >
-        <fieldset className="grid gap-x-2 md:grid-cols-2">
-          <legend className="fieldset-legend">{tAddress("addressLegend")}</legend>
-          {addressFields.map((field) => (
-            <TextField
-              key={field}
-              label={tAddress(`fields.${field}`)}
-              name={`address.${field}`}
-              type={field === "email" ? "email" : "text"}
-              isRequired={requiredAddressFields.has(field)}
-              value={address[field]}
-              onChange={(value) => setAddress({ ...address, [field]: value })}
-            />
-          ))}
-        </fieldset>
+        <AddressFields
+          value={address}
+          onChange={setAddress}
+          className="grid gap-x-2 md:grid-cols-2"
+        />
 
         <fieldset className="space-y-2">
           <legend className="fieldset-legend">{t("savedParcels")}</legend>
@@ -178,44 +150,20 @@ export function QuoteScreen({ canManage }: { canManage: boolean }) {
                   ✕
                 </Button>
               </div>
-              <RadioGroup
-                label={tParcel("sizeSource")}
-                value={parcel.source}
-                onChange={(value) => update(parcel.key, { source: value as "box" | "typed" })}
-              >
-                <Radio value="box">{tParcel("fromBox")}</Radio>
-                <Radio value="typed">{tParcel("typed")}</Radio>
-              </RadioGroup>
-              {parcel.source === "box" ? (
-                <SelectField
-                  label={tParcel("box")}
-                  name={`adHocParcels.${index}.size.boxId`}
-                  isRequired
-                  selectedKey={parcel.boxId}
-                  onSelectionChange={(key) =>
-                    update(parcel.key, { boxId: key === null ? null : String(key) })
-                  }
-                  options={boxOptions}
-                />
-              ) : (
-                <div className="grid grid-cols-3 gap-x-2">
-                  {sides.map(({ key, label }) => (
-                    <NumberField
-                      key={key}
-                      label={tParcel(label)}
-                      name={`adHocParcels.${index}.size.${key}`}
-                      isRequired
-                      minValue={0.01}
-                      value={parcel.size[key]}
-                      onChange={(value) =>
-                        update(parcel.key, { size: { ...parcel.size, [key]: value } })
-                      }
-                    />
-                  ))}
-                </div>
-              )}
+              <ParcelSizeFields
+                namePrefix={`adHocParcels.${index}.size`}
+                source={parcel.source}
+                onSourceChange={(source) => update(parcel.key, { source })}
+                boxId={parcel.boxId}
+                onBoxChange={(boxId) => update(parcel.key, { boxId })}
+                boxOptions={boxOptions}
+                size={parcel.size}
+                onSizeChange={(size) => update(parcel.key, { size })}
+              />
               <WeightInput
                 label={tParcel("weightField")}
+                name={`adHocParcels.${index}.weightOz`}
+                isRequired
                 valueOz={parcel.weightOz}
                 weightDisplay={weightDisplay}
                 onChange={(weightOz) => update(parcel.key, { weightOz })}
@@ -376,7 +324,7 @@ function ParcelQuotes({
                     )}
                   </td>
                   <td className="text-end tabular-nums">
-                    {ratePrice(format, quote.amountCents, quote.currency)}
+                    {money(format, quote.amountCents, quote.currency)}
                   </td>
                   <td>
                     {quote.deliveryDays !== null

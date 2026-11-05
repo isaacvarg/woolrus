@@ -8,7 +8,6 @@ import {
   type LabRunTrend,
 } from "@woolrus/contracts";
 import { useFormatter, useTranslations } from "next-intl";
-import { money } from "@/app/(app)/qa/[orderId]/money";
 import {
   FailuresCard,
   Header,
@@ -19,6 +18,7 @@ import {
   WinsCard,
 } from "@/app/(app)/rate-lab/runs/[id]/run-detail";
 import { useErrorMessage } from "@/lib/errors";
+import { money } from "@/lib/money";
 import { orpc } from "@/lib/orpc";
 import { PageSection, ReportShell } from "../../../../report-shell";
 

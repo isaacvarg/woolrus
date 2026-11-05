@@ -10,27 +10,7 @@ import { Dialog } from "@/components/ui/dialog";
 import { Button, Checkbox, TextAreaField, TextField } from "@/components/ui/fields";
 import { errorData, useErrorMessage, useFieldErrors } from "@/lib/errors";
 import { orpc } from "@/lib/orpc";
-
-export const addressFields = [
-  "name",
-  "company",
-  "phone",
-  "email",
-  "address1",
-  "address2",
-  "city",
-  "state",
-  "postalCode",
-  "country",
-] as const;
-export type AddressField = (typeof addressFields)[number];
-export const requiredAddressFields = new Set<AddressField>([
-  "name",
-  "address1",
-  "city",
-  "postalCode",
-  "country",
-]);
+import { AddressFields, addressForm } from "../address-fields";
 
 /**
  * Adds a test address, or edits `address`. Saving a new one keeps the dialog open on the check's
@@ -57,12 +37,7 @@ export function AddressDialog({
   const locked = address?.locked ?? false;
   const [title, setTitle] = useState(address?.title ?? "");
   const [description, setDescription] = useState(address?.description ?? "");
-  const [form, setForm] = useState<Record<AddressField, string>>(() => {
-    const original = address?.original;
-    return Object.fromEntries(
-      addressFields.map((f) => [f, original?.[f] ?? (f === "country" ? "US" : "")]),
-    ) as Record<AddressField, string>;
-  });
+  const [form, setForm] = useState(() => addressForm(address?.original));
   const [groupIds, setGroupIds] = useState(new Set(address?.groups.map((g) => g.id) ?? []));
   // One key per dialog: a retried submit can't create two addresses.
   const [idempotencyKey] = useState(() => crypto.randomUUID());
@@ -111,7 +86,7 @@ export function AddressDialog({
     >
       {(close) => (
         <Form
-          className="max-h-[70vh] space-y-2 overflow-y-auto"
+          className="space-y-2"
           validationErrors={fieldErrors(save.error)}
           onSubmit={(event) => {
             event.preventDefault();
@@ -177,21 +152,7 @@ export function AddressDialog({
               {t("lockedReason")}
             </p>
           )}
-          <fieldset className="grid grid-cols-2 gap-x-2">
-            <legend className="fieldset-legend">{t("addressLegend")}</legend>
-            {addressFields.map((field) => (
-              <TextField
-                key={field}
-                label={t(`fields.${field}`)}
-                name={`address.${field}`}
-                type={field === "email" ? "email" : "text"}
-                isRequired={requiredAddressFields.has(field)}
-                isDisabled={locked}
-                value={form[field]}
-                onChange={(value) => setForm({ ...form, [field]: value })}
-              />
-            ))}
-          </fieldset>
+          <AddressFields value={form} onChange={setForm} isDisabled={locked} />
           <fieldset>
             <legend className="fieldset-legend">{t("groupsLegend")}</legend>
             {choices.length === 0 && <p className="text-sm opacity-70">{t("noGroups")}</p>}

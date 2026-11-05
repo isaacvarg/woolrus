@@ -1,11 +1,11 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { LabAddress } from "@woolrus/contracts";
 import { useTranslations } from "next-intl";
-import { useState } from "react";
-import { formatAddress } from "@/app/(app)/orders/[id]/address";
+import { useDeferredValue, useState } from "react";
 import { Button, Checkbox, SelectField, TextField } from "@/components/ui/fields";
+import { formatAddress } from "@/lib/address";
 import { useErrorMessage } from "@/lib/errors";
 import { orpc } from "@/lib/orpc";
 import { AddressDialog } from "./address-dialog";
@@ -22,6 +22,8 @@ export function AddressesManager({ canManage }: { canManage: boolean }) {
   const [showArchived, setShowArchived] = useState(false);
   const [groupId, setGroupId] = useState<string>(ALL);
   const [search, setSearch] = useState("");
+  // Typing renders at once; the list follows the deferred text and keeps its rows meanwhile.
+  const deferredSearch = useDeferredValue(search);
   // `false`: closed; `null`: adding; an address: editing it.
   const [editing, setEditing] = useState<LabAddress | null | false>(false);
   const [managingGroups, setManagingGroups] = useState(false);
@@ -34,8 +36,9 @@ export function AddressesManager({ canManage }: { canManage: boolean }) {
       input: {
         includeArchived: showArchived,
         groupIds: groupId === ALL ? [] : [groupId],
-        search,
+        search: deferredSearch,
       },
+      placeholderData: keepPreviousData,
     }),
   );
 

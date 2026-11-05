@@ -16,7 +16,6 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { money } from "@/app/(app)/qa/[orderId]/money";
 import { ChartFigure } from "@/components/charts/chart-figure";
 import {
   type ChartColors,
@@ -26,6 +25,7 @@ import {
 } from "@/components/charts/theme";
 import { Checkbox, SelectField, TextField } from "@/components/ui/fields";
 import { useErrorMessage } from "@/lib/errors";
+import { money } from "@/lib/money";
 import { orpc } from "@/lib/orpc";
 import { ReportLink, reportQuery } from "../report-link";
 
@@ -76,15 +76,6 @@ export function toInput(f: Filters): RealOrdersInput {
   };
 }
 
-/** The CSV export of what the dashboard shows: the same filters, as query parameters. */
-function exportHref(f: Filters): string {
-  const query = new URLSearchParams();
-  for (const [name, value] of Object.entries(toInput(f))) {
-    if (value !== undefined && value !== false) query.set(name, String(value));
-  }
-  return `/api/rate-lab/real-orders/export.csv?${query}`;
-}
-
 const laneName = (lane: { country: string; state: string | null }) =>
   lane.state ? `${lane.country}-${lane.state}` : lane.country;
 
@@ -94,7 +85,14 @@ export function RealOrdersDashboard() {
   const errorMessage = useErrorMessage();
   const [filters, setFilters] = useState(initialFilters);
   const set = <K extends keyof Filters>(key: K, value: Filters[K]) =>
-    setFilters((current) => ({ ...current, [key]: value }));
+    setFilters((current) => ({
+      ...current,
+      [key]: value,
+      // A service belongs to a carrier and a state to a country: a new parent starts them over,
+      // or the dashboard (and its CSV and PDF) would silently filter on the old one.
+      ...(key === "carrierId" && { serviceId: ALL }),
+      ...(key === "country" && { state: ALL }),
+    }));
 
   const query = useQuery({
     ...orpc.rateLab.realOrders.queryOptions({ input: toInput(filters) }),
@@ -102,17 +100,35 @@ export function RealOrdersDashboard() {
   });
   const data = query.data;
   const options = data?.options;
-  const select = (
-    label: string,
-    key: "carrierId" | "serviceId" | "country" | "state" | "boxId",
-    items: { id: string; label: string }[],
-  ) => (
+  const items = {
+    carrierId: (options?.carriers ?? []).map((c) => ({ id: c.id, label: c.name })),
+    serviceId: (options?.services ?? [])
+      .filter((s) => filters.carrierId === ALL || s.carrierId === filters.carrierId)
+      .map((s) => ({ id: s.id, label: s.name })),
+    country: (options?.countries ?? []).map((c) => ({ id: c, label: c })),
+    state: (options?.states ?? [])
+      .filter((s) => filters.country === ALL || s.country === filters.country)
+      .map((s) => ({ id: s.state, label: laneName(s) })),
+    boxId: (options?.boxes ?? []).map((b) => ({ id: b.id, label: b.name })),
+  };
+  type Choice = keyof typeof items;
+  // Options follow the date range: a choice the new range no longer offers is dropped, once the
+  // answer for the current filters is in (not the previous one shown while it loads).
+  if (options && !query.isPlaceholderData) {
+    const gone = (Object.keys(items) as Choice[]).filter(
+      (key) => filters[key] !== ALL && !items[key].some((item) => item.id === filters[key]),
+    );
+    if (gone.length > 0) {
+      setFilters({ ...filters, ...Object.fromEntries(gone.map((key) => [key, ALL])) });
+    }
+  }
+  const select = (label: string, key: Choice) => (
     <div className="w-44">
       <SelectField
         label={label}
         selectedKey={filters[key]}
         onSelectionChange={(value) => set(key, String(value))}
-        options={[{ id: ALL, label: t("all") }, ...items]}
+        options={[{ id: ALL, label: t("all") }, ...items[key]]}
       />
     </div>
   );
@@ -136,40 +152,20 @@ export function RealOrdersDashboard() {
             onChange={(v) => set("to", v)}
           />
         </div>
-        {select(
-          t("carrier"),
-          "carrierId",
-          (options?.carriers ?? []).map((c) => ({ id: c.id, label: c.name })),
-        )}
-        {select(
-          t("service"),
-          "serviceId",
-          (options?.services ?? [])
-            .filter((s) => filters.carrierId === ALL || s.carrierId === filters.carrierId)
-            .map((s) => ({ id: s.id, label: s.name })),
-        )}
-        {select(
-          t("country"),
-          "country",
-          (options?.countries ?? []).map((c) => ({ id: c, label: c })),
-        )}
-        {select(
-          t("state"),
-          "state",
-          (options?.states ?? [])
-            .filter((s) => filters.country === ALL || s.country === filters.country)
-            .map((s) => ({ id: s.state, label: laneName(s) })),
-        )}
-        {select(
-          t("box"),
-          "boxId",
-          (options?.boxes ?? []).map((b) => ({ id: b.id, label: b.name })),
-        )}
+        {select(t("carrier"), "carrierId")}
+        {select(t("service"), "serviceId")}
+        {select(t("country"), "country")}
+        {select(t("state"), "state")}
+        {select(t("box"), "boxId")}
         <Checkbox isSelected={filters.includeFake} onChange={(v) => set("includeFake", v)}>
           {t("includeFake")}
         </Checkbox>
         <div className="ms-auto flex flex-wrap gap-2">
-          <a className="btn btn-outline" href={exportHref(filters)} download>
+          <a
+            className="btn btn-outline"
+            href={`/api/rate-lab/real-orders/export.csv?${reportQuery({ ...toInput(filters) })}`}
+            download
+          >
             {t("exportCsv")}
           </a>
           <ReportLink
