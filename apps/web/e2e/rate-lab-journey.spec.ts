@@ -1,10 +1,10 @@
 import { readFile } from "node:fs/promises";
 import { expect, type Page, test } from "@playwright/test";
-import { createFakeShippingProvider, runLabRun } from "@woolrus/core";
 import { createDb } from "@woolrus/db";
 import { signInAs } from "./support/auth";
 import { openNav } from "./support/nav";
 import { demoService } from "./support/qa";
+import { gatedLabRun, runIdOf } from "./support/rate-lab";
 import { ensureShipFrom } from "./support/rates";
 import { withSettingsLock } from "./support/settings-lock";
 
@@ -16,15 +16,14 @@ import { withSettingsLock } from "./support/settings-lock";
 const db = createDb();
 const prefix = `E2E journey ${crypto.randomUUID().slice(0, 8)}`;
 const api = "/api/v1/shipping";
+/** This spec's runs only (other specs run alongside): the suite run and the one-off's run. */
 const runIds: string[] = [];
-const startedAt = new Date();
 
-/** The run and its job, and the one-off's run: their fetches hold on to carriers, addresses and parcels. */
+/** The runs and the suite run's job: their fetches hold on to carriers, addresses and parcels. */
 async function deleteRuns() {
   await db.$executeRaw`DELETE FROM pgboss.job WHERE name = 'rateLab.run'
     AND data->>'runId' = ANY(${runIds})`;
   await db.rateLabRun.deleteMany({ where: { id: { in: runIds } } });
-  await db.rateLabRun.deleteMany({ where: { kind: "ONE_OFF", createdAt: { gte: startedAt } } });
 }
 
 test.afterAll(async () => {
@@ -103,6 +102,7 @@ test("Rate Lab end to end: set up, run, read, export, quote and trend; hidden wi
     await db.shippingCarrier.update({ where: { id: carrier.id }, data: { enabled: true } });
     await db.carrierService.update({ where: { id: service.id }, data: { enabled: true } });
     const admin = await (await browser.newContext()).newPage();
+    let run: ReturnType<typeof gatedLabRun> | undefined;
     try {
       // 1. An admin adds two addresses and two parcels, each pair in a group.
       await signInAs(admin, ["ADMIN"]);
@@ -124,7 +124,7 @@ test("Rate Lab end to end: set up, run, read, export, quote and trend; hidden wi
       await addParcel(admin, parcelGroup, parcels[1] ?? "", ["16", "12", "8"], "60");
 
       // 2. A Rate Lab user starts a run on both groups and watches it.
-      await signInAs(page, ["PICKER", "RATE_LAB"]);
+      const labUser = await signInAs(page, ["PICKER", "RATE_LAB"]);
       await page.goto("/");
       await openNav(page);
       await page.getByRole("link", { name: "Rate Lab" }).click();
@@ -141,23 +141,20 @@ test("Rate Lab end to end: set up, run, read, export, quote and trend; hidden wi
 
       const row = page.getByTestId("lab-run-row").filter({ hasText: addressGroup });
       await expect(row).toContainText("Queued");
-      const run = await db.rateLabRun.findFirstOrThrow({
-        where: { kind: "SUITE", status: "QUEUED" },
-        orderBy: { createdAt: "desc" },
-      });
-      runIds.push(run.id);
-      // CI starts no worker: the job runs here, against a slow fake so its progress shows.
-      const job = runLabRun(db, [createFakeShippingProvider("SHIPSTATION", { latencyMs: 3_000 })], {
-        runId: run.id,
-      });
+      const runId = await runIdOf(row);
+      runIds.push(runId);
+      // The job runs here, its quotes held until the progress has shown.
+      run = gatedLabRun(db, runId);
+      await run.inFlight(3);
       await expect(row).toContainText("Running", { timeout: 15_000 });
       await expect(row.getByRole("progressbar", { name: "Combinations quoted" })).toBeVisible();
-      expect(await job).toEqual({ status: "SUCCEEDED" });
+      run.release();
+      expect(await run.job).toEqual({ status: "SUCCEEDED" });
       await expect(row).toContainText("Succeeded", { timeout: 15_000 });
 
       // The finished run, with its insights.
       await row.getByRole("link").first().click();
-      await expect(page).toHaveURL(`/rate-lab/runs/${run.id}`);
+      await expect(page).toHaveURL(`/rate-lab/runs/${runId}`);
       await expect(page.getByRole("heading", { name: /^Run of / })).toBeVisible();
       const picks = page.getByRole("table", { name: "Cheapest and fastest" });
       for (const address of addresses) {
@@ -180,10 +177,10 @@ test("Rate Lab end to end: set up, run, read, export, quote and trend; hidden wi
       for (const title of [...addresses, ...parcels]) expect(csv).toContain(title);
 
       const report = page.getByRole("link", { name: "PDF report" });
-      await expect(report).toHaveAttribute("href", `/rate-lab/runs/${run.id}/report?print=1`);
+      await expect(report).toHaveAttribute("href", `/rate-lab/runs/${runId}/report?print=1`);
       await page.setViewportSize({ width: 718, height: 1000 });
       await page.emulateMedia({ media: "print" });
-      await page.goto(`/rate-lab/runs/${run.id}/report`);
+      await page.goto(`/rate-lab/runs/${runId}/report`);
       await expect(page.getByRole("heading", { name: "Rate Lab run report" })).toBeVisible();
       await expect(page.getByRole("table", { name: "Cheapest and fastest" })).toContainText(
         addresses[0] ?? "",
@@ -214,6 +211,11 @@ test("Rate Lab end to end: set up, run, read, export, quote and trend; hidden wi
       await expect(card).toHaveCount(1);
       await expect(card).toContainText(parcels[0] ?? "");
       await expect(card).toContainText("Cheapest");
+      // The user is this test's own, so its one-off run is this one.
+      const oneOff = await db.rateLabRun.findFirstOrThrow({
+        where: { kind: "ONE_OFF", startedById: labUser.id },
+      });
+      runIds.push(oneOff.id);
 
       // 5. Trends: a cell per combination of the run (fake-quoted, so shown on request).
       await page
@@ -238,6 +240,7 @@ test("Rate Lab end to end: set up, run, read, export, quote and trend; hidden wi
       }
     } finally {
       // Before the carrier cleanup, and so a failed run can't stay queued and block other specs.
+      await run?.settle();
       await deleteRuns();
       await admin.request.delete(`${api}/providers/SHIPSTATION/credentials`);
       await db.shippingProviderAccount.updateMany({
