@@ -383,6 +383,22 @@ describe("realOrders", () => {
     expect(result.alternatives.packages.map((p) => p.orderId)).toEqual([edge.order.id]);
   });
 
+  it("leaves an order's labels bought on fake quotes out of its cost, unless fake data is asked for", async () => {
+    const { services } = await carrier("USPS", null, ["usps_ga"]);
+    const quotes = [{ service: services[0] as Service, amountCents: 300 }];
+    const purchasedAt = "2026-11-01T10:00:00Z";
+    await order(2000, [
+      { quotes, buy: 0, costCents: 300, purchasedAt },
+      { quotes, buy: 0, costCents: 700, fake: true, purchasedAt },
+    ]);
+    const admin = await createActor(db, ["ADMIN"]);
+
+    const real = await realOrders(db, admin, {}, { now });
+    expect(real.costVsCharged).toMatchObject({ orders: 1, costCents: 300, chargedCents: 2000 });
+    const withFake = await realOrders(db, admin, { includeFake: true }, { now });
+    expect(withFake.costVsCharged).toMatchObject({ orders: 1, costCents: 1000 });
+  });
+
   it("caps the alternatives table, newest first", async () => {
     const { admin, c } = await seed();
     const result = await realOrders(db, admin, { alternativesLimit: 1 }, { now });

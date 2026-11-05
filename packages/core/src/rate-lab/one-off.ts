@@ -22,11 +22,12 @@ import { toNumber } from "../units";
 import { type CatalogDeps, checkTestAddress, createLabAddress } from "./catalog";
 import { type Combination, type CombinationParcel, labQuoter } from "./combination";
 import { createLabParcel, resolveParcelSize } from "./parcels";
-import { LAB_CONCURRENCY } from "./runs";
+import { isUniqueViolation, LAB_CONCURRENCY, recoverStalledLabRuns } from "./runs";
 
 // One-off quotes (SPEC-rate-lab "One-off quotes"): "what would this cost?" for a typed address,
 // quoted inline as a ONE_OFF run. The address is checked but not saved as a test address; the
-// one-active-run rule is for suite runs only, so a one-off works while one is going.
+// one-active-run rule is for suite runs only, so a one-off works while one is going. A person has
+// one one-off running at a time: each quotes through every provider on the shared credentials.
 
 /** A typed parcel as the run keeps it (`ad_hoc_parcels`): the size it was quoted at. */
 const AdHocParcel = z.object({
@@ -93,66 +94,75 @@ export async function quoteOneOff(
       weightOz,
     })),
   );
-  const checked = await checkTestAddress(address, deps);
-  const shipTo = LabAddressValue.parse(checked.address);
 
+  // The run is created before the address check, so a refused quote asks no provider anything. A
+  // one-off whose request died is failed as stalled first, so it doesn't hold the person's slot.
+  await recoverStalledLabRuns(db);
   const now = new Date();
-  const run = await db.$transaction(async (tx) => {
-    const created = await tx.rateLabRun.create({
-      data: {
-        kind: "ONE_OFF",
-        status: "RUNNING",
-        startedById: actor.userId,
-        selection: { addressGroupIds: [], addressIds: [], parcelGroupIds, parcelIds },
-        shipFrom: shipFrom.data as Prisma.InputJsonObject,
-        adHocAddress: address as Prisma.InputJsonObject,
-        adHocParcels: typed as Prisma.InputJsonArray,
-        combinations: total,
-        startedAt: now,
-        heartbeatAt: now,
-      },
-    });
-    // No address in the audit: it may be a customer's, and the PII purge only clears the run.
-    await recordAudit(tx, actor, {
-      entityType: "RateLabRun",
-      entityId: created.id,
-      action: "quoteOneOff",
-      after: { parcelIds, parcelGroupIds, adHocParcels: typed.length, combinations: total },
-    });
-    return created;
-  });
-
-  const parcels: { combination: Combination; saved: { id: string; title: string } | null }[] = [
-    ...saved.map((parcel) => ({
-      saved: { id: parcel.id, title: parcel.title },
-      combination: {
-        shipTo,
-        residential: checked.residential,
-        labParcelId: parcel.id,
-        parcel: {
-          title: parcel.title,
-          boxId: parcel.boxId,
-          lengthIn: toNumber(parcel.lengthIn) ?? 0,
-          widthIn: toNumber(parcel.widthIn) ?? 0,
-          heightIn: toNumber(parcel.heightIn) ?? 0,
-          weightOz: toNumber(parcel.weightOz) ?? 0,
-          items: parcel.items,
+  const run = await db
+    .$transaction(async (tx) => {
+      const created = await tx.rateLabRun.create({
+        data: {
+          kind: "ONE_OFF",
+          status: "RUNNING",
+          startedById: actor.userId,
+          selection: { addressGroupIds: [], addressIds: [], parcelGroupIds, parcelIds },
+          shipFrom: shipFrom.data as Prisma.InputJsonObject,
+          adHocAddress: address as Prisma.InputJsonObject,
+          adHocParcels: typed as Prisma.InputJsonArray,
+          combinations: total,
+          startedAt: now,
+          heartbeatAt: now,
         },
-      },
-    })),
-    ...typed.map((parcel, index) => ({
-      saved: null,
-      combination: {
-        shipTo,
-        residential: checked.residential,
-        // A number, as the Quote tab numbers typed parcels: the title reaches message params
-        // (customsIncomplete) and the provider's item name, so no English word goes in it.
-        parcel: { ...parcel, title: `#${index + 1}`, items: [] } satisfies CombinationParcel,
-      },
-    })),
-  ];
+      });
+      // No address in the audit: it may be a customer's, and the PII purge only clears the run.
+      await recordAudit(tx, actor, {
+        entityType: "RateLabRun",
+        entityId: created.id,
+        action: "quoteOneOff",
+        after: { parcelIds, parcelGroupIds, adHocParcels: typed.length, combinations: total },
+      });
+      return created;
+    })
+    .catch((error: unknown) => {
+      // The one-running-one-off-per-person index: this person's other one-off is still quoting.
+      if (isUniqueViolation(error)) throw new AppError("CONFLICT", "errors.rateLab.oneOffActive");
+      throw error;
+    });
 
   try {
+    const checked = await checkTestAddress(address, deps);
+    const shipTo = LabAddressValue.parse(checked.address);
+    const parcels: { combination: Combination; saved: { id: string; title: string } | null }[] = [
+      ...saved.map((parcel) => ({
+        saved: { id: parcel.id, title: parcel.title },
+        combination: {
+          shipTo,
+          residential: checked.residential,
+          labParcelId: parcel.id,
+          parcel: {
+            title: parcel.title,
+            boxId: parcel.boxId,
+            lengthIn: toNumber(parcel.lengthIn) ?? 0,
+            widthIn: toNumber(parcel.widthIn) ?? 0,
+            heightIn: toNumber(parcel.heightIn) ?? 0,
+            weightOz: toNumber(parcel.weightOz) ?? 0,
+            items: parcel.items,
+          },
+        },
+      })),
+      ...typed.map((parcel, index) => ({
+        saved: null,
+        combination: {
+          shipTo,
+          residential: checked.residential,
+          // A number, as the Quote tab numbers typed parcels: the title reaches message params
+          // (customsIncomplete) and the provider's item name, so no English word goes in it.
+          parcel: { ...parcel, title: `#${index + 1}`, items: [] } satisfies CombinationParcel,
+        },
+      })),
+    ];
+
     const quoter = labQuoter(db, providers, { runId: run.id, shipFrom: shipFrom.data });
     const answers: LabOneOffParcel[] = new Array(parcels.length);
     const answer = async (i: number): Promise<LabOneOffParcel> => {

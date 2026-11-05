@@ -184,6 +184,8 @@ Hand-written SQL at the end of the migration:
 - One active run: a partial unique index on `rate_lab_runs ((true)) WHERE kind = 'SUITE' AND status IN ('QUEUED','RUNNING')`.
 - Group names unique per kind, case-insensitive: `UNIQUE (kind, lower(name))`.
 - `ad_hoc_*` only on `ONE_OFF` runs.
+- One running one-off per person (later migration `20261105190000_rate_lab_one_off_per_user`): a partial unique
+  index on `rate_lab_runs (started_by_id) WHERE kind = 'ONE_OFF' AND status = 'RUNNING'`.
 
 ### Addresses and parcels (`packages/core/src/rate-lab/catalog.ts`)
 
@@ -251,7 +253,11 @@ becomes `CANCELLED` at once. Audited.
 `quoteOneOff({ address, parcelIds?, parcelGroupIds?, adHocParcels? })` (`ratelab.use`): at least one parcel; total
 parcels ≤ 20. It checks the address (not stored as a test address), creates a `ONE_OFF` run and runs it **inline** in
 the request: one-offs are small, and the person is waiting. The one-active-run rule doesn't apply to `ONE_OFF`
-(the index covers `SUITE` only). It returns the run id, the address check (typed vs. quoted) and each parcel's
+(the index covers `SUITE` only), but a person has **one one-off running at a time**: each quotes through every
+enabled provider on the shared credentials, so a loop of them could exhaust a carrier's API quota. A second one
+while the first is quoting is refused (`errors.rateLab.oneOffActive`, CONFLICT) before any provider is asked; a
+partial unique index decides it, so two at once can't race. Stalled runs are recovered first, so a one-off whose
+request died (no heartbeat for `LAB_STALL_MS`; each combination bumps it) doesn't hold the slot. It returns the run id, the address check (typed vs. quoted) and each parcel's
 quotes and provider errors, which the Quote tab shows. Saved parcels it quotes are locked like a run's; a typed
 parcel has no contents, so an international one logs `customsIncomplete`. One-off fetches are excluded from Trends
 (decision 12).
@@ -402,7 +408,8 @@ latest run, so its insights flag a move. Runs are fake, so Trends shows them wit
    with contents, the request carries a declaration built by `buildCustoms`.
 9. **Never buys:** a spy on the fakes proves no `purchaseLabel` call in any lab path.
 10. **One-off:** returns quotes for each parcel inline; is excluded from Trends; **Save as test address** creates
-    an unlocked address with the typed original; the PII purge clears `adHocAddress` after the retention period
+    an unlocked address with the typed original; a person's second one-off while one runs is refused (another
+    person's isn't), and one that finished, failed or stalled frees the slot; the PII purge clears `adHocAddress` after the retention period
     and keeps the fetches.
 11. **Insights:** unit tests on `runInsights`: cheapest prefers purchasable, fastest tie-break, a 10% move flagged
     and a 9.9% one not, new and missing services, carrier wins, failures per provider; comparison uses the most

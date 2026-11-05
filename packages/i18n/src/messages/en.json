@@ -1378,6 +1378,7 @@
       "oneOffTooMany": "{parcels} parcels is more than the {max} a quote can take. Pick fewer.",
       "oneOffPurged": "This quote's address was cleared by the personal data purge, so it can't be saved.",
       "oneOffParcelInvalid": "That typed parcel isn't part of this quote.",
+      "oneOffActive": "Your other quote is still running. Wait for it to finish.",
       "notStarted": "The run never started: the worker didn't pick it up, so it was marked failed."
     }
   },

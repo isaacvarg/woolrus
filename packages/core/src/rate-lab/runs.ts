@@ -36,9 +36,11 @@ export const LAB_CONCURRENCY = 3;
 export const LAB_STALL_MS = 10 * 60_000;
 
 /**
- * A queued run older than this has lost its job: past the job's expiry pg-boss has failed it (a
- * run is never retried), so nothing will pick the run up. Anything shorter could fail a run whose
- * job is legitimately waiting, e.g. for the worker to come back.
+ * A queued run older than this is failed as never started: the worker has been gone longer than
+ * any run could last, so free the one-active slot. pg-boss's expiry only applies to a job once
+ * it's started; a never-started job stays fetchable until retention, so a worker that comes back
+ * may still pick it up, and `runLabRun` then finds the run no longer queued and skips it. Anything
+ * shorter could fail a run whose job is legitimately waiting, e.g. for the worker to restart.
  */
 export const LAB_QUEUED_STALL_MS = RATE_LAB_RUN_EXPIRE_SECONDS * 1000 + LAB_STALL_MS;
 
@@ -132,7 +134,7 @@ export async function previewLabRun(
 export const labRunInclude = { startedBy: { select: { id: true, name: true } } } as const;
 export type LabRunRecord = Prisma.RateLabRunGetPayload<{ include: typeof labRunInclude }>;
 
-const isUniqueViolation = (error: unknown) =>
+export const isUniqueViolation = (error: unknown) =>
   error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
 
 /**

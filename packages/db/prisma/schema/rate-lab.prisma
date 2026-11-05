@@ -131,8 +131,10 @@ model RateLabParcelItem {
   @@map("rate_lab_parcel_items")
 }
 
+/// One suite run queued or running at a time, and one running one-off per person (hand-written
+/// partial unique indexes).
 model RateLabRun {
-  id                    String           @id @default(uuid(7)) @db.Uuid
+  id                   String           @id @default(uuid(7)) @db.Uuid
   kind                  RateLabRunKind
   status                RateLabRunStatus @default(QUEUED)
   startedById           String?          @map("started_by_id") @db.Uuid

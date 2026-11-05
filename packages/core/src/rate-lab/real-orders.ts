@@ -181,9 +181,14 @@ function laneCost(rows: RealOrderRow[]): RealOrdersLaneWeek[] {
 
 /**
  * What each order's active package labels cost in all, whatever their date, link or filters: an
- * order's shipping charge pays for all of it, so comparing a part would read as profit.
+ * order's shipping charge pays for all of it, so comparing a part would read as profit. A label
+ * bought on a fake provider's quote cost nothing real, so it counts only with `includeFake`.
  */
-async function orderLabelCosts(db: DbTx, orderIds: string[]): Promise<Map<string, number>> {
+async function orderLabelCosts(
+  db: DbTx,
+  orderIds: string[],
+  includeFake: boolean,
+): Promise<Map<string, number>> {
   if (orderIds.length === 0) return new Map();
   const totals = await db.$queryRaw<{ orderId: string; costCents: number }[]>`
     SELECT p.order_id AS "orderId",
@@ -192,6 +197,7 @@ async function orderLabelCosts(db: DbTx, orderIds: string[]): Promise<Map<string
     JOIN shipping_labels l ON l.package_id = p.id AND l.status = 'ACTIVE'
     LEFT JOIN rate_quotes q ON q.id = l.rate_quote_id
     WHERE p.order_id = ANY(${orderIds}::uuid[])
+      ${includeFake ? Prisma.empty : Prisma.sql`AND (q.id IS NULL OR NOT q.fake)`}
     GROUP BY p.order_id`;
   return new Map(totals.map((t) => [t.orderId, t.costCents]));
 }
@@ -348,7 +354,7 @@ export async function realOrders(
     laneCost: laneCost(rows),
     costVsCharged: costVsCharged(
       rows,
-      await orderLabelCosts(db, [...new Set(rows.map((r) => r.orderId))]),
+      await orderLabelCosts(db, [...new Set(rows.map((r) => r.orderId))], filters.includeFake),
     ),
     alternatives: {
       total: rows.length,
