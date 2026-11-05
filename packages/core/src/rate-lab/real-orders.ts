@@ -10,12 +10,13 @@ import {
 import { type DbTx, Prisma } from "@woolrus/db";
 import type { z } from "zod";
 import { type Actor, assertCan } from "../permissions";
+import { byName, DAY_MS, groupBy } from "./shared";
 
 // Rate Lab's Real orders dashboard (SPEC-rate-lab "Real orders"): bought, not voided labels that
 // link to their logged quote, compared with the other quotes of the same fetch. One query loads a
-// row per label in the range; the filters and figures are plain sums over those rows.
+// row per label in the range; the filters and figures are plain sums over those rows, except label
+// cost vs. charged, which costs each listed order with all its active labels.
 
-const DAY_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_DAYS = 30;
 const OVER_MAX = 50;
 
@@ -117,7 +118,6 @@ export function medianCents(values: readonly number[]): number {
 }
 
 const sum = (values: readonly number[]) => values.reduce((total, v) => total + v, 0);
-const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name);
 
 /** The Monday (UTC) of the week `at` falls in. */
 function weekOf(at: Date): string {
@@ -128,17 +128,6 @@ function weekOf(at: Date): string {
 
 const overspend = (row: RealOrderRow) =>
   row.cheapest || row.cheapestCents === null ? 0 : Math.max(0, row.amountCents - row.cheapestCents);
-
-function groupBy<K, T>(rows: readonly T[], key: (row: T) => K): Map<K, T[]> {
-  const groups = new Map<K, T[]>();
-  for (const row of rows) {
-    const k = key(row);
-    const group = groups.get(k);
-    if (group) group.push(row);
-    else groups.set(k, [row]);
-  }
-  return groups;
-}
 
 function choice(rows: RealOrderRow[]): RealOrders["choice"] {
   const picked = rows.filter((r) => !r.cheapest);
@@ -190,14 +179,35 @@ function laneCost(rows: RealOrderRow[]): RealOrdersLaneWeek[] {
     );
 }
 
-function costVsCharged(rows: RealOrderRow[]): RealOrders["costVsCharged"] {
+/**
+ * What each order's active package labels cost in all, whatever their date, link or filters: an
+ * order's shipping charge pays for all of it, so comparing a part would read as profit.
+ */
+async function orderLabelCosts(db: DbTx, orderIds: string[]): Promise<Map<string, number>> {
+  if (orderIds.length === 0) return new Map();
+  const totals = await db.$queryRaw<{ orderId: string; costCents: number }[]>`
+    SELECT p.order_id AS "orderId",
+           SUM(COALESCE(l.cost_cents, l.quoted_amount_cents, q.amount_cents, 0))::int AS "costCents"
+    FROM packages p
+    JOIN shipping_labels l ON l.package_id = p.id AND l.status = 'ACTIVE'
+    LEFT JOIN rate_quotes q ON q.id = l.rate_quote_id
+    WHERE p.order_id = ANY(${orderIds}::uuid[])
+    GROUP BY p.order_id`;
+  return new Map(totals.map((t) => [t.orderId, t.costCents]));
+}
+
+/** Per order the filters picked, all its label cost against what it charged for shipping. */
+function costVsCharged(
+  rows: RealOrderRow[],
+  labelCosts: Map<string, number>,
+): RealOrders["costVsCharged"] {
   const orders: RealOrdersOrderCost[] = [...groupBy(rows, (r) => r.orderId)].map(
     ([orderId, group]) => {
       const first = group[0] as RealOrderRow;
       return {
         orderId,
         number: first.orderNumber,
-        costCents: sum(group.map((r) => r.costCents)),
+        costCents: labelCosts.get(orderId) ?? 0,
         chargedCents: first.chargedCents,
       };
     },
@@ -335,7 +345,10 @@ export async function realOrders(
       })
       .sort(bySpend),
     laneCost: laneCost(rows),
-    costVsCharged: costVsCharged(rows),
+    costVsCharged: costVsCharged(
+      rows,
+      await orderLabelCosts(db, [...new Set(rows.map((r) => r.orderId))]),
+    ),
     alternatives: {
       total: rows.length,
       packages: await alternatives(db, rows, names, filters.alternativesLimit),
