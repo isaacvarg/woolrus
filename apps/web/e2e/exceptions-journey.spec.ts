@@ -64,7 +64,8 @@ test("out of stock, void, pack, report, resolve and delete: the exceptions journ
   await db.packageItem.create({ data: { packageId: pkg.id, orderItemId: item.id, quantity: 2 } });
   await signInAs(page, ["PACKER"]);
   await page.goto(`/pack/${order.id}`);
-  await page.getByTestId("pack-item").getByRole("button", { name: "Void" }).click();
+  await page.getByRole("button", { name: "Actions for E2E item" }).click();
+  await page.getByRole("menuitem", { name: "Void" }).click();
   const packVoid = page.getByRole("dialog", { name: "Void E2E item" });
   await packVoid.getByRole("textbox", { name: "How many to void" }).fill("2");
   await packVoid.getByRole("radio", { name: "Damaged" }).click();

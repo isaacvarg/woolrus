@@ -73,7 +73,6 @@ test("Start packing opens the pack screen; add packages, split a line, unpack, d
   const packages = page.getByTestId("pack-package");
   await expect(packages).toHaveCount(1);
   await expect(packages.first()).toHaveAttribute("data-selected", "true");
-  await expect(packages.first()).toContainText("Selected");
 
   // Tap: one unit. Stepper: several at once.
   await item.getByRole("button", { name: "Put one E2E item in the selected package" }).click();
@@ -83,22 +82,26 @@ test("Start packing opens the pack screen; add packages, split a line, unpack, d
   await item.getByRole("button", { name: "Put 3 here" }).click();
   await expect(item.getByTestId("pack-left")).toHaveText("2 left");
   await expect(packages.first()).toContainText("×4");
-  await expect(page.getByTestId("pack-unassigned")).toHaveText("2 items unassigned");
 
   // A second package takes the rest: the one line is split, never changed.
   await addCustomPackage(page);
   await expect(packages).toHaveCount(2);
-  await expect(packages.nth(1)).toHaveAttribute("data-selected", "true");
+  // The selected package is listed first.
+  await expect(packages.first()).toHaveAttribute("data-selected", "true");
+  await expect(packages.first()).toContainText("Package 2");
   await item.getByRole("button", { name: "Put one E2E item in the selected package" }).click();
-  await expect(item.getByTestId("pack-where")).toHaveText("4 in #1 · 1 in #2");
+  await expect(item.getByTestId("pack-where")).toHaveText(/^4 @\s*1\s*•\s*1 @\s*2$/);
   await item.getByRole("button", { name: "Put one E2E item in the selected package" }).click();
   await expect(page.getByTestId("pack-all-packed")).toBeVisible();
-  await expect(packages.nth(1)).toContainText("×2");
+  await expect(packages.first()).toContainText("×2");
 
   // Taking one back out returns it to the items.
-  await page.getByRole("button", { name: "Take one E2E item out of package 2" }).click();
+  await page.getByRole("button", { name: "Remove items from package 2" }).click();
+  const items = page.getByRole("dialog", { name: "Remove items from package 2" });
+  await items.getByRole("button", { name: "Take one E2E item out of package 2" }).click();
+  await items.getByRole("button", { name: "Back" }).click();
   await expect(item.getByTestId("pack-left")).toHaveText("1 left");
-  await expect(packages.nth(1)).toContainText("×1");
+  await expect(packages.first()).toContainText("×1");
 
   // Deleting package 2 returns its unit too.
   await page.getByRole("button", { name: "Actions for package 2" }).click();
@@ -168,7 +171,7 @@ test("a weight over the box's max needs a reason; changing a weighed package ask
   const pkg = page.getByTestId("pack-package");
   await expect(pkg).toHaveCount(1);
   await expect(pkg.getByTestId("pack-max")).toHaveText("Max 2 lb 8 oz");
-  await expect(page.getByTestId("pack-unweighed")).toHaveText("1 package without a weight");
+  await expect(pkg.getByLabel("lb", { exact: true })).toBeVisible();
 
   await page.getByRole("button", { name: "Put one E2E item in the selected package" }).click();
   await expect(pkg).toContainText("×1");
@@ -179,12 +182,11 @@ test("a weight over the box's max needs a reason; changing a weighed package ask
   const dialog = page.getByRole("dialog", { name: "Over the box's limit" });
   await dialog.getByRole("button", { name: "Save with reason" }).click();
   await expect(dialog).toBeVisible();
-  await expect(page.getByTestId("pack-unweighed")).toHaveText("1 package without a weight");
 
   await dialog.getByLabel("Reason").fill("Dense kit, carrier agreed");
   await dialog.getByRole("button", { name: "Save with reason" }).click();
   await expect(dialog).toBeHidden();
-  await expect(page.getByTestId("pack-unweighed")).toHaveText("0 packages without a weight");
+  await expect(pkg.getByTestId("pack-weight")).toHaveText("3 lb");
   await expect(pkg.getByTestId("pack-override")).toContainText("Dense kit, carrier agreed");
   await expect(pkg.getByTestId("pack-stale")).toHaveCount(0);
 
@@ -197,8 +199,7 @@ test("a weight over the box's max needs a reason; changing a weighed package ask
 
   // What's shown is what the server kept.
   await page.reload();
-  await expect(page.getByTestId("pack-unweighed")).toHaveText("0 packages without a weight");
-  await expect(page.getByTestId("pack-package").getByLabel("lb", { exact: true })).toHaveValue("3");
+  await expect(page.getByTestId("pack-package").getByTestId("pack-weight")).toHaveText("3 lb");
 });
 
 test("the suggested box is listed first and adding it works; a weight far off the estimate warns", async ({
@@ -233,14 +234,14 @@ test("the suggested box is listed first and adding it works; a weight far off th
   const pkg = page.getByTestId("pack-package");
   await expect(pkg).toHaveCount(1);
   await page.getByRole("button", { name: "Put one E2E item in the selected package" }).click();
-  await expect(pkg.getByTestId("pack-estimate")).toHaveText("Est. 10 oz");
 
   // Within 25% of 10 oz: no warning. 3 lb is far off.
   await pkg.getByLabel("oz", { exact: true }).fill("11");
   await pkg.getByRole("button", { name: "Save weight" }).click();
-  await expect(page.getByTestId("pack-unweighed")).toHaveText("0 packages without a weight");
+  await expect(pkg.getByTestId("pack-weight")).toHaveText("11 oz");
   await expect(pkg.getByTestId("pack-weight-warning")).toHaveCount(0);
 
+  await pkg.getByRole("button", { name: "Edit weight of package 1" }).click();
   await pkg.getByLabel("lb", { exact: true }).fill("1");
   await pkg.getByLabel("oz", { exact: true }).fill("0");
   await pkg.getByRole("button", { name: "Save weight" }).click();

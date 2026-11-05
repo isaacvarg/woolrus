@@ -10,11 +10,11 @@ import type {
   WeightDisplay,
 } from "@woolrus/contracts";
 import { formatWeight } from "@woolrus/core/format";
+import { Box, EllipsisVertical, PencilSparkles, Weight } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { useState } from "react";
-import { AllVoidedBanner } from "@/components/exceptions/all-voided-banner";
 import { ReportIssueFlow } from "@/components/exceptions/report-issue-flow";
 import { VoidDialog } from "@/components/exceptions/void-dialog";
 import { CustomsNotice } from "@/components/shipping/customs-notice";
@@ -108,6 +108,7 @@ type Dialogs =
   | { kind: "change"; pkg: PackPackage }
   | { kind: "delete"; pkg: PackPackage }
   | { kind: "note"; pkg: PackPackage }
+  | { kind: "items"; pkgId: string }
   | { kind: "overweight"; pkg: PackPackage; weightOz: number; maxOz: number };
 
 type Weigh = { pkg: PackPackage; weightOz: number; overrideReason?: string };
@@ -323,7 +324,6 @@ function PackLayout({
   const settings = useQuery(orpc.settings.public.queryOptions());
   // Until settings load, use the schema default so the screen isn't held back.
   const weightDisplay = settings.data?.weightDisplay ?? "LB_OZ";
-  const unweighed = view.packages.filter((p) => p.weightOz === null).length;
 
   const putAll = useMutation({
     mutationKey: writeKey,
@@ -422,74 +422,56 @@ function PackLayout({
               <p className="text-sm">{t("pack.selectedHint")}</p>
             )}
             <ul className="grid gap-3" aria-label={t("pack.packages")}>
-              {view.packages.map((pkg) => (
-                <PackageCard
-                  key={pkg.id}
-                  pkg={pkg}
-                  lines={view.lines}
-                  isSelected={pkg.id === selected?.id}
-                  disabled={!canPack}
-                  onSelect={() => setSelectedId(pkg.id)}
-                  onTakeOut={(line) => move.mutate({ pkg, line, delta: -1 })}
-                  onChangeBox={() => setDialog({ kind: "change", pkg })}
-                  onPutAll={() => putAll.mutate(pkg)}
-                  putAllDisabled={unassignedUnits === 0}
-                  onDelete={() => setDialog({ kind: "delete", pkg })}
-                  onAddNote={() => setDialog({ kind: "note", pkg })}
-                  onReport={mayReport ? () => setReporting({ packageId: pkg.id }) : undefined}
-                  weightDisplay={weightDisplay}
-                  weighing={weigh.isPending && weigh.variables?.pkg.id === pkg.id}
-                  onWeigh={(weightOz, overrideReason) =>
-                    weigh.mutate({ pkg, weightOz, overrideReason })
-                  }
-                />
-              ))}
+              {[...view.packages]
+                .sort((a, b) => Number(b.id === selected?.id) - Number(a.id === selected?.id))
+                .map((pkg) => (
+                  <PackageCard
+                    key={pkg.id}
+                    pkg={pkg}
+                    lines={view.lines}
+                    isSelected={pkg.id === selected?.id}
+                    disabled={!canPack}
+                    onSelect={() => setSelectedId(pkg.id)}
+                    onEditItems={() => setDialog({ kind: "items", pkgId: pkg.id })}
+                    onChangeBox={() => setDialog({ kind: "change", pkg })}
+                    onPutAll={() => putAll.mutate(pkg)}
+                    putAllDisabled={unassignedUnits === 0}
+                    onDelete={() => setDialog({ kind: "delete", pkg })}
+                    onAddNote={() => setDialog({ kind: "note", pkg })}
+                    onReport={mayReport ? () => setReporting({ packageId: pkg.id }) : undefined}
+                    weightDisplay={weightDisplay}
+                    weighing={weigh.isPending && weigh.variables?.pkg.id === pkg.id}
+                    onWeigh={(weightOz, overrideReason) =>
+                      weigh.mutate({ pkg, weightOz, overrideReason })
+                    }
+                  />
+                ))}
             </ul>
           </div>
         </div>
       )}
 
-      {canPack && view.lines.length > 0 && (
+      {canPack && view.lines.length > 0 && view.unmet.length === 0 && !view.order.allVoided && (
         <footer
           data-toast-clearance
-          className="fixed inset-x-0 bottom-0 z-10 space-y-1 border-t border-base-300 bg-base-100 p-4"
+          className="fixed inset-x-0 bottom-0 z-10 border-t border-base-300 bg-base-100 p-4"
         >
-          <p className="font-semibold" data-testid="pack-unassigned">
-            {t("pack.unassigned", { count: unassignedUnits })}
-          </p>
-          <p className="text-sm" data-testid="pack-unweighed">
-            {t("pack.noWeight", { count: unweighed })}
-          </p>
-          {view.order.allVoided && <AllVoidedBanner />}
-          {view.unmet.length > 0 && !view.order.allVoided && (
-            <ul className="list-disc ps-6 text-sm" data-testid="pack-unmet">
-              {view.unmet.map((condition) => (
-                <li key={`${condition.messageKey}:${JSON.stringify(condition.params)}`}>
-                  {t.has(condition.messageKey)
-                    ? t(condition.messageKey, condition.params as never)
-                    : t("errors.internal")}
-                </li>
-              ))}
-            </ul>
-          )}
-          {view.unmet.length === 0 && !view.order.allVoided && (
-            <div className="flex justify-end gap-2 pt-1">
-              <Button
-                className="btn-outline btn-lg"
-                isDisabled={complete.isPending}
-                onPress={() => complete.mutate("queue")}
-              >
-                {t("pack.done")}
-              </Button>
-              <Button
-                className="btn-primary btn-lg"
-                isDisabled={complete.isPending}
-                onPress={() => complete.mutate("next")}
-              >
-                {t("pack.doneNext")}
-              </Button>
-            </div>
-          )}
+          <div className="flex justify-end gap-2">
+            <Button
+              className="btn-outline btn-lg"
+              isDisabled={complete.isPending}
+              onPress={() => complete.mutate("queue")}
+            >
+              {t("pack.done")}
+            </Button>
+            <Button
+              className="btn-primary btn-lg"
+              isDisabled={complete.isPending}
+              onPress={() => complete.mutate("next")}
+            >
+              {t("pack.doneNext")}
+            </Button>
+          </div>
         </footer>
       )}
 
@@ -530,6 +512,57 @@ function PackLayout({
           onClose={closeDialog}
         />
       )}
+      {dialog?.kind === "items" &&
+        (() => {
+          const pkg = view.packages.find((p) => p.id === dialog.pkgId);
+          if (!pkg) return null;
+          return (
+            <Dialog
+              title={t("pack.removeItems", { number: pkg.number })}
+              isOpen
+              onOpenChange={(open) => !open && closeDialog()}
+            >
+              {(close) => (
+                <div className="space-y-4">
+                  <p className="text-sm">{t("pack.removeItemsHint")}</p>
+                  {pkg.items.length === 0 ? (
+                    <p className="text-sm">{t("pack.empty")}</p>
+                  ) : (
+                    <ul className="divide-y divide-base-300">
+                      {pkg.items.map((item) => {
+                        const line = view.lines.find((l) => l.id === item.orderItemId);
+                        return (
+                          <li key={item.orderItemId} className="flex items-center gap-3 py-2">
+                            <ItemThumb url={line?.imageUrl ?? null} className="size-12" />
+                            <span className="grow">{item.name}</span>
+                            <span className="text-xl font-bold tabular-nums">×{item.quantity}</span>
+                            {line && (
+                              <Button
+                                className="btn-outline btn-lg min-w-16 text-2xl"
+                                aria-label={t("pack.takeOut", {
+                                  name: item.name,
+                                  number: pkg.number,
+                                })}
+                                onPress={() => move.mutate({ pkg, line, delta: -1 })}
+                              >
+                                −
+                              </Button>
+                            )}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                  <div className="modal-action">
+                    <Button className="btn-ghost" onPress={close}>
+                      {t("order.back")}
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </Dialog>
+          );
+        })()}
       {dialog?.kind === "note" && (
         <PackageNoteDialog orderId={order.id} pkg={dialog.pkg} onClose={closeDialog} />
       )}
@@ -609,16 +642,35 @@ function PackBanner({ view, userId }: { view: PackView; userId: string | null })
   );
 }
 
-/** "4 in #1 · 2 in #2", and what's wrong when a line has more in boxes than it needs. */
+/** "4 @ [box] 1 • 2 @ [box] 2", and what's wrong when a line has more in boxes than it needs. */
 function WhereRest({ line }: { line: PackLine }) {
   const t = useTranslations();
   if (line.packedIn.length === 0) return null;
   return (
-    <div className="text-sm" data-testid="pack-where">
-      {line.packedIn
-        .map((p) => t("pack.packedIn", { count: p.quantity, number: p.number }))
-        .join(" · ")}
+    <div className="flex flex-wrap items-center gap-x-2 text-sm" data-testid="pack-where">
+      {line.packedIn.map((p, i) => (
+        <span key={p.packageId} className="inline-flex items-center gap-1">
+          {i > 0 && <span aria-hidden="true">•</span>}
+          <span
+            className="inline-flex items-center gap-1"
+            role="img"
+            aria-label={t("pack.packedInBox", { count: p.quantity, number: p.number })}
+          >
+            {p.quantity} @ <Box className="size-4" aria-hidden="true" /> {p.number}
+          </span>
+        </span>
+      ))}
     </div>
+  );
+}
+
+function ItemThumb({ url, className }: { url: string | null; className: string }) {
+  return url ? (
+    // Store images come from the shop's own domain; next/image would need it configured.
+    // biome-ignore lint/performance/noImgElement: see above
+    <img src={url} alt="" className={`${className} shrink-0 rounded-field object-cover`} />
+  ) : (
+    <div className={`${className} shrink-0 rounded-field bg-base-200`} aria-hidden="true" />
   );
 }
 
@@ -642,22 +694,16 @@ function ItemCard({
 
   return (
     <li
-      className={`rounded-box border-2 bg-base-100 shadow-sm ${line.tooMany > 0 ? "border-error" : "border-base-300"}`}
+      className={`relative rounded-box border-2 bg-base-100 shadow-sm ${line.tooMany > 0 ? "border-error" : "border-base-300"}`}
       data-testid="pack-item"
     >
       <Button
-        className="btn-ghost h-auto min-h-40 w-full items-start justify-start gap-4 rounded-box p-4 text-start font-normal"
+        className="btn-ghost h-auto min-h-40 w-full items-start justify-start gap-4 rounded-box p-4 pe-12 text-start font-normal"
         isDisabled={disabled || line.unassigned === 0}
         aria-label={t("pack.putOne", { name: line.name })}
         onPress={() => onPut(1)}
       >
-        {line.imageUrl ? (
-          // Store images come from the shop's own domain; next/image would need it configured.
-          // biome-ignore lint/performance/noImgElement: see above
-          <img src={line.imageUrl} alt="" className="size-24 shrink-0 rounded-box object-cover" />
-        ) : (
-          <div className="size-24 shrink-0 rounded-box bg-base-200" aria-hidden="true" />
-        )}
+        <ItemThumb url={line.imageUrl} className="size-24" />
         <span className="min-w-0 grow space-y-1">
           <span className="block text-xl font-bold">{line.name}</span>
           {line.sku && <span className="block text-sm">{t("pack.sku", { sku: line.sku })}</span>}
@@ -690,17 +736,19 @@ function ItemCard({
         </span>
       </Button>
       {(onVoid || onReport) && (
-        <div className="flex justify-end gap-2 border-t border-base-300 p-2">
-          {onReport && (
-            <Button className="btn-outline btn-warning btn-sm" onPress={onReport}>
-              {t("issues.button")}
-            </Button>
-          )}
-          {onVoid && (
-            <Button className="btn-outline btn-error btn-sm" onPress={onVoid}>
-              {t("voids.button")}
-            </Button>
-          )}
+        <div className="absolute end-2 top-2">
+          <Menu
+            label={t("pack.itemMenu", { name: line.name })}
+            trigger={<EllipsisVertical className="size-5" aria-hidden="true" />}
+            triggerClassName="btn-ghost btn-square btn-sm"
+          >
+            {onReport && <MenuItem onAction={onReport}>{t("issues.button")}</MenuItem>}
+            {onVoid && (
+              <MenuItem danger onAction={onVoid}>
+                {t("voids.button")}
+              </MenuItem>
+            )}
+          </Menu>
         </div>
       )}
       {line.unassigned > 1 && !disabled && (
@@ -737,7 +785,7 @@ function PackageCard({
   isSelected,
   disabled,
   onSelect,
-  onTakeOut,
+  onEditItems,
   onChangeBox,
   onPutAll,
   putAllDisabled,
@@ -757,7 +805,7 @@ function PackageCard({
   isSelected: boolean;
   disabled: boolean;
   onSelect: () => void;
-  onTakeOut: (line: PackLine) => void;
+  onEditItems: () => void;
   onChangeBox: () => void;
   onPutAll: () => void;
   putAllDisabled: boolean;
@@ -765,141 +813,187 @@ function PackageCard({
   onAddNote: () => void;
 }) {
   const t = useTranslations();
-  const locale = useLocale();
   const size = pkg.box ?? pkg.dimensions;
   const sizeText =
     size &&
     t("pack.dimensions", { length: size.lengthIn, width: size.widthIn, height: size.heightIn });
+  const hasMenu = !disabled || onReport;
 
   return (
     <li
-      className={`rounded-box border-2 bg-base-100 shadow-sm ${isSelected ? "border-primary ring-2 ring-primary" : "border-base-300"}`}
+      className={`relative rounded-box border-2 bg-base-100 shadow-sm ${isSelected ? "border-primary ring-2 ring-primary" : "border-base-300"}`}
       data-testid="pack-package"
       data-selected={isSelected || undefined}
     >
-      <div className="flex items-stretch">
-        <Button
-          className="btn-ghost h-auto min-h-20 grow justify-start rounded-box p-4 text-start font-normal"
-          aria-pressed={isSelected}
-          aria-label={t("pack.select", { number: pkg.number })}
-          isDisabled={disabled}
-          onPress={onSelect}
-        >
-          <span className="block space-y-1">
-            <span className="flex items-center gap-2">
-              <span className="text-xl font-bold">{t("pack.package", { number: pkg.number })}</span>
-              {isSelected && (
-                <span className="badge badge-primary">
-                  <span aria-hidden="true">✓ </span>
-                  {t("pack.selected")}
-                </span>
-              )}
-            </span>
-            <span className="block text-sm">
-              {pkg.box?.name ?? t("pack.custom")}
-              {sizeText && ` · ${sizeText}`} · {t("pack.units", { count: pkg.units })}
-            </span>
+      <Button
+        className={`h-auto min-h-20 w-full justify-start p-4 text-start font-normal ${isSelected ? "rounded-t-[inherit] rounded-b-none bg-primary/15 hover:bg-primary/20" : "btn-ghost rounded-box"} ${hasMenu ? "pe-28" : "pe-16"}`}
+        aria-pressed={isSelected}
+        aria-label={t("pack.select", { number: pkg.number })}
+        isDisabled={disabled}
+        onPress={onSelect}
+      >
+        <span className="block space-y-1">
+          <span className="flex items-center gap-2">
+            <span className="text-xl font-bold">{t("pack.package", { number: pkg.number })}</span>
           </span>
-        </Button>
-        {!disabled && (
-          <div className="p-2">
-            <Menu
-              label={t("pack.menu", { number: pkg.number })}
-              trigger="⋯"
-              triggerClassName="btn-ghost btn-lg text-2xl"
-            >
-              <MenuItem onAction={onChangeBox}>{t("pack.changeBox")}</MenuItem>
+          <span className="block text-sm">
+            {pkg.box?.name ?? t("pack.custom")}
+            {sizeText && ` · ${sizeText}`} · {t("pack.units", { count: pkg.units })}
+          </span>
+        </span>
+      </Button>
+      {isSelected && (
+        <PencilSparkles
+          className="pointer-events-none absolute end-20 top-6 size-7 text-primary"
+          aria-hidden="true"
+        />
+      )}
+      {hasMenu && (
+        <div className="absolute end-2 top-2">
+          <Menu
+            label={t("pack.menu", { number: pkg.number })}
+            trigger={<EllipsisVertical className="size-6" aria-hidden="true" />}
+            triggerClassName="btn-ghost btn-square btn-lg"
+          >
+            {!disabled && <MenuItem onAction={onChangeBox}>{t("pack.changeBox")}</MenuItem>}
+            {!disabled && (
               <MenuItem isDisabled={putAllDisabled} onAction={onPutAll}>
                 {t("pack.putEverything")}
               </MenuItem>
-              <MenuItem onAction={onAddNote}>{t("pack.addNote")}</MenuItem>
+            )}
+            {!disabled && <MenuItem onAction={onAddNote}>{t("pack.addNote")}</MenuItem>}
+            {onReport && <MenuItem onAction={onReport}>{t("issues.packageButton")}</MenuItem>}
+            {!disabled && (
               <MenuItem danger onAction={onDelete}>
                 {t("pack.delete")}
               </MenuItem>
-            </Menu>
-          </div>
-        )}
-      </div>
-      <div className="space-y-2 border-t border-base-300 p-4">
-        {pkg.weightStale && pkg.weightOz !== null && (
-          <div role="status" className="alert alert-warning" data-testid="pack-stale">
-            <span className="grow">{t("pack.stale")}</span>
-            {!disabled && (
-              <Button
-                className="btn-sm"
-                isPending={weighing}
-                // Same value again confirms it; a kept reason travels with it.
-                onPress={() =>
-                  pkg.weightOz !== null && onWeigh(pkg.weightOz, pkg.overrideReason ?? undefined)
-                }
-              >
-                {t("pack.staleConfirm")}
-              </Button>
             )}
-          </div>
-        )}
-        {pkg.overrideReason && (
-          <p className="text-sm" data-testid="pack-override">
-            <span className="badge badge-warning me-2">{t("pack.overweightBadge")}</span>
-            {pkg.overrideReason}
-          </p>
-        )}
-        {pkg.estimatedWeightOz !== null && (
-          <p className="text-sm" data-testid="pack-estimate">
-            {t("pack.estimate", {
-              weight: formatWeight(pkg.estimatedWeightOz, weightDisplay, locale),
-            })}
-          </p>
-        )}
-        {pkg.weightWarning && (
-          <p role="status" className="alert alert-warning" data-testid="pack-weight-warning">
-            {t(pkg.weightWarning.percent > 0 ? "pack.warnHeavier" : "pack.warnLighter", {
-              percent: Math.abs(pkg.weightWarning.percent),
-            })}
-          </p>
-        )}
-        <WeightField
-          // Remount when the saved weight changes, so the fields show what the server kept.
-          key={pkg.weightOz ?? "none"}
-          weightOz={pkg.weightOz}
-          maxWeightOz={pkg.box?.maxWeightOz ?? null}
-          weightDisplay={weightDisplay}
-          disabled={disabled}
-          isPending={weighing}
-          onSave={(oz) => onWeigh(oz)}
-        />
-      </div>
-      {pkg.items.length === 0 ? (
-        <p className="border-t border-base-300 p-4 text-sm">{t("pack.empty")}</p>
-      ) : (
-        <ul className="divide-y divide-base-300 border-t border-base-300">
-          {pkg.items.map((item) => {
-            const line = lines.find((l) => l.id === item.orderItemId);
-            return (
-              <li key={item.orderItemId} className="flex items-center gap-2 px-4 py-2">
-                <span className="grow">{item.name}</span>
-                <span className="text-xl font-bold tabular-nums">×{item.quantity}</span>
-                {line && !disabled && (
-                  <Button
-                    className="btn-outline btn-lg min-w-16 text-2xl"
-                    aria-label={t("pack.takeOut", { name: item.name, number: pkg.number })}
-                    onPress={() => onTakeOut(line)}
-                  >
-                    −
-                  </Button>
-                )}
-              </li>
-            );
-          })}
-        </ul>
-      )}
-      {onReport && (
-        <div className="flex justify-end border-t border-base-300 p-2">
-          <Button className="btn-outline btn-warning btn-sm" onPress={onReport}>
-            {t("issues.packageButton")}
-          </Button>
+          </Menu>
         </div>
       )}
+      {isSelected && (
+        <>
+          <div className="space-y-2 border-t border-base-300 p-4">
+            {pkg.weightStale && pkg.weightOz !== null && (
+              <div role="status" className="alert alert-warning" data-testid="pack-stale">
+                <span className="grow">{t("pack.stale")}</span>
+                {!disabled && (
+                  <Button
+                    className="btn-sm"
+                    isPending={weighing}
+                    // Same value again confirms it; a kept reason travels with it.
+                    onPress={() =>
+                      pkg.weightOz !== null &&
+                      onWeigh(pkg.weightOz, pkg.overrideReason ?? undefined)
+                    }
+                  >
+                    {t("pack.staleConfirm")}
+                  </Button>
+                )}
+              </div>
+            )}
+            {pkg.overrideReason && (
+              <p className="text-sm" data-testid="pack-override">
+                <span className="badge badge-warning me-2">{t("pack.overweightBadge")}</span>
+                {pkg.overrideReason}
+              </p>
+            )}
+            {pkg.weightWarning && (
+              <p role="status" className="alert alert-warning" data-testid="pack-weight-warning">
+                {t(pkg.weightWarning.percent > 0 ? "pack.warnHeavier" : "pack.warnLighter", {
+                  percent: Math.abs(pkg.weightWarning.percent),
+                })}
+              </p>
+            )}
+            <WeightEditor
+              // Remount when the saved weight changes, so the fields show what the server kept.
+              key={pkg.weightOz ?? "none"}
+              pkg={pkg}
+              weightDisplay={weightDisplay}
+              disabled={disabled}
+              weighing={weighing}
+              onWeigh={onWeigh}
+            />
+          </div>
+          {pkg.items.length === 0 ? (
+            <p className="border-t border-base-300 p-4 text-sm">{t("pack.empty")}</p>
+          ) : (
+            <div className="border-t border-base-300">
+              <Button
+                className="btn-ghost h-auto min-h-16 w-full flex-wrap justify-start gap-x-5 gap-y-2 rounded-box p-4 font-normal"
+                aria-label={t("pack.removeItems", { number: pkg.number })}
+                isDisabled={disabled}
+                onPress={onEditItems}
+              >
+                {pkg.items.map((item) => (
+                  <span
+                    key={item.orderItemId}
+                    className="inline-flex items-center gap-2"
+                    role="img"
+                    aria-label={t("pack.packagedItems", { count: item.quantity, name: item.name })}
+                  >
+                    <ItemThumb
+                      url={lines.find((l) => l.id === item.orderItemId)?.imageUrl ?? null}
+                      className="size-12"
+                    />
+                    <span className="text-xl font-bold tabular-nums">×{item.quantity}</span>
+                  </span>
+                ))}
+              </Button>
+            </div>
+          )}
+        </>
+      )}
     </li>
+  );
+}
+
+/** The saved weight as an icon and a number that opens for editing; the fields while there's none. */
+function WeightEditor({
+  pkg,
+  weightDisplay,
+  disabled,
+  weighing,
+  onWeigh,
+}: {
+  pkg: PackPackage;
+  weightDisplay: WeightDisplay;
+  disabled: boolean;
+  weighing: boolean;
+  onWeigh: (weightOz: number, overrideReason?: string) => void;
+}) {
+  const t = useTranslations();
+  const locale = useLocale();
+  const [editing, setEditing] = useState(false);
+  if (pkg.weightOz !== null && !editing) {
+    return (
+      <Button
+        className="btn-ghost btn-lg gap-2 px-2 font-bold tabular-nums"
+        aria-label={t("pack.editWeight", { number: pkg.number })}
+        isDisabled={disabled}
+        onPress={() => setEditing(true)}
+        data-testid="pack-weight"
+      >
+        <Weight className="size-6" aria-hidden="true" />
+        {formatWeight(pkg.weightOz, weightDisplay, locale)}
+      </Button>
+    );
+  }
+  return (
+    <div className="flex flex-wrap items-end gap-2">
+      <WeightField
+        weightOz={pkg.weightOz}
+        maxWeightOz={pkg.box?.maxWeightOz ?? null}
+        weightDisplay={weightDisplay}
+        disabled={disabled}
+        isPending={weighing}
+        onSave={(oz) => onWeigh(oz)}
+      />
+      {editing && (
+        <Button className="btn-ghost mb-0.5" onPress={() => setEditing(false)}>
+          {t("pack.weightCancel")}
+        </Button>
+      )}
+    </div>
   );
 }
