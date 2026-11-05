@@ -1,5 +1,14 @@
+import { RATE_LAB_MAX_COMBINATIONS_CEILING } from "@woolrus/contracts";
 import { describe, expect, it } from "vitest";
-import { isFinalAttempt, JOB_RETENTION_SECONDS, queueOptions, queues } from "./jobs";
+import { PROVIDER_TIMEOUT_MS } from "./adapters/shipping/provider";
+import {
+  isFinalAttempt,
+  JOB_RETENTION_SECONDS,
+  queueOptions,
+  queues,
+  RATE_LAB_RUN_EXPIRE_SECONDS,
+} from "./jobs";
+import { LAB_CONCURRENCY } from "./rate-lab/runs";
 
 describe("queueOptions", () => {
   it("keeps finished jobs 30 days on every queue", () => {
@@ -22,6 +31,15 @@ describe("woo.push", () => {
 describe("rateLab.run", () => {
   it("never retries: a re-run is a new run", () => {
     expect(queueOptions[queues.rateLabRun].retryLimit).toBe(0);
+  });
+
+  it("outlives the longest run the cap allows, within pg-boss's 24-hour limit", () => {
+    // Every combination of the largest run waiting out the provider timeout, three at a time.
+    const longest =
+      (RATE_LAB_MAX_COMBINATIONS_CEILING / LAB_CONCURRENCY) * (PROVIDER_TIMEOUT_MS / 1000);
+    expect(queueOptions[queues.rateLabRun].expireInSeconds).toBe(RATE_LAB_RUN_EXPIRE_SECONDS);
+    expect(RATE_LAB_RUN_EXPIRE_SECONDS).toBeGreaterThan(longest * 1.05);
+    expect(RATE_LAB_RUN_EXPIRE_SECONDS).toBeLessThanOrEqual(24 * 60 * 60);
   });
 });
 
