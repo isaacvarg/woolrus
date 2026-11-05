@@ -1154,7 +1154,8 @@
       "email": "Enter a valid email address.",
       "emailFrom": "Use an address like no-reply@example.com or Woolrus '<'no-reply@example.com>.",
       "country": "Use the 2-letter country code, e.g. US.",
-      "dateRange": "The end date must be on or after the start date."
+      "dateRange": "The end date must be on or after the start date.",
+      "dateRangeTooLong": "Pick a range of at most 366 days."
     },
     "settings": {
       "encryptionKeyMissing": "Secrets can't be saved: the server's encryption key is missing or invalid. Ask whoever runs the server to set SETTINGS_ENCRYPTION_KEY.",
@@ -1376,7 +1377,8 @@
       "oneOffNoParcels": "Pick or add at least one parcel.",
       "oneOffTooMany": "{parcels} parcels is more than the {max} a quote can take. Pick fewer.",
       "oneOffPurged": "This quote's address was cleared by the personal data purge, so it can't be saved.",
-      "oneOffParcelInvalid": "That typed parcel isn't part of this quote."
+      "oneOffParcelInvalid": "That typed parcel isn't part of this quote.",
+      "notStarted": "The run never started: the worker didn't pick it up, so it was marked failed."
     }
   },
   "emails": {

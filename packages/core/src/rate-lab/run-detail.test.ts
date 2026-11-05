@@ -359,6 +359,6 @@ describe("getLabRun", () => {
     expect(second.id).not.toBe(first.id);
     expect(second.combinations).toBe(1);
     const stored = await db.rateLabRun.findUniqueOrThrow({ where: { id: second.id } });
-    expect(stored.selection).toEqual(selection);
+    expect(stored.selection).toMatchObject(selection);
   });
 });

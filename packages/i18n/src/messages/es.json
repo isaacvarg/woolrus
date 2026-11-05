@@ -1154,7 +1154,8 @@
       "email": "Ingresa un correo electrónico válido.",
       "emailFrom": "Usa una dirección como no-reply@example.com o Woolrus '<'no-reply@example.com>.",
       "country": "Usa el código de país de 2 letras, p. ej. US.",
-      "dateRange": "La fecha final debe ser igual o posterior a la inicial."
+      "dateRange": "La fecha final debe ser igual o posterior a la inicial.",
+      "dateRangeTooLong": "Elige un rango de 366 días como máximo."
     },
     "settings": {
       "encryptionKeyMissing": "No se pueden guardar secretos: falta la clave de cifrado del servidor o no es válida. Pide a quien administra el servidor que configure SETTINGS_ENCRYPTION_KEY.",
@@ -1376,7 +1377,8 @@
       "oneOffNoParcels": "Elige o agrega al menos un paquete.",
       "oneOffTooMany": "{parcels} paquetes son más de los {max} que admite una cotización. Elige menos.",
       "oneOffPurged": "La purga de datos personales borró la dirección de esta cotización, así que no se puede guardar.",
-      "oneOffParcelInvalid": "Ese paquete escrito no es parte de esta cotización."
+      "oneOffParcelInvalid": "Ese paquete escrito no es parte de esta cotización.",
+      "notStarted": "La prueba nunca empezó: el worker no la tomó, así que se marcó como fallida."
     }
   },
   "emails": {
