@@ -1,13 +1,13 @@
 import {
   CreateLabAddressInput,
   CreateLabGroupInput,
-  type DuplicateLabAddressInput,
+  DuplicateLabAddressInput,
   type LabAddress,
   LabAddressValue,
   type LabGroup,
   ListLabAddressesInput,
   ListLabGroupsInput,
-  type RenameLabGroupInput,
+  RenameLabGroupInput,
   UpdateLabAddressInput,
 } from "@woolrus/contracts";
 import { type Db, type DbTx, Prisma, type RateLabGroupKind } from "@woolrus/db";
@@ -18,6 +18,7 @@ import { type CheckedAddress, checkAddress } from "../carriers/quote";
 import { AppError, notFound } from "../errors";
 import { withIdempotency } from "../idempotency";
 import { type Actor, assertCan } from "../permissions";
+import { byName, lastQuoted } from "./shared";
 
 // Rate Lab's test addresses and the groups that tag them (SPEC-rate-lab "Addresses and parcels").
 // Parcels are in parcels.ts.
@@ -38,8 +39,6 @@ const addressInclude = {
 
 type AddressRow = Prisma.RateLabAddressGetPayload<{ include: typeof addressInclude }>;
 type GroupRow = { id: string; kind: RateLabGroupKind; name: string; archivedAt: Date | null };
-
-const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name);
 
 /** An item's groups as it shows them, by name. */
 export function groupRefs(groups: { group: GroupRow }[]) {
@@ -75,25 +74,10 @@ function toLabAddress(row: AddressRow, lastQuotedAt: Date | null): LabAddress {
   };
 }
 
-/** When each address was last quoted, from rate history's lab fetches. */
-async function lastQuoted(db: Db | DbTx, ids: string[]): Promise<Map<string, Date>> {
-  if (ids.length === 0) return new Map();
-  const rows = await db.rateFetch.groupBy({
-    by: ["labAddressId"],
-    where: { labAddressId: { in: ids } },
-    _max: { fetchedAt: true },
-  });
-  return new Map(
-    rows.flatMap((r) =>
-      r.labAddressId && r._max.fetchedAt ? [[r.labAddressId, r._max.fetchedAt]] : [],
-    ),
-  );
-}
-
 async function loadAddress(tx: Db | DbTx, id: string): Promise<LabAddress> {
   const row = await tx.rateLabAddress.findUnique({ where: { id }, include: addressInclude });
   if (!row) throw notFound();
-  return toLabAddress(row, (await lastQuoted(tx, [id])).get(id) ?? null);
+  return toLabAddress(row, (await lastQuoted(tx, "address", [id])).get(id) ?? null);
 }
 
 /**
@@ -163,6 +147,7 @@ export async function listLabAddresses(
   });
   const quoted = await lastQuoted(
     db,
+    "address",
     rows.map((r) => r.id),
   );
   return rows.map((row) => toLabAddress(row, quoted.get(row.id) ?? null));
@@ -306,9 +291,10 @@ export async function recheckLabAddress(
 export async function duplicateLabAddress(
   db: Db,
   actor: Actor,
-  { idempotencyKey, id }: DuplicateLabAddressInput,
+  input: DuplicateLabAddressInput,
 ): Promise<LabAddress> {
   assertCan(actor, "ratelab.manage");
+  const { idempotencyKey, id } = DuplicateLabAddressInput.parse(input);
   return db.$transaction(async (tx) => {
     const { id: copyId } = await withIdempotency(
       tx,
@@ -431,16 +417,15 @@ export async function createLabGroup(
 export async function renameLabGroup(
   db: Db,
   actor: Actor,
-  { id, name }: RenameLabGroupInput,
+  input: RenameLabGroupInput,
 ): Promise<LabGroup> {
   assertCan(actor, "ratelab.manage");
+  const { id, name } = RenameLabGroupInput.parse(input);
   try {
     return await db.$transaction(async (tx) => {
       const existing = await tx.rateLabGroup.findUnique({ where: { id } });
       if (!existing) throw notFound();
-      const group = toLabGroup(
-        await tx.rateLabGroup.update({ where: { id }, data: { name: name.trim() } }),
-      );
+      const group = toLabGroup(await tx.rateLabGroup.update({ where: { id }, data: { name } }));
       await recordAudit(tx, actor, {
         entityType: "RateLabGroup",
         entityId: id,
