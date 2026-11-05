@@ -4,8 +4,11 @@
 export type CsvCell = string | number | null;
 
 const BOM = "﻿";
-/** A spreadsheet treats a cell starting with one of these as a formula (CSV injection). */
-const FORMULA_START = /^[=+\-@]/;
+/**
+ * A spreadsheet treats a cell starting with one of these as a formula (CSV injection); OWASP adds
+ * tab and carriage return, which some spreadsheets skip before reading a formula.
+ */
+const FORMULA_START = /^[=+\-@\t\r]/;
 const NEEDS_QUOTES = /[",\r\n]/;
 const CHUNK = 64 * 1024;
 

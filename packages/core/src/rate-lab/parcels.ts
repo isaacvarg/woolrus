@@ -1,6 +1,6 @@
 import {
   CreateLabParcelInput,
-  type DuplicateLabParcelInput,
+  DuplicateLabParcelInput,
   type LabParcel,
   type LabParcelProduct,
   ListLabParcelProductsInput,
@@ -15,6 +15,7 @@ import { withIdempotency } from "../idempotency";
 import { type Actor, assertCan } from "../permissions";
 import { toNumber } from "../units";
 import { copyTitle, groupRefs, resolveGroups } from "./catalog";
+import { lastQuoted } from "./shared";
 
 // Rate Lab's test parcels (SPEC-rate-lab "Addresses and parcels"): a size copied from a box or
 // typed, a weight, and optional contents for customs (decision 4). Locked once quoted (decision 5).
@@ -81,25 +82,10 @@ function samePhysical(a: Physical, b: Physical): boolean {
   return canonical(a) === canonical(b);
 }
 
-/** When each parcel was last quoted, from rate history's lab fetches. */
-async function lastQuoted(db: Db | DbTx, ids: string[]): Promise<Map<string, Date>> {
-  if (ids.length === 0) return new Map();
-  const rows = await db.rateFetch.groupBy({
-    by: ["labParcelId"],
-    where: { labParcelId: { in: ids } },
-    _max: { fetchedAt: true },
-  });
-  return new Map(
-    rows.flatMap((r) =>
-      r.labParcelId && r._max.fetchedAt ? [[r.labParcelId, r._max.fetchedAt]] : [],
-    ),
-  );
-}
-
 async function loadParcel(tx: Db | DbTx, id: string): Promise<LabParcel> {
   const row = await tx.rateLabParcel.findUnique({ where: { id }, include: parcelInclude });
   if (!row) throw notFound();
-  return toLabParcel(row, (await lastQuoted(tx, [id])).get(id) ?? null);
+  return toLabParcel(row, (await lastQuoted(tx, "parcel", [id])).get(id) ?? null);
 }
 
 type SizeInput = z.output<typeof CreateLabParcelInput>["size"];
@@ -171,6 +157,7 @@ export async function listLabParcels(
   });
   const quoted = await lastQuoted(
     db,
+    "parcel",
     rows.map((r) => r.id),
   );
   return rows.map((row) => toLabParcel(row, quoted.get(row.id) ?? null));
@@ -305,9 +292,10 @@ export async function updateLabParcel(
 export async function duplicateLabParcel(
   db: Db,
   actor: Actor,
-  { idempotencyKey, id }: DuplicateLabParcelInput,
+  input: DuplicateLabParcelInput,
 ): Promise<LabParcel> {
   assertCan(actor, "ratelab.manage");
+  const { idempotencyKey, id } = DuplicateLabParcelInput.parse(input);
   return db.$transaction(async (tx) => {
     const { id: copyId } = await withIdempotency(
       tx,

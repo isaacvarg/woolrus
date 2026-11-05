@@ -6,6 +6,7 @@ import { AppError } from "../errors";
 import { type Actor, assertCan } from "../permissions";
 import { realOrderRows } from "./real-orders";
 import { getLabRun } from "./run-detail";
+import { groupBy } from "./shared";
 
 // Rate Lab's CSV exports (SPEC-rate-lab "Exports", FR-REP-04): one row per quote, for a run and
 // for the Real orders dashboard's filters. The caller streams `rows` through `csvStream`.
@@ -118,8 +119,7 @@ export async function realOrdersCsv(
         },
         orderBy: [{ amountCents: "asc" }, { id: "asc" }],
       });
-      const byFetch = new Map<string, typeof quotes>();
-      for (const q of quotes) byFetch.set(q.fetchId, [...(byFetch.get(q.fetchId) ?? []), q]);
+      const byFetch = groupBy(quotes, (q) => q.fetchId);
       for (const label of batch) {
         for (const q of byFetch.get(label.fetchId) ?? []) {
           const bought = q.id === label.quoteId;

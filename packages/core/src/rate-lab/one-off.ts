@@ -145,7 +145,9 @@ export async function quoteOneOff(
       combination: {
         shipTo,
         residential: checked.residential,
-        parcel: { ...parcel, title: `Parcel ${index + 1}`, items: [] } satisfies CombinationParcel,
+        // A number, as the Quote tab numbers typed parcels: the title reaches message params
+        // (customsIncomplete) and the provider's item name, so no English word goes in it.
+        parcel: { ...parcel, title: `#${index + 1}`, items: [] } satisfies CombinationParcel,
       },
     })),
   ];
@@ -153,35 +155,46 @@ export async function quoteOneOff(
   try {
     const quoter = labQuoter(db, providers, { runId: run.id, shipFrom: shipFrom.data });
     const answers: LabOneOffParcel[] = new Array(parcels.length);
+    const answer = async (i: number): Promise<LabOneOffParcel> => {
+      const { combination, saved: savedParcel } = parcels[i] as (typeof parcels)[number];
+      const { rates, errors } = await quoter.log(combination, await quoter.quote(combination));
+      const { parcel } = combination;
+      return {
+        parcel: savedParcel,
+        adHocIndex: savedParcel ? null : i - saved.length,
+        boxId: parcel.boxId,
+        lengthIn: parcel.lengthIn,
+        widthIn: parcel.widthIn,
+        heightIn: parcel.heightIn,
+        weightOz: parcel.weightOz,
+        quotes: [...rates].sort(compareRates).map((rate) => ({
+          provider: rate.provider,
+          carrierName: rate.service.carrier.label ?? rate.service.carrier.name,
+          serviceName: rate.serviceName,
+          amountCents: rate.amountCents,
+          currency: rate.currency,
+          deliveryDays: rate.deliveryDays ?? null,
+          quoteOnly: rate.quoteOnly,
+          cheapest: rate.cheapest,
+        })),
+        errors,
+      };
+    };
+    // The first combination that throws stops every worker before its next one, and the run fails
+    // only once those in flight are done, so nothing calls a provider or bumps the run after that.
+    let failure: { error: unknown } | null = null;
     let next = 0;
     const work = async () => {
-      for (let i = next++; i < parcels.length; i = next++) {
-        const { combination, saved: savedParcel } = parcels[i] as (typeof parcels)[number];
-        const { rates, errors } = await quoter.log(combination, await quoter.quote(combination));
-        const { parcel } = combination;
-        answers[i] = {
-          parcel: savedParcel,
-          adHocIndex: savedParcel ? null : i - saved.length,
-          boxId: parcel.boxId,
-          lengthIn: parcel.lengthIn,
-          widthIn: parcel.widthIn,
-          heightIn: parcel.heightIn,
-          weightOz: parcel.weightOz,
-          quotes: [...rates].sort(compareRates).map((rate) => ({
-            provider: rate.provider,
-            carrierName: rate.service.carrier.label ?? rate.service.carrier.name,
-            serviceName: rate.serviceName,
-            amountCents: rate.amountCents,
-            currency: rate.currency,
-            deliveryDays: rate.deliveryDays ?? null,
-            quoteOnly: rate.quoteOnly,
-            cheapest: rate.cheapest,
-          })),
-          errors,
-        };
+      for (let i = next++; i < parcels.length && !failure; i = next++) {
+        try {
+          answers[i] = await answer(i);
+        } catch (error) {
+          failure ??= { error };
+        }
       }
     };
     await Promise.all(Array.from({ length: LAB_CONCURRENCY }, work));
+    if (failure) throw (failure as { error: unknown }).error;
 
     const quotes = answers.reduce((sum, answer) => sum + answer.quotes.length, 0);
     const failures = answers.reduce((sum, answer) => sum + answer.errors.length, 0);

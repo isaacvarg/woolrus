@@ -277,24 +277,62 @@ describe("quoteOneOff", () => {
     for (const provider of providers) expect(provider.purchaseLabel).not.toHaveBeenCalled();
   });
 
+  it("stops quoting once a combination throws, and fails the run with nothing left running", async () => {
+    const { providers, sent } = await fakes();
+    const { lab } = await people();
+    // A provider answer the quote code can't read makes the first parcel throw; the others are
+    // slow enough that, without a stop, the other workers would go on to the rest.
+    const [shipStation] = providers;
+    if (!shipStation) throw new Error("missing provider");
+    const getRates = shipStation.getRates;
+    shipStation.getRates = async (request: RateRequest) => {
+      if (request.package.lengthIn === 1) {
+        sent.push(request);
+        return null as unknown as Awaited<ReturnType<typeof getRates>>;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      return getRates(request);
+    };
+    const broken = { size: { lengthIn: 1, widthIn: 1, heightIn: 1 }, weightOz: 1 };
+
+    await expect(
+      quoteOneOff(
+        db,
+        lab,
+        { address: typed, adHocParcels: [broken, ...Array(9).fill(typedParcel)] },
+        { providers },
+      ),
+    ).rejects.toThrow(TypeError);
+
+    // The broken parcel, and the two in flight beside it (LAB_CONCURRENCY), each to both fakes.
+    expect(sent).toHaveLength(6);
+    const run = await db.rateLabRun.findFirstOrThrow({ where: { kind: "ONE_OFF" } });
+    expect(run).toMatchObject({ status: "FAILED", error: "errors.rateLab.runFailed" });
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(sent).toHaveLength(6);
+    expect(await db.rateLabRun.findUniqueOrThrow({ where: { id: run.id } })).toEqual(run);
+  });
+
   it("logs an international typed parcel as customs-incomplete without asking anyone", async () => {
     const { providers, sent } = await fakes();
     const { lab } = await people();
     const result = await quoteOneOff(
       db,
       lab,
-      { address: canadian, adHocParcels: [typedParcel] },
+      { address: canadian, adHocParcels: [typedParcel, typedParcel] },
       { providers },
     );
     expect(sent).toEqual([]);
+    // Named by number, as the Quote tab numbers typed parcels: no English inside the message.
+    const incomplete = (products: string) => ({
+      quotes: [],
+      errors: [
+        { provider: null, messageKey: "errors.shipping.customsIncomplete", params: { products } },
+      ],
+    });
     expect(result).toMatchObject({
       status: "FAILED",
-      parcels: [
-        {
-          quotes: [],
-          errors: [{ provider: null, messageKey: "errors.shipping.customsIncomplete" }],
-        },
-      ],
+      parcels: [incomplete("#1"), incomplete("#2")],
     });
   });
 

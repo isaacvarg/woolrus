@@ -350,8 +350,37 @@ describe("realOrders", () => {
     const byState = await realOrders(db, admin, { country: "us", state: "ca" }, { now });
     expect(byState.choice).toMatchObject({ packages: 1, notCheapest: 1, overspendCents: 300 });
 
+    // The filter picks the order; its cost is still both of its labels.
     const byBox = await realOrders(db, admin, { boxId: a.boxIds[1] ?? undefined }, { now });
-    expect(byBox.costVsCharged).toMatchObject({ orders: 1, costCents: 900, chargedCents: 1000 });
+    expect(byBox.costVsCharged).toMatchObject({ orders: 1, costCents: 1410, chargedCents: 1000 });
+  });
+
+  it("costs an order in the range with all its active labels, wherever they fall", async () => {
+    const { services } = await carrier("USPS", null, ["usps_ga"]);
+    const ga = services[0] as Service;
+    const quotes = [{ service: ga, amountCents: 300 }];
+    const from = "2026-10-04T12:00:00.000Z";
+    const justBefore = "2026-10-04T11:59:59.999Z";
+    const edge = await order(2000, [
+      { quotes, buy: 0, costCents: 300, purchasedAt: from },
+      { quotes, buy: 0, costCents: 700, purchasedAt: justBefore },
+      { quotes, buy: 0, costCents: 900, linked: false, purchasedAt: "2026-10-30T10:00:00Z" },
+      { quotes, buy: 0, costCents: 5000, status: "VOIDED", purchasedAt: from },
+    ]);
+    await order(100, [{ quotes, buy: 0, costCents: 300, purchasedAt: justBefore }]);
+    const admin = await createActor(db, ["ADMIN"]);
+
+    const result = await realOrders(db, admin, {}, { now });
+    expect(result.from).toEqual(new Date(from));
+    expect(result.choice.packages).toBe(1);
+    expect(result.costVsCharged).toEqual({
+      orders: 1,
+      costCents: 1900,
+      chargedCents: 2000,
+      overCount: 0,
+      over: [],
+    });
+    expect(result.alternatives.packages.map((p) => p.orderId)).toEqual([edge.order.id]);
   });
 
   it("caps the alternatives table, newest first", async () => {

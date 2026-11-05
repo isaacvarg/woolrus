@@ -5,16 +5,17 @@ import {
   LabRunSelection,
   RateError,
 } from "@woolrus/contracts";
-import type { Db, RateQuote } from "@woolrus/db";
+import { type Db, Prisma, type RateQuote } from "@woolrus/db";
 import { z } from "zod";
 import { compareRates } from "../carriers/compare";
 import { notFound } from "../errors";
 import { type Actor, assertCan } from "../permissions";
-import { type InsightCombination, runInsights } from "./insights";
+import { type ComparedCombination, runInsights } from "./insights";
 import { labRunInclude, labRunRows } from "./runs";
+import { groupBy } from "./shared";
 
 // A run's page (SPEC-rate-lab "Run detail"): every quote by address × parcel, and the insights,
-// with prices compared against the most recent earlier suite run of each combination.
+// with each service's price compared against the most recent earlier suite run that had it.
 
 const Input = z.object({ id: z.uuid() });
 const Errors = z.array(RateError).catch([]);
@@ -30,32 +31,69 @@ type Compared = {
   createdAt: Date;
 };
 
+/** A saved address × parcel of this run, and whether its fetch used a fake provider. */
+type Pair = { addressId: string; parcelId: string; fake: boolean };
+
 /**
- * For each saved address × parcel, the latest fetch of an earlier `SUITE` run that got quotes for
- * it. One-off runs never count (decision 12), and neither does an earlier run whose combination
- * failed outright: with nothing to compare, every service would read as new.
+ * The earlier fetches a combination is compared with: `SUITE` runs created before this one, for
+ * the same address × parcel, with the same fake flag (SPEC-rate-history decision 6). One-off runs
+ * never count (decision 12). Both queries below order them the same way, newest first, so the
+ * last run's quotes are exactly the per-service rows from its fetch.
  */
-function comparedFetches(
-  db: Db,
-  run: { id: string; createdAt: Date },
-  pairs: { addressId: string; parcelId: string }[],
-) {
+function earlierSuiteFetches(run: { id: string; createdAt: Date }, pairs: Pair[]) {
+  return Prisma.sql`
+    JOIN rate_lab_runs r ON r.id = f.lab_run_id
+    WHERE r.kind = 'SUITE'
+      AND (r.created_at, r.id) < (${run.createdAt}, ${run.id}::uuid)
+      AND (f.lab_address_id, f.lab_parcel_id, f.fake) IN (
+        SELECT * FROM unnest(
+          ${pairs.map((p) => p.addressId)}::uuid[],
+          ${pairs.map((p) => p.parcelId)}::uuid[],
+          ${pairs.map((p) => p.fake)}::boolean[]
+        )
+      )`;
+}
+
+const newestFirst = Prisma.sql`r.created_at DESC, r.id DESC, f.fetched_at DESC, f.id DESC`;
+
+/**
+ * For each saved address × parcel, the latest earlier fetch that got quotes for it: what the page
+ * says it compared with, and what MISSING is measured on. An earlier run whose combination failed
+ * outright doesn't count: with nothing to compare, every service would read as missing.
+ */
+function lastFetches(db: Db, run: { id: string; createdAt: Date }, pairs: Pair[]) {
   if (pairs.length === 0) return Promise.resolve([] as Compared[]);
-  const addressIds = pairs.map((p) => p.addressId);
-  const parcelIds = pairs.map((p) => p.parcelId);
   return db.$queryRaw<Compared[]>`
     SELECT DISTINCT ON (f.lab_address_id, f.lab_parcel_id)
            f.id AS "fetchId", f.lab_address_id AS "addressId", f.lab_parcel_id AS "parcelId",
            r.id AS "runId", r.created_at AS "createdAt"
     FROM rate_fetches f
-    JOIN rate_lab_runs r ON r.id = f.lab_run_id
-    WHERE r.kind = 'SUITE'
-      AND (r.created_at, r.id) < (${run.createdAt}, ${run.id}::uuid)
-      AND (f.lab_address_id, f.lab_parcel_id) IN (
-        SELECT * FROM unnest(${addressIds}::uuid[], ${parcelIds}::uuid[])
-      )
+    ${earlierSuiteFetches(run, pairs)}
       AND EXISTS (SELECT 1 FROM rate_quotes q WHERE q.fetch_id = f.id)
-    ORDER BY f.lab_address_id, f.lab_parcel_id, r.created_at DESC, r.id DESC, f.fetched_at DESC
+    ORDER BY f.lab_address_id, f.lab_parcel_id, ${newestFirst}
+  `;
+}
+
+type ComparedQuote = QuoteRow & { addressId: string; parcelId: string };
+
+/**
+ * For each saved address × parcel × carrier service, its cheapest quote in the latest earlier
+ * fetch that had that service, so a service a partial run missed is compared with the run before.
+ */
+function latestByService(db: Db, run: { id: string; createdAt: Date }, pairs: Pair[]) {
+  if (pairs.length === 0) return Promise.resolve([] as ComparedQuote[]);
+  return db.$queryRaw<ComparedQuote[]>`
+    SELECT DISTINCT ON (f.lab_address_id, f.lab_parcel_id, q.service_id)
+           q.id, q.fetch_id AS "fetchId", q.provider, q.carrier_id AS "carrierId",
+           q.service_id AS "serviceId", q.service_code AS "serviceCode",
+           q.service_name AS "serviceName", q.amount_cents AS "amountCents", q.currency,
+           q.delivery_days AS "deliveryDays", q.guaranteed, q.quote_only AS "quoteOnly", q.fake,
+           f.lab_address_id AS "addressId", f.lab_parcel_id AS "parcelId"
+    FROM rate_quotes q
+    JOIN rate_fetches f ON f.id = q.fetch_id
+    ${earlierSuiteFetches(run, pairs)}
+    ORDER BY f.lab_address_id, f.lab_parcel_id, q.service_id, ${newestFirst},
+             q.amount_cents, q.id
   `;
 }
 
@@ -101,22 +139,21 @@ export async function getLabRun(
       destCountry: true,
       destState: true,
       providerErrors: true,
+      fake: true,
       labAddress: { select: { id: true, title: true } },
       labParcel: { select: { id: true, title: true } },
       quotes: { select: quoteSelect },
     },
   });
-  const pairs = fetches.flatMap((f) =>
-    f.labAddressId && f.labParcelId ? [{ addressId: f.labAddressId, parcelId: f.labParcelId }] : [],
+  const pairs: Pair[] = fetches.flatMap((f) =>
+    f.labAddressId && f.labParcelId
+      ? [{ addressId: f.labAddressId, parcelId: f.labParcelId, fake: f.fake }]
+      : [],
   );
-  const compared = await comparedFetches(db, run, pairs);
-  const previousQuotes: QuoteRow[] =
-    compared.length === 0
-      ? []
-      : await db.rateQuote.findMany({
-          where: { fetchId: { in: compared.map((c) => c.fetchId) } },
-          select: quoteSelect,
-        });
+  const [compared, previousQuotes] = await Promise.all([
+    lastFetches(db, run, pairs),
+    latestByService(db, run, pairs),
+  ]);
 
   const carrierIds = [
     ...new Set([...fetches.flatMap((f) => f.quotes), ...previousQuotes].map((q) => q.carrierId)),
@@ -157,17 +194,16 @@ export async function getLabRun(
         a.fetchId.localeCompare(b.fetchId),
     );
 
-  const quotesByFetch = new Map<string, LabQuote[]>();
-  for (const quote of previousQuotes) {
-    const list = quotesByFetch.get(quote.fetchId) ?? [];
-    list.push(toQuote(quote));
-    quotesByFetch.set(quote.fetchId, list);
-  }
-  const previous = new Map<string, InsightCombination>(
-    [...comparedByKey].map(([k, c]) => [
-      k,
-      { key: k, quotes: quotesByFetch.get(c.fetchId) ?? [], errors: [] },
-    ]),
+  const previousByKey = groupBy(previousQuotes, (q) => `${q.addressId}:${q.parcelId}`);
+  const previous = new Map<string, ComparedCombination>(
+    [...comparedByKey].map(([k, c]) => {
+      const rows = previousByKey.get(k) ?? [];
+      const byService = rows.map(({ addressId: _a, parcelId: _p, ...q }) => toQuote(q));
+      // Every service of the last fetch has its latest row in that fetch (both queries order
+      // fetches the same way), so these are its quotes, one per service.
+      const lastRun = byService.filter((_, i) => rows[i]?.fetchId === c.fetchId);
+      return [k, { lastRun, byService }];
+    }),
   );
 
   const [row] = await labRunRows(db, [run]);

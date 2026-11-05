@@ -1,6 +1,11 @@
 import type { LabQuote } from "@woolrus/contracts";
 import { describe, expect, it } from "vitest";
-import { type InsightCombination, PRICE_MOVE_PCT, runInsights } from "./insights";
+import {
+  type ComparedCombination,
+  type InsightCombination,
+  PRICE_MOVE_PCT,
+  runInsights,
+} from "./insights";
 
 // SPEC-rate-lab criterion 11: the run page's insights, from hand-built quotes. No database.
 
@@ -40,7 +45,7 @@ const combination = (
   errors: InsightCombination["errors"] = [],
 ): InsightCombination => ({ key, quotes, errors });
 
-const none = new Map<string, InsightCombination>();
+const none = new Map<string, ComparedCombination>();
 
 describe("cheapest and fastest", () => {
   it("prefers a purchasable quote over a cheaper quote-only one", () => {
@@ -100,7 +105,9 @@ describe("cheapest and fastest", () => {
 });
 
 describe("price moves", () => {
-  const earlier = (quotes: LabQuote[]) => new Map([["a", combination("a", quotes)]]);
+  /** The last run's quotes, and each service's latest earlier quote (the last run's by default). */
+  const earlier = (lastRun: LabQuote[], byService: LabQuote[] = lastRun) =>
+    new Map<string, ComparedCombination>([["a", { lastRun, byService }]]);
 
   it(`flags a move of ${PRICE_MOVE_PCT}% or more, up or down, and not a 9.9% one`, () => {
     const { moves } = runInsights(
@@ -147,6 +154,46 @@ describe("price moves", () => {
         serviceName: "Express",
         previousCents: 2000,
         currentCents: null,
+        changePct: null,
+      }),
+    ]);
+  });
+
+  it("compares a service the last run missed with the earlier run that had it", () => {
+    const { moves } = runInsights(
+      [combination("a", [quote(ground, 1000), quote(express, 2400)])],
+      earlier([quote(ground, 1000)], [quote(ground, 1000), quote(express, 2000)]),
+    );
+    expect(moves).toEqual([
+      expect.objectContaining({
+        kind: "CHANGED",
+        serviceId: express.serviceId,
+        previousCents: 2000,
+        currentCents: 2400,
+        changePct: 20,
+      }),
+    ]);
+  });
+
+  it("lists as missing only what the last run had", () => {
+    const { moves } = runInsights(
+      [combination("a", [quote(ground, 1000)])],
+      earlier([quote(ground, 1000)], [quote(ground, 1000), quote(express, 2000)]),
+    );
+    expect(moves).toEqual([]);
+  });
+
+  it("flags a move from a free price with no percentage, and none between two free ones", () => {
+    const { moves } = runInsights(
+      [combination("a", [quote(ground, 500), quote(express, 0)])],
+      earlier([quote(ground, 0), quote(express, 0)]),
+    );
+    expect(moves).toEqual([
+      expect.objectContaining({
+        kind: "CHANGED",
+        serviceId: ground.serviceId,
+        previousCents: 0,
+        currentCents: 500,
         changePct: null,
       }),
     ]);

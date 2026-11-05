@@ -352,9 +352,16 @@ describe("listing, archiving and groups", () => {
     await expect(
       renameLabGroup(db, admin, { id: west.id, name: "RURAL/REMOTE" }),
     ).rejects.toMatchObject({ messageKey: "errors.rateLab.groupNameTaken" });
-    expect(await renameLabGroup(db, admin, { id: west.id, name: "Pacific" })).toMatchObject({
+    expect(await renameLabGroup(db, admin, { id: west.id, name: "  Pacific " })).toMatchObject({
       name: "Pacific",
     });
+    // Parsed in core like its siblings: a blank name or a bad id never reaches the database.
+    await expect(renameLabGroup(db, admin, { id: west.id, name: "   " })).rejects.toThrow(
+      /too_small/,
+    );
+    await expect(
+      duplicateLabAddress(db, admin, { idempotencyKey: idempotencyKey(), id: "nope" }),
+    ).rejects.toThrow(/uuid/i);
 
     await archiveLabGroup(db, admin, { id: west.id });
     const names = async (includeArchived: boolean) =>

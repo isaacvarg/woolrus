@@ -33,6 +33,12 @@ describe("csvCell", () => {
     expect(csvCell('=A1,"x"')).toBe(`"'=A1,""x"""`);
     expect(csvCell("a=b")).toBe("a=b");
   });
+
+  it("also prefixes a text cell starting with a tab or carriage return (OWASP)", () => {
+    expect(csvCell("\t=1+1")).toBe("'\t=1+1");
+    expect(csvCell("\r=1+1")).toBe(`"'\r=1+1"`);
+    expect(csvCell("a\tb")).toBe("a\tb");
+  });
 });
 
 describe("csvStream", () => {
