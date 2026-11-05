@@ -163,14 +163,12 @@ export function RealOrdersDashboard() {
         <div className="ms-auto flex flex-wrap gap-2">
           <a
             className="btn btn-outline"
-            href={`/api/rate-lab/real-orders/export.csv?${reportQuery({ ...toInput(filters) })}`}
+            href={`/api/rate-lab/real-orders/export.csv?${reportQuery(toInput(filters))}`}
             download
           >
             {t("exportCsv")}
           </a>
-          <ReportLink
-            href={`/rate-lab/real-orders/report?${reportQuery({ ...toInput(filters) })}`}
-          />
+          <ReportLink href={`/rate-lab/real-orders/report?${reportQuery(toInput(filters))}`} />
         </div>
       </div>
 
