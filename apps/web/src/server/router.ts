@@ -38,6 +38,7 @@ import {
   getEmailSender,
   getIssue,
   getLabRun,
+  getLotRules,
   getOrder,
   getOrderHistory,
   getOrderShipping,
@@ -126,6 +127,7 @@ import {
   sendTestEmail,
   setCarrierEnabled,
   setCarrierLabel,
+  setLotRules,
   setPackageBox,
   setPin,
   setProviderCredentials,
@@ -457,6 +459,10 @@ export const router = implementer.router({
   lumexia: {
     testConnection: api.lumexia.testConnection.handler(({ context }) =>
       testLumexiaConnection(db, context.actor),
+    ),
+    lotRules: api.lumexia.lotRules.handler(({ context }) => getLotRules(db, context.actor)),
+    setLotRules: api.lumexia.setLotRules.handler(({ input, context }) =>
+      setLotRules(db, context.actor, input),
     ),
   },
   priorityRules: {

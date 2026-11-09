@@ -188,7 +188,26 @@
       "testEmailSent": "Enviado a {to}. Revisa tu bandeja de entrada.",
       "testEmailLogged": "Resend no está configurado, así que el correo para {to} se escribió en el registro del servidor en lugar de enviarse.",
       "lumexiaTestHint": "Comprueba la URL y la clave de API guardadas.",
-      "lumexiaTestOk": "Conectado a Lumexia."
+      "lumexiaTestOk": "Conectado a Lumexia.",
+      "lotRules": {
+        "title": "Reglas de lote",
+        "intro": "Elige qué tipos de artículo de Lumexia necesitan un lote al empacar. Los tipos vienen de Lumexia.",
+        "groups": {
+          "itemTypes": "Tipo de artículo",
+          "procurementTypes": "Tipo de abastecimiento",
+          "inventoryTypes": "Tipo de inventario"
+        },
+        "anyMatch": "Un producto necesita un lote si alguno de sus tipos está activado.",
+        "tracked": "Rastreado en Lumexia",
+        "noTypes": "Lumexia no tiene tipos de esta clase.",
+        "removed": "Eliminado en Lumexia",
+        "switchOff": "Desactivar",
+        "unnamed": "Tipo sin nombre {id}",
+        "readOnly": "Estas reglas no se pueden cambiar hasta que Woolrus pueda conectarse con Lumexia. Activados ahora:",
+        "noneOn": "Ninguno",
+        "save": "Guardar reglas de lote",
+        "loadFailed": "No se pudieron cargar las reglas de lote."
+      }
     },
     "shipping": {
       "title": "Envíos",

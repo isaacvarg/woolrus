@@ -47,6 +47,7 @@ export * from "./identity/users";
 export * from "./install-jobs";
 export * from "./jobs";
 export * from "./lumexia/connection";
+export * from "./lumexia/rules";
 export * from "./notes/files";
 export * from "./notes/push";
 export * from "./notes/service";

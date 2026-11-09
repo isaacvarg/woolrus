@@ -521,6 +521,104 @@ test("Lumexia's Test connection shows ok, unconfigured and down, in en and es", 
   }
 });
 
+test("an admin switches on a lot rule and saves it, and sees the tag and removed ids, in en and es", async ({
+  page,
+}) => {
+  // Lumexia's types are stubbed (the dev stack has no Lumexia); saving goes through for real.
+  const BASE = "0190a000-0000-7000-8000-0000000000a1";
+  const GONE = "0190a000-0000-7000-8000-0000000000ff";
+  const STOCKED = "0190a000-0000-7000-8000-0000000000c1";
+  const empty = { itemTypeIds: [], procurementTypeIds: [], inventoryTypeIds: [] };
+  await page.route(/\/rpc\/lumexia\/lotRules/, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        json: {
+          readOnly: false,
+          itemTypes: {
+            types: [{ id: BASE, name: "Production base", needsLot: false }],
+            unknownIds: [],
+          },
+          procurementTypes: { types: [], unknownIds: [GONE] },
+          inventoryTypes: {
+            types: [{ id: STOCKED, name: "Stocked", needsLot: false, isTracked: true }],
+            unknownIds: [],
+          },
+        },
+      }),
+    }),
+  );
+  await signInAs(page, ["ADMIN"]);
+  await withSettingsLock(async () => {
+    try {
+      for (const [messages, locale] of [
+        [es, "es"],
+        [en, "en"],
+      ] as const) {
+        const t = messages.settings.integrations.lotRules;
+        await page.request.patch("/api/v1/me/preferences", { data: { locale } });
+        await page.goto("/settings");
+        const rules = page.getByRole("region", { name: t.title });
+        await expect(rules.getByText(t.tracked)).toBeVisible();
+        await expect(rules.getByText(t.removed)).toBeVisible();
+        await expect(rules.getByText(t.anyMatch)).toBeVisible();
+      }
+
+      const rules = page.getByRole("region", { name: en.settings.integrations.lotRules.title });
+      const save = rules.getByRole("button", { name: en.settings.integrations.lotRules.save });
+      await expect(save).toBeDisabled();
+      await rules.getByRole("switch", { name: "Production base" }).click();
+      await rules
+        .getByRole("button", { name: en.settings.integrations.lotRules.switchOff })
+        .click();
+      await expect(rules.getByText(en.settings.integrations.lotRules.removed)).toBeHidden();
+      const request = page.waitForRequest(/\/rpc\/lumexia\/setLotRules/);
+      await save.click();
+      expect((await request).postDataJSON().json).toEqual({ ...empty, itemTypeIds: [BASE] });
+      await expect(rules.getByText(en.settings.integrations.saved)).toBeVisible();
+
+      // Without a Lumexia to ask, the saved ids come back read-only.
+      const saved = await (await page.request.get("/api/v1/lumexia/lot-rules")).json();
+      expect(saved).toMatchObject({
+        readOnly: true,
+        itemTypes: { types: [{ id: BASE, name: null, needsLot: true }] },
+        procurementTypes: { types: [] },
+      });
+    } finally {
+      await page.request.put("/api/v1/lumexia/lot-rules", { data: empty });
+    }
+  });
+});
+
+test("lot rules are read-only, with the saved ids, while Lumexia is down", async ({ page }) => {
+  const BASE = "0190a000-0000-7000-8000-0000000000a1";
+  await page.route(/\/rpc\/lumexia\/lotRules/, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        json: {
+          readOnly: true,
+          messageKey: "errors.lumexia.unavailable",
+          itemTypes: { types: [{ id: BASE, name: null, needsLot: true }], unknownIds: [] },
+          procurementTypes: { types: [], unknownIds: [] },
+          inventoryTypes: { types: [], unknownIds: [] },
+        },
+      }),
+    }),
+  );
+  await signInAs(page, ["ADMIN"]);
+  await page.goto("/settings");
+  const rules = page.getByRole("region", { name: en.settings.integrations.lotRules.title });
+  await expect(rules.getByText(en.errors.lumexia.unavailable, { exact: false })).toBeVisible();
+  await expect(rules.getByText(BASE)).toBeVisible();
+  await expect(rules.getByRole("switch")).toHaveCount(0);
+  await expect(
+    rules.getByRole("button", { name: en.settings.integrations.lotRules.save }),
+  ).toHaveCount(0);
+});
+
 test("an admin sets the email sender and sends a test email, which is logged without a Resend key", async ({
   page,
 }) => {

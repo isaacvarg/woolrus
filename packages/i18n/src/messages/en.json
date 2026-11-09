@@ -188,7 +188,26 @@
       "testEmailSent": "Sent to {to}. Check your inbox.",
       "testEmailLogged": "Resend isn't set up, so the email to {to} was written to the server log instead of sent.",
       "lumexiaTestHint": "Checks the saved URL and API key.",
-      "lumexiaTestOk": "Connected to Lumexia."
+      "lumexiaTestOk": "Connected to Lumexia.",
+      "lotRules": {
+        "title": "Lot rules",
+        "intro": "Choose which kinds of Lumexia item need a lot at Packing. The types come from Lumexia.",
+        "groups": {
+          "itemTypes": "Item type",
+          "procurementTypes": "Procurement type",
+          "inventoryTypes": "Inventory type"
+        },
+        "anyMatch": "A product needs a lot if any of its types is switched on.",
+        "tracked": "Tracked in Lumexia",
+        "noTypes": "Lumexia has no types of this kind.",
+        "removed": "Removed in Lumexia",
+        "switchOff": "Switch off",
+        "unnamed": "Unnamed type {id}",
+        "readOnly": "These rules can't be changed until Woolrus can reach Lumexia. Switched on now:",
+        "noneOn": "None",
+        "save": "Save lot rules",
+        "loadFailed": "The lot rules couldn't be loaded."
+      }
     },
     "shipping": {
       "title": "Shipping",
