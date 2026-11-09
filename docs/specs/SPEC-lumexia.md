@@ -3,7 +3,7 @@
 **Milestone:** M5 · **Depends on:** `settings` (`lumexiaBaseUrl`, `lumexiaApiKey`, `getIntegrationConfig`),
 `packing` (packages, `PackageItem`, the pack screen and its scan field, the **packed** gate), `qa` (the QA screen,
 the **verified** gate, purchase preconditions), `notes` (internal notes), `operations` (the health pattern) ·
-**Used by:** `returns` (which lot came back, later), `reporting` (lot reports, later) · **State:** spec approved
+**Used by:** `returns` (which lot came back, later), `reporting` (lot reports, later) · **State:** planned
 
 Project-wide commands, structure, code style, testing levels and boundaries are in [`../../SPEC.md`](../../SPEC.md);
 this spec only adds what is specific to `lumexia`.
