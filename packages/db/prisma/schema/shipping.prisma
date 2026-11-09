@@ -109,21 +109,56 @@ model PackageItem {
   qaVerifiedAt       DateTime? @map("qa_verified_at") @db.Timestamptz(3)
   /// Units QA has confirmed, 0…quantity (hand-written CHECK); `qaVerifiedAt` is set when it reaches `quantity`.
   qaVerifiedQuantity Int       @default(0) @map("qa_verified_quantity")
-  // Lot traceability (Lumexia). Null until lot capture is enabled for the product.
-  lotCode            String?   @map("lot_code")
-  lumexiaLotId       String?   @map("lumexia_lot_id")
 
-  package      Package   @relation(fields: [packageId], references: [id], onDelete: Cascade)
-  orderItem    OrderItem @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
-  packedBy     User?     @relation("PackedBy", fields: [packedById], references: [id], onDelete: SetNull)
-  qaVerifiedBy User?     @relation("QaVerifiedBy", fields: [qaVerifiedById], references: [id], onDelete: SetNull)
+  package      Package          @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  orderItem    OrderItem        @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  packedBy     User?            @relation("PackedBy", fields: [packedById], references: [id], onDelete: SetNull)
+  qaVerifiedBy User?            @relation("QaVerifiedBy", fields: [qaVerifiedById], references: [id], onDelete: SetNull)
+  /// The Lumexia lots of these units; one row per lot, since a box line can hold several (SPEC-lumexia).
+  lots         PackageItemLot[]
 
   // One row per line per package: moving units between packages merges instead of duplicating.
   @@unique([packageId, orderItemId])
   @@index([packageId])
   @@index([orderItemId])
-  @@index([lotCode])
   @@map("package_items")
+}
+
+/// Whether Lumexia agrees a captured lot is the box line's item (SPEC-lumexia "Validation").
+enum LotStatus {
+  UNVERIFIED
+  VALID
+  NOT_FOUND
+  WRONG_ITEM
+
+  @@map("lot_status")
+}
+
+/// Units of a box line that came from one Lumexia lot. Once a line has a lot, its lots cover all its
+/// units; Σ quantity ≤ PackageItem.quantity is enforced in core under the order lock.
+model PackageItemLot {
+  id            String    @id @default(uuid(7)) @db.Uuid
+  packageItemId String    @map("package_item_id") @db.Uuid
+  /// Null only for a QR (UUID) scan Lumexia hasn't resolved yet.
+  lotNumber     String?   @map("lot_number")
+  lumexiaLotId  String?   @map("lumexia_lot_id")
+  /// > 0 (hand-written CHECK).
+  quantity      Int
+  /// Scan order; the lowest is the default lot, which gives and takes units.
+  position      Int
+  status        LotStatus @default(UNVERIFIED)
+  scannedById   String?   @map("scanned_by_id") @db.Uuid
+  scannedAt     DateTime  @default(now()) @map("scanned_at") @db.Timestamptz(3)
+  checkedAt     DateTime? @map("checked_at") @db.Timestamptz(3)
+
+  packageItem PackageItem @relation(fields: [packageItemId], references: [id], onDelete: Cascade)
+  scannedBy   User?       @relation("LotScannedBy", fields: [scannedById], references: [id], onDelete: SetNull)
+
+  @@unique([packageItemId, lotNumber])
+  @@unique([packageItemId, lumexiaLotId])
+  @@index([lotNumber])
+  @@index([status])
+  @@map("package_item_lots")
 }
 
 model ShippingCarrier {

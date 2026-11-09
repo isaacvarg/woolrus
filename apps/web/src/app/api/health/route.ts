@@ -2,6 +2,7 @@ import {
   emailStatus,
   encryptionKey,
   fakeShippingProviders,
+  lumexiaHealth,
   shippingProviderHealth,
   woocommerceHealth,
   workerHealth,
@@ -11,7 +12,7 @@ import { storage } from "@/server/storage";
 
 export const dynamic = "force-dynamic";
 
-/** Dependency checks (NFR-OPS-02). Lumexia joins as its adapter lands. */
+/** Dependency checks (NFR-OPS-02). */
 export async function GET() {
   const checks: Record<string, "ok" | "fail"> = {};
   try {
@@ -64,8 +65,16 @@ export async function GET() {
     worker = "stale";
   }
   degraded ||= worker === "stale";
+  // Informational, like email: Lumexia down never fails or degrades the endpoint, because the floor
+  // works without it and lots wait as unverified (SPEC-lumexia "Adapter").
+  let lumexia: "ok" | "unconfigured" | "down" = "down";
+  try {
+    if (checks.database === "ok") lumexia = await lumexiaHealth(db);
+  } catch {
+    lumexia = "down";
+  }
   return Response.json(
-    { ok, degraded, checks: { ...checks, email, woocommerce, worker } },
+    { ok, degraded, checks: { ...checks, email, woocommerce, worker, lumexia } },
     { status: ok ? 200 : 503 },
   );
 }

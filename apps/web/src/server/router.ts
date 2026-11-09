@@ -142,6 +142,7 @@ import {
   stuckLabels,
   substitute,
   syncCarriers,
+  testLumexiaConnection,
   testProvider,
   testStoreConnection,
   touchStation,
@@ -451,6 +452,11 @@ export const router = implementer.router({
     run: api.sync.run.handler(({ input, context }) => requestSync(db, context.actor, input)),
     testConnection: api.sync.testConnection.handler(({ context }) =>
       testStoreConnection(db, context.actor),
+    ),
+  },
+  lumexia: {
+    testConnection: api.lumexia.testConnection.handler(({ context }) =>
+      testLumexiaConnection(db, context.actor),
     ),
   },
   priorityRules: {

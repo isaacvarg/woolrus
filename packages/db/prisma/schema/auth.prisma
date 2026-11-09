@@ -63,6 +63,7 @@ model User {
   pickBatches        PickBatch[]
   packedItems        PackageItem[]       @relation("PackedBy")
   verifiedItems      PackageItem[]       @relation("QaVerifiedBy")
+  scannedLots        PackageItemLot[]    @relation("LotScannedBy")
   labelsPurchased    ShippingLabel[]     @relation("LabelPurchasedBy")
   labelsVoided       ShippingLabel[]     @relation("LabelVoidedBy")
   manifestsCreated   Manifest[]

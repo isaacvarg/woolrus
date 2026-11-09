@@ -2,6 +2,7 @@ import { boxes } from "./boxes";
 import { carriers } from "./carriers";
 import { invitations } from "./invitations";
 import { issues } from "./issues";
+import { lumexia } from "./lumexia";
 import { me } from "./me";
 import { notes } from "./notes";
 import { operations } from "./operations";
@@ -23,6 +24,7 @@ export * from "./boxes";
 export * from "./carriers";
 export * from "./invitations";
 export * from "./issues";
+export * from "./lumexia";
 export * from "./me";
 export * from "./notes";
 export * from "./operations";
@@ -68,5 +70,6 @@ export const contract = {
   operations,
   shipping,
   rateLab,
+  lumexia,
 };
 export type Contract = typeof contract;

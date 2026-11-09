@@ -1,5 +1,6 @@
 import { expect, type Page, test } from "@playwright/test";
 import en from "@woolrus/i18n/messages/en.json" with { type: "json" };
+import es from "@woolrus/i18n/messages/es.json" with { type: "json" };
 import { signInAs } from "./support/auth";
 import { openNav } from "./support/nav";
 import { withSettingsLock } from "./support/settings-lock";
@@ -478,6 +479,46 @@ test("Test connection explains a refused key in the user's language", async ({ p
   const woo = page.getByRole("region", { name: "WooCommerce" });
   await woo.getByRole("button", { name: "Test connection" }).click();
   await expect(woo.getByText(en.errors.sync.unauthorized)).toBeVisible();
+});
+
+test("Lumexia's Test connection shows ok, unconfigured and down, in en and es", async ({
+  page,
+}) => {
+  // The states themselves are core's (connection.test.ts); this checks the card shows each one.
+  // Stubbed: the settings row is shared, and the dev stack has no Lumexia to answer.
+  const answers = [
+    { status: "ok" },
+    { status: "unconfigured", messageKey: "errors.lumexia.unconfigured" },
+    { status: "down", messageKey: "errors.lumexia.unauthorized" },
+  ];
+  let next = 0;
+  await page.route(/\/rpc\/lumexia\/testConnection/, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ json: answers[next++ % answers.length] }),
+    }),
+  );
+  await signInAs(page, ["ADMIN"]);
+  for (const [messages, locale] of [
+    [en, "en"],
+    [es, "es"],
+  ] as const) {
+    await page.request.patch("/api/v1/me/preferences", { data: { locale } });
+    await page.goto("/settings");
+    const lumexia = page.getByRole("region", { name: "Lumexia" });
+    const button = lumexia.getByRole("button", {
+      name: messages.settings.integrations.testConnection,
+    });
+    for (const text of [
+      messages.settings.integrations.lumexiaTestOk,
+      messages.errors.lumexia.unconfigured,
+      messages.errors.lumexia.unauthorized,
+    ]) {
+      await button.click();
+      await expect(lumexia.getByText(text)).toBeVisible();
+    }
+  }
 });
 
 test("an admin sets the email sender and sends a test email, which is logged without a Resend key", async ({

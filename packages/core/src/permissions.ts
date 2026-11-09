@@ -92,6 +92,8 @@ export const permissions = [
   "ratelab.use",
   /** Rate Lab: manage test addresses, parcels and groups. */
   "ratelab.manage",
+  /** Lumexia: test the connection, link products to items, set lot rules (SPEC-lumexia). */
+  "lumexia.manage",
 ] as const;
 export type Permission = (typeof permissions)[number];
 

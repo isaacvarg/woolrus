@@ -94,6 +94,13 @@ describe("permissions", () => {
     expect(can(actor(["RATE_LAB"]), "report.read")).toBe(false);
   });
 
+  it("gives lumexia.manage to Admin only", () => {
+    expect(can(actor(["ADMIN"]), "lumexia.manage")).toBe(true);
+    for (const role of ["PICKER", "PACKER", "QA", "SHIPPER", "RATE_LAB"] as const) {
+      expect(can(actor([role]), "lumexia.manage")).toBe(false);
+    }
+  });
+
   it("gives the shipping actor no user and no station", () => {
     expect(shippingActor).toMatchObject({ userId: null, stationId: null, system: "shipping" });
   });

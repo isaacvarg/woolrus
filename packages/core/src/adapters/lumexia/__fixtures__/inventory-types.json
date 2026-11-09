@@ -1,0 +1,17 @@
+{
+  "inventoryTypes": [
+    {
+      "id": "0193f0a1-0000-7000-8000-000000000021",
+      "name": "Lot tracked",
+      "archived": false,
+      "isTracked": true
+    },
+    {
+      "id": "0193f0a1-0000-7000-8000-000000000022",
+      "name": "Untracked",
+      "archived": false,
+      "isTracked": false
+    }
+  ],
+  "nextCursor": null
+}

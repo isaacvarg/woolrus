@@ -66,6 +66,7 @@ export function IntegrationsSection() {
           {id === "woocommerce" && (
             <StoreTools trackingEnabled={settings.data.wooTrackingEnabled} />
           )}
+          {id === "lumexia" && <LumexiaTools />}
           {id === "email" && <EmailTools />}
         </IntegrationCard>
       ))}
@@ -292,6 +293,34 @@ function StoreTools({ trackingEnabled }: { trackingEnabled: boolean }) {
           <li>{t("webhook.step3")}</li>
           <li>{t("webhook.step4")}</li>
         </ol>
+      </div>
+    </div>
+  );
+}
+
+/** Test connection under the Lumexia card's key: the same ok / unconfigured / down as health. */
+function LumexiaTools() {
+  const t = useTranslations("settings.integrations");
+  const message = useTranslations();
+  const errorMessage = useErrorMessage();
+  const test = useMutation(orpc.lumexia.testConnection.mutationOptions());
+
+  return (
+    <div className="flex flex-wrap items-center gap-3 border-t border-base-200 pt-4">
+      <Button className="btn-outline" isPending={test.isPending} onPress={() => test.mutate({})}>
+        {t("testConnection")}
+      </Button>
+      <span className="text-sm text-base-content/70">{t("lumexiaTestHint")}</span>
+      <div aria-live="polite" className="basis-full">
+        {test.data?.status === "ok" && <p className="text-success">{t("lumexiaTestOk")}</p>}
+        {test.data && test.data.status !== "ok" && (
+          <p className={test.data.status === "unconfigured" ? "text-warning" : "text-error"}>
+            {message.has(test.data.messageKey)
+              ? message(test.data.messageKey as never)
+              : message("errors.internal")}
+          </p>
+        )}
+        {test.error && <p className="text-error">{errorMessage(test.error)}</p>}
       </div>
     </div>
   );

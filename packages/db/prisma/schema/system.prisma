@@ -12,16 +12,20 @@ enum WeightDisplay {
 model Settings {
   id Int @id @default(1)
 
-  shipFromAddress      Json?   @map("ship_from_address")
-  wooStoreUrl          String? @map("woo_store_url")
-  wooConsumerKeyEnc    String? @map("woo_consumer_key_enc")
-  wooConsumerSecretEnc String? @map("woo_consumer_secret_enc")
-  wooWebhookSecretEnc  String? @map("woo_webhook_secret_enc")
-  lumexiaBaseUrl       String? @map("lumexia_base_url")
-  lumexiaApiKeyEnc     String? @map("lumexia_api_key_enc")
+  shipFromAddress              Json?    @map("ship_from_address")
+  wooStoreUrl                  String?  @map("woo_store_url")
+  wooConsumerKeyEnc            String?  @map("woo_consumer_key_enc")
+  wooConsumerSecretEnc         String?  @map("woo_consumer_secret_enc")
+  wooWebhookSecretEnc          String?  @map("woo_webhook_secret_enc")
+  lumexiaBaseUrl               String?  @map("lumexia_base_url")
+  lumexiaApiKeyEnc             String?  @map("lumexia_api_key_enc")
+  /// Lumexia types whose items need a lot (Settings → Lumexia → Lot rules). An item needs one if any matches.
+  lumexiaLotItemTypeIds        String[] @default([]) @map("lumexia_lot_item_type_ids") @db.Uuid
+  lumexiaLotProcurementTypeIds String[] @default([]) @map("lumexia_lot_procurement_type_ids") @db.Uuid
+  lumexiaLotInventoryTypeIds   String[] @default([]) @map("lumexia_lot_inventory_type_ids") @db.Uuid
   /// Sender for app email, e.g. "Woolrus <no-reply@example.com>" (SPEC-identity "Email").
-  emailFrom            String? @map("email_from")
-  resendApiKeyEnc      String? @map("resend_api_key_enc")
+  emailFrom                    String?  @map("email_from")
+  resendApiKeyEnc              String?  @map("resend_api_key_enc")
 
   syncIntervalMinutes    Int           @default(5) @map("sync_interval_minutes")
   stationIdleLockMinutes Int           @default(10) @map("station_idle_lock_minutes")
