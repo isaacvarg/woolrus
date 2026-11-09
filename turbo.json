@@ -1,6 +1,7 @@
 {
   "$schema": "https://turborepo.com/schema.json",
   "globalEnv": ["NODE_ENV"],
+  "globalPassThroughEnv": ["PRISMA_SCHEMA_ENGINE_BINARY", "NIX_LD", "NIX_LD_LIBRARY_PATH"],
   "tasks": {
     "generate": {
       "inputs": ["prisma/**", "prisma.config.ts"],

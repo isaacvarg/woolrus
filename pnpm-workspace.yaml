@@ -62,3 +62,9 @@ minimumReleaseAgeExclude:
   - '@sentry/server-runtime-injection@11.10.0'
   - '@sentry/server-utils@11.10.0'
   - '@sentry/vercel-edge@11.10.0'
+permissions:
+  '@tanstack/react-table':
+    skills: true
+skills:
+  dirs:
+    - .claude/skills
