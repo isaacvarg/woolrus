@@ -1,45 +1,17 @@
 import type { LotRuleGroup, LotRules, SetLotRulesInput } from "@woolrus/contracts";
-import type { Db, Product, Settings } from "@woolrus/db";
+import type { Db } from "@woolrus/db";
 import type { LumexiaClient, LumexiaType } from "../adapters/lumexia/client";
 import { isLumexiaError } from "../adapters/lumexia/errors";
 import { recordAudit } from "../audit";
 import { type Actor, assertCan } from "../permissions";
 import { loadSettings } from "../settings/service";
 import { lumexiaClientFor } from "./connection";
+import type { LotRuleSettings } from "./needs-lot";
 
 // Lot rules (SPEC-lumexia "Lot rules and linking", decision 3): admins switch on the Lumexia item,
 // procurement and inventory types whose items need a lot. Types are matched by id, never by name.
 
-export type LotRuleProduct = Pick<
-  Product,
-  | "physical"
-  | "lumexiaItemId"
-  | "lumexiaItemTypeId"
-  | "lumexiaProcurementTypeId"
-  | "lumexiaInventoryTypeId"
-  | "lotOverride"
->;
-
-export type LotRuleSettings = Pick<
-  Settings,
-  "lumexiaLotItemTypeIds" | "lumexiaLotProcurementTypeIds" | "lumexiaLotInventoryTypeIds"
->;
-
-/**
- * A product needs a lot when it is physical, linked to a Lumexia item, and either its override is
- * `true`, or its override is null and any of its three type ids is switched on in the matching list.
- * Pure: callers read the rules live, so a switch changes every product of that type at once.
- */
-export function needsLot(product: LotRuleProduct, settings: LotRuleSettings): boolean {
-  if (!product.physical || !product.lumexiaItemId) return false;
-  if (product.lotOverride !== null) return product.lotOverride;
-  const on = (id: string | null, ids: readonly string[]) => id !== null && ids.includes(id);
-  return (
-    on(product.lumexiaItemTypeId, settings.lumexiaLotItemTypeIds) ||
-    on(product.lumexiaProcurementTypeId, settings.lumexiaLotProcurementTypeIds) ||
-    on(product.lumexiaInventoryTypeId, settings.lumexiaLotInventoryTypeIds)
-  );
-}
+export { type LotRuleProduct, type LotRuleSettings, needsLot } from "./needs-lot";
 
 const kinds = [
   { kind: "item", group: "itemTypes", input: "itemTypeIds", column: "lumexiaLotItemTypeIds" },

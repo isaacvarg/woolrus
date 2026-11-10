@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   PackageBoxInput,
+  PackageItemView,
   PackLine,
   PackPackage,
   PackResult,
@@ -10,6 +11,7 @@ import type {
   WeightDisplay,
 } from "@woolrus/contracts";
 import { formatWeight } from "@woolrus/core/format";
+import { isLotCode, lotLabel } from "@woolrus/core/lot-codes";
 import { Box, EllipsisVertical, PencilSparkles, Weight } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -53,11 +55,21 @@ function applyMove(view: PackView, { pkg, line, delta }: Move): PackView {
   });
   const packages = view.packages.map((p) => {
     if (p.id !== pkg.id) return p;
-    const held = p.items.find((it) => it.orderItemId === line.id)?.quantity ?? 0;
+    const current = p.items.find((it) => it.orderItemId === line.id);
+    const held = current?.quantity ?? 0;
+    // Lots stay as they were until the server's answer says how the split rule moved them.
     const items = [
       ...p.items.filter((it) => it.orderItemId !== line.id),
       ...(held + delta > 0
-        ? [{ orderItemId: line.id, name: line.name, quantity: held + delta }]
+        ? [
+            {
+              orderItemId: line.id,
+              name: line.name,
+              quantity: held + delta,
+              needsLot: current?.needsLot ?? false,
+              lots: current?.lots ?? [],
+            },
+          ]
         : []),
     ];
     return { ...p, items, units: p.units + delta };
@@ -210,13 +222,46 @@ function PackLayout({
       setScanned({ ok: false, at: Date.now(), message: errorMessage(error) });
     },
   });
+  const scanLot = useMutation({
+    mutationKey: writeKey,
+    scope: { id: writeScope },
+    mutationFn: ({ pkg, code, scanId }: { pkg: PackPackage; code: string; scanId: string }) =>
+      client.packing.scanLot({ packageId: pkg.id, code, scanId }),
+    onSuccess: (result, { pkg }) => {
+      accept(result);
+      playScanSound(true);
+      // The box line whose lots changed is the one this scan went on.
+      const lotsOf = (p: PackPackage | undefined, id: string) =>
+        JSON.stringify(p?.items.find((it) => it.orderItemId === id)?.lots ?? []);
+      const after = result.packages.find((p) => p.id === pkg.id);
+      const item = after?.items.find(
+        (it) => lotsOf(after, it.orderItemId) !== lotsOf(pkg, it.orderItemId),
+      );
+      const lot = item?.lots.at(-1)?.lotNumber;
+      setScanned({
+        ok: true,
+        at: Date.now(),
+        message: t("pack.lotScanned", {
+          lot: lot ? lotLabel(lot) : "",
+          name: item?.name ?? "",
+          number: pkg.number,
+        }),
+      });
+    },
+    onError: (error) => {
+      playScanSound(false);
+      setScanned({ ok: false, at: Date.now(), message: errorMessage(error) });
+    },
+  });
   useScanner((code) => {
     if (!selected) {
       playScanSound(false);
       setScanned({ ok: false, at: Date.now(), message: t("pack.noPackageSelected") });
       return;
     }
-    scan.mutate({ pkg: selected, code, scanId: crypto.randomUUID() });
+    // One scan field: a lot label goes to the lot, anything else packs a product (SPEC-lumexia).
+    const write = isLotCode(code) ? scanLot : scan;
+    write.mutate({ pkg: selected, code, scanId: crypto.randomUUID() });
   }, canPack);
 
   const move = useMutation({
@@ -835,6 +880,9 @@ function PackageCard({
         <span className="block space-y-1">
           <span className="flex items-center gap-2">
             <span className="text-xl font-bold">{t("pack.package", { number: pkg.number })}</span>
+            {pkg.items.some((it) => it.needsLot && it.lots.length === 0) && (
+              <span className="badge badge-warning">{t("pack.lotNeeded")}</span>
+            )}
           </span>
           <span className="block text-sm">
             {pkg.box?.name ?? t("pack.custom")}
@@ -940,11 +988,52 @@ function PackageCard({
                   </span>
                 ))}
               </Button>
+              <LotRows items={pkg.items} />
             </div>
           )}
         </>
       )}
     </li>
+  );
+}
+
+/**
+ * Each lot-needing box line: **Lot needed**, or its lots as chips ("2 × A12A0124"). Scanning a lot
+ * label with the package selected fills them in (SPEC-lumexia "Reads and UI").
+ */
+function LotRows({ items }: { items: PackageItemView[] }) {
+  const t = useTranslations();
+  const lotItems = items.filter((it) => it.needsLot || it.lots.length > 0);
+  if (lotItems.length === 0) return null;
+  return (
+    <ul className="space-y-2 px-4 pb-4" data-testid="pack-lots">
+      {lotItems.map((item) => (
+        <li key={item.orderItemId} className="flex flex-wrap items-center gap-2">
+          <span className="text-sm font-semibold">{item.name}</span>
+          {item.lots.length === 0 ? (
+            <span className="badge badge-warning" data-testid="pack-lot-needed">
+              {t("pack.lotNeeded")}
+            </span>
+          ) : (
+            <ul className="flex flex-wrap gap-2" aria-label={t("pack.lotsOf", { name: item.name })}>
+              {item.lots.map((lot) => {
+                const label = lot.lotNumber ? lotLabel(lot.lotNumber) : (lot.lumexiaLotId ?? "");
+                return (
+                  <li
+                    key={lot.id}
+                    className="badge badge-outline badge-lg tabular-nums"
+                    title={lot.lotNumber ?? undefined}
+                    aria-label={t("pack.lotChipLabel", { count: lot.quantity, lot: label })}
+                  >
+                    {t("pack.lotChip", { count: lot.quantity, lot: label })}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </li>
+      ))}
+    </ul>
   );
 }
 

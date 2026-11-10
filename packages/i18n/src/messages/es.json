@@ -663,7 +663,12 @@
     "addNoteTitle": "Añadir una nota al paquete {number}",
     "done": "Listo",
     "doneNext": "Listo, siguiente pedido",
-    "noneLeft": "No hay más pedidos de Empaque."
+    "noneLeft": "No hay más pedidos de Empaque.",
+    "lotNeeded": "Falta el lote",
+    "lotChip": "{count} × {lot}",
+    "lotChipLabel": "{count} del lote {lot}",
+    "lotsOf": "Lotes de {name}",
+    "lotScanned": "Lote {lot} en {name} del paquete {number}."
   },
   "qa": {
     "title": "Control de calidad #{number}",
@@ -1253,7 +1258,8 @@
         "criticalIssueOpen": "Resuelve los {count} problemas críticos abiertos antes de que el pedido salga de QA.",
         "notReady": "El pedido no está Listo.",
         "noPackages": "El pedido no tiene paquetes.",
-        "packageOverweight": "El paquete {package} supera el límite de su caja de {maxOz} oz y necesita un motivo."
+        "packageOverweight": "El paquete {package} supera el límite de su caja de {maxOz} oz y necesita un motivo.",
+        "lotMissing": "{line} en el paquete {package} necesita un lote."
       }
     },
     "sync": {
@@ -1413,7 +1419,12 @@
       "unauthorized": "Lumexia rechazó la clave de API. Crea una clave de solo lectura en Lumexia, en Settings → User → Agents.",
       "badResponse": "Esa URL no parece ser la API de Lumexia (no se encontró /api/v1).",
       "itemNotFound": "Lumexia no tiene ese artículo. Puede que se haya eliminado; vuelve a buscar.",
-      "notLinked": "Primero vincula este producto a un artículo de Lumexia."
+      "notLinked": "Primero vincula este producto a un artículo de Lumexia.",
+      "notALot": "Eso no es un número de lote de Lumexia.",
+      "scanLotNumber": "Escanea el número de lote impreso. Aún no se pueden leer los códigos QR de lote.",
+      "lotNotOnPackage": "Nada en este paquete necesita lote.",
+      "lotWrongItem": "El lote {lotNumber} pertenece a otro artículo ({itemRef}). No se guardó.",
+      "allUnitsHaveLots": "Las {count} unidades ya tienen lote; toca un lote para cambiarlo."
     }
   },
   "emails": {

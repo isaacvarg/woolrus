@@ -1,6 +1,7 @@
 import type { DbTx, LabelStatus, PickStatus, WorkflowStatus } from "@woolrus/db";
 import type { ErrorCode } from "@woolrus/i18n";
 import { notFound, type UnmetCondition } from "../errors";
+import { type LotRuleSettings, needsLot } from "../lumexia/needs-lot";
 import type { GateKind } from "./machine";
 
 // Stage-exit gates (SPEC-workflow "Gates"). They read only the database, never the client, and say
@@ -23,6 +24,8 @@ export type GateLine = {
   physical: boolean;
   pickStatus: PickStatus;
   pickedQuantity: number;
+  /** Its product needs a Lumexia lot, by the lot rules as they are now (SPEC-lumexia). */
+  needsLot: boolean;
 };
 
 export type GatePackage = {
@@ -36,7 +39,8 @@ export type GatePackage = {
   maxWeightOz: number | null;
   /** The packer gave a reason for a weight above the max (FR-PACK-09). */
   hasOverrideReason: boolean;
-  items: { orderItemId: string; quantity: number; qaVerified: boolean }[];
+  /** `lotUnits`: Σ the box line's lot quantities; once it has any lot, they cover every unit. */
+  items: { orderItemId: string; quantity: number; qaVerified: boolean; lotUnits: number }[];
   selectedRates: number;
   activeLabels: number;
   liveLabels: number;
@@ -115,7 +119,19 @@ function packed(snap: GateSnapshot): UnmetCondition[] {
       : []),
   ]);
 
-  return [...allVoidedCondition(snap), ...lines, ...packages];
+  // Any lot satisfies it, whatever Lumexia later says: validation never blocks Packing (SPEC-lumexia
+  // decision 5). Rules are read live, so switching a type on affects an order already in Packing.
+  const lotLines = new Map(snap.lines.filter((l) => l.needsLot).map((l) => [l.id, l.name]));
+  const lots = snap.packages.flatMap((p) =>
+    p.items.flatMap((it) => {
+      const line = lotLines.get(it.orderItemId);
+      return line !== undefined && it.lotUnits === 0
+        ? [unmet("lotMissing", { line, package: p.number })]
+        : [];
+    }),
+  );
+
+  return [...allVoidedCondition(snap), ...lines, ...packages, ...lots];
 }
 
 function verified(snap: GateSnapshot): UnmetCondition[] {
@@ -166,6 +182,27 @@ export function evaluateGate(kind: GateKind, snap: GateSnapshot): UnmetCondition
   return gates[kind](snap);
 }
 
+const noLotRules: LotRuleSettings = {
+  lumexiaLotItemTypeIds: [],
+  lumexiaLotProcurementTypeIds: [],
+  lumexiaLotInventoryTypeIds: [],
+};
+
+/**
+ * The lot rules, read straight from the Settings row: `loadSettings` would make the gates import
+ * settings/service, which imports this module back through sync and carriers.
+ */
+async function lotRuleSettings(tx: DbTx): Promise<LotRuleSettings> {
+  const row = await tx.settings.findFirst({
+    select: {
+      lumexiaLotItemTypeIds: true,
+      lumexiaLotProcurementTypeIds: true,
+      lumexiaLotInventoryTypeIds: true,
+    },
+  });
+  return row ?? noLotRules;
+}
+
 /** Reads what the gates need, inside the transition's transaction. */
 export async function loadGateSnapshot(tx: DbTx, orderId: string): Promise<GateSnapshot> {
   const order = await tx.order.findUnique({
@@ -180,7 +217,16 @@ export async function loadGateSnapshot(tx: DbTx, orderId: string): Promise<GateS
           quantity: true,
           pickStatus: true,
           pickedQuantity: true,
-          product: { select: { physical: true } },
+          product: {
+            select: {
+              physical: true,
+              lumexiaItemId: true,
+              lumexiaItemTypeId: true,
+              lumexiaProcurementTypeId: true,
+              lumexiaInventoryTypeId: true,
+              lotOverride: true,
+            },
+          },
           voids: { where: { undoneAt: null }, select: { quantity: true } },
         },
       },
@@ -199,7 +245,12 @@ export async function loadGateSnapshot(tx: DbTx, orderId: string): Promise<GateS
           box: { select: { maxWeightOz: true } },
           items: {
             orderBy: { packedAt: "asc" },
-            select: { orderItemId: true, quantity: true, qaVerifiedAt: true },
+            select: {
+              orderItemId: true,
+              quantity: true,
+              qaVerifiedAt: true,
+              lots: { select: { quantity: true } },
+            },
           },
           rates: { where: { selected: true }, select: { id: true } },
           labels: { where: { status: { in: [...liveLabelStatuses] } }, select: { status: true } },
@@ -208,9 +259,10 @@ export async function loadGateSnapshot(tx: DbTx, orderId: string): Promise<GateS
     },
   });
   if (!order) throw notFound();
-  const openCriticalIssues = await tx.qualityIssue.count({
-    where: { orderId, status: "OPEN", severity: "CRITICAL" },
-  });
+  const [openCriticalIssues, settings] = await Promise.all([
+    tx.qualityIssue.count({ where: { orderId, status: "OPEN", severity: "CRITICAL" } }),
+    lotRuleSettings(tx),
+  ]);
 
   return {
     status: order.status,
@@ -224,6 +276,8 @@ export async function loadGateSnapshot(tx: DbTx, orderId: string): Promise<GateS
       physical: it.product?.physical ?? true,
       pickStatus: it.pickStatus,
       pickedQuantity: it.pickedQuantity,
+      // Variations use their parent product's link (SPEC-lumexia decision 4).
+      needsLot: it.product ? needsLot(it.product, settings) : false,
     })),
     packages: order.packages.map((p) => ({
       id: p.id,
@@ -237,6 +291,7 @@ export async function loadGateSnapshot(tx: DbTx, orderId: string): Promise<GateS
         orderItemId: it.orderItemId,
         quantity: it.quantity,
         qaVerified: it.qaVerifiedAt !== null,
+        lotUnits: it.lots.reduce((sum, l) => sum + l.quantity, 0),
       })),
       selectedRates: p.rates.length,
       activeLabels: p.labels.filter((l) => l.status === "ACTIVE").length,

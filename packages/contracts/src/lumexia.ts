@@ -51,6 +51,24 @@ export const SetLotRulesInput = z.object({
 });
 export type SetLotRulesInput = z.infer<typeof SetLotRulesInput>;
 
+// Lots captured at Packing (SPEC-lumexia "Capturing lots").
+
+/** Whether Lumexia agrees a lot is the box line's item. Only `WRONG_ITEM` ever blocks (at QA). */
+export const LotStatus = z.enum(["UNVERIFIED", "VALID", "NOT_FOUND", "WRONG_ITEM"]);
+export type LotStatus = z.infer<typeof LotStatus>;
+
+/** One lot on a box line. The default lot (the earliest) gives and takes units. */
+export const LotDto = z.object({
+  id: z.string(),
+  /** null only for a QR scan Lumexia hasn't resolved yet. */
+  lotNumber: z.string().nullable(),
+  lumexiaLotId: z.string().nullable(),
+  quantity: z.number().int(),
+  status: LotStatus,
+  isDefault: z.boolean(),
+});
+export type LotDto = z.infer<typeof LotDto>;
+
 // Lumexia items: product ↔ item links (SPEC-lumexia "Lot rules and linking").
 
 /** A Lumexia item, as search and Match by SKU show it. */

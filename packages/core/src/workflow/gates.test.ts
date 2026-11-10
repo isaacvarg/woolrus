@@ -19,6 +19,7 @@ const line = (overrides: Partial<GateLine> = {}): GateLine => ({
   physical: true,
   pickStatus: "PICKED",
   pickedQuantity: 2,
+  needsLot: false,
   ...overrides,
 });
 
@@ -30,7 +31,7 @@ const pkg = (overrides: Partial<GatePackage> = {}): GatePackage => ({
   weightOz: 16,
   maxWeightOz: null,
   hasOverrideReason: false,
-  items: [{ orderItemId: "line-1", quantity: 2, qaVerified: true }],
+  items: [{ orderItemId: "line-1", quantity: 2, qaVerified: true, lotUnits: 0 }],
   selectedRates: 1,
   activeLabels: 1,
   liveLabels: 1,
@@ -122,20 +123,53 @@ describe("packed gate", () => {
     expect(evaluateGate("packed", snapshot())).toEqual([]);
   });
 
-  it("adds a line split across packages", () => {
+  // SPEC-lumexia success criterion 8.
+  it("reports each lot-needing box line without a lot, per package", () => {
+    const lines = [line({ needsLot: true }), line({ id: "line-2", name: "Cap", quantity: 1 })];
     const packages = [
-      pkg({ items: [{ orderItemId: "line-1", quantity: 1, qaVerified: false }] }),
+      pkg({
+        items: [
+          { orderItemId: "line-1", quantity: 1, qaVerified: false, lotUnits: 0 },
+          { orderItemId: "line-2", quantity: 1, qaVerified: false, lotUnits: 0 },
+        ],
+      }),
       pkg({
         id: "pkg-2",
         number: 2,
-        items: [{ orderItemId: "line-1", quantity: 1, qaVerified: false }],
+        items: [{ orderItemId: "line-1", quantity: 1, qaVerified: false, lotUnits: 0 }],
+      }),
+    ];
+    const snap = snapshot({ lines, packages });
+    expect(evaluateGate("packed", { ...snap, lines: [lines[0] as GateLine] })).toEqual([
+      { messageKey: "errors.workflow.gate.lotMissing", params: { line: "Tee", package: 1 } },
+      { messageKey: "errors.workflow.gate.lotMissing", params: { line: "Tee", package: 2 } },
+    ]);
+  });
+
+  it("is satisfied by any lot on the box line", () => {
+    const lines = [line({ needsLot: true })];
+    const packages = [
+      pkg({ items: [{ orderItemId: "line-1", quantity: 2, qaVerified: false, lotUnits: 2 }] }),
+    ];
+    expect(evaluateGate("packed", snapshot({ lines, packages }))).toEqual([]);
+  });
+
+  it("adds a line split across packages", () => {
+    const packages = [
+      pkg({ items: [{ orderItemId: "line-1", quantity: 1, qaVerified: false, lotUnits: 0 }] }),
+      pkg({
+        id: "pkg-2",
+        number: 2,
+        items: [{ orderItemId: "line-1", quantity: 1, qaVerified: false, lotUnits: 0 }],
       }),
     ];
     expect(evaluateGate("packed", snapshot({ packages }))).toEqual([]);
   });
 
   it("reports an under-packed line", () => {
-    const packages = [pkg({ items: [{ orderItemId: "line-1", quantity: 1, qaVerified: false }] })];
+    const packages = [
+      pkg({ items: [{ orderItemId: "line-1", quantity: 1, qaVerified: false, lotUnits: 0 }] }),
+    ];
     expect(evaluateGate("packed", snapshot({ packages }))).toEqual([
       {
         messageKey: "errors.workflow.gate.lineUnderPacked",
@@ -146,7 +180,9 @@ describe("packed gate", () => {
 
   it("reports an over-packed line, counting voided quantity out", () => {
     const lines = [line({ quantity: 3, voidedQuantity: 1 })];
-    const packages = [pkg({ items: [{ orderItemId: "line-1", quantity: 3, qaVerified: false }] })];
+    const packages = [
+      pkg({ items: [{ orderItemId: "line-1", quantity: 3, qaVerified: false, lotUnits: 0 }] }),
+    ];
     expect(evaluateGate("packed", snapshot({ lines, packages }))).toEqual([
       {
         messageKey: "errors.workflow.gate.lineOverPacked",
@@ -160,8 +196,8 @@ describe("packed gate", () => {
     const packages = [
       pkg({
         items: [
-          { orderItemId: "line-1", quantity: 2, qaVerified: false },
-          { orderItemId: "line-2", quantity: 1, qaVerified: false },
+          { orderItemId: "line-1", quantity: 2, qaVerified: false, lotUnits: 0 },
+          { orderItemId: "line-2", quantity: 1, qaVerified: false, lotUnits: 0 },
         ],
       }),
     ];
@@ -216,8 +252,8 @@ describe("verified gate", () => {
     const packages = [
       pkg({
         items: [
-          { orderItemId: "line-1", quantity: 1, qaVerified: true },
-          { orderItemId: "line-1", quantity: 1, qaVerified: false },
+          { orderItemId: "line-1", quantity: 1, qaVerified: true, lotUnits: 0 },
+          { orderItemId: "line-1", quantity: 1, qaVerified: false, lotUnits: 0 },
         ],
       }),
     ];
@@ -350,7 +386,7 @@ describe("loadGateSnapshot", () => {
         weightOz: 16,
         maxWeightOz: null,
         hasOverrideReason: false,
-        items: [{ orderItemId: items[0]?.id, quantity: 2, qaVerified: true }],
+        items: [{ orderItemId: items[0]?.id, quantity: 2, qaVerified: true, lotUnits: 0 }],
         selectedRates: 1,
         activeLabels: 0,
         liveLabels: 1,
@@ -402,7 +438,9 @@ describe("voided quantity beyond the line", () => {
       line({ quantity: 1, voidedQuantity: 3, pickStatus: "PENDING", pickedQuantity: 0 }),
       line({ id: "line-2", quantity: 1, pickedQuantity: 1 }),
     ];
-    const packages = [pkg({ items: [{ orderItemId: "line-2", quantity: 1, qaVerified: true }] })];
+    const packages = [
+      pkg({ items: [{ orderItemId: "line-2", quantity: 1, qaVerified: true, lotUnits: 0 }] }),
+    ];
 
     expect(evaluateGate("picked", snapshot({ lines }))).toEqual([]);
     expect(evaluateGate("packed", snapshot({ lines, packages }))).toEqual([]);

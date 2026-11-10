@@ -125,6 +125,7 @@ import {
   scan,
   scanBatch,
   scanIntoPackage,
+  scanLot,
   scanVerify,
   searchLumexiaItems,
   selectRate,
@@ -433,6 +434,7 @@ export const router = implementer.router({
     scan: api.packing.scan.handler(({ input, context }) =>
       scanIntoPackage(db, context.actor, input),
     ),
+    scanLot: api.packing.scanLot.handler(({ input, context }) => scanLot(db, context.actor, input)),
   },
   pickBatches: {
     create: api.pickBatches.create.handler(({ input, context }) =>

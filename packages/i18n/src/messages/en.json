@@ -663,7 +663,12 @@
     "addNoteTitle": "Add a note to package {number}",
     "done": "Done",
     "doneNext": "Done, next order",
-    "noneLeft": "No more Packing orders to pack."
+    "noneLeft": "No more Packing orders to pack.",
+    "lotNeeded": "Lot needed",
+    "lotChip": "{count} × {lot}",
+    "lotChipLabel": "{count} from lot {lot}",
+    "lotsOf": "Lots of {name}",
+    "lotScanned": "Lot {lot} on {name} in package {number}."
   },
   "qa": {
     "title": "QA #{number}",
@@ -1253,7 +1258,8 @@
         "criticalIssueOpen": "Resolve the {count} open critical issue(s) before the order can leave QA.",
         "notReady": "The order isn't Ready.",
         "noPackages": "The order has no packages.",
-        "packageOverweight": "Package {package} is over its box's limit of {maxOz} oz and needs a reason."
+        "packageOverweight": "Package {package} is over its box's limit of {maxOz} oz and needs a reason.",
+        "lotMissing": "{line} in package {package} needs a lot."
       }
     },
     "sync": {
@@ -1413,7 +1419,12 @@
       "unauthorized": "Lumexia refused the API key. Create a read-only key in Lumexia under Settings → User → Agents.",
       "badResponse": "That URL doesn't look like Lumexia's API (no /api/v1 found).",
       "itemNotFound": "Lumexia has no such item. It may have been deleted; search again.",
-      "notLinked": "Link this product to a Lumexia item first."
+      "notLinked": "Link this product to a Lumexia item first.",
+      "notALot": "That isn't a Lumexia lot number.",
+      "scanLotNumber": "Scan the printed lot number. Lot QR codes can't be read yet.",
+      "lotNotOnPackage": "Nothing in this package needs a lot.",
+      "lotWrongItem": "Lot {lotNumber} belongs to another item ({itemRef}). It wasn't saved.",
+      "allUnitsHaveLots": "All {count} units already have a lot; tap a lot to change it."
     }
   },
   "emails": {

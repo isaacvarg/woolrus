@@ -48,6 +48,7 @@ export * from "./install-jobs";
 export * from "./jobs";
 export * from "./lumexia/connection";
 export * from "./lumexia/items";
+export * from "./lumexia/lots";
 export * from "./lumexia/rules";
 export * from "./notes/files";
 export * from "./notes/push";

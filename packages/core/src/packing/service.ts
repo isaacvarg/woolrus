@@ -14,6 +14,7 @@ import type { Db, DbTx } from "@woolrus/db";
 import { recordAudit } from "../audit";
 import { AppError, notFound } from "../errors";
 import { storedResult, withIdempotency } from "../idempotency";
+import { lotsAfterPacking, lotsAfterUnpacking } from "../lumexia/lot-store";
 import { type Actor, assertCan, can } from "../permissions";
 import { normalizeCode } from "../picking/codes";
 import { matchingLines, notOnOrder } from "../picking/scan";
@@ -88,7 +89,7 @@ async function boxColumns(tx: DbTx, box: PackageBoxInput) {
 }
 
 /** Loads a package and locks its order for packing; the package must belong to that order. */
-async function lockPackage(tx: DbTx, actor: Actor, packageId: string, now: Date) {
+export async function lockPackage(tx: DbTx, actor: Actor, packageId: string, now: Date) {
   const ref = await tx.package.findUnique({ where: { id: packageId }, select: { orderId: true } });
   if (!ref) throw notFound();
   const order = await lockForPacking(tx, actor, ref.orderId, now);
@@ -321,11 +322,13 @@ async function addUnits(
   quantity: number,
   now: Date,
 ) {
-  await tx.packageItem.upsert({
+  const row = await tx.packageItem.upsert({
     where: { packageId_orderItemId: { packageId, orderItemId } },
     create: { packageId, orderItemId, quantity, packedById: actor.userId, packedAt: now },
     update: { quantity: { increment: quantity }, packedById: actor.userId, packedAt: now },
   });
+  // A box line with lots keeps them covering every unit: the new ones join the default lot.
+  await lotsAfterPacking(tx, row.id, quantity);
 }
 
 /** Puts units of a line into a package, up to the line's unassigned units. */
@@ -367,10 +370,12 @@ export async function unpackUnits(
     });
     if (!line || !isPhysical(line))
       throw new AppError("CONFLICT", "errors.packing.lineNotPackable");
-    const held = pkg.items.find((it) => it.orderItemId === orderItemId)?.quantity ?? 0;
-    if (quantity > held) throw new AppError("CONFLICT", "errors.packing.notInPackage");
+    const boxLine = pkg.items.find((it) => it.orderItemId === orderItemId);
+    const held = boxLine?.quantity ?? 0;
+    if (!boxLine || quantity > held) throw new AppError("CONFLICT", "errors.packing.notInPackage");
 
     const where = { packageId_orderItemId: { packageId, orderItemId } };
+    // At 0 the row goes, and its lots with it (cascade).
     if (quantity === held) await tx.packageItem.delete({ where });
     // Verification goes in the same write: the verified count can't exceed the new quantity.
     else {
@@ -383,6 +388,7 @@ export async function unpackUnits(
           qaVerifiedById: null,
         },
       });
+      await lotsAfterUnpacking(tx, boxLine.id, quantity);
     }
     await invalidate(tx, packageId, true);
     return finish(tx, actor, order, "unpackUnits", { packageId, before: pkg }, now);
