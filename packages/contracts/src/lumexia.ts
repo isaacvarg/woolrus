@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { base } from "./base";
+import { base, Id } from "./base";
 
 // Lumexia's API (SPEC-lumexia). Nothing here carries the API key or Lumexia's URL.
 
@@ -51,6 +51,100 @@ export const SetLotRulesInput = z.object({
 });
 export type SetLotRulesInput = z.infer<typeof SetLotRulesInput>;
 
+// Lumexia items: product ↔ item links (SPEC-lumexia "Lot rules and linking").
+
+/** A Lumexia item, as search and Match by SKU show it. */
+export const LumexiaItemDto = z.object({
+  id: z.string(),
+  referenceCode: z.string(),
+  name: z.string(),
+  aliases: z.array(z.string()),
+  itemTypeId: z.string().nullable(),
+  procurementTypeId: z.string().nullable(),
+  inventoryTypeId: z.string().nullable(),
+  archived: z.boolean(),
+});
+export type LumexiaItemDto = z.infer<typeof LumexiaItemDto>;
+
+/** A product's link. `notFound` is set when the daily refresh no longer finds the item. */
+export const LumexiaLinkDto = z.object({
+  itemId: z.string(),
+  referenceCode: z.string().nullable(),
+  itemTypeId: z.string().nullable(),
+  /** null when Lumexia couldn't be asked for the type names. */
+  itemTypeName: z.string().nullable(),
+  syncedAt: z.coerce.date().nullable(),
+  notFound: z.boolean(),
+});
+export type LumexiaLinkDto = z.infer<typeof LumexiaLinkDto>;
+
+/** One row of the Lumexia items page: a product (variations use their parent's link). */
+export const LumexiaProductRow = z.object({
+  id: z.string(),
+  name: z.string(),
+  sku: z.string().nullable(),
+  physical: z.boolean(),
+  link: LumexiaLinkDto.nullable(),
+  /** null = follow the lot rules. */
+  lotOverride: z.boolean().nullable(),
+  needsLot: z.boolean(),
+});
+export type LumexiaProductRow = z.infer<typeof LumexiaProductRow>;
+
+/** `configured` is false when Lumexia's URL or key isn't set: nothing can be linked then. */
+export const LumexiaProducts = z.object({
+  configured: z.boolean(),
+  products: z.array(LumexiaProductRow),
+});
+export type LumexiaProducts = z.infer<typeof LumexiaProducts>;
+
+export const SearchLumexiaItemsInput = z.object({ q: z.string().trim().min(1).max(100) });
+export type SearchLumexiaItemsInput = z.infer<typeof SearchLumexiaItemsInput>;
+
+/** A proposed link: the SKU equals the item's reference code or one of its aliases. */
+export const LinkSuggestion = z.object({
+  productId: z.string(),
+  productName: z.string(),
+  sku: z.string(),
+  item: LumexiaItemDto,
+  matchedOn: z.enum(["referenceCode", "alias"]),
+  /** The code or alias as Lumexia has it. */
+  matchedValue: z.string(),
+});
+export type LinkSuggestion = z.infer<typeof LinkSuggestion>;
+
+const lumexiaItemId = z.string().trim().min(1).max(100);
+
+export const LinkProductInput = z.object({ productId: Id, itemId: lumexiaItemId });
+export type LinkProductInput = z.infer<typeof LinkProductInput>;
+
+/** Confirmed suggestions, linked in one transaction. */
+export const LinkProductsInput = z.object({
+  links: z.array(LinkProductInput).min(1).max(200),
+});
+export type LinkProductsInput = z.infer<typeof LinkProductsInput>;
+
+export const LinkProductsResult = z.object({ linked: z.number().int() });
+export type LinkProductsResult = z.infer<typeof LinkProductsResult>;
+
+export const ProductIdInput = z.object({ productId: Id });
+export type ProductIdInput = z.infer<typeof ProductIdInput>;
+
+/** true/false = always/never needs a lot; null = follow the lot rules. */
+export const SetLotOverrideInput = z.object({
+  productId: Id,
+  lotOverride: z.boolean().nullable(),
+});
+export type SetLotOverrideInput = z.infer<typeof SetLotOverrideInput>;
+
+export const ProductLinkResult = z.object({
+  productId: z.string(),
+  itemId: z.string().nullable(),
+  referenceCode: z.string().nullable(),
+  lotOverride: z.boolean().nullable(),
+});
+export type ProductLinkResult = z.infer<typeof ProductLinkResult>;
+
 export const lumexia = {
   testConnection: base
     .route({
@@ -77,4 +171,65 @@ export const lumexia = {
     })
     .input(SetLotRulesInput)
     .output(SetLotRulesInput),
+  products: base
+    .route({
+      method: "GET",
+      path: "/lumexia/products",
+      tags: ["Lumexia"],
+      summary: "Products with their Lumexia links and whether they need a lot",
+    })
+    .output(LumexiaProducts),
+  searchItems: base
+    .route({
+      method: "GET",
+      path: "/lumexia/items",
+      tags: ["Lumexia"],
+      summary: "Search Lumexia items by name, reference code or alias",
+    })
+    .input(SearchLumexiaItemsInput)
+    .output(z.array(LumexiaItemDto)),
+  suggestLinks: base
+    .route({
+      method: "POST",
+      path: "/lumexia/suggest-links",
+      tags: ["Lumexia"],
+      summary: "Propose a Lumexia item for each unlinked product by SKU (writes nothing)",
+    })
+    .output(z.array(LinkSuggestion)),
+  linkProduct: base
+    .route({
+      method: "POST",
+      path: "/lumexia/products/{productId}/link",
+      tags: ["Lumexia"],
+      summary: "Link a product to a Lumexia item",
+    })
+    .input(LinkProductInput)
+    .output(ProductLinkResult),
+  linkProducts: base
+    .route({
+      method: "POST",
+      path: "/lumexia/products/link",
+      tags: ["Lumexia"],
+      summary: "Link up to 200 products to Lumexia items in one go",
+    })
+    .input(LinkProductsInput)
+    .output(LinkProductsResult),
+  unlinkProduct: base
+    .route({
+      method: "POST",
+      path: "/lumexia/products/{productId}/unlink",
+      tags: ["Lumexia"],
+      summary: "Remove a product's Lumexia link and lot override (captured lots stay)",
+    })
+    .input(ProductIdInput)
+    .output(ProductLinkResult),
+  setLotOverride: base
+    .route({
+      method: "PUT",
+      path: "/lumexia/products/{productId}/lot-override",
+      tags: ["Lumexia"],
+      summary: "Make a linked product always or never need a lot, or follow the rules",
+    })
+    .input(SetLotOverrideInput)
+    .output(ProductLinkResult),
 };

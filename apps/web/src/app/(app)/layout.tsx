@@ -106,6 +106,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               <Link href="/settings/customs">{t("nav.customs")}</Link>
             </li>
           )}
+          {can(actor, "lumexia.manage") && (
+            <li>
+              <Link href="/lumexia">{t("nav.lumexiaItems")}</Link>
+            </li>
+          )}
           {can(actor, "ops.jobs") && <FailedJobsNav />}
           {user && (
             <NavFooter

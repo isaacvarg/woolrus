@@ -20,7 +20,7 @@ export type SystemActor = {
   roles: readonly Role[];
   stationId: null;
   requestId?: undefined;
-  system: "store-sync" | "operations" | "shipping";
+  system: "store-sync" | "operations" | "shipping" | "lumexia";
 };
 
 export type Actor = UserActor | SystemActor;
@@ -50,6 +50,14 @@ export const shippingActor: SystemActor = Object.freeze({
   roles: Object.freeze(["ADMIN"] as const),
   stationId: null,
   system: "shipping",
+});
+
+/** Lumexia's background work (the daily item refresh, lot validation): audit rows show "lumexia". */
+export const lumexiaActor: SystemActor = Object.freeze({
+  userId: null,
+  roles: Object.freeze(["ADMIN"] as const),
+  stationId: null,
+  system: "lumexia",
 });
 
 export const permissions = [

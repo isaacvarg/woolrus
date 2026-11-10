@@ -18,6 +18,7 @@ import {
   runEmailJob,
   runLabelsPurchaseJob,
   runLabRunJob,
+  runLumexiaRefreshJob,
   runRatesFetchJob,
   runStorageDeleteJob,
   runWooPushJob,
@@ -201,6 +202,18 @@ await boss.work(
     if (result.failed > 0) throw new Error(`pii purge: ${result.failed} orders failed`);
     return result;
   }),
+);
+
+// Lumexia item refresh (SPEC-lumexia "Lot rules and linking"): daily at 04:00 Chicago time, so an
+// item moved to another type in Lumexia follows the lot rules from the next day. Lumexia down
+// throws, and the queue's policy retries; unconfigured is skipped.
+await boss.schedule(queues.lumexiaRefreshItems, "0 4 * * *", {}, { tz: "America/Chicago" });
+await boss.work(
+  queues.lumexiaRefreshItems,
+  META,
+  runJob<JobPayloads[typeof queues.lumexiaRefreshItems]>(queues.lumexiaRefreshItems, async () =>
+    runLumexiaRefreshJob(db),
+  ),
 );
 
 // Every minute, a job proves the worker consumes the queue: it upserts the heartbeat row and

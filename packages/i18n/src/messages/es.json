@@ -38,7 +38,8 @@
     "issues": "Incidencias",
     "customs": "Aduanas",
     "manifests": "Manifiestos",
-    "rateLab": "Rate Lab"
+    "rateLab": "Rate Lab",
+    "lumexiaItems": "Artículos de Lumexia"
   },
   "navFooter": {
     "preferences": "Preferencias",
@@ -1410,7 +1411,9 @@
       "unconfigured": "Lumexia aún no está configurado. Agrega la URL base de la API y la clave en Configuración → Integraciones.",
       "unavailable": "No se pudo conectar con Lumexia. Revisa la URL y que Lumexia esté funcionando.",
       "unauthorized": "Lumexia rechazó la clave de API. Crea una clave de solo lectura en Lumexia, en Settings → User → Agents.",
-      "badResponse": "Esa URL no parece ser la API de Lumexia (no se encontró /api/v1)."
+      "badResponse": "Esa URL no parece ser la API de Lumexia (no se encontró /api/v1).",
+      "itemNotFound": "Lumexia no tiene ese artículo. Puede que se haya eliminado; vuelve a buscar.",
+      "notLinked": "Primero vincula este producto a un artículo de Lumexia."
     }
   },
   "emails": {
@@ -1619,6 +1622,62 @@
     "empty": "Ningún producto coincide con este filtro.",
     "loadMore": "Cargar más",
     "none": "Sin definir"
+  },
+  "lumexiaItems": {
+    "title": "Artículos de Lumexia",
+    "intro": "Vincula cada producto con su artículo en Lumexia. Un producto vinculado necesita lote cuando el tipo de su artículo está activado en Ajustes → Lumexia → Reglas de lote, o cuando su ajuste de Lote lo indica.",
+    "notConfigured": "Lumexia no está configurado.",
+    "openSettings": "Abrir Ajustes",
+    "filter": "Mostrar",
+    "filters": {
+      "all": "Todos",
+      "linked": "Vinculados",
+      "unlinked": "Sin vincular",
+      "needsLot": "Necesitan lote"
+    },
+    "columns": {
+      "product": "Producto",
+      "item": "Artículo de Lumexia",
+      "itemType": "Tipo de artículo",
+      "needsLot": "Necesita lote",
+      "lot": "Lote",
+      "actions": "Acciones"
+    },
+    "noSku": "Sin SKU",
+    "notLinked": "Sin vincular",
+    "notFound": "No encontrado en Lumexia",
+    "yes": "Sí",
+    "no": "No",
+    "override": "excepción",
+    "unknownType": "Tipo desconocido",
+    "lotSetting": "Ajuste de lote de {product}",
+    "lotOptions": {
+      "rules": "Seguir reglas de lote",
+      "always": "Siempre",
+      "never": "Nunca"
+    },
+    "search": "Buscar artículos de Lumexia para {product}",
+    "searchPlaceholder": "Buscar por nombre o código",
+    "searching": "Buscando…",
+    "noItems": "Ningún artículo de Lumexia coincide.",
+    "link": "Vincular",
+    "change": "Cambiar",
+    "unlink": "Desvincular",
+    "linked": "{product} vinculado a {item}.",
+    "unlinked": "{product} desvinculado. Los lotes ya registrados se conservan.",
+    "noProducts": "Ningún producto coincide.",
+    "matchBySku": "Emparejar por SKU",
+    "matching": "Emparejando…",
+    "review": {
+      "title": "Revisar coincidencias de SKU",
+      "intro": "El SKU de cada producto coincidió con un artículo de Lumexia. Desmarca las que parezcan incorrectas; revisa bien las coincidencias por alias, porque los alias pueden contener ids de otros sistemas.",
+      "none": "Ningún SKU de producto sin vincular coincide con exactamente un artículo de Lumexia.",
+      "matchedCode": "coincide con el código de referencia {value}",
+      "matchedAlias": "coincide con el alias {value}",
+      "confirm": "{count, plural, one {Vincular # producto} other {Vincular # productos}}",
+      "cancel": "Cancelar",
+      "done": "{count, plural, one {# producto vinculado.} other {# productos vinculados.}}"
+    }
   },
   "stuckLabels": {
     "title": "Etiquetas que no se pudieron anular",

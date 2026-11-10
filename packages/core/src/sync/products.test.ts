@@ -59,7 +59,7 @@ describe("syncProducts", () => {
     });
   });
 
-  it("refreshes weight, dimensions, stock, bin and physical, and leaves warehouse fields alone", async () => {
+  it("refreshes weight, dimensions, stock, bin and physical, and leaves warehouse fields (customs, every lumexia* field, lotOverride) alone", async () => {
     const soap = store.addProduct({ sku: "SOAP" });
     await sync();
     const warehouse = {
@@ -67,6 +67,12 @@ describe("syncProducts", () => {
       countryOfOrigin: "US",
       customsDescription: "Bar soap",
       lumexiaItemId: "LX-42",
+      lumexiaItemRef: "BASE1234",
+      lumexiaItemTypeId: "0190a000-0000-7000-8000-0000000000a1",
+      lumexiaProcurementTypeId: "0190a000-0000-7000-8000-0000000000b1",
+      lumexiaInventoryTypeId: "0190a000-0000-7000-8000-0000000000c1",
+      lumexiaSyncedAt: new Date("2026-11-01T12:00:00Z"),
+      lotOverride: false,
       barcode: "0123456789012",
     };
     await db.product.update({ where: { wooProductId: soap.id }, data: warehouse });

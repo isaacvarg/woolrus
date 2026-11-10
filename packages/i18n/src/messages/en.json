@@ -38,7 +38,8 @@
     "issues": "Issues",
     "customs": "Customs",
     "manifests": "Manifests",
-    "rateLab": "Rate Lab"
+    "rateLab": "Rate Lab",
+    "lumexiaItems": "Lumexia items"
   },
   "navFooter": {
     "preferences": "Preferences",
@@ -1410,7 +1411,9 @@
       "unconfigured": "Lumexia isn't set up yet. Add the API base URL and key in Settings → Integrations.",
       "unavailable": "Lumexia couldn't be reached. Check the URL and that Lumexia is up.",
       "unauthorized": "Lumexia refused the API key. Create a read-only key in Lumexia under Settings → User → Agents.",
-      "badResponse": "That URL doesn't look like Lumexia's API (no /api/v1 found)."
+      "badResponse": "That URL doesn't look like Lumexia's API (no /api/v1 found).",
+      "itemNotFound": "Lumexia has no such item. It may have been deleted; search again.",
+      "notLinked": "Link this product to a Lumexia item first."
     }
   },
   "emails": {
@@ -1619,6 +1622,62 @@
     "empty": "No products match this filter.",
     "loadMore": "Load more",
     "none": "Not set"
+  },
+  "lumexiaItems": {
+    "title": "Lumexia items",
+    "intro": "Link each product to its item in Lumexia. A linked product needs a lot when its item's type is switched on in Settings → Lumexia → Lot rules, or when its Lot setting says so.",
+    "notConfigured": "Lumexia isn't configured.",
+    "openSettings": "Open Settings",
+    "filter": "Show",
+    "filters": {
+      "all": "All",
+      "linked": "Linked",
+      "unlinked": "Not linked",
+      "needsLot": "Needs lot"
+    },
+    "columns": {
+      "product": "Product",
+      "item": "Lumexia item",
+      "itemType": "Item type",
+      "needsLot": "Needs lot",
+      "lot": "Lot",
+      "actions": "Actions"
+    },
+    "noSku": "No SKU",
+    "notLinked": "Not linked",
+    "notFound": "Not found in Lumexia",
+    "yes": "Yes",
+    "no": "No",
+    "override": "override",
+    "unknownType": "Unknown type",
+    "lotSetting": "Lot setting for {product}",
+    "lotOptions": {
+      "rules": "Follow lot rules",
+      "always": "Always",
+      "never": "Never"
+    },
+    "search": "Search Lumexia items for {product}",
+    "searchPlaceholder": "Search by name or code",
+    "searching": "Searching…",
+    "noItems": "No Lumexia items match.",
+    "link": "Link",
+    "change": "Change",
+    "unlink": "Unlink",
+    "linked": "Linked {product} to {item}.",
+    "unlinked": "Unlinked {product}. Lots already captured stay.",
+    "noProducts": "No products match.",
+    "matchBySku": "Match by SKU",
+    "matching": "Matching…",
+    "review": {
+      "title": "Review SKU matches",
+      "intro": "Each product's SKU matched one Lumexia item. Untick any that look wrong; alias matches are worth a second look, since aliases can hold other systems' ids.",
+      "none": "No unlinked product's SKU matches exactly one Lumexia item.",
+      "matchedCode": "matched reference code {value}",
+      "matchedAlias": "matched alias {value}",
+      "confirm": "{count, plural, one {Link # product} other {Link # products}}",
+      "cancel": "Cancel",
+      "done": "{count, plural, one {Linked # product.} other {Linked # products.}}"
+    }
   },
   "stuckLabels": {
     "title": "Labels that couldn't be voided",

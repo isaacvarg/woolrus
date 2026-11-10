@@ -57,6 +57,8 @@ import {
   labTrendSeries,
   labTrendsReport,
   linkBarcode,
+  linkProduct,
+  linkProducts,
   listBoxes,
   listFailedJobs,
   listInvitations,
@@ -78,6 +80,7 @@ import {
   listUsers,
   listVoids,
   lockStation,
+  lumexiaProducts,
   manifestCandidates,
   markLabelNotBought,
   markOutOfStock,
@@ -123,10 +126,12 @@ import {
   scanBatch,
   scanIntoPackage,
   scanVerify,
+  searchLumexiaItems,
   selectRate,
   sendTestEmail,
   setCarrierEnabled,
   setCarrierLabel,
+  setLotOverride,
   setLotRules,
   setPackageBox,
   setPin,
@@ -143,6 +148,7 @@ import {
   stationStatus,
   stuckLabels,
   substitute,
+  suggestLinks,
   syncCarriers,
   testLumexiaConnection,
   testProvider,
@@ -151,6 +157,7 @@ import {
   unarchiveLabAddress,
   unarchiveLabParcel,
   undoVoid,
+  unlinkProduct,
   unlockWithBadge,
   unlockWithPin,
   unpackUnits,
@@ -463,6 +470,25 @@ export const router = implementer.router({
     lotRules: api.lumexia.lotRules.handler(({ context }) => getLotRules(db, context.actor)),
     setLotRules: api.lumexia.setLotRules.handler(({ input, context }) =>
       setLotRules(db, context.actor, input),
+    ),
+    products: api.lumexia.products.handler(({ context }) => lumexiaProducts(db, context.actor)),
+    searchItems: api.lumexia.searchItems.handler(({ input, context }) =>
+      searchLumexiaItems(db, context.actor, input),
+    ),
+    suggestLinks: api.lumexia.suggestLinks.handler(({ context }) =>
+      suggestLinks(db, context.actor),
+    ),
+    linkProduct: api.lumexia.linkProduct.handler(({ input, context }) =>
+      linkProduct(db, context.actor, input),
+    ),
+    linkProducts: api.lumexia.linkProducts.handler(({ input, context }) =>
+      linkProducts(db, context.actor, input),
+    ),
+    unlinkProduct: api.lumexia.unlinkProduct.handler(({ input, context }) =>
+      unlinkProduct(db, context.actor, input),
+    ),
+    setLotOverride: api.lumexia.setLotOverride.handler(({ input, context }) =>
+      setLotOverride(db, context.actor, input),
     ),
   },
   priorityRules: {
