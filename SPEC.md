@@ -65,7 +65,7 @@ States: `not started` → `spec draft` → `spec approved` → `planned` → `in
 | `settings` | M1 | [SPEC-settings](docs/specs/SPEC-settings.md) | [#18](https://github.com/isaacvarg/woolrus/issues/18) | done |
 | `store-sync` | M1 | [SPEC-store-sync](docs/specs/SPEC-store-sync.md) | [#19](https://github.com/isaacvarg/woolrus/issues/19) | done |
 | `workflow` | M1 | [SPEC-workflow](docs/specs/SPEC-workflow.md) | [#20](https://github.com/isaacvarg/woolrus/issues/20) | done |
-| `identity` | M2 | [SPEC-identity](docs/specs/SPEC-identity.md) | [#21](https://github.com/isaacvarg/woolrus/issues/21); A1 [#170](https://github.com/isaacvarg/woolrus/issues/170) | done; A1 (station-only users) in progress, tickets #171–#174 |
+| `identity` | M2 | [SPEC-identity](docs/specs/SPEC-identity.md) | [#21](https://github.com/isaacvarg/woolrus/issues/21); A1 [#170](https://github.com/isaacvarg/woolrus/issues/170) | done; A1 (station-only users) done |
 | `notes` | M2 | [SPEC-notes](docs/specs/SPEC-notes.md) | [#22](https://github.com/isaacvarg/woolrus/issues/22) | done |
 | `picking` | M2 | [SPEC-picking](docs/specs/SPEC-picking.md) | [#23](https://github.com/isaacvarg/woolrus/issues/23) | done |
 | `packing` | M2 | [SPEC-packing](docs/specs/SPEC-packing.md) | [#24](https://github.com/isaacvarg/woolrus/issues/24) | done |
