@@ -1,7 +1,9 @@
-import type { PackResult, ScanLotInput } from "@woolrus/contracts";
+import type { LotIdInput, PackResult, ScanLotInput, SetLotQuantityInput } from "@woolrus/contracts";
 import type { Db, DbTx } from "@woolrus/db";
+import type { LumexiaClient } from "../adapters/lumexia/client";
+import { isLumexiaError } from "../adapters/lumexia/errors";
 import { recordAudit } from "../audit";
-import { AppError, notFound } from "../errors";
+import { AppError, type LineCandidate, notFound } from "../errors";
 import { storedResult, withIdempotency } from "../idempotency";
 import { createTextNote } from "../notes/service";
 import { type PackOptions, packResult } from "../packing/queries";
@@ -10,10 +12,11 @@ import { type Actor, assertCan } from "../permissions";
 import { loadSettings } from "../settings/service";
 import { touchClaim } from "../workflow/claims";
 import { notifyOrderChanged } from "../workflow/notify";
-import { parseLotCode } from "./codes";
-import { lotOrder, lotSnapshot, writeLots } from "./lot-store";
+import { type LotCode, parseLotCode } from "./codes";
+import { lumexiaClientFor } from "./connection";
+import { loadLots, lotOrder, lotSnapshot, writeLots } from "./lot-store";
 import { needsLot } from "./needs-lot";
-import { scanLotInto } from "./split";
+import { type LotSlot, removeLotFrom, scanLotInto, setLotQuantityIn } from "./split";
 
 // Lot capture at Packing (SPEC-lumexia "Capturing lots"). Each write runs like a packing write:
 // `order.pack`, the order row lock, Packing, the live claim, audit and notify. Lots don't change
@@ -22,6 +25,16 @@ import { scanLotInto } from "./split";
 const SCAN = "lumexia.scanLot";
 /** A rejected scan's note has its own key, so a retried scan doesn't write a second one. */
 const REJECTED = "lumexia.scanLotRejected";
+/** Someone is waiting at the bench: a QR scan asks Lumexia for at most this long. */
+const QR_TIMEOUT_MS = 2_000;
+
+type Connect = (db: Db) => Promise<LumexiaClient | null>;
+const defaultConnect: Connect = (d) => lumexiaClientFor(d, { timeoutMs: QR_TIMEOUT_MS });
+
+export type LotOptions = PackOptions & {
+  /** The Lumexia client a QR scan asks; tests pass a fake. */
+  connect?: Connect;
+};
 
 /** The package's box lines with what picking a lot's line needs: the product's link and the lots. */
 const boxLines = (tx: DbTx, packageId: string) =>
@@ -65,22 +78,90 @@ const wrongItemError = (lotNumber: string, itemRef: string) =>
   });
 
 /**
- * Scans a printed lot number into the package's lot-needing box line for that lot's item, by the
- * split rule. A lot for another item is refused with nothing saved on the line, and one internal
- * note on the package written in its own transaction, so it outlives the refused scan. Idempotent
- * on `scanId`. Lots are saved `UNVERIFIED`; validation against Lumexia comes later.
+ * What a scan names. A printed number names its item by reference code. A QR code names a lot
+ * Lumexia may resolve (then `itemId` is its item); unresolved, it's only `lumexiaLotId`.
+ */
+type ScannedLot = {
+  lotNumber: string | null;
+  lumexiaLotId: string | null;
+  referenceCode: string | null;
+  itemId: string | null;
+};
+
+/**
+ * A QR code's lot, from Lumexia within the 2 s budget. Down, slow, unconfigured or not knowing the
+ * lot all leave it unresolved: it's saved `UNVERIFIED` and validated later (decision 5).
+ */
+async function resolveLot(db: Db, code: LotCode, connect: Connect): Promise<ScannedLot> {
+  if (code.kind === "number") {
+    return {
+      lotNumber: code.lotNumber,
+      lumexiaLotId: null,
+      referenceCode: code.referenceCode,
+      itemId: null,
+    };
+  }
+  const unresolved = { lotNumber: null, lumexiaLotId: code.id, referenceCode: null, itemId: null };
+  let found: Awaited<ReturnType<LumexiaClient["getLot"]>>;
+  try {
+    const client = await connect(db);
+    found = client ? await client.getLot(code.id) : null;
+  } catch (error) {
+    // A key that can't be decrypted is as good as unconfigured here.
+    if (isLumexiaError(error) || error instanceof AppError) return unresolved;
+    throw error;
+  }
+  if (!found) return unresolved;
+  const lotNumber = found.lotNumber.trim().toUpperCase();
+  const parsed = parseLotCode(lotNumber);
+  return {
+    lotNumber,
+    lumexiaLotId: code.id,
+    referenceCode: parsed?.kind === "number" ? parsed.referenceCode : null,
+    itemId: found.itemId,
+  };
+}
+
+type BoxLine = Awaited<ReturnType<typeof boxLines>>[number];
+
+/**
+ * The lot-needing box lines a lot can go on: its item's (from Lumexia) for a resolved QR code;
+ * for a number, the lines with its reference code, else those whose link has no reference code
+ * (validation checks them later); for an unresolved QR code, all of them.
+ */
+function candidatesFor(lines: BoxLine[], lot: ScannedLot): BoxLine[] {
+  if (lot.itemId) return lines.filter((it) => it.orderItem.product?.lumexiaItemId === lot.itemId);
+  if (!lot.referenceCode) return lines;
+  const itemRef = (it: BoxLine) => it.orderItem.product?.lumexiaItemRef?.toUpperCase() ?? null;
+  const exact = lines.filter((it) => itemRef(it) === lot.referenceCode);
+  return exact.length > 0 ? exact : lines.filter((it) => itemRef(it) === null);
+}
+
+const asCandidate = (it: BoxLine): LineCandidate => ({
+  packageItemId: it.id,
+  name: it.orderItem.name,
+  quantity: it.quantity,
+});
+
+/**
+ * Scans a lot (its printed number, or its label's QR code) into the package's lot-needing box line
+ * for that lot's item, by the split rule. When several lines could take it, refuses with
+ * `chooseLine` and the candidates; the client retries with `packageItemId`. A lot for another item
+ * is refused with nothing saved on the line, and one internal note on the package written in its
+ * own transaction, so it outlives the refused scan. Idempotent on `scanId`. Lots are saved
+ * `UNVERIFIED`; validation against Lumexia comes later.
  */
 export async function scanLot(
   db: Db,
   actor: Actor,
-  { packageId, code, scanId }: ScanLotInput,
-  { now = new Date() }: PackOptions = {},
+  { packageId, code, scanId, packageItemId }: ScanLotInput,
+  { now = new Date(), connect = defaultConnect }: LotOptions = {},
 ): Promise<PackResult> {
   assertCan(actor, "order.pack");
-  const lot = parseLotCode(code);
-  if (!lot) throw new AppError("BAD_REQUEST", "errors.lumexia.notALot");
-  // QR codes (the lot's UUID) need Lumexia to name their item; they come with the QR ticket.
-  if (lot.kind === "uuid") throw new AppError("BAD_REQUEST", "errors.lumexia.scanLotNumber");
+  const parsed = parseLotCode(code);
+  if (!parsed) throw new AppError("BAD_REQUEST", "errors.lumexia.notALot");
+  // Asked before the transaction: the order lock isn't held while Lumexia answers.
+  const lot = await resolveLot(db, parsed, connect);
 
   try {
     return await db.$transaction(async (tx) => {
@@ -98,26 +179,30 @@ export async function scanLot(
         (it) => it.orderItem.product && needsLot(it.orderItem.product, settings),
       );
       if (lotLines.length === 0) throw new AppError("CONFLICT", "errors.lumexia.lotNotOnPackage");
-      // A line whose link has no reference code can't be checked offline; validation will.
-      const candidates = lotLines.filter((it) => {
-        const itemRef = it.orderItem.product?.lumexiaItemRef;
-        return !itemRef || itemRef.toUpperCase() === lot.referenceCode;
-      });
-      const target = candidates[0];
-      if (!target) {
+      const candidates = candidatesFor(lotLines, lot);
+      if (candidates.length === 0 && lot.lotNumber) {
         throw new WrongItem(
           order.id,
           lot.lotNumber,
-          lot.referenceCode,
+          lot.referenceCode ?? lot.lotNumber,
           lotLines.map((it) => it.orderItem.name),
         );
+      }
+      const target = packageItemId
+        ? candidates.find((it) => it.id === packageItemId)
+        : candidates[0];
+      if (!target) throw new AppError("CONFLICT", "errors.lumexia.lotNotOnPackage");
+      if (!packageItemId && candidates.length > 1) {
+        throw new AppError("CONFLICT", "errors.lumexia.chooseLine", undefined, {
+          candidates: candidates.map(asCandidate),
+        });
       }
 
       let written = false;
       await withIdempotency(tx, scanId, SCAN, actor, async () => {
         const plan = scanLotInto(target.lots, target.quantity, {
           lotNumber: lot.lotNumber,
-          lumexiaLotId: null,
+          lumexiaLotId: lot.lumexiaLotId,
         });
         if (!plan.ok) {
           throw new AppError("CONFLICT", "errors.lumexia.allUnitsHaveLots", undefined, {
@@ -133,7 +218,11 @@ export async function scanLot(
           entityId: target.id,
           action: "lot.scan",
           before: { lots: lotSnapshot(target.lots) },
-          after: { lotNumber: lot.lotNumber, lots: lotSnapshot(plan.lots) },
+          after: {
+            lotNumber: lot.lotNumber,
+            lumexiaLotId: lot.lumexiaLotId,
+            lots: lotSnapshot(plan.lots),
+          },
           at: now,
         });
         written = true;
@@ -151,6 +240,83 @@ export async function scanLot(
     await noteRejectedLot(db, actor, packageId, scanId, error);
     throw wrongItemError(error.lotNumber, error.itemRef);
   }
+}
+
+/**
+ * Changes one lot's count by hand (the chip's dialog). The default lot gives or takes the
+ * difference and keeps at least 1, so the lots still cover the box line: `errors.lumexia.lotQuantity`
+ * with the allowed `{ min, max }` otherwise. The default's own count is whatever the others leave.
+ */
+export function setLotQuantity(
+  db: Db,
+  actor: Actor,
+  { lotId, quantity }: SetLotQuantityInput,
+  options: PackOptions = {},
+): Promise<PackResult> {
+  return editLot(db, actor, lotId, "lot.setQuantity", options, (lots) => {
+    const plan = setLotQuantityIn(lots, lotId, quantity);
+    if (!plan.ok) {
+      throw new AppError("CONFLICT", "errors.lumexia.lotQuantity", undefined, {
+        params: { min: plan.min, max: plan.max },
+      });
+    }
+    return plan.lots;
+  });
+}
+
+/**
+ * Removes a lot from its box line: its units go to the default lot. Removing the default makes
+ * the next lot by position the default; removing the only lot leaves the line needing a lot.
+ */
+export function removeLot(
+  db: Db,
+  actor: Actor,
+  { lotId }: LotIdInput,
+  options: PackOptions = {},
+): Promise<PackResult> {
+  return editLot(db, actor, lotId, "lot.remove", options, (lots) => removeLotFrom(lots, lotId));
+}
+
+/** A hand edit of one box line's lots, run like a packing write. An edit that changes nothing writes nothing. */
+async function editLot(
+  db: Db,
+  actor: Actor,
+  lotId: string,
+  action: string,
+  { now = new Date() }: PackOptions,
+  plan: (lots: LotSlot[]) => LotSlot[],
+): Promise<PackResult> {
+  assertCan(actor, "order.pack");
+  return db.$transaction(async (tx) => {
+    const row = await tx.packageItemLot.findUnique({
+      where: { id: lotId },
+      select: { packageItem: { select: { id: true, packageId: true } } },
+    });
+    if (!row) throw notFound();
+    const { id: packageItemId, packageId } = row.packageItem;
+    const { order } = await lockPackage(tx, actor, packageId, now);
+    // Read again under the lock: another write may have just changed or removed it.
+    const before = await loadLots(tx, packageItemId);
+    if (!before.some((l) => l.id === lotId)) throw notFound();
+    const after = plan(before);
+    const unchanged =
+      after.length === before.length &&
+      after.every((l) => before.some((b) => b.id === l.id && b.quantity === l.quantity));
+    if (!unchanged) {
+      await writeLots(tx, packageItemId, before, after, { scannedById: actor.userId, now });
+      await recordAudit(tx, actor, {
+        entityType: "PackageItem",
+        entityId: packageItemId,
+        action,
+        before: { lots: lotSnapshot(before) },
+        after: { lotId, lots: lotSnapshot(after) },
+        at: now,
+      });
+      await touchClaim(tx, actor, order.id, { now });
+      await notifyOrderChanged(tx, { id: order.id, status: order.status });
+    }
+    return packResult(tx, order.id);
+  });
 }
 
 /**

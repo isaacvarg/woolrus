@@ -93,3 +93,80 @@ test("a packer scans lots into a box: Lot needed, chips, a wrong-item refusal, a
   await page.reload();
   await expect(page.getByTestId("pack-lots")).toContainText("1 × B07C1124");
 });
+
+test("a packer picks the line in Which line? and edits a lot's count from its chip (ticket #164)", async ({
+  page,
+}) => {
+  const customerName = `E2E ${crypto.randomUUID()}`;
+  const order = await createOrder({
+    customerName,
+    quantity: 3,
+    status: "PACKING",
+    ownProduct: true,
+  });
+  const line = await db.orderItem.findFirstOrThrow({ where: { orderId: order.id } });
+  const product = await db.product.findUniqueOrThrow({ where: { id: line.productId as string } });
+  const ref = (product.sku as string).toUpperCase();
+  await db.product.update({
+    where: { id: product.id },
+    data: { lumexiaItemId: crypto.randomUUID(), lumexiaItemRef: ref, lotOverride: true },
+  });
+  // A second variation of the same item: both lines take its lots.
+  await db.orderItem.create({
+    data: {
+      orderId: order.id,
+      wooLineItemId: order.wooOrderId + 900_000,
+      productId: product.id,
+      sku: "E2E-SKU-L",
+      name: "E2E item (Large)",
+      quantity: 2,
+      unitPriceCents: 500,
+      attributes: [],
+    },
+  });
+
+  await signInAs(page, ["PACKER"]);
+  await page.goto("/queue/packing");
+  await page.getByRole("searchbox", { name: "Search orders" }).fill(customerName);
+  await page
+    .getByRole("row", { name: new RegExp(order.number) })
+    .getByRole("button", { name: "Start packing" })
+    .click();
+  await expect(page).toHaveURL(`/pack/${order.id}`, { timeout: 20_000 });
+
+  await page.getByRole("button", { name: "Add package" }).click();
+  const boxDialog = page.getByRole("dialog", { name: "Choose a box" });
+  await boxDialog.getByLabel("Length").fill("12");
+  await boxDialog.getByLabel("Width").fill("9");
+  await boxDialog.getByLabel("Height").fill("4");
+  await boxDialog.getByRole("button", { name: "Use this size" }).click();
+  await expect(boxDialog).toBeHidden();
+  await page.getByRole("button", { name: "Put everything left here" }).click();
+  await expect(page.getByTestId("pack-lot-needed")).toHaveCount(2);
+
+  // The lot fits both lines: Which line? asks, and the scan goes on the one chosen.
+  await scanCode(page, `${ref}.A12A0124`);
+  const which = page.getByRole("dialog", { name: "Which line?" });
+  await which.getByRole("button", { name: /E2E item \(Large\)/ }).click();
+  await expect(which).toBeHidden();
+  const lots = page.getByTestId("pack-lots");
+  await expect(lots).toContainText("2 × A12A0124");
+  await expect(page.getByTestId("pack-lot-needed")).toHaveCount(1);
+
+  // A second lot on the 3-unit line, then its count changed from the chip.
+  await scanCode(page, `${ref}.A12A0124`);
+  await which.getByRole("button", { name: /E2E item \(3/ }).click();
+  await scanCode(page, `${ref}.B07C1124`);
+  await which.getByRole("button", { name: /E2E item \(3/ }).click();
+  await expect(lots).toContainText("1 × B07C1124");
+  await lots.getByRole("button", { name: "1 from lot B07C1124" }).click();
+  const lotDialog = page.getByRole("dialog", { name: "Lot B07C1124" });
+  await lotDialog.getByLabel("Units from this lot").fill("2");
+  await lotDialog.getByRole("button", { name: "Save count" }).click();
+  await expect(lotDialog).toBeHidden();
+  await expect(lots).toContainText("2 × B07C1124");
+  await expect(lots).toContainText("1 × A12A0124");
+
+  await page.reload();
+  await expect(page.getByTestId("pack-lots")).toContainText("2 × B07C1124");
+});

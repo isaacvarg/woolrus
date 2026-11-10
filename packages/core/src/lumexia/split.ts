@@ -94,3 +94,45 @@ export function removeUnitsFromLots(current: readonly LotSlot[], units: number):
   }
   return lots.filter((l) => l.quantity > 0);
 }
+
+export type LotEditPlan = { ok: true; lots: LotSlot[] } | { ok: false; min: number; max: number };
+
+/**
+ * One lot's count changed by hand: the default lot gives or takes the difference and keeps at
+ * least 1, so the lots still cover the box line exactly. The default's own count is the rest of
+ * the units, so for it only its current count is allowed.
+ */
+export function setLotQuantityIn(
+  current: readonly LotSlot[],
+  lotId: string,
+  quantity: number,
+): LotEditPlan {
+  const lots = byPosition(current);
+  const [first] = lots;
+  const target = lots.find((l) => l.id === lotId);
+  if (!first || !target) throw new Error(`lot ${lotId} isn't on this box line`);
+  if (target === first) {
+    return quantity === first.quantity
+      ? { ok: true, lots }
+      : { ok: false, min: first.quantity, max: first.quantity };
+  }
+  const max = target.quantity + first.quantity - 1;
+  if (quantity < 1 || quantity > max) return { ok: false, min: 1, max };
+  first.quantity -= quantity - target.quantity;
+  target.quantity = quantity;
+  return { ok: true, lots };
+}
+
+/**
+ * A lot removed by hand: its units go to the default lot. Removing the default makes the next lot
+ * by position the default, with the units; removing the only lot leaves none (the line needs one).
+ */
+export function removeLotFrom(current: readonly LotSlot[], lotId: string): LotSlot[] {
+  const lots = byPosition(current);
+  const target = lots.find((l) => l.id === lotId);
+  if (!target) throw new Error(`lot ${lotId} isn't on this box line`);
+  const rest = lots.filter((l) => l !== target);
+  const [first] = rest;
+  if (first) first.quantity += target.quantity;
+  return rest;
+}

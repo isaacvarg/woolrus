@@ -21,6 +21,10 @@ export const AppErrorData = z.object({
     .optional(),
   /** A refused scan of an unknown code that the caller may link to the line's product. */
   canLink: z.boolean().optional(),
+  /** A lot scan that fits more than one box line: the client asks which and retries with one. */
+  candidates: z
+    .array(z.object({ packageItemId: z.string(), name: z.string(), quantity: z.number() }))
+    .optional(),
 });
 export type AppErrorData = z.infer<typeof AppErrorData>;
 

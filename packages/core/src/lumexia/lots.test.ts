@@ -2,12 +2,13 @@ import type { Db } from "@woolrus/db";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { createActor, resetDb, testDb } from "../../test/db";
 import { createOrder, type LineSpec } from "../../test/factories";
+import { FakeLumexiaClient } from "../adapters/lumexia/fake";
 import { completePack } from "../packing/complete";
 import { getPackView } from "../packing/queries";
 import { packRemaining, packUnits, scanIntoPackage, unpackUnits } from "../packing/service";
 import type { UserActor } from "../permissions";
 import { loadSettings } from "../settings/service";
-import { scanLot } from "./lots";
+import { removeLot, scanLot, setLotQuantity } from "./lots";
 import { setLotRules } from "./rules";
 
 // SPEC-lumexia "Capturing lots" and the packed gate's lotMissing: success criteria 3, 5–8.
@@ -186,14 +187,11 @@ describe("scanLot: refusals", () => {
     });
   });
 
-  it("refuses what isn't a lot, and a QR code for now", async () => {
+  it("refuses what isn't a lot", async () => {
     const { packer, pkg } = await packing();
     await expect(scan(packer, pkg.id, "LAV-8OZ")).rejects.toMatchObject({
       kind: "BAD_REQUEST",
       messageKey: "errors.lumexia.notALot",
-    });
-    await expect(scan(packer, pkg.id, crypto.randomUUID())).rejects.toMatchObject({
-      messageKey: "errors.lumexia.scanLotNumber",
     });
   });
 
@@ -308,5 +306,270 @@ describe("the packed gate's lotMissing", () => {
     const view = await getPackView(db, packer, { orderId: order.id });
     expect(view.unmet.map((u) => u.messageKey)).toEqual(["errors.workflow.gate.lotMissing"]);
     expect(view.packages[0]?.items[0]?.needsLot).toBe(true);
+  });
+});
+
+/** Scans with `lumexia` as the configured client (null = unconfigured). */
+const scanWith = (
+  lumexia: FakeLumexiaClient | null,
+  actor: UserActor,
+  input: { packageId: string; code: string; packageItemId?: string },
+  scanId = key(),
+) => scanLot(db, actor, { ...input, scanId }, { connect: async () => lumexia });
+
+/** A fake Lumexia that knows `item-BASE1234` and `item-OTHER`, each with one lot. */
+function lumexiaWithLots() {
+  const lumexia = new FakeLumexiaClient();
+  const ours = lumexia.addLot({ itemId: "item-BASE1234", lotNumber: "base1234.a12a0124" });
+  const theirs = lumexia.addLot({ itemId: "item-OTHER", lotNumber: "OTHER9.B01B0125" });
+  return { lumexia, ours, theirs };
+}
+
+describe("scanLot: QR codes (the lot's UUID)", () => {
+  it("resolves the lot and its item through Lumexia, with a 2 s budget", async () => {
+    const { packer, pkg, items } = await packing([{ quantity: 1 }, { quantity: 3 }]);
+    await link(items[0]?.productId ?? null, "CAP9");
+    await link(items[1]?.productId ?? null, "BASE1234");
+    const target = await db.packageItem.findFirstOrThrow({
+      where: { packageId: pkg.id, orderItemId: items[1]?.id },
+    });
+    const { lumexia, ours } = lumexiaWithLots();
+
+    await scanWith(lumexia, packer, { packageId: pkg.id, code: ours.id.toUpperCase() });
+
+    const rows = await db.packageItemLot.findMany({ where: { packageItemId: target.id } });
+    expect(rows).toMatchObject([
+      { lotNumber: A, lumexiaLotId: ours.id, quantity: 3, status: "UNVERIFIED" },
+    ]);
+    expect(lumexia.calls).toEqual([{ method: "getLot", args: [ours.id] }]);
+  });
+
+  it("treats a lot's QR code and its printed number as one lot", async () => {
+    const { packer, pkg, boxLine } = await packing();
+    const { lumexia, ours } = lumexiaWithLots();
+
+    await scan(packer, pkg.id, B);
+    await scanWith(lumexia, packer, { packageId: pkg.id, code: ours.id });
+    await scan(packer, pkg.id, A);
+    expect(await lotsOf(boxLine.id)).toBe("B07C1124:1 A12A0124:2");
+  });
+
+  it("refuses a lot on another item with one note, and saves nothing", async () => {
+    const { packer, order, pkg, boxLine } = await packing();
+    const { lumexia, theirs } = lumexiaWithLots();
+    const scanId = key();
+
+    for (let i = 0; i < 2; i++) {
+      await expect(
+        scanWith(lumexia, packer, { packageId: pkg.id, code: theirs.id }, scanId),
+      ).rejects.toMatchObject({
+        kind: "CONFLICT",
+        messageKey: "errors.lumexia.lotWrongItem",
+        params: { lotNumber: "OTHER9.B01B0125", itemRef: "OTHER9" },
+      });
+    }
+
+    expect(await db.packageItemLot.count({ where: { packageItemId: boxLine.id } })).toBe(0);
+    const notes = await db.note.findMany({ where: { orderId: order.id } });
+    expect(notes.map((n) => n.content)).toEqual([
+      "Lot OTHER9.B01B0125 (item OTHER9) was scanned for Line 0 and rejected: it belongs to a different item.",
+    ]);
+  });
+
+  const down = () => {
+    const lumexia = new FakeLumexiaClient();
+    lumexia.setDown(true);
+    return lumexia;
+  };
+  const unknown = () => new FakeLumexiaClient();
+
+  it.each([
+    ["down", down],
+    ["unconfigured", () => null],
+    ["without that lot", unknown],
+  ])(
+    "saves it unverified with only its id when Lumexia is %s, and packing completes",
+    async (_, make) => {
+      const { packer, order, pkg, boxLine } = await packing();
+      const id = crypto.randomUUID();
+
+      await scanWith(make(), packer, { packageId: pkg.id, code: id });
+
+      const rows = await db.packageItemLot.findMany({ where: { packageItemId: boxLine.id } });
+      expect(rows).toMatchObject([
+        { lotNumber: null, lumexiaLotId: id, quantity: 3, status: "UNVERIFIED" },
+      ]);
+      await expect(
+        completePack(db, packer, { orderId: order.id, expectedVersion: 3, after: "queue" }),
+      ).resolves.toEqual({ nextOrderId: null });
+    },
+  );
+
+  it("asks which line when an unresolved lot fits more than one", async () => {
+    const { packer, pkg, items } = await packing([{ quantity: 2 }, { quantity: 1 }]);
+    await link(items[1]?.productId ?? null, "CAP9");
+    const lines = await db.packageItem.findMany({
+      where: { packageId: pkg.id },
+      orderBy: { packedAt: "asc" },
+    });
+    const id = crypto.randomUUID();
+
+    await expect(scanWith(down(), packer, { packageId: pkg.id, code: id })).rejects.toMatchObject({
+      kind: "CONFLICT",
+      messageKey: "errors.lumexia.chooseLine",
+      candidates: [
+        { packageItemId: lines[0]?.id, name: "Line 0", quantity: 2 },
+        { packageItemId: lines[1]?.id, name: "Line 1", quantity: 1 },
+      ],
+    });
+    expect(await db.packageItemLot.count()).toBe(0);
+
+    await scanWith(down(), packer, {
+      packageId: pkg.id,
+      code: id,
+      packageItemId: lines[1]?.id as string,
+    });
+    expect(
+      await db.packageItemLot.findMany({ where: { packageItemId: lines[1]?.id as string } }),
+    ).toMatchObject([{ lumexiaLotId: id, quantity: 1 }]);
+  });
+});
+
+describe("scanLot: Which line?", () => {
+  /** Two variations of one item in one box: both lines are BASE1234. */
+  async function twoVariations() {
+    const built = await packing([{ quantity: 2 }, { quantity: 3 }]);
+    await link(built.items[1]?.productId ?? null, "BASE1234");
+    const lines = await db.packageItem.findMany({
+      where: { packageId: built.pkg.id },
+      orderBy: { packedAt: "asc" },
+    });
+    return { ...built, lines };
+  }
+
+  it("refuses with the candidates, then applies the split rule to the chosen line", async () => {
+    const { packer, pkg, lines } = await twoVariations();
+    const [first, second] = lines.map((l) => ({ id: l.id })) as [{ id: string }, { id: string }];
+
+    await expect(scan(packer, pkg.id, A)).rejects.toMatchObject({
+      messageKey: "errors.lumexia.chooseLine",
+      candidates: [
+        { packageItemId: first.id, name: "Line 0", quantity: 2 },
+        { packageItemId: second.id, name: "Line 1", quantity: 3 },
+      ],
+    });
+
+    const pick = (code: string) =>
+      scanLot(db, packer, { packageId: pkg.id, code, scanId: key(), packageItemId: second.id });
+    await pick(A);
+    await pick(B);
+    expect(await lotsOf(second.id)).toBe("A12A0124:2 B07C1124:1");
+    expect(await lotsOf(first.id)).toBe("");
+  });
+
+  it("refuses a chosen line the lot can't go on", async () => {
+    const { packer, pkg, items } = await packing([{ quantity: 2 }, { quantity: 1 }]);
+    const other = await db.packageItem.findFirstOrThrow({
+      where: { packageId: pkg.id, orderItemId: items[1]?.id },
+    });
+    await expect(
+      scanLot(db, packer, { packageId: pkg.id, code: A, scanId: key(), packageItemId: other.id }),
+    ).rejects.toMatchObject({ messageKey: "errors.lumexia.lotNotOnPackage" });
+  });
+
+  it("puts a resolved QR lot on the chosen line of its item", async () => {
+    const { packer, pkg, lines } = await twoVariations();
+    const { lumexia, ours } = lumexiaWithLots();
+    await expect(
+      scanWith(lumexia, packer, { packageId: pkg.id, code: ours.id }),
+    ).rejects.toMatchObject({ messageKey: "errors.lumexia.chooseLine" });
+    await scanWith(lumexia, packer, {
+      packageId: pkg.id,
+      code: ours.id,
+      packageItemId: lines[0]?.id as string,
+    });
+    expect(await lotsOf(lines[0]?.id as string)).toBe("A12A0124:2");
+  });
+});
+
+describe("setLotQuantity and removeLot", () => {
+  /** A 5-unit box line holding A:2 B:1 C:2. */
+  async function threeLots() {
+    const built = await packing([{ quantity: 5 }]);
+    for (const code of [A, B, C, C]) await scan(built.packer, built.pkg.id, code);
+    const rows = await db.packageItemLot.findMany({
+      where: { packageItemId: built.boxLine.id },
+      orderBy: { position: "asc" },
+    });
+    const [a, b, c] = rows.map((r) => r.id) as [string, string, string];
+    return { ...built, a, b, c };
+  }
+
+  it("setLotQuantity moves the difference from or to the default lot, audited", async () => {
+    const { packer, boxLine, b, c } = await threeLots();
+
+    const result = await setLotQuantity(db, packer, { lotId: c, quantity: 3 });
+    expect(await lotsOf(boxLine.id)).toBe("A12A0124:1 B07C1124:1 C01D0125:3");
+    expect(result.packages[0]?.items[0]?.lots.map((l) => l.quantity)).toEqual([1, 1, 3]);
+    await setLotQuantity(db, packer, { lotId: b, quantity: 1 }); // unchanged
+    await setLotQuantity(db, packer, { lotId: c, quantity: 1 });
+    expect(await lotsOf(boxLine.id)).toBe("A12A0124:3 B07C1124:1 C01D0125:1");
+
+    const audit = await db.auditEvent.findMany({ where: { action: "lot.setQuantity" } });
+    expect(audit).toHaveLength(2);
+    expect(audit[0]).toMatchObject({ entityType: "PackageItem", entityId: boxLine.id });
+  });
+
+  it("setLotQuantity can't take the default below 1 or change the default itself", async () => {
+    const { packer, boxLine, a, c } = await threeLots();
+
+    await expect(setLotQuantity(db, packer, { lotId: c, quantity: 4 })).rejects.toMatchObject({
+      kind: "CONFLICT",
+      messageKey: "errors.lumexia.lotQuantity",
+      params: { min: 1, max: 3 },
+    });
+    await expect(setLotQuantity(db, packer, { lotId: a, quantity: 1 })).rejects.toMatchObject({
+      messageKey: "errors.lumexia.lotQuantity",
+      params: { min: 2, max: 2 },
+    });
+    expect(await lotsOf(boxLine.id)).toBe("A12A0124:2 B07C1124:1 C01D0125:2");
+  });
+
+  it("removeLot gives its units to the default, and promotes the next when the default goes", async () => {
+    const { packer, boxLine, a, b, c } = await threeLots();
+
+    await removeLot(db, packer, { lotId: b });
+    expect(await lotsOf(boxLine.id)).toBe("A12A0124:3 C01D0125:2");
+    await removeLot(db, packer, { lotId: a });
+    expect(await lotsOf(boxLine.id)).toBe("C01D0125:5");
+    const result = await removeLot(db, packer, { lotId: c });
+    expect(await db.packageItemLot.count()).toBe(0);
+    expect(result.unmet.map((u) => u.messageKey)).toEqual(["errors.workflow.gate.lotMissing"]);
+    expect(await db.auditEvent.count({ where: { action: "lot.remove" } })).toBe(3);
+  });
+
+  it("refuses a lot that doesn't exist", async () => {
+    const { packer } = await threeLots();
+    await expect(removeLot(db, packer, { lotId: crypto.randomUUID() })).rejects.toMatchObject({
+      kind: "NOT_FOUND",
+    });
+  });
+
+  it("both need order.pack and the live claim", async () => {
+    const { pkg, a, c } = await threeLots();
+    void pkg;
+    const picker = await createActor(db, ["PICKER"]);
+    const otherPacker = await createActor(db, ["PACKER"]);
+
+    for (const call of [
+      (actor: UserActor) => setLotQuantity(db, actor, { lotId: c, quantity: 1 }),
+      (actor: UserActor) => removeLot(db, actor, { lotId: a }),
+    ]) {
+      await expect(call(picker)).rejects.toMatchObject({ kind: "FORBIDDEN" });
+      await expect(call(otherPacker)).rejects.toMatchObject({
+        messageKey: "errors.workflow.claimRequired",
+      });
+    }
+    expect(await db.packageItemLot.count()).toBe(3);
   });
 });

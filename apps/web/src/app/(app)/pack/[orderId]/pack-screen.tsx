@@ -1,7 +1,10 @@
 "use client";
 
+import { ORPCError } from "@orpc/client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
+  AppErrorData,
+  LotDto,
   PackageBoxInput,
   PackageItemView,
   PackLine,
@@ -11,7 +14,7 @@ import type {
   WeightDisplay,
 } from "@woolrus/contracts";
 import { formatWeight } from "@woolrus/core/format";
-import { isLotCode, lotLabel } from "@woolrus/core/lot-codes";
+import { isLotCode } from "@woolrus/core/lot-codes";
 import { Box, EllipsisVertical, PencilSparkles, Weight } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -29,6 +32,7 @@ import { client, orpc } from "@/lib/orpc";
 import { playScanSound, useScanner } from "@/lib/scanner";
 import { ScanBanner, type ScanOutcome } from "../../pick/[orderId]/pick-screen";
 import { BoxDialog } from "./box-dialog";
+import { type LineCandidate, LotDialog, useLotText, WhichLineDialog } from "./lot-dialogs";
 import { OrderDrawer, PackageNoteDialog } from "./order-drawer";
 import { OverweightDialog, overweightMax, WeightField } from "./weight-field";
 
@@ -121,7 +125,24 @@ type Dialogs =
   | { kind: "delete"; pkg: PackPackage }
   | { kind: "note"; pkg: PackPackage }
   | { kind: "items"; pkgId: string }
-  | { kind: "overweight"; pkg: PackPackage; weightOz: number; maxOz: number };
+  | { kind: "overweight"; pkg: PackPackage; weightOz: number; maxOz: number }
+  | { kind: "lot"; pkgId: string; orderItemId: string; lotId: string }
+  | {
+      kind: "whichLine";
+      pkg: PackPackage;
+      code: string;
+      scanId: string;
+      candidates: LineCandidate[];
+    };
+
+/** A lot scan that fits several box lines: the lines to choose from in **Which line?** */
+const chooseLineOf = (error: unknown) => {
+  if (!(error instanceof ORPCError)) return null;
+  const data = error.data as AppErrorData | undefined;
+  return data?.messageKey === "errors.lumexia.chooseLine" ? (data.candidates ?? null) : null;
+};
+
+type ScanLotVars = { pkg: PackPackage; code: string; scanId: string; packageItemId?: string };
 
 type Weigh = { pkg: PackPackage; weightOz: number; overrideReason?: string };
 
@@ -225,10 +246,11 @@ function PackLayout({
   const scanLot = useMutation({
     mutationKey: writeKey,
     scope: { id: writeScope },
-    mutationFn: ({ pkg, code, scanId }: { pkg: PackPackage; code: string; scanId: string }) =>
-      client.packing.scanLot({ packageId: pkg.id, code, scanId }),
+    mutationFn: ({ pkg, code, scanId, packageItemId }: ScanLotVars) =>
+      client.packing.scanLot({ packageId: pkg.id, code, scanId, packageItemId }),
     onSuccess: (result, { pkg }) => {
       accept(result);
+      setDialog((d) => (d?.kind === "whichLine" ? null : d));
       playScanSound(true);
       // The box line whose lots changed is the one this scan went on.
       const lotsOf = (p: PackPackage | undefined, id: string) =>
@@ -237,18 +259,24 @@ function PackLayout({
       const item = after?.items.find(
         (it) => lotsOf(after, it.orderItemId) !== lotsOf(pkg, it.orderItemId),
       );
-      const lot = item?.lots.at(-1)?.lotNumber;
+      const lot = item?.lots.at(-1);
       setScanned({
         ok: true,
         at: Date.now(),
         message: t("pack.lotScanned", {
-          lot: lot ? lotLabel(lot) : "",
+          lot: lot ? lotText(lot) : "",
           name: item?.name ?? "",
           number: pkg.number,
         }),
       });
     },
-    onError: (error) => {
+    onError: (error, { pkg, code, scanId }) => {
+      const candidates = chooseLineOf(error);
+      if (candidates) {
+        setDialog({ kind: "whichLine", pkg, code, scanId, candidates });
+        return;
+      }
+      setDialog((d) => (d?.kind === "whichLine" ? null : d));
       playScanSound(false);
       setScanned({ ok: false, at: Date.now(), message: errorMessage(error) });
     },
@@ -294,6 +322,20 @@ function PackLayout({
   });
 
   const closeDialog = () => setDialog(null);
+  const lotText = useLotText();
+  const editLot = useMutation({
+    mutationKey: writeKey,
+    scope: { id: writeScope },
+    mutationFn: (edit: { lotId: string; quantity?: number }) =>
+      edit.quantity === undefined
+        ? client.packing.removeLot({ lotId: edit.lotId })
+        : client.packing.setLotQuantity({ lotId: edit.lotId, quantity: edit.quantity }),
+    onSuccess: async (result) => {
+      await accept(result);
+      closeDialog();
+    },
+    onError: refuse,
+  });
   const add = useMutation({
     mutationKey: writeKey,
     scope: { id: writeScope },
@@ -483,6 +525,7 @@ function PackLayout({
                     putAllDisabled={unassignedUnits === 0}
                     onDelete={() => setDialog({ kind: "delete", pkg })}
                     onAddNote={() => setDialog({ kind: "note", pkg })}
+                    onOpenLot={(lot) => setDialog({ kind: "lot", pkgId: pkg.id, ...lot })}
                     onReport={mayReport ? () => setReporting({ packageId: pkg.id }) : undefined}
                     weightDisplay={weightDisplay}
                     weighing={weigh.isPending && weigh.variables?.pkg.id === pkg.id}
@@ -608,6 +651,42 @@ function PackLayout({
             </Dialog>
           );
         })()}
+      {dialog?.kind === "lot" &&
+        (() => {
+          // Read from the live view, so the dialog shows the counts the server last confirmed.
+          const item = view.packages
+            .find((p) => p.id === dialog.pkgId)
+            ?.items.find((it) => it.orderItemId === dialog.orderItemId);
+          const lot = item?.lots.find((l) => l.id === dialog.lotId);
+          if (!item || !lot) return null;
+          return (
+            <LotDialog
+              key={`${lot.id}:${lot.quantity}`}
+              item={item}
+              lot={lot}
+              isPending={editLot.isPending}
+              onSetQuantity={(quantity) => editLot.mutate({ lotId: lot.id, quantity })}
+              onRemove={() => editLot.mutate({ lotId: lot.id })}
+              onClose={closeDialog}
+            />
+          );
+        })()}
+      {dialog?.kind === "whichLine" && (
+        <WhichLineDialog
+          packageNumber={dialog.pkg.number}
+          candidates={dialog.candidates}
+          isPending={scanLot.isPending}
+          onChoose={(packageItemId) =>
+            scanLot.mutate({
+              pkg: dialog.pkg,
+              code: dialog.code,
+              scanId: dialog.scanId,
+              packageItemId,
+            })
+          }
+          onClose={closeDialog}
+        />
+      )}
       {dialog?.kind === "note" && (
         <PackageNoteDialog orderId={order.id} pkg={dialog.pkg} onClose={closeDialog} />
       )}
@@ -836,6 +915,7 @@ function PackageCard({
   putAllDisabled,
   onDelete,
   onAddNote,
+  onOpenLot,
   onReport,
   weightDisplay,
   weighing,
@@ -856,6 +936,7 @@ function PackageCard({
   putAllDisabled: boolean;
   onDelete: () => void;
   onAddNote: () => void;
+  onOpenLot: (lot: { orderItemId: string; lotId: string }) => void;
 }) {
   const t = useTranslations();
   const size = pkg.box ?? pkg.dimensions;
@@ -988,7 +1069,14 @@ function PackageCard({
                   </span>
                 ))}
               </Button>
-              <LotRows items={pkg.items} />
+              <LotRows
+                items={pkg.items}
+                onOpen={
+                  disabled
+                    ? undefined
+                    : (item, lot) => onOpenLot({ orderItemId: item.orderItemId, lotId: lot.id })
+                }
+              />
             </div>
           )}
         </>
@@ -999,10 +1087,19 @@ function PackageCard({
 
 /**
  * Each lot-needing box line: **Lot needed**, or its lots as chips ("2 × A12A0124"). Scanning a lot
- * label with the package selected fills them in (SPEC-lumexia "Reads and UI").
+ * label with the package selected fills them in; tapping a chip opens its dialog (SPEC-lumexia
+ * "Reads and UI").
  */
-function LotRows({ items }: { items: PackageItemView[] }) {
+function LotRows({
+  items,
+  onOpen,
+}: {
+  items: PackageItemView[];
+  /** Unset while the packer can't edit (no claim): the chips are only shown. */
+  onOpen?: (item: PackageItemView, lot: LotDto) => void;
+}) {
   const t = useTranslations();
+  const lotText = useLotText();
   const lotItems = items.filter((it) => it.needsLot || it.lots.length > 0);
   if (lotItems.length === 0) return null;
   return (
@@ -1017,15 +1114,29 @@ function LotRows({ items }: { items: PackageItemView[] }) {
           ) : (
             <ul className="flex flex-wrap gap-2" aria-label={t("pack.lotsOf", { name: item.name })}>
               {item.lots.map((lot) => {
-                const label = lot.lotNumber ? lotLabel(lot.lotNumber) : (lot.lumexiaLotId ?? "");
+                const label = lotText(lot);
+                const text = t("pack.lotChip", { count: lot.quantity, lot: label });
+                const name = t("pack.lotChipLabel", { count: lot.quantity, lot: label });
                 return (
-                  <li
-                    key={lot.id}
-                    className="badge badge-outline badge-lg tabular-nums"
-                    title={lot.lotNumber ?? undefined}
-                    aria-label={t("pack.lotChipLabel", { count: lot.quantity, lot: label })}
-                  >
-                    {t("pack.lotChip", { count: lot.quantity, lot: label })}
+                  <li key={lot.id}>
+                    {onOpen ? (
+                      <Button
+                        className="btn-outline btn-sm h-auto min-h-10 tabular-nums"
+                        aria-label={name}
+                        onPress={() => onOpen(item, lot)}
+                      >
+                        {text}
+                      </Button>
+                    ) : (
+                      <span
+                        className="badge badge-outline badge-lg tabular-nums"
+                        title={lot.lotNumber ?? undefined}
+                        role="img"
+                        aria-label={name}
+                      >
+                        {text}
+                      </span>
+                    )}
                   </li>
                 );
               })}

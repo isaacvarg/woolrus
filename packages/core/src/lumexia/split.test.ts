@@ -3,8 +3,10 @@ import {
   addUnitsToLots,
   type LotPlan,
   type LotSlot,
+  removeLotFrom,
   removeUnitsFromLots,
   scanLotInto,
+  setLotQuantityIn,
 } from "./split";
 
 // SPEC-lumexia success criterion 6: the split rule.
@@ -106,6 +108,50 @@ describe("addUnitsToLots / removeUnitsFromLots", () => {
     expect(show(removeUnitsFromLots(start, 4))).toBe("A:1 B:1");
     expect(show(removeUnitsFromLots(start, 5))).toBe("A:1");
     expect(removeUnitsFromLots(start, 6)).toEqual([]);
+  });
+});
+
+/** Saved lots: each with its lot number as its id. */
+const saved = (boxQuantity: number, codes: string[]) =>
+  scanAll(boxQuantity, codes).map((l) => ({ ...l, id: l.lotNumber as string }));
+
+describe("setLotQuantityIn", () => {
+  it("moves the difference from or to the default lot", () => {
+    const start = saved(5, ["A", "B"]); // A:4 B:1
+    const up = setLotQuantityIn(start, "B", 3);
+    expect(up.ok && show(up.lots)).toBe("A:2 B:3");
+    const down = setLotQuantityIn(saved(5, ["A", "B", "B"]), "B", 1);
+    expect(down.ok && show(down.lots)).toBe("A:4 B:1");
+    expect(show(start)).toBe("A:4 B:1"); // the input isn't changed
+  });
+
+  it("can't take the default below 1, so the total never passes the box line", () => {
+    const start = saved(5, ["A", "B", "C"]); // A:3 B:1 C:1
+    expect(setLotQuantityIn(start, "B", 3).ok).toBe(true);
+    expect(setLotQuantityIn(start, "B", 4)).toEqual({ ok: false, min: 1, max: 3 });
+  });
+
+  it("leaves the default's count to the others: only its current count is allowed", () => {
+    const start = saved(5, ["A", "B"]);
+    expect(setLotQuantityIn(start, "A", 4)).toEqual({ ok: true, lots: start });
+    expect(setLotQuantityIn(start, "A", 3)).toEqual({ ok: false, min: 4, max: 4 });
+  });
+});
+
+describe("removeLotFrom", () => {
+  it("gives a removed lot's units to the default", () => {
+    const start = saved(5, ["A", "B", "C", "C"]); // A:2 B:1 C:2
+    expect(show(removeLotFrom(start, "C"))).toBe("A:4 B:1");
+  });
+
+  it("makes the next lot by position the default when the default goes", () => {
+    const after = removeLotFrom(saved(5, ["A", "B", "C"]), "A"); // A:3 B:1 C:1
+    expect(show(after)).toBe("B:4 C:1");
+    expect(after[0]?.id).toBe("B");
+  });
+
+  it("leaves no lots when the only one goes", () => {
+    expect(removeLotFrom(saved(3, ["A"]), "A")).toEqual([]);
   });
 });
 

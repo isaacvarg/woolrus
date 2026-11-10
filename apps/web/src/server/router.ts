@@ -103,6 +103,7 @@ import {
   refreshRates,
   registerStation,
   removeFromBatch,
+  removeLot,
   renameLabGroup,
   renameStation,
   reopenIssue,
@@ -133,6 +134,7 @@ import {
   setCarrierEnabled,
   setCarrierLabel,
   setLotOverride,
+  setLotQuantity,
   setLotRules,
   setPackageBox,
   setPin,
@@ -435,6 +437,12 @@ export const router = implementer.router({
       scanIntoPackage(db, context.actor, input),
     ),
     scanLot: api.packing.scanLot.handler(({ input, context }) => scanLot(db, context.actor, input)),
+    setLotQuantity: api.packing.setLotQuantity.handler(({ input, context }) =>
+      setLotQuantity(db, context.actor, input),
+    ),
+    removeLot: api.packing.removeLot.handler(({ input, context }) =>
+      removeLot(db, context.actor, input),
+    ),
   },
   pickBatches: {
     create: api.pickBatches.create.handler(({ input, context }) =>
