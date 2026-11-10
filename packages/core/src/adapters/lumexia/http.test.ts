@@ -252,6 +252,25 @@ describe("Lumexia HTTP client", () => {
       });
     }
 
+    it("raises LumexiaUnavailable when the headers arrive but the body stalls past the timeout", async () => {
+      const { client } = setupWith({
+        // As fetch does: the abort errors the body stream that is still being read.
+        fetch: async (_input, init) =>
+          new Response(
+            new ReadableStream({
+              start(controller) {
+                controller.enqueue(new TextEncoder().encode('{"items": ['));
+                init?.signal?.addEventListener("abort", () =>
+                  controller.error(init.signal?.reason),
+                );
+              },
+            }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          ),
+      });
+      expect(await failure(client.listTypes("item"))).toBeInstanceOf(LumexiaUnavailable);
+    });
+
     it("throws a 400 as an internal error with Lumexia's code, not a Lumexia failure", async () => {
       const { client } = setup(json(error400, 400));
       const error = await failure(client.listTypes("item"));

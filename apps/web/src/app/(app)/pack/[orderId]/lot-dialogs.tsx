@@ -66,12 +66,10 @@ export function LotDialog({
                 value={quantity}
                 onChange={(value) => setQuantity(Number.isNaN(value) ? lot.quantity : value)}
               />
-              <Button
-                type="submit"
-                className="btn-primary"
-                isPending={isPending}
-                isDisabled={quantity === lot.quantity}
-              >
+              {/* Always enabled: NumberField commits its value on blur or Enter, so while the
+                  packer is still typing `quantity` holds the old count. An unchanged save is a
+                  no-op on the server. */}
+              <Button type="submit" className="btn-primary" isPending={isPending}>
                 {t("pack.lotSave")}
               </Button>
             </Form>

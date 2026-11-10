@@ -9,11 +9,15 @@ import { parseLotCode } from "./codes";
 // lot, from a typed lot number or a scan of the label's QR code (the lot's UUID). Packages a repack
 // threw away never shipped, so they're left out; orders not shipped yet stay in, with no date.
 
-/** A UUID matches the Lumexia lot id; anything else the lot number, ignoring case. */
+/**
+ * A UUID matches the Lumexia lot id; anything else the lot number, ignoring case. Lot numbers are
+ * stored upper-cased (scans, Lumexia's answers), so an exact upper-case match is case-insensitive
+ * without `ILIKE`, which would read `%` and `_` as wildcards and skip the index.
+ */
 function lotWhere(code: string): Prisma.PackageItemLotWhereInput {
   const parsed = parseLotCode(code);
   if (parsed?.kind === "uuid") return { lumexiaLotId: parsed.id };
-  return { lotNumber: { equals: code.trim(), mode: "insensitive" } };
+  return { lotNumber: code.trim().toUpperCase() };
 }
 
 async function findLotShipments(db: DbTx, code: string): Promise<LotShipmentRow[]> {

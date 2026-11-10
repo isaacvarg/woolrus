@@ -82,7 +82,18 @@ export function createLumexiaClient(
 
     // Every answer of Lumexia's, errors included, is JSON; anything else is another site.
     const isJson = response.headers.get("content-type")?.includes("json") ?? false;
-    const body: unknown = isJson ? await response.json().catch(() => undefined) : undefined;
+    const body: unknown = isJson
+      ? await response.json().catch((error: unknown) => {
+          // The timeout covers the body too: a stalled body is Lumexia being slow, not another site.
+          if (
+            error instanceof Error &&
+            (error.name === "TimeoutError" || error.name === "AbortError")
+          ) {
+            throw new LumexiaUnavailable(`${what}: timeout`);
+          }
+          return undefined;
+        })
+      : undefined;
     if (body === undefined) {
       response.body?.cancel().catch(() => {});
       throw new LumexiaBadResponse(`${what}: ${status}, not JSON`, status);

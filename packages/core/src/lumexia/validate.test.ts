@@ -134,11 +134,11 @@ describe("validateLots", () => {
     expect(fake.calls.map((c) => c.method)).toEqual(["getLot"]);
   });
 
-  it("doesn't fill in a number another lot on the line already has", async () => {
+  it("merges a QR lot into the same lot already on the line by number", async () => {
     const { boxLine } = await packing();
     const fake = lumexia();
     const found = fake.addLot({ itemId: ITEM, lotNumber: "BASE1234.A12A0124" });
-    await lot(boxLine.id, { quantity: 2 });
+    const byNumber = await lot(boxLine.id, { quantity: 2 });
     const qr = await lot(boxLine.id, {
       lotNumber: null,
       lumexiaLotId: found.id,
@@ -148,7 +148,31 @@ describe("validateLots", () => {
 
     await validateLots(db, fake, [qr.id], { now: NOW });
 
-    expect(await reread(qr.id)).toMatchObject({ status: "VALID", lotNumber: null });
+    const rows = await db.packageItemLot.findMany({ where: { packageItemId: boxLine.id } });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      id: byNumber.id,
+      status: "VALID",
+      lotNumber: "BASE1234.A12A0124",
+      lumexiaLotId: found.id,
+      quantity: 3,
+      position: 0,
+    });
+    const audit = await db.auditEvent.findFirstOrThrow({ where: { action: "lot.validate" } });
+    expect(audit.after).toMatchObject({ lotId: qr.id, mergedInto: byNumber.id, quantity: 3 });
+  });
+
+  it("keeps the earlier position when the merged-away lot was the default", async () => {
+    const { boxLine } = await packing();
+    const fake = lumexia();
+    const found = fake.addLot({ itemId: ITEM, lotNumber: "BASE1234.A12A0124" });
+    const qr = await lot(boxLine.id, { lotNumber: null, lumexiaLotId: found.id, quantity: 2 });
+    const byNumber = await lot(boxLine.id, { quantity: 1, position: 1 });
+
+    await validateLots(db, fake, [qr.id], { now: NOW });
+
+    expect(await db.packageItemLot.findUnique({ where: { id: qr.id } })).toBeNull();
+    expect(await reread(byNumber.id)).toMatchObject({ quantity: 3, position: 0, status: "VALID" });
   });
 
   it("marks a lot only on other items WRONG_ITEM with one note, however often it's checked", async () => {

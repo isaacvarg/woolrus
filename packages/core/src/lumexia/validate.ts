@@ -99,11 +99,9 @@ export async function validateLots(
       const lot = await lotWithLine(tx, id);
       if (!lot || settled.includes(lot.status)) return null;
       const status: LotStatus = onItem ? "VALID" : other ? "WRONG_ITEM" : "NOT_FOUND";
-      const filled = onItem ? await fillIn(tx, lot, onItem) : {};
-      const after = await tx.packageItemLot.update({
-        where: { id },
-        data: { status, checkedAt: now, ...filled },
-      });
+      const after = onItem
+        ? await settleValid(tx, lot, onItem, now)
+        : await tx.packageItemLot.update({ where: { id }, data: { status, checkedAt: now } });
       if (status === "WRONG_ITEM") {
         const lotNumber = after.lotNumber ?? other?.lotNumber ?? lot.lumexiaLotId ?? "";
         await createTextNote(tx, lumexiaActor, {
@@ -129,6 +127,7 @@ export async function validateLots(
           status,
           lotNumber: after.lotNumber,
           lumexiaLotId: after.lumexiaLotId,
+          ...(after.id !== id && { mergedInto: after.id, quantity: after.quantity }),
           by: lumexiaActor.system,
         },
         at: now,
@@ -146,35 +145,43 @@ export async function validateLots(
 }
 
 /**
- * The number or id a valid lot was missing. Left out when another lot on the same line already has
- * it (a number and the same lot's QR code scanned separately), which the unique keys would refuse.
+ * Marks a lot VALID with both its number and its Lumexia id. When the same lot is already on the
+ * line under its other identifier (its number scanned, and its QR code scanned while Lumexia was
+ * down), the two rows are one lot: this row's units fold into that one, which keeps the earlier
+ * position, so lot lookup finds every unit by either identifier. Returns the row that remains.
  */
-async function fillIn(
+async function settleValid(
   tx: DbTx,
-  lot: { id: string; packageItemId: string; lotNumber: string | null; lumexiaLotId: string | null },
+  lot: { id: string; packageItemId: string; quantity: number; position: number },
   found: LumexiaLot,
-): Promise<{ lotNumber?: string; lumexiaLotId?: string }> {
-  const fields: { lotNumber?: string; lumexiaLotId?: string } = {};
-  if (!lot.lotNumber) fields.lotNumber = found.lotNumber.trim().toUpperCase();
-  if (!lot.lumexiaLotId) fields.lumexiaLotId = found.id;
-  const taken = await tx.packageItemLot.findMany({
+  now: Date,
+) {
+  const identity = { lotNumber: found.lotNumber.trim().toUpperCase(), lumexiaLotId: found.id };
+  const twin = await tx.packageItemLot.findFirst({
     where: {
       packageItemId: lot.packageItemId,
       id: { not: lot.id },
-      OR: [
-        ...(fields.lotNumber ? [{ lotNumber: fields.lotNumber }] : []),
-        ...(fields.lumexiaLotId ? [{ lumexiaLotId: fields.lumexiaLotId }] : []),
-      ],
+      OR: [{ lotNumber: identity.lotNumber }, { lumexiaLotId: identity.lumexiaLotId }],
     },
-    select: { lotNumber: true, lumexiaLotId: true },
   });
-  if (taken.some((t) => fields.lotNumber && t.lotNumber === fields.lotNumber)) {
-    delete fields.lotNumber;
+  if (!twin) {
+    return tx.packageItemLot.update({
+      where: { id: lot.id },
+      data: { status: "VALID", checkedAt: now, ...identity },
+    });
   }
-  if (taken.some((t) => fields.lumexiaLotId && t.lumexiaLotId === fields.lumexiaLotId)) {
-    delete fields.lumexiaLotId;
-  }
-  return fields;
+  // Deleted first, so the twin can take both identifiers without tripping the unique keys.
+  await tx.packageItemLot.delete({ where: { id: lot.id } });
+  return tx.packageItemLot.update({
+    where: { id: twin.id },
+    data: {
+      status: "VALID",
+      checkedAt: now,
+      ...identity,
+      quantity: twin.quantity + lot.quantity,
+      position: Math.min(twin.position, lot.position),
+    },
+  });
 }
 
 /**

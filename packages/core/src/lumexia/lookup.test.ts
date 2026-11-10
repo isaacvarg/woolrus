@@ -127,6 +127,14 @@ describe("lookupLot", () => {
     expect((await lookupLot(db, reader, { code: "BASE1234.Z99L3199" })).rows).toEqual([]);
   });
 
+  it("reads % and _ literally, not as wildcards", async () => {
+    const reader = await createActor(db, ["QA"]);
+    await shipped([{ lotNumber: A, quantity: 3 }]);
+
+    expect((await lookupLot(db, reader, { code: "%" })).rows).toEqual([]);
+    expect((await lookupLot(db, reader, { code: "BASE1234_A12A0124" })).rows).toEqual([]);
+  });
+
   it("needs order.read", async () => {
     const nobody = await createActor(db, []);
     await expect(lookupLot(db, nobody, { code: A })).rejects.toMatchObject({ kind: "FORBIDDEN" });

@@ -14,7 +14,7 @@ import type {
   WeightDisplay,
 } from "@woolrus/contracts";
 import { formatWeight } from "@woolrus/core/format";
-import { isLotCode } from "@woolrus/core/lot-codes";
+import { isLotCode, parseLotCode } from "@woolrus/core/lot-codes";
 import { Box, EllipsisVertical, PencilSparkles, Weight } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -249,7 +249,7 @@ function PackLayout({
     scope: { id: writeScope },
     mutationFn: ({ pkg, code, scanId, packageItemId }: ScanLotVars) =>
       client.packing.scanLot({ packageId: pkg.id, code, scanId, packageItemId }),
-    onSuccess: (result, { pkg }) => {
+    onSuccess: (result, { pkg, code }) => {
       accept(result);
       setDialog((d) => (d?.kind === "whichLine" ? null : d));
       playScanSound(true);
@@ -260,12 +260,16 @@ function PackLayout({
       const item = after?.items.find(
         (it) => lotsOf(after, it.orderItemId) !== lotsOf(pkg, it.orderItemId),
       );
-      const lot = item?.lots.at(-1);
+      // The scanned lot itself, not the latest one: a re-scan adds a unit to an earlier lot.
+      const parsed = parseLotCode(code);
+      const lot = item?.lots.find((l) =>
+        parsed?.kind === "uuid" ? l.lumexiaLotId === parsed.id : l.lotNumber === parsed?.lotNumber,
+      );
       setScanned({
         ok: true,
         at: Date.now(),
         message: t("pack.lotScanned", {
-          lot: lot ? lotText(lot) : "",
+          lot: lot ? lotText(lot) : code.trim(),
           name: item?.name ?? "",
           number: pkg.number,
         }),

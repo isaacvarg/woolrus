@@ -3,6 +3,7 @@ import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { createActor, resetDb, testDb } from "../../test/db";
 import { createOrder, type LineSpec } from "../../test/factories";
 import { FakeLumexiaClient } from "../adapters/lumexia/fake";
+import { voidItem } from "../exceptions/voids";
 import { completePack } from "../packing/complete";
 import { getPackView } from "../packing/queries";
 import { packRemaining, packUnits, scanIntoPackage, unpackUnits } from "../packing/service";
@@ -236,6 +237,24 @@ describe("packing keeps a box line's lots covering its units", () => {
     expect(await lotsOf(boxLine.id)).toBe("A12A0124:1 B07C1124:1");
     await unpackUnits(db, packer, { packageId: pkg.id, orderItemId, quantity: 2 });
     expect(await db.packageItemLot.count()).toBe(0);
+  });
+
+  it("a void that shrinks a box line takes the units out of its lots too", async () => {
+    const { packer, pkg, items, order, boxLine } = await packing([{ quantity: 3 }]);
+    for (const code of [A, B, B]) await scan(packer, pkg.id, code);
+    expect(await lotsOf(boxLine.id)).toBe("A12A0124:1 B07C1124:2");
+
+    await voidItem(db, packer, {
+      orderId: order.id,
+      orderItemId: items[0]?.id as string,
+      quantity: 1,
+      reason: "Damaged",
+    });
+
+    expect((await db.packageItem.findUniqueOrThrow({ where: { id: boxLine.id } })).quantity).toBe(
+      2,
+    );
+    expect(await lotsOf(boxLine.id)).toBe("A12A0124:1 B07C1124:1");
   });
 
   it("random scans, packs and unpacks never break Σ lots = the box line", async () => {
