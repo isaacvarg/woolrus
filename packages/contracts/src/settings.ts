@@ -28,6 +28,38 @@ export const IntegrationUrl = z
     return url === null || (url.username === "" && url.password === "");
   }, "errors.field.urlCredentials");
 
+/** 10/8, 172.16/12, 192.168/16, loopback 127/8 and link-local 169.254/16. */
+const PRIVATE_IPV4 = /^(10\.\d+|172\.(1[6-9]|2\d|3[01])|192\.168|127\.\d+|169\.254)\.\d+\.\d+$/;
+/** Loopback, unique-local fc00::/7 and link-local fe80::/10; `URL` keeps IPv6 hosts in brackets. */
+const PRIVATE_IPV6 = /^\[(::1|f[cd][0-9a-f]{0,2}:.*|fe[89ab][0-9a-f]?:.*)\]$/i;
+/** Names that only resolve on a local network, or a bare hostname such as `lumexia`. */
+const LOCAL_NAME = /^([a-z0-9-]+|.+\.(localhost|local|lan|internal|home\.arpa))$/i;
+
+const isLocalNetworkHost = (hostname: string) =>
+  PRIVATE_IPV4.test(hostname) || PRIVATE_IPV6.test(hostname) || LOCAL_NAME.test(hostname);
+
+/**
+ * A service on the warehouse's own network (Lumexia, SPEC-lumexia): https:// anywhere, or http://
+ * for a local-network host (a private or loopback IP, a bare hostname, or a .local, .lan,
+ * .internal or .home.arpa name). A public host still needs https://, since the API key travels in a
+ * header. No username or password in the URL, as with `IntegrationUrl`.
+ */
+export const LocalServiceUrl = z
+  .string()
+  .trim()
+  .max(2048)
+  .refine((value) => {
+    const url = parseUrl(value);
+    return (
+      url !== null &&
+      (url.protocol === "https:" || (url.protocol === "http:" && isLocalNetworkHost(url.hostname)))
+    );
+  }, "errors.field.urlHttpsOrLocal")
+  .refine((value) => {
+    const url = parseUrl(value);
+    return url === null || (url.username === "" && url.password === "");
+  }, "errors.field.urlCredentials");
+
 const isAddress = (value: string) => z.email().safeParse(value).success;
 const NAMED_ADDRESS = /^([^<>,"]+?)\s*<([^<>\s]+)>$/;
 
@@ -145,7 +177,7 @@ export type PublicSettings = z.infer<typeof PublicSettings>;
 export const UpdateSettingsInput = z.object({
   shipFromAddress: ShipFromAddress.optional(),
   wooStoreUrl: IntegrationUrl.nullable().optional(),
-  lumexiaBaseUrl: IntegrationUrl.nullable().optional(),
+  lumexiaBaseUrl: LocalServiceUrl.nullable().optional(),
   emailFrom: EmailFrom.nullable().optional(),
   syncIntervalMinutes: SyncIntervalMinutes.optional(),
   stationIdleLockMinutes: StationIdleLockMinutes.optional(),

@@ -109,6 +109,10 @@ What the as-built API means for Woolrus:
 - **Aliases** are plain values and include other systems' ids (such as WooCommerce product ids), so a SKU match
   on an alias can hit the wrong item. `suggestLinks` labels alias matches ("matched alias LAV-BASE-1G") so the
   admin sees which ones to check, and it skips any SKU matching more than one item.
+- **Local network:** Lumexia runs on the warehouse network, often over plain http. Its URL in Settings takes
+  `https://` anywhere, or `http://` for a local-network host: a private or loopback IP, a bare hostname, or a
+  `.local`, `.lan`, `.internal` or `.home.arpa` name. A public host still needs `https://`, because the API key
+  travels in a header. WooCommerce and carrier URLs keep the stricter rule (`http://` only for localhost).
 - **Dev port:** Lumexia's dev server defaults to :3000, which is Woolrus web's port. Run Lumexia on another port
   in dev (e.g. `http://localhost:3100`) and save that as the Lumexia URL in Settings.
 - There are no recorded responses. The fixtures are written from the shapes above, and an opt-in live adapter test
