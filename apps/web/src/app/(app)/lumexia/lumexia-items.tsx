@@ -351,6 +351,12 @@ function ItemSearch({ row, onLinked }: { row: LumexiaProductRow; onLinked: () =>
   );
 }
 
+const MATCH_LABEL = {
+  referenceCode: "matchedCode",
+  alias: "matchedAlias",
+  baseCode: "matchedBase",
+} as const;
+
 /** Match by SKU's review: every suggestion ticked; alias matches are flagged for a second look. */
 function ReviewDialog({
   suggestions,
@@ -419,9 +425,7 @@ function ReviewDialog({
                         <span
                           className={`badge badge-sm ${s.matchedOn === "alias" ? "badge-warning" : "badge-ghost"}`}
                         >
-                          {s.matchedOn === "alias"
-                            ? t("matchedAlias", { value: s.matchedValue })
-                            : t("matchedCode", { value: s.matchedValue })}
+                          {t(MATCH_LABEL[s.matchedOn], { value: s.matchedValue })}
                         </span>
                       </span>
                     </Checkbox>

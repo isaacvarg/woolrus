@@ -32,7 +32,8 @@ Lumexia in the background so the floor never waits on it.
    item now needs a lot.
 2. I open **Lumexia items**. Every product is listed with its SKU, its Lumexia link (or "Not linked"), its item
    type and whether it needs a lot. I press **Match by SKU**; Woolrus proposes a Lumexia item for each product
-   whose SKU equals an item's reference code or alias. I review the list and confirm the matches.
+   whose SKU equals an item's reference code or alias, or whose SKU is a pack size of a production base
+   (`BASE1812G` and `BASE1812P` both propose the item `BASE1812`). I review the list and confirm the matches.
 3. For a product whose SKU doesn't match, I search Lumexia items by name or reference code and pick one. For an
    exception, I can set one linked product to **Always needs a lot** or **Never needs a lot**, overriding the
    rule; **Follow lot rules** is the default.
@@ -218,7 +219,7 @@ All need `lumexia.manage` (Admin). The ones that call Lumexia also need a config
 | `getLotRules()` | `listTypes` for all three kinds, joined with the three Settings lists: `{ itemTypes, procurementTypes, inventoryTypes }`, each `{ id, name, needsLot, isTracked? }[]` plus `unknownIds` (switched-on ids Lumexia no longer returns, shown as "Removed in Lumexia" so they can be switched off). Lumexia down → the saved ids are returned without names, and the switches are read-only. |
 | `setLotRules({ itemTypeIds, procurementTypeIds, inventoryTypeIds })` | Replaces the three lists (UUIDs, not checked against Lumexia, so it works offline). Audited `settings.lumexiaLotRules` with before/after. |
 | `searchLumexiaItems({ q })` | Passes through to `searchItems`. |
-| `suggestLinks()` | Takes every unlinked product's SKU and calls `findItems({ referenceCodes })`, which matches reference codes and aliases case-insensitively. Returns `{ productId, item, matchedOn: "referenceCode" \| "alias" }[]`; writes nothing. A SKU matching more than one item is left out. |
+| `suggestLinks()` | Takes every unlinked product's SKU and calls `findItems({ referenceCodes })`, which matches reference codes and aliases case-insensitively. A SKU of the form `BASE<digits><letter>` is a production base in one pack size, so it is looked up without the letter too: when the whole SKU matches nothing, the item whose reference code equals the base is proposed (reference codes only, never aliases). Returns `{ productId, item, matchedOn: "referenceCode" \| "alias" \| "baseCode" }[]`; writes nothing. A SKU matching more than one item is left out, with no fallback to the base. |
 | `linkProduct({ productId, itemId })` | Reads the item, then sets `lumexiaItemId/Ref`, the three type ids and `lumexiaSyncedAt`. Audited `product.lumexiaLink`. |
 | `linkProducts({ links })` | Same, for up to 200 confirmed suggestions in one transaction (one `findItems({ ids })` call). |
 | `unlinkProduct({ productId })` | Clears the link fields and `lotOverride`. Lots already captured stay. |
@@ -342,8 +343,9 @@ lookup uses `order.read`.
    or its override is `true`, and false for an override of `false` or an unlinked product (unit tests over the
    table of cases). Switching a type on makes an order already in Packing need lots. `getLotRules` lists all three
    kinds with their switches and `isTracked`, reports unknown ids, and works read-only when Lumexia is down.
-4. **Linking:** `suggestLinks` matches SKUs to reference codes and aliases case-insensitively, skips ambiguous
-   SKUs and writes nothing; `linkProduct` stores the reference code and all three type ids; unlink clears the
+4. **Linking:** `suggestLinks` matches SKUs to reference codes and aliases case-insensitively, resolves
+   pack-sized base SKUs to their base's reference code when the whole SKU matches nothing, skips ambiguous SKUs and
+   writes nothing; `linkProduct` stores the reference code and all three type ids; unlink clears the
    override and keeps lots; the refresh job updates type ids; store sync leaves `lotOverride` and every `lumexia*`
    field alone; every operation is Admin-only (allowed + forbidden tests).
 5. **Codes:** `parseLotCode` accepts `BASE1234.A12A0124` and UUIDs, rejects product barcodes, and splits out the

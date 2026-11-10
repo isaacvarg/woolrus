@@ -119,13 +119,16 @@ export type LumexiaProducts = z.infer<typeof LumexiaProducts>;
 export const SearchLumexiaItemsInput = z.object({ q: z.string().trim().min(1).max(100) });
 export type SearchLumexiaItemsInput = z.infer<typeof SearchLumexiaItemsInput>;
 
-/** A proposed link: the SKU equals the item's reference code or one of its aliases. */
+/**
+ * A proposed link: the SKU equals the item's reference code or one of its aliases, or (`baseCode`)
+ * it's a production base's SKU whose pack-size letter drops off to give the reference code.
+ */
 export const LinkSuggestion = z.object({
   productId: z.string(),
   productName: z.string(),
   sku: z.string(),
   item: LumexiaItemDto,
-  matchedOn: z.enum(["referenceCode", "alias"]),
+  matchedOn: z.enum(["referenceCode", "alias", "baseCode"]),
   /** The code or alias as Lumexia has it. */
   matchedValue: z.string(),
 });

@@ -1,4 +1,7 @@
 {
+  "enabledPlugins": {
+    "agent-skills@addy-agent-skills": true
+  },
   "extraKnownMarketplaces": {
     "addy-agent-skills": {
       "source": {
@@ -6,8 +9,5 @@
         "repo": "addyosmani/agent-skills"
       }
     }
-  },
-  "enabledPlugins": {
-    "agent-skills@addy-agent-skills": true
   }
 }

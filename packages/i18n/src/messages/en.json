@@ -1748,6 +1748,7 @@
       "none": "No unlinked product's SKU matches exactly one Lumexia item.",
       "matchedCode": "matched reference code {value}",
       "matchedAlias": "matched alias {value}",
+      "matchedBase": "matched base code {value}",
       "confirm": "{count, plural, one {Link # product} other {Link # products}}",
       "cancel": "Cancel",
       "done": "{count, plural, one {Linked # product.} other {Linked # products.}}"

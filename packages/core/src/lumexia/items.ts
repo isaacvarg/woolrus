@@ -190,9 +190,17 @@ export async function searchLumexiaItems(
 }
 
 /**
+ * WooCommerce sells each production base per pack size, as its Lumexia reference code plus one
+ * letter (BASE1812G a gallon, BASE1812P a pail), while Lumexia has one item, BASE1812.
+ */
+const PACK_SIZED_BASE_SKU = /^(BASE\d+)[A-Z]$/i;
+const baseCodeOf = (sku: string) => PACK_SIZED_BASE_SKU.exec(sku)?.[1] ?? null;
+
+/**
  * A Lumexia item for each unlinked product whose SKU equals an item's reference code or one of its
  * aliases, case-insensitively. Aliases include other systems' ids, so each match says which it hit.
- * A SKU matching more than one item is left out. Writes nothing.
+ * A pack-sized base SKU that matches nothing falls back to its base's reference code (never an
+ * alias). A SKU matching more than one item is left out. Writes nothing.
  */
 export async function suggestLinks(
   db: Db,
@@ -212,17 +220,37 @@ export async function suggestLinks(
     return sku ? [{ ...p, sku }] : [];
   });
   if (products.length === 0) return [];
-  const skus = [...new Set(products.map((p) => p.sku))];
-  const items = await askLumexia(() => client.findItems({ referenceCodes: skus }));
+  const codes = [
+    ...new Set(
+      products.flatMap((p) => {
+        const base = baseCodeOf(p.sku);
+        return base ? [p.sku, base] : [p.sku];
+      }),
+    ),
+  ];
+  const items = await askLumexia(() => client.findItems({ referenceCodes: codes }));
 
   return products.flatMap((p): LinkSuggestion[] => {
     const sku = p.sku.toLowerCase();
-    const matches = items.flatMap((item): Match[] => {
+    const skuMatches = items.flatMap((item): Match[] => {
       if (item.referenceCode.toLowerCase() === sku)
         return [{ item, matchedOn: "referenceCode", matchedValue: item.referenceCode }];
       const alias = item.aliases.find((a) => a.toLowerCase() === sku);
       return alias === undefined ? [] : [{ item, matchedOn: "alias", matchedValue: alias }];
     });
+    const base = baseCodeOf(p.sku)?.toLowerCase();
+    const matches =
+      skuMatches.length > 0 || !base
+        ? skuMatches
+        : items
+            .filter((item) => item.referenceCode.toLowerCase() === base)
+            .map(
+              (item): Match => ({
+                item,
+                matchedOn: "baseCode",
+                matchedValue: item.referenceCode,
+              }),
+            );
     const [only] = matches;
     if (!only || matches.length > 1) return [];
     return [

@@ -32,6 +32,24 @@ const linked = {
   needsLot: true,
 };
 
+const suggestion = {
+  productId: PRODUCT,
+  productName: unlinked.name,
+  sku: "BASE1234",
+  item: {
+    id: ITEM,
+    referenceCode: "BASE1234",
+    name: "Lavender base",
+    aliases: [],
+    itemTypeId: BASE,
+    procurementTypeId: null,
+    inventoryTypeId: null,
+    archived: false,
+  },
+  matchedOn: "referenceCode",
+  matchedValue: "BASE1234",
+};
+
 const rpc = (json: unknown) => ({
   status: 200,
   contentType: "application/json",
@@ -44,29 +62,7 @@ async function stubLumexia(page: Page) {
   await page.route(/\/rpc\/lumexia\/products/, (route) =>
     route.fulfill(rpc({ configured: true, products: [isLinked ? linked : unlinked] })),
   );
-  await page.route(/\/rpc\/lumexia\/suggestLinks/, (route) =>
-    route.fulfill(
-      rpc([
-        {
-          productId: PRODUCT,
-          productName: unlinked.name,
-          sku: "BASE1234",
-          item: {
-            id: ITEM,
-            referenceCode: "BASE1234",
-            name: "Lavender base",
-            aliases: [],
-            itemTypeId: BASE,
-            procurementTypeId: null,
-            inventoryTypeId: null,
-            archived: false,
-          },
-          matchedOn: "referenceCode",
-          matchedValue: "BASE1234",
-        },
-      ]),
-    ),
-  );
+  await page.route(/\/rpc\/lumexia\/suggestLinks/, (route) => route.fulfill(rpc([suggestion])));
   await page.route(/\/rpc\/lumexia\/linkProducts/, (route) => {
     isLinked = true;
     return route.fulfill(rpc({ linked: 1 }));
@@ -110,6 +106,19 @@ test("an admin matches by SKU, confirms, and sees the product linked with Needs 
   await expect(row.getByRole("cell", { name: t.yes, exact: true })).toBeVisible();
   await page.getByRole("radio", { name: t.filters.needsLot }).click();
   await expect(page.getByRole("row", { name: new RegExp(unlinked.name) })).toBeVisible();
+});
+
+test("Match by SKU labels a pack-sized base SKU as matching its base code", async ({ page }) => {
+  await stubLumexia(page);
+  await page.route(/\/rpc\/lumexia\/suggestLinks/, (route) =>
+    route.fulfill(rpc([{ ...suggestion, sku: "BASE1234G", matchedOn: "baseCode" }])),
+  );
+  await signInAs(page, ["ADMIN"]);
+  await page.goto("/lumexia");
+  await page.getByRole("button", { name: en.lumexiaItems.matchBySku }).click();
+  const dialog = page.getByRole("dialog", { name: en.lumexiaItems.review.title });
+  await expect(dialog.getByText("BASE1234G")).toBeVisible();
+  await expect(dialog.getByText("matched base code BASE1234")).toBeVisible();
 });
 
 test("without a Lumexia client the page says it isn't configured and links to Settings", async ({

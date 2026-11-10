@@ -133,6 +133,80 @@ describe("suggestLinks", () => {
     expect(calls).toHaveLength(1);
     expect(calls[0]?.args[0]).toEqual({ referenceCodes: ["A", "B"] });
   });
+
+  describe("production base SKUs (reference code + pack-size letter)", () => {
+    it("links every pack size of a base to the base's item, case-insensitively", async () => {
+      const gallon = await product({ sku: "BASE1812G", name: "A gallon" });
+      const pail = await product({ sku: "base1812p", name: "B pail" });
+      const base = item("BASE1812");
+
+      expect(await suggestLinks(db, admin, connect())).toEqual([
+        {
+          productId: gallon.id,
+          productName: "A gallon",
+          sku: "BASE1812G",
+          item: expect.objectContaining({ id: base.id, referenceCode: "BASE1812" }),
+          matchedOn: "baseCode",
+          matchedValue: "BASE1812",
+        },
+        {
+          productId: pail.id,
+          productName: "B pail",
+          sku: "base1812p",
+          item: expect.objectContaining({ id: base.id, referenceCode: "BASE1812" }),
+          matchedOn: "baseCode",
+          matchedValue: "BASE1812",
+        },
+      ]);
+    });
+
+    it("asks Lumexia for the SKU and its base in the same findItems call", async () => {
+      await product({ sku: "BASE1812G" });
+      await product({ sku: "BASE1812P" });
+      await suggestLinks(db, admin, connect());
+      const calls = fake.calls.filter((c) => c.method === "findItems");
+      expect(calls).toHaveLength(1);
+      expect(calls[0]?.args[0]).toEqual({
+        referenceCodes: ["BASE1812G", "BASE1812", "BASE1812P"],
+      });
+    });
+
+    it("prefers an item matching the whole SKU over the base", async () => {
+      await product({ sku: "BASE1812G" });
+      const whole = item("BASE1812G");
+      item("BASE1812");
+
+      expect(await suggestLinks(db, admin, connect())).toEqual([
+        expect.objectContaining({
+          item: expect.objectContaining({ id: whole.id }),
+          matchedOn: "referenceCode",
+        }),
+      ]);
+    });
+
+    it("doesn't fall back to the base when the whole SKU is ambiguous", async () => {
+      await product({ sku: "BASE1812G" });
+      item("BASE1812G");
+      item("OTHER", { aliases: ["BASE1812G"] });
+      item("BASE1812");
+
+      expect(await suggestLinks(db, admin, connect())).toEqual([]);
+    });
+
+    it("matches the base on reference codes only, since aliases can hold other systems' ids", async () => {
+      await product({ sku: "BASE1812G" });
+      item("UNRELATED", { aliases: ["BASE1812"] });
+
+      expect(await suggestLinks(db, admin, connect())).toEqual([]);
+    });
+
+    it("strips a letter only from BASE<digits><letter> SKUs", async () => {
+      for (const sku of ["FO1812G", "MP-013B", "BASE1812GG", "BASE1812"]) await product({ sku });
+      for (const code of ["FO1812", "MP-013", "BASE1812G", "BASE181"]) item(code);
+
+      expect(await suggestLinks(db, admin, connect())).toEqual([]);
+    });
+  });
 });
 
 describe("linkProduct", () => {

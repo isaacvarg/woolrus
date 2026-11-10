@@ -1748,6 +1748,7 @@
       "none": "Ningún SKU de producto sin vincular coincide con exactamente un artículo de Lumexia.",
       "matchedCode": "coincide con el código de referencia {value}",
       "matchedAlias": "coincide con el alias {value}",
+      "matchedBase": "coincide con el código base {value}",
       "confirm": "{count, plural, one {Vincular # producto} other {Vincular # productos}}",
       "cancel": "Cancelar",
       "done": "{count, plural, one {# producto vinculado.} other {# productos vinculados.}}"
