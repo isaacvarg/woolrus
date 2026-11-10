@@ -69,7 +69,7 @@ export function RowLots({
               <span className="font-semibold">
                 {t("qa.lotUnits", { count: lot.quantity, lot: lotText(lot) })}
               </span>
-              <LotStatus status={lot.status} />
+              <LotStatus status={lot.status} warnUnverified />
               {blocking && (
                 <>
                   <span className="badge badge-error" data-testid="qa-lot-blocking">

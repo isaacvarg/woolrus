@@ -370,13 +370,37 @@ describe("the lumexia.validateLots job", () => {
   });
 });
 
+const healthy = async () => "ok" as const;
+
 describe("sweepLots", () => {
+  it("queues nothing while Lumexia is down, unconfigured or refusing the key", async () => {
+    const { boxLine } = await packing();
+    await lot(boxLine.id, { scannedAt: minutes(6) });
+
+    for (const state of ["down", "unconfigured"] as const) {
+      expect(await sweepLots(db, { now: NOW, health: async () => state })).toEqual({
+        queued: 0,
+        skipped: state,
+      });
+    }
+    expect(await validateJobs()).toEqual([]);
+  });
+
+  it("doesn't queue a lot again while a validation job still holds it", async () => {
+    const { boxLine } = await packing();
+    const old = await lot(boxLine.id, { scannedAt: minutes(6) });
+
+    expect(await sweepLots(db, { now: NOW, health: healthy })).toEqual({ queued: 1 });
+    expect(await sweepLots(db, { now: NOW, health: healthy })).toEqual({ queued: 0 });
+    expect((await validateJobs()).map((j) => j.ids)).toEqual([[old.id]]);
+  });
+
   it("re-queues unverified lots older than 5 minutes, and validates them once Lumexia is back", async () => {
     const { boxLine } = await packing();
     const old = await lot(boxLine.id, { scannedAt: minutes(6) });
     await lot(boxLine.id, { lotNumber: "BASE1234.B07C1124", position: 1, scannedAt: minutes(4) });
 
-    expect(await sweepLots(db, NOW)).toEqual({ queued: 1 });
+    expect(await sweepLots(db, { now: NOW, health: healthy })).toEqual({ queued: 1 });
     const jobs = await validateJobs();
     expect(jobs.map((j) => j.ids)).toEqual([[old.id]]);
 
@@ -422,7 +446,7 @@ describe("sweepLots", () => {
       checkedAt: days(2),
     });
 
-    expect(await sweepLots(db, NOW)).toEqual({ queued: 1 });
+    expect(await sweepLots(db, { now: NOW, health: healthy })).toEqual({ queued: 1 });
     expect((await validateJobs()).map((j) => j.ids)).toEqual([[due.id]]);
   });
 
@@ -443,7 +467,7 @@ describe("sweepLots", () => {
 
   it("queues nothing when nothing is due", async () => {
     await packing();
-    expect(await sweepLots(db, NOW)).toEqual({ queued: 0 });
+    expect(await sweepLots(db, { now: NOW, health: healthy })).toEqual({ queued: 0 });
     expect(await validateJobs()).toEqual([]);
   });
 });

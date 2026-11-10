@@ -8,7 +8,7 @@ import { createTextNote } from "../notes/service";
 import { lumexiaActor } from "../permissions";
 import { lockOrder } from "../workflow/lock";
 import { notifyOrderChanged } from "../workflow/notify";
-import { lumexiaClientFor } from "./connection";
+import { type LumexiaHealth, lumexiaClientFor, lumexiaHealth } from "./connection";
 
 // Lot validation (SPEC-lumexia "Validation"). Lots are saved UNVERIFIED at Packing and checked here,
 // in the background, so Lumexia being slow or down never holds up the floor (decision 5). Every lot
@@ -22,6 +22,8 @@ const NOT_FOUND_RECHECK_MS = 24 * 60 * 60_000;
 const NOT_FOUND_GIVE_UP_MS = 7 * 24 * 60 * 60_000;
 /** Lots per job the sweep queues. */
 const SWEEP_BATCH = 200;
+/** Lots one sweep queues at most; the rest wait for the next sweep. */
+const SWEEP_LIMIT = 2_000;
 
 /** Settled lots aren't checked again: a wrong lot is fixed by replacing it, not by re-checking. */
 const settled: readonly LotStatus[] = ["VALID", "WRONG_ITEM"];
@@ -223,11 +225,26 @@ async function endRetries(db: Db, queue: string, jobId: string): Promise<void> {
  * (saved while Lumexia was down or unconfigured, or whose job ran out of retries) and for NOT_FOUND
  * lots last checked a day ago or more, for 7 days after they were scanned. Lines whose product isn't
  * linked are left out: there's no item to check them against.
+ *
+ * It queues nothing while Lumexia isn't healthy (unconfigured, down, or refusing the key), so an
+ * outage or a bad key doesn't pile up failed jobs every 10 minutes; lots already waiting in a
+ * validation job aren't queued again, so a slow Lumexia doesn't get each lot checked twice; and one
+ * sweep queues at most `SWEEP_LIMIT` lots, oldest first, leaving the rest to the next.
  */
-export async function sweepLots(db: Db, now: Date = new Date()): Promise<{ queued: number }> {
+export async function sweepLots(
+  db: Db,
+  {
+    now = new Date(),
+    health = () => lumexiaHealth(db),
+  }: { now?: Date; health?: () => Promise<LumexiaHealth> } = {},
+): Promise<{ queued: number } | { queued: 0; skipped: Exclude<LumexiaHealth, "ok"> }> {
+  const state = await health();
+  if (state !== "ok") return { queued: 0, skipped: state };
   const at = (ms: number) => new Date(now.getTime() - ms);
+  const waiting = await queuedLotIds(db);
   const due = await db.packageItemLot.findMany({
     where: {
+      id: { notIn: waiting },
       packageItem: { orderItem: { product: { lumexiaItemId: { not: null } } } },
       OR: [
         { status: "UNVERIFIED", scannedAt: { lte: at(UNVERIFIED_GRACE_MS) } },
@@ -239,6 +256,7 @@ export async function sweepLots(db: Db, now: Date = new Date()): Promise<{ queue
       ],
     },
     orderBy: { scannedAt: "asc" },
+    take: SWEEP_LIMIT,
     select: { id: true },
   });
   const ids = due.map((l) => l.id);
@@ -251,4 +269,14 @@ export async function sweepLots(db: Db, now: Date = new Date()): Promise<{ queue
     }
   });
   return { queued: ids.length };
+}
+
+/** Lots in a validation job that hasn't finished: waiting, retrying or running. */
+async function queuedLotIds(db: Db): Promise<string[]> {
+  const rows = await db.$queryRawUnsafe<{ id: string }[]>(
+    `SELECT DISTINCT jsonb_array_elements_text(data->'packageItemLotIds') AS id
+       FROM ${JOBS_SCHEMA}.job WHERE name = $1 AND state IN ('created', 'retry', 'active')`,
+    queues.lumexiaValidateLots,
+  );
+  return rows.map((r) => r.id);
 }

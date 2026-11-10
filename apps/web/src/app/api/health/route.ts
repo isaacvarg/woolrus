@@ -21,6 +21,13 @@ export async function GET() {
   } catch {
     checks.database = "fail";
   }
+  // Informational, like email: Lumexia down never fails or degrades the endpoint, because the floor
+  // works without it and lots wait as unverified (SPEC-lumexia "Adapter"). Its ping (up to 3 s) is
+  // started here and awaited last, so it runs alongside the checks below instead of after them.
+  const lumexiaPending: Promise<"ok" | "unconfigured" | "down"> =
+    checks.database === "ok"
+      ? lumexiaHealth(db).catch(() => "down" as const)
+      : Promise.resolve("down" as const);
   // Without a valid key, integration secrets can't be stored or read (FR-SET-05).
   checks.encryption = encryptionKey() ? "ok" : "fail";
   // Creates a missing bucket (first use), then HEAD bucket; 2 s timeout each. Missing env counts as
@@ -65,14 +72,7 @@ export async function GET() {
     worker = "stale";
   }
   degraded ||= worker === "stale";
-  // Informational, like email: Lumexia down never fails or degrades the endpoint, because the floor
-  // works without it and lots wait as unverified (SPEC-lumexia "Adapter").
-  let lumexia: "ok" | "unconfigured" | "down" = "down";
-  try {
-    if (checks.database === "ok") lumexia = await lumexiaHealth(db);
-  } catch {
-    lumexia = "down";
-  }
+  const lumexia = await lumexiaPending;
   return Response.json(
     { ok, degraded, checks: { ...checks, email, woocommerce, worker, lumexia } },
     { status: ok ? 200 : 503 },
