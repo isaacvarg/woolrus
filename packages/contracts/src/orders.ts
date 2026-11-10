@@ -312,12 +312,14 @@ export const OrderPackageSummary = z.object({
   weightOz: z.number().nullable(),
   units: z.number().int(),
   /** What is in it, per order line: a line split across boxes appears in each. */
-  /** `lots`: the line's lots in this package, the default first, each with its Lumexia check. */
   items: z.array(
     z.object({
       orderItemId: Id,
       name: z.string(),
       quantity: z.number().int(),
+      /** The line's product needs a Lumexia lot (read live from the lot rules). */
+      needsLot: z.boolean(),
+      /** Its lots, the default first (SPEC-lumexia "Reads and UI"). */
       lots: z.array(LotDto),
     }),
   ),

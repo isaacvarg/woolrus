@@ -12,7 +12,7 @@ import {
 } from "@/components/exceptions/report-issue-dialog";
 import { VoidDialog } from "@/components/exceptions/void-dialog";
 import { VoidRow } from "@/components/exceptions/void-row";
-import { LotStatus, useLotText } from "@/components/lots/lot-status";
+import { LotList } from "@/components/lots/lot-list";
 import type { TargetOption } from "@/components/notes/note-composer";
 import { useTargetName } from "@/components/notes/note-list";
 import { NoteOnTarget, NotesPanel } from "@/components/notes/notes-panel";
@@ -423,7 +423,6 @@ function NoteOn({
 
 function OrderPackages({ order, notes }: { order: Order; notes: NotesProps }) {
   const t = useTranslations();
-  const lotText = useLotText();
   if (order.packages.length === 0) return null;
   return (
     <div className="space-y-2">
@@ -456,20 +455,11 @@ function OrderPackages({ order, notes }: { order: Order; notes: NotesProps }) {
                 {pkg.items.map((item) => (
                   <li key={item.orderItemId}>
                     {item.name} ×{item.quantity}
-                    {item.lots.length > 0 && (
-                      <ul className="ms-4 flex flex-wrap gap-x-4" data-testid="order-package-lots">
-                        {item.lots.map((lot) => (
-                          <li key={lot.id} className="inline-flex items-center gap-2 tabular-nums">
-                            {t("pack.lotChip", { count: lot.quantity, lot: lotText(lot) })}
-                            <LotStatus status={lot.status} />
-                          </li>
-                        ))}
-                      </ul>
-                    )}
                   </li>
                 ))}
               </ul>
             )}
+            <LotList items={pkg.items} />
           </li>
         ))}
       </ul>

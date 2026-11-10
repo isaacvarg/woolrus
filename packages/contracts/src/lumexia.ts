@@ -163,6 +163,32 @@ export const ProductLinkResult = z.object({
 });
 export type ProductLinkResult = z.infer<typeof ProductLinkResult>;
 
+// Lot lookup (SPEC-lumexia "Reads and UI", success criterion 12).
+
+/** A lot number (any case) or the UUID a lot label's QR code holds. */
+export const LookupLotInput = z.object({ code: z.string().trim().min(1).max(100) });
+export type LookupLotInput = z.infer<typeof LookupLotInput>;
+
+/** One package item that holds the lot. `shippedAt` is the order's completion, null until then. */
+export const LotShipmentRow = z.object({
+  /** The lot row's id. */
+  id: z.string(),
+  orderId: z.string(),
+  orderNumber: z.string(),
+  customerName: z.string(),
+  packageNumber: z.number().int(),
+  productName: z.string(),
+  lotNumber: z.string().nullable(),
+  lumexiaLotId: z.string().nullable(),
+  quantity: z.number().int(),
+  status: LotStatus,
+  shippedAt: z.date().nullable(),
+});
+export type LotShipmentRow = z.infer<typeof LotShipmentRow>;
+
+export const LotLookupResult = z.object({ rows: z.array(LotShipmentRow) });
+export type LotLookupResult = z.infer<typeof LotLookupResult>;
+
 export const lumexia = {
   testConnection: base
     .route({
@@ -250,4 +276,13 @@ export const lumexia = {
     })
     .input(SetLotOverrideInput)
     .output(ProductLinkResult),
+  lookupLot: base
+    .route({
+      method: "GET",
+      path: "/lumexia/lots",
+      tags: ["Lumexia"],
+      summary: "Every order and package that holds a lot, by lot number or lot UUID",
+    })
+    .input(LookupLotInput)
+    .output(LotLookupResult),
 };
