@@ -83,10 +83,44 @@ describe("UpdateSettingsInput", () => {
     expect(fieldErrors({ wooStoreUrl: "http://shop.example.com" })).toEqual({
       wooStoreUrl: "errors.field.urlHttps",
     });
-    expect(fieldErrors({ lumexiaBaseUrl: "ftp://lumexia.example.com" })).toEqual({
-      lumexiaBaseUrl: "errors.field.urlHttps",
-    });
     expect(fieldErrors({ wooStoreUrl: "not a url" })).toEqual({
+      wooStoreUrl: "errors.field.urlHttps",
+    });
+  });
+
+  it("allows http for Lumexia on the local network, and only there", () => {
+    for (const url of [
+      "http://192.168.1.20:3000",
+      "http://10.0.0.5",
+      "http://172.16.4.2/api/v1",
+      "http://172.31.255.1",
+      "http://127.0.0.1:3100",
+      "http://[::1]:3000",
+      "http://[fd12:3456::7]",
+      "http://lumexia",
+      "http://lumexia.local:3000",
+      "http://lumexia.lan",
+      "http://lumexia.internal",
+      "http://lumexia.home.arpa",
+      "http://localhost:3100",
+      "https://lumexia.example.com",
+    ]) {
+      expect(fieldErrors({ lumexiaBaseUrl: url }), url).toEqual({});
+    }
+    for (const url of [
+      "http://lumexia.example.com",
+      "http://172.32.0.1",
+      "http://8.8.8.8",
+      "http://[2001:db8::1]",
+      "ftp://192.168.1.20",
+      "not a url",
+    ]) {
+      expect(fieldErrors({ lumexiaBaseUrl: url }), url).toEqual({
+        lumexiaBaseUrl: "errors.field.urlHttpsOrLocal",
+      });
+    }
+    // WooCommerce keeps the stricter rule: a store is on the internet.
+    expect(fieldErrors({ wooStoreUrl: "http://192.168.1.20" })).toEqual({
       wooStoreUrl: "errors.field.urlHttps",
     });
   });
