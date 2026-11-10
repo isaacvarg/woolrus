@@ -17,7 +17,12 @@ import { queues } from "../jobs";
 import { type Actor, assertCan } from "../permissions";
 import { hashBadgeCode, hashPin, newBadgeCode } from "./credentials";
 import { openInvitation } from "./sign-in";
-import { isStationOnly, stationOnlyEmailFilter, stationOnlyPlaceholder } from "./station-only";
+import {
+  isStationOnly,
+  publicEmail,
+  stationOnlyEmailFilter,
+  stationOnlyPlaceholder,
+} from "./station-only";
 
 const summarySelect = {
   id: true,
@@ -36,16 +41,14 @@ type UserRow = Prisma.UserGetPayload<{ select: typeof summarySelect }>;
 
 /** Only flags leave this function: never `pinHash` or `badgeCode` (SPEC-identity, no secrets out). */
 function toUserSummary(user: UserRow): UserSummary {
-  const stationOnly = isStationOnly(user.email);
   const times = [user.sessions[0]?.updatedAt, user.stationActivations[0]?.startedAt].filter(
     (t): t is Date => t !== undefined,
   );
   return {
     id: user.id,
     name: user.name,
-    // The placeholder never leaves core (SPEC-identity amendment 1).
-    email: stationOnly ? null : user.email,
-    stationOnly,
+    email: publicEmail(user.email),
+    stationOnly: isStationOnly(user.email),
     roles: user.roles,
     active: user.active,
     hasPin: user.pinHash !== null,

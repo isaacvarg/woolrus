@@ -50,6 +50,10 @@ export function UsersManager({ currentUserId }: { currentUserId: string }) {
   const [badge, setBadge] = useState<IssuedBadge | null>(null);
   const [addingStationUser, setAddingStationUser] = useState(false);
   const [addingEmail, setAddingEmail] = useState<UserSummary | null>(null);
+  // Clear PIN or Revoke badge that would leave a station-only user no way in, waiting to be confirmed.
+  const [lastWayIn, setLastWayIn] = useState<{ user: UserSummary; credential: Credential } | null>(
+    null,
+  );
   const invalidate = useInvalidate();
   const reactivate = useMutation({
     mutationFn: (user: UserSummary) => client.users.reactivate({ id: user.id }),
@@ -58,7 +62,10 @@ export function UsersManager({ currentUserId }: { currentUserId: string }) {
   });
   const clearPin = useMutation({
     mutationFn: (user: UserSummary) => client.users.clearPin({ id: user.id }),
-    onSuccess: (user) => toast.success(t("users.pinCleared", { name: user.name })),
+    onSuccess: (user) => {
+      toast.success(t("users.pinCleared", { name: user.name }));
+      setLastWayIn(null);
+    },
     onError: (error) => toast.error(errorMessage(error)),
     onSettled: invalidate,
   });
@@ -70,7 +77,10 @@ export function UsersManager({ currentUserId }: { currentUserId: string }) {
   });
   const revokeBadge = useMutation({
     mutationFn: (user: UserSummary) => client.users.revokeBadge({ id: user.id }),
-    onSuccess: (user) => toast.success(t("users.badgeRevoked", { name: user.name })),
+    onSuccess: (user) => {
+      toast.success(t("users.badgeRevoked", { name: user.name }));
+      setLastWayIn(null);
+    },
     onError: (error) => toast.error(errorMessage(error)),
     onSettled: invalidate,
   });
@@ -175,7 +185,13 @@ export function UsersManager({ currentUserId }: { currentUserId: string }) {
                       )}
                       <MenuItem onAction={() => setSettingPin(user)}>{t("users.setPin")}</MenuItem>
                       {user.hasPin && (
-                        <MenuItem onAction={() => clearPin.mutate(user)}>
+                        <MenuItem
+                          onAction={() =>
+                            isLastWayIn(user, "pin")
+                              ? setLastWayIn({ user, credential: "pin" })
+                              : clearPin.mutate(user)
+                          }
+                        >
                           {t("users.clearPin")}
                         </MenuItem>
                       )}
@@ -183,7 +199,13 @@ export function UsersManager({ currentUserId }: { currentUserId: string }) {
                         {t("users.issueBadge")}
                       </MenuItem>
                       {user.hasBadge && (
-                        <MenuItem onAction={() => revokeBadge.mutate(user)}>
+                        <MenuItem
+                          onAction={() =>
+                            isLastWayIn(user, "badge")
+                              ? setLastWayIn({ user, credential: "badge" })
+                              : revokeBadge.mutate(user)
+                          }
+                        >
                           {t("users.revokeBadge")}
                         </MenuItem>
                       )}
@@ -222,6 +244,18 @@ export function UsersManager({ currentUserId }: { currentUserId: string }) {
         <DeactivateDialog user={deactivating} onClose={() => setDeactivating(null)} />
       )}
       {addingEmail && <AddEmailDialog user={addingEmail} onClose={() => setAddingEmail(null)} />}
+      {lastWayIn && (
+        <LastWayInDialog
+          {...lastWayIn}
+          isPending={clearPin.isPending || revokeBadge.isPending}
+          onConfirm={() =>
+            lastWayIn.credential === "pin"
+              ? clearPin.mutate(lastWayIn.user)
+              : revokeBadge.mutate(lastWayIn.user)
+          }
+          onClose={() => setLastWayIn(null)}
+        />
+      )}
       {settingPin && <PinDialog user={settingPin} onClose={() => setSettingPin(null)} />}
       {badge && <BadgeDialog badge={badge} onClose={() => setBadge(null)} />}
       {addingStationUser && (
@@ -293,6 +327,65 @@ function RolesDialog({ user, onClose }: { user: UserSummary; onClose: () => void
             </Button>
           </div>
         </Form>
+      )}
+    </Dialog>
+  );
+}
+
+type Credential = "pin" | "badge";
+
+/**
+ * A station-only user unlocks stations with a PIN or a badge and has no other way in (SPEC-identity
+ * amendment 1). Removing the only one they hold is allowed, but asked about first.
+ */
+function isLastWayIn(user: UserSummary, credential: Credential): boolean {
+  if (!user.stationOnly) return false;
+  return credential === "pin" ? !user.hasBadge : !user.hasPin;
+}
+
+const lastWayInText = {
+  pin: { title: "users.clearPinTitle", body: "users.clearPinNoWayIn", action: "users.clearPin" },
+  badge: {
+    title: "users.revokeBadgeTitle",
+    body: "users.revokeBadgeNoWayIn",
+    action: "users.revokeBadge",
+  },
+} as const;
+
+function LastWayInDialog({
+  user,
+  credential,
+  isPending,
+  onConfirm,
+  onClose,
+}: {
+  user: UserSummary;
+  credential: Credential;
+  isPending: boolean;
+  onConfirm: () => void;
+  onClose: () => void;
+}) {
+  const t = useTranslations();
+  const text = lastWayInText[credential];
+
+  return (
+    <Dialog
+      title={t(text.title, { name: user.name })}
+      isOpen
+      onOpenChange={(open) => !open && onClose()}
+    >
+      {(close) => (
+        <>
+          <p className="alert alert-warning">{t(text.body, { name: user.name })}</p>
+          <div className="modal-action">
+            <Button className="btn-ghost" onPress={close}>
+              {t("common.cancel")}
+            </Button>
+            <Button className="btn-error" isPending={isPending} onPress={onConfirm}>
+              {t(text.action)}
+            </Button>
+          </div>
+        </>
       )}
     </Dialog>
   );

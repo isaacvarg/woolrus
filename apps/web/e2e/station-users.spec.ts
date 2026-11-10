@@ -149,3 +149,67 @@ test("desktop: adding a station user with a taken name warns but still adds them
   await expect(add.getByText("can now unlock any station with their PIN.")).toBeVisible();
   expect(await db.user.count({ where: { name: { equals: taken, mode: "insensitive" } } })).toBe(2);
 });
+
+// "Everything else is unchanged" (SPEC-identity amendment 1): clearing the PIN of a station-only
+// user with no badge leaves them no way in, so it asks first, but it's still allowed.
+test("desktop: clearing a badge-less station user's PIN warns first, then clears it", async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "one viewport is enough for a dialog");
+  const name = `No Badge Luis ${unique()}`;
+  const user = await db.user.create({
+    data: {
+      name,
+      email: `${crypto.randomUUID()}@station.invalid`,
+      roles: ["PICKER"],
+      pinHash: "not-a-real-hash",
+    },
+  });
+  await signInAs(page, ["ADMIN"]);
+  await page.goto("/users");
+  const row = await findUserRow(page, name);
+  const clearPin = async () => {
+    await row.getByRole("button", { name: `Actions for ${name}` }).click(slowRender);
+    await page.getByRole("menuitem", { name: "Clear PIN" }).click();
+  };
+  const confirm = page.getByRole("dialog", { name: `Clear ${name}'s PIN?` });
+
+  // Cancel keeps the PIN.
+  await clearPin();
+  await expect(confirm.getByText("can't unlock any station")).toBeVisible();
+  await confirm.getByRole("button", { name: "Cancel" }).click();
+  await expect(confirm).toHaveCount(0);
+  expect((await db.user.findUniqueOrThrow({ where: { id: user.id } })).pinHash).not.toBeNull();
+
+  // Confirming clears it.
+  await clearPin();
+  await confirm.getByRole("button", { name: "Clear PIN" }).click();
+  await expect(page.getByText(`PIN cleared for ${name}.`)).toBeVisible();
+  expect((await db.user.findUniqueOrThrow({ where: { id: user.id } })).pinHash).toBeNull();
+});
+
+// The same for the badge: revoking it from a station-only user with no PIN asks first.
+test("desktop: revoking a PIN-less station user's badge warns first, then revokes it", async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "one viewport is enough for a dialog");
+  const name = `No PIN Luis ${unique()}`;
+  const user = await db.user.create({
+    data: {
+      name,
+      email: `${crypto.randomUUID()}@station.invalid`,
+      roles: ["PICKER"],
+      badgeCode: `e2e-${crypto.randomUUID()}`,
+    },
+  });
+  await signInAs(page, ["ADMIN"]);
+  await page.goto("/users");
+  const row = await findUserRow(page, name);
+  await row.getByRole("button", { name: `Actions for ${name}` }).click(slowRender);
+  await page.getByRole("menuitem", { name: "Revoke badge" }).click();
+  const confirm = page.getByRole("dialog", { name: `Revoke ${name}'s badge?` });
+  await expect(confirm.getByText("can't unlock any station")).toBeVisible();
+  await confirm.getByRole("button", { name: "Revoke badge" }).click();
+  await expect(page.getByText(`Badge revoked for ${name}.`)).toBeVisible();
+  expect((await db.user.findUniqueOrThrow({ where: { id: user.id } })).badgeCode).toBeNull();
+});

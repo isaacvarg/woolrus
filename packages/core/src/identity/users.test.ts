@@ -3,7 +3,7 @@ import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { createActor, resetDb, testDb } from "../../test/db";
 import { raceBehindLock } from "../../test/locks";
 import type { UserActor } from "../permissions";
-import { isStationOnly } from "./station-only";
+import { isStationOnly, publicEmail } from "./station-only";
 import { stationStatus, unlockWithPin } from "./station-session";
 import { findStationByToken, registerStation } from "./stations";
 import {
@@ -302,6 +302,13 @@ describe("isStationOnly", () => {
     expect(isStationOnly("luis@example.test")).toBe(false);
     expect(isStationOnly("luis@station.invalid.example.test")).toBe(false);
     expect(isStationOnly("luis@notstation.invalid")).toBe(false);
+  });
+});
+
+describe("publicEmail", () => {
+  it("hides a placeholder and passes a real address through", () => {
+    expect(publicEmail(`${crypto.randomUUID()}@station.invalid`)).toBeNull();
+    expect(publicEmail("luis@example.test")).toBe("luis@example.test");
   });
 });
 

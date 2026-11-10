@@ -11,6 +11,11 @@ export function isStationOnly(email: string): boolean {
   return email.toLowerCase().endsWith(`@${STATION_ONLY_DOMAIN}`);
 }
 
+/** The address to show outside core: null for a placeholder, which never leaves core. */
+export function publicEmail(email: string): string | null {
+  return isStationOnly(email) ? null : email;
+}
+
 /** A fresh placeholder for a new station-only user: `<random uuid>@station.invalid`. */
 export function stationOnlyPlaceholder(): string {
   return `${crypto.randomUUID()}@${STATION_ONLY_DOMAIN}`;
