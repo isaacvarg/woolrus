@@ -1,9 +1,9 @@
 "use client";
 
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Role, type UserSummary } from "@woolrus/contracts";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Role, USER_LIST_PAGE_MAX, type UserSummary } from "@woolrus/contracts";
 import { useTranslations } from "next-intl";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Form } from "react-aria-components";
 import { Dialog } from "@/components/ui/dialog";
 import { Button, Checkbox, TextField } from "@/components/ui/fields";
@@ -13,6 +13,29 @@ import { PinField } from "./credentials-dialogs";
 
 /** Station-only users can't be Admins (SPEC-identity amendment 1, decision 10). */
 export const stationRoles = Role.options.filter((role) => role !== "ADMIN");
+
+const NAME_CHECK_DEBOUNCE_MS = 300;
+
+/**
+ * The active user who already has `name` (trimmed, any case), if any. Names needn't be unique, so
+ * this only feeds a warning (SPEC-identity amendment 1, decision 13). `users.list` matches part of
+ * the name; the exact comparison happens here.
+ */
+function useActiveNamesake(name: string) {
+  const [search, setSearch] = useState("");
+  useEffect(() => {
+    const timer = setTimeout(() => setSearch(name.trim()), NAME_CHECK_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [name]);
+  const users = useQuery({
+    ...orpc.users.list.queryOptions({ input: { search, pageSize: USER_LIST_PAGE_MAX } }),
+    enabled: search !== "",
+  });
+  const wanted = search.toLowerCase();
+  // Only while the debounced search still matches what's typed, so a stale warning never shows.
+  if (!wanted || name.trim().toLowerCase() !== wanted) return undefined;
+  return users.data?.users.find((user) => user.active && user.name.trim().toLowerCase() === wanted);
+}
 
 /**
  * Add a worker with no email: name, roles and a PIN (SPEC-identity amendment 1). Once created,
@@ -41,6 +64,7 @@ export function AddStationUserDialog({
   });
   const errors = fieldErrors(create.error);
   const created = create.data;
+  const namesake = useActiveNamesake(created ? "" : name);
 
   return (
     <Dialog
@@ -86,6 +110,13 @@ export function AddStationUserDialog({
               value={name}
               onChange={setName}
             />
+            <div aria-live="polite">
+              {namesake && (
+                <p className="alert alert-warning text-sm">
+                  {t("users.duplicateNameWarning", { name: namesake.name })}
+                </p>
+              )}
+            </div>
             <fieldset className="fieldset">
               <legend className="fieldset-legend">{t("users.roles")}</legend>
               {stationRoles.map((role) => (
