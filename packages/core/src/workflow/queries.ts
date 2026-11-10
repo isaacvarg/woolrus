@@ -17,6 +17,8 @@ import { z } from "zod";
 import { AppError, notFound } from "../errors";
 import { issueInclude, toIssueView } from "../exceptions/issues";
 import { toVoidView, voidInclude } from "../exceptions/voids";
+import { lotOrder, toLotDtos } from "../lumexia/lot-store";
+import { needsLot } from "../lumexia/needs-lot";
 import { lineAndPackageNoteCounts, noteCounts } from "../notes/targets";
 import { type Actor, assertCan } from "../permissions";
 import { loadSettings } from "../settings/service";
@@ -307,6 +309,16 @@ export function toAttributes(stored: Prisma.JsonValue): LineAttribute[] {
   return parsed.success ? parsed.data : [];
 }
 
+/** What `needsLot` reads from a line's product. */
+const lotRuleProductFields = {
+  physical: true,
+  lumexiaItemId: true,
+  lumexiaItemTypeId: true,
+  lumexiaProcurementTypeId: true,
+  lumexiaInventoryTypeId: true,
+  lotOverride: true,
+} as const;
+
 /** One order for its detail page, with the buttons the caller may use. */
 export async function getOrder(
   db: DbTx,
@@ -321,7 +333,7 @@ export async function getOrder(
       items: {
         orderBy: { createdAt: "asc" },
         include: {
-          product: { select: { physical: true } },
+          product: { select: lotRuleProductFields },
           voids: { where: { undoneAt: null }, select: { quantity: true } },
           pickedBy: { select: nameFields },
         },
@@ -330,7 +342,10 @@ export async function getOrder(
         orderBy: { number: "asc" },
         include: {
           box: { select: { name: true } },
-          items: { select: { orderItemId: true, quantity: true }, orderBy: { packedAt: "asc" } },
+          items: {
+            select: { orderItemId: true, quantity: true, lots: { orderBy: lotOrder } },
+            orderBy: { packedAt: "asc" },
+          },
           labels: { where: { status: { in: [...liveLabelStatuses] } }, select: { id: true } },
         },
       },
@@ -359,6 +374,10 @@ export async function getOrder(
   if (!detail) throw notFound();
   const externalChange = externalChangeOf(order);
   const names = new Map(order.items.map((i) => [i.id, i.name]));
+  const settings = await loadSettings(db);
+  const lotLines = new Set(
+    order.items.flatMap((i) => (i.product && needsLot(i.product, settings) ? [i.id] : [])),
+  );
   return {
     ...detail,
     externalChange,
@@ -401,6 +420,8 @@ export async function getOrder(
         orderItemId: it.orderItemId,
         name: names.get(it.orderItemId) ?? "",
         quantity: it.quantity,
+        needsLot: lotLines.has(it.orderItemId),
+        lots: toLotDtos(it.lots),
       })),
       liveLabel: p.labels.length > 0,
       discarded: p.discardedAt !== null,

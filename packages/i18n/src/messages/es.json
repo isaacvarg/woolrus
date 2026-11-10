@@ -16,6 +16,7 @@
   },
   "nav": {
     "boxes": "Cajas",
+    "lotLookup": "Buscar lote",
     "settings": "Configuración",
     "pending": "Pendientes",
     "picking": "En surtido",
@@ -1689,6 +1690,35 @@
       "cancel": "Cancelar",
       "done": "{count, plural, one {# producto vinculado.} other {# productos vinculados.}}"
     }
+  },
+  "lotLookup": {
+    "title": "Buscar lote",
+    "intro": "Escribe un número de lote o escanea el código QR de una etiqueta de lote para ver todos los pedidos y paquetes que lo contienen.",
+    "code": "Número de lote o código QR",
+    "search": "Buscar",
+    "downloadCsv": "Descargar CSV",
+    "count": "{count, plural, one {# artículo de paquete contiene el lote {code}.} other {# artículos de paquete contienen el lote {code}.}}",
+    "empty": "Ningún paquete contiene el lote {code}.",
+    "notShipped": "Sin enviar",
+    "columns": {
+      "order": "Pedido",
+      "customer": "Cliente",
+      "package": "Paquete",
+      "product": "Producto",
+      "lot": "Lote",
+      "quantity": "Cantidad",
+      "status": "Estado del lote",
+      "shipped": "Enviado"
+    },
+    "status": {
+      "UNVERIFIED": "Sin verificar",
+      "VALID": "Válido",
+      "NOT_FOUND": "No está en Lumexia",
+      "WRONG_ITEM": "Artículo equivocado"
+    },
+    "lots": "Lotes",
+    "lotsInPackage": "Lotes en el paquete {number}",
+    "lotWithStatus": "{count} del lote {lot}, {status}"
   },
   "stuckLabels": {
     "title": "Etiquetas que no se pudieron anular",

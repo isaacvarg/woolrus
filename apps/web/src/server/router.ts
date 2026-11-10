@@ -80,6 +80,7 @@ import {
   listUsers,
   listVoids,
   lockStation,
+  lookupLot,
   lumexiaProducts,
   manifestCandidates,
   markLabelNotBought,
@@ -491,6 +492,9 @@ export const router = implementer.router({
     ),
     setLotOverride: api.lumexia.setLotOverride.handler(({ input, context }) =>
       setLotOverride(db, context.actor, input),
+    ),
+    lookupLot: api.lumexia.lookupLot.handler(({ input, context }) =>
+      lookupLot(db, context.actor, input),
     ),
   },
   priorityRules: {

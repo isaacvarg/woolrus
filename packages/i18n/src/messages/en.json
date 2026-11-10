@@ -16,6 +16,7 @@
   },
   "nav": {
     "boxes": "Boxes",
+    "lotLookup": "Lot lookup",
     "settings": "Settings",
     "pending": "Pending",
     "picking": "Picking",
@@ -1689,6 +1690,35 @@
       "cancel": "Cancel",
       "done": "{count, plural, one {Linked # product.} other {Linked # products.}}"
     }
+  },
+  "lotLookup": {
+    "title": "Lot lookup",
+    "intro": "Type a lot number or scan the QR code on a lot label to find every order and package that holds the lot.",
+    "code": "Lot number or QR code",
+    "search": "Look up",
+    "downloadCsv": "Download CSV",
+    "count": "{count, plural, one {# package item holds lot {code}.} other {# package items hold lot {code}.}}",
+    "empty": "No package holds lot {code}.",
+    "notShipped": "Not shipped",
+    "columns": {
+      "order": "Order",
+      "customer": "Customer",
+      "package": "Package",
+      "product": "Product",
+      "lot": "Lot",
+      "quantity": "Quantity",
+      "status": "Lot status",
+      "shipped": "Shipped"
+    },
+    "status": {
+      "UNVERIFIED": "Unverified",
+      "VALID": "Valid",
+      "NOT_FOUND": "Not in Lumexia",
+      "WRONG_ITEM": "Wrong item"
+    },
+    "lots": "Lots",
+    "lotsInPackage": "Lots in package {number}",
+    "lotWithStatus": "{count} from lot {lot}, {status}"
   },
   "stuckLabels": {
     "title": "Labels that couldn't be voided",

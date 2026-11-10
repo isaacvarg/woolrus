@@ -12,6 +12,7 @@ import {
 } from "@/components/exceptions/report-issue-dialog";
 import { VoidDialog } from "@/components/exceptions/void-dialog";
 import { VoidRow } from "@/components/exceptions/void-row";
+import { LotList } from "@/components/lots/lot-list";
 import type { TargetOption } from "@/components/notes/note-composer";
 import { useTargetName } from "@/components/notes/note-list";
 import { NoteOnTarget, NotesPanel } from "@/components/notes/notes-panel";
@@ -458,6 +459,7 @@ function OrderPackages({ order, notes }: { order: Order; notes: NotesProps }) {
                 ))}
               </ul>
             )}
+            <LotList items={pkg.items} />
           </li>
         ))}
       </ul>
