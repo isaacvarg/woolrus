@@ -83,7 +83,8 @@ test("an admin matches by SKU, confirms, and sees the product linked with Needs 
     await page.goto("/lumexia");
     await expect(page.getByRole("heading", { name: es.lumexiaItems.title })).toBeVisible();
     await expect(page.getByRole("button", { name: es.lumexiaItems.matchBySku })).toBeVisible();
-    await expect(page.getByText(es.lumexiaItems.notLinked)).toBeVisible();
+    // The filter has a "Not linked" option too: look in the table.
+    await expect(page.getByRole("cell", { name: es.lumexiaItems.notLinked })).toBeVisible();
   } finally {
     await page.request.patch("/api/v1/me/preferences", { data: { locale: "en" } });
   }

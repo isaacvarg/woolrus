@@ -1,4 +1,4 @@
-import { expect, type Page, test } from "@playwright/test";
+import { expect, type Locator, type Page, test } from "@playwright/test";
 import en from "@woolrus/i18n/messages/en.json" with { type: "json" };
 import es from "@woolrus/i18n/messages/es.json" with { type: "json" };
 import { signInAs } from "./support/auth";
@@ -7,6 +7,10 @@ import { withSettingsLock } from "./support/settings-lock";
 
 // There is one settings row, and the desktop and tablet projects run in parallel. Tests that change
 // it take turns through withSettingsLock and put back anything other tests could trip over.
+
+/** The base URL form's own status: the Lumexia card also holds the Lot rules section's status. */
+const urlSaved = (lumexia: Locator) =>
+  lumexia.locator("form", { has: lumexia.page().getByLabel("API base URL") }).getByRole("status");
 
 test("an admin saves general settings and they persist after a reload", async ({ page }) => {
   await signInAs(page, ["ADMIN"]);
@@ -239,13 +243,13 @@ test("an admin saves and removes the Lumexia base URL", async ({ page }) => {
 
       await lumexia.getByLabel("API base URL").fill("https://lumexia.example.com");
       await lumexia.getByRole("button", { name: "Save" }).click();
-      await expect(lumexia.getByRole("status")).toHaveText("Saved.");
+      await expect(urlSaved(lumexia)).toHaveText("Saved.");
       await page.reload();
       await expect(lumexia.getByLabel("API base URL")).toHaveValue("https://lumexia.example.com");
 
       await lumexia.getByLabel("API base URL").fill("");
       await lumexia.getByRole("button", { name: "Save" }).click();
-      await expect(lumexia.getByRole("status")).toHaveText("Saved.");
+      await expect(urlSaved(lumexia)).toHaveText("Saved.");
       await page.reload();
       await expect(lumexia.getByLabel("API base URL")).toHaveValue("");
     } finally {
@@ -413,7 +417,7 @@ test("moving the Lumexia URL to another server asks first, then shows its key as
       // A path change stays on the same server: no question, key kept.
       await lumexia.getByLabel("API base URL").fill("https://lumexia.example.com/v2");
       await lumexia.getByRole("button", { name: "Save" }).click();
-      await expect(lumexia.getByRole("status")).toHaveText("Saved.");
+      await expect(urlSaved(lumexia)).toHaveText("Saved.");
       await expect(key.getByText("Set", { exact: true })).toBeVisible();
 
       // Another host: cancelling keeps everything as it was.
@@ -427,9 +431,7 @@ test("moving the Lumexia URL to another server asks first, then shows its key as
 
       await lumexia.getByRole("button", { name: "Save" }).click();
       await dialog.getByRole("button", { name: "Save and remove keys" }).click();
-      await expect(lumexia.getByRole("status")).toHaveText(
-        en.settings.integrations.savedKeysCleared,
-      );
+      await expect(urlSaved(lumexia)).toHaveText(en.settings.integrations.savedKeysCleared);
       await expect(key.getByText("Not set", { exact: true })).toBeVisible();
       await page.reload();
       await expect(lumexia.getByLabel("API base URL")).toHaveValue("https://lx.example.net");
@@ -516,7 +518,7 @@ test("Lumexia's Test connection shows ok, unconfigured and down, in en and es", 
       messages.errors.lumexia.unauthorized,
     ]) {
       await button.click();
-      await expect(lumexia.getByText(text)).toBeVisible();
+      await expect(lumexia.getByTestId("lumexia-test-result")).toHaveText(text);
     }
   }
 });
@@ -568,7 +570,10 @@ test("an admin switches on a lot rule and saves it, and sees the tag and removed
       const rules = page.getByRole("region", { name: en.settings.integrations.lotRules.title });
       const save = rules.getByRole("button", { name: en.settings.integrations.lotRules.save });
       await expect(save).toBeDisabled();
-      await rules.getByRole("switch", { name: "Production base" }).click();
+      // React Aria's switch input is visually hidden, so Playwright clicks it with force.
+      const base = rules.getByRole("switch", { name: "Production base" });
+      await base.click({ force: true });
+      await expect(base).toBeChecked();
       await rules
         .getByRole("button", { name: en.settings.integrations.lotRules.switchOff })
         .click();

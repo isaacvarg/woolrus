@@ -316,7 +316,7 @@ function LumexiaTools() {
         {t("testConnection")}
       </Button>
       <span className="text-sm text-base-content/70">{t("lumexiaTestHint")}</span>
-      <div aria-live="polite" className="basis-full">
+      <div aria-live="polite" className="basis-full" data-testid="lumexia-test-result">
         {test.data?.status === "ok" && <p className="text-success">{t("lumexiaTestOk")}</p>}
         {test.data && test.data.status !== "ok" && (
           <p className={test.data.status === "unconfigured" ? "text-warning" : "text-error"}>

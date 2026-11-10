@@ -144,7 +144,9 @@ test("a packer picks the line in Which line? and edits a lot's count from its ch
   await boxDialog.getByLabel("Height").fill("4");
   await boxDialog.getByRole("button", { name: "Use this size" }).click();
   await expect(boxDialog).toBeHidden();
-  await page.getByRole("button", { name: "Put everything left here" }).click();
+  // Put everything lives in the package's ⋯ menu since the pack card redesign.
+  await page.getByRole("button", { name: "Actions for package 1" }).click();
+  await page.getByRole("menuitem", { name: "Put everything left here" }).click();
   await expect(page.getByTestId("pack-lot-needed")).toHaveCount(2);
 
   // The lot fits both lines: Which line? asks, and the scan goes on the one chosen.
