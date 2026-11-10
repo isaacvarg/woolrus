@@ -9,6 +9,7 @@ import {
   revokeInvitation,
 } from "./invitations";
 import { acceptInvitation, mayCreateAccount } from "./sign-in";
+import { stationOnlyPlaceholder } from "./station-only";
 
 const db: Db = testDb();
 afterAll(() => db.$disconnect());
@@ -94,6 +95,26 @@ describe("createInvitation", () => {
       createInvitation(db, actor, { idempotencyKey: key(), email, roles: ["QA"] }, { appUrl }),
     ).rejects.toMatchObject({ kind: "CONFLICT", messageKey: "errors.users.alreadyExists" });
     expect(await emailJobs(email)).toHaveLength(0);
+  });
+
+  // SPEC-identity amendment 1, criterion 18: the station-only placeholder domain is reserved.
+  it("refuses any address on the station-only domain, in any case, with nothing written", async () => {
+    const actor = await admin();
+    for (const email of [stationOnlyPlaceholder(), "luis@STATION.invalid"]) {
+      await expect(
+        createInvitation(
+          db,
+          actor,
+          { idempotencyKey: key(), email, roles: ["PICKER"] },
+          { appUrl },
+        ),
+      ).rejects.toMatchObject({
+        kind: "BAD_REQUEST",
+        messageKey: "errors.invitations.reservedEmail",
+      });
+      expect(await emailJobs(email.toLowerCase())).toHaveLength(0);
+    }
+    expect(await db.invitation.count()).toBe(0);
   });
 
   it("refuses an email with a pending invitation", async () => {

@@ -1,8 +1,14 @@
 # Spec: `identity`
 
 **Milestone:** M2 · **Depends on:** `settings` · **Used by:** every module (the `Actor`), `picking`/`packing`/`qa`
-(station actors on the floor), `operations` (email health) · **State:** done ·
-**Issue:** [#21](https://github.com/isaacvarg/woolrus/issues/21)
+(station actors on the floor), `operations` (email health) · **State:** done; amendment 1 (station-only users,
+2026-11-10) is **done** (tickets #171–#174) · **Issue:** [#21](https://github.com/isaacvarg/woolrus/issues/21); amendment 1:
+[#170](https://github.com/isaacvarg/woolrus/issues/170)
+
+> **Amendment 1 (approved 2026-11-10): station-only users.** Some floor staff have no email address, or shouldn't
+> need one to work. An admin can now create a user with just a name, roles and a PIN. That user can only unlock
+> stations and never signs in personally, until an admin adds an email for them. Everything marked *(A1)* below
+> belongs to this amendment.
 
 Project-wide commands, structure, code style, testing levels and boundaries are in [`../../SPEC.md`](../../SPEC.md);
 this spec only adds what is specific to `identity`.
@@ -34,6 +40,11 @@ on the tablet. Every action is attributed to the right person and station.
 
 Any user can unlock any active station. The station only says *where* the action happened.
 
+**Station-only users (A1)** have only the right-hand column: no email, no personal sign-in, no Better Auth
+session. They unlock a station with their PIN or badge like anyone else. Since a station has to be registered by an
+admin first, they can only work on devices the admin set up, which keeps NFR-SEC-02 ("sign-in limited to invited
+or allow-listed users") intact: they can't sign in anywhere, only unlock.
+
 ### User stories
 
 1. As an admin, I invite `ana@…` as Picker + Packer. She gets an email, signs in with Google or a magic link, and
@@ -50,6 +61,14 @@ Any user can unlock any active station. The station only says *where* the action
 7. As anyone, I pick English or Spanish, light/dark/high-contrast, and collapse the sidebar. My choices follow me
    to every device and station.
 8. As an admin, I see every station, who is on it now and when it was last used, and I can rename or revoke it.
+9. *(A1)* As an admin, I choose **Add station user**, enter "Luis", tick Picker, and type or generate a PIN. Luis
+   now has a tile on every station and can unlock with that PIN right away. Nobody gets an email. I can issue
+   him a badge, change his roles, reset his PIN, or deactivate him, the same as anyone else.
+10. *(A1)* As an admin, I can't give a station-only user the Admin role: admin powers need a person who can also
+    sign in personally.
+11. *(A1)* As an admin, Luis now has an email address. I choose **Add email** on his row and enter it. He gets an
+    email telling him he can now sign in, and signs in with a magic link. He's the same user, with the same
+    history, PIN and badge, and he can now sign in personally like anyone else.
 
 ## Scope
 
@@ -64,8 +83,13 @@ Any user can unlock any active station. The station only says *where* the action
 - Email: `EmailSender` adapter, Resend implementation, log implementation for dev, email settings + a "Send test
   email" action, invitation and magic-link templates in en/es, an `email` entry in `/api/health`.
 - User preferences (FR-SET-03) and log out.
+- *(A1)* Station-only users: create one with name + roles + PIN; the same admin actions as for any other user;
+  marked "Station only" in the users list; no email, personal sign-in or Admin role.
+- *(A1)* Adding an email to a station-only user, which makes them a regular user.
 
 **Out (owned elsewhere or later):**
+- *(A1)* Going the other way: removing a regular user's email to make them station-only.
+- *(A1)* Bulk import of station users (CSV).
 - Native Android station auth (bearer device token). The design keeps it possible: the station token is opaque and
   could later travel in a header.
 - Password sign-in, 2FA, SSO beyond Google/Discord.
@@ -104,8 +128,10 @@ acting (ship review, 2026-10-20).
 
 | Function | Permission | Notes |
 |---|---|---|
-| `listUsers(db, actor, { search?, page, pageSize })` | `user.manage` | Name order, 50 a page (max 100), search by name or email. Name, email, roles, active, `hasPin`, `hasBadge`, `pinLockedUntil`, last activity. Never `pinHash` or badge hash |
-| `updateUserRoles(db, actor, { userId, roles })` | `user.manage` | ≥ 1 role. Audited with before/after |
+| `listUsers(db, actor, { search?, page, pageSize })` | `user.manage` | Name order, 50 a page (max 100), search by name or email. Name, email, roles, active, `hasPin`, `hasBadge`, `pinLockedUntil`, last activity. Never `pinHash` or badge hash. *(A1)* `email` is `null` and `stationOnly: true` for station-only users; search never matches their placeholder |
+| *(A1)* `createStationUser(db, actor, { name, roles, pin, idempotencyKey })` | `user.manage` | Below |
+| *(A1)* `addUserEmail(db, actor, { id, email, idempotencyKey })` | `user.manage` | Below |
+| `updateUserRoles(db, actor, { userId, roles })` | `user.manage` | ≥ 1 role. Audited with before/after. *(A1)* Refuses `ADMIN` for a station-only user (`errors.users.stationOnlyAdmin`) |
 | `deactivateUser(db, actor, { userId })` | `user.manage` | `active=false`, delete their Better Auth sessions, end their open activations (`MANUAL`), audited. Idempotent |
 | `reactivateUser(db, actor, { userId })` | `user.manage` | Audited |
 | `setPin(db, actor, { userId, pin })` | `user.manage` | Hash with scrypt (Node `crypto`, per-user salt), reset failed attempts/lock. Audited as `user.pin.set`, never the PIN |
@@ -122,6 +148,52 @@ acting (ship review, 2026-10-20).
 **Last-admin guard:** `updateUserRoles` and `deactivateUser` refuse (`CONFLICT`, `errors.users.lastAdmin`) any change
 that would leave no active Admin. An admin can't deactivate themselves or remove their own Admin role
 (`errors.users.self`). `ADMIN_EMAILS` still bootstraps an admin on first sign-in.
+
+### Station-only users (A1)
+
+- **Storage:** no schema change. `User.email` stays required and unique, as Better Auth expects. A station-only
+  user gets a reserved placeholder, `<random uuid>@station.invalid`. `.invalid` is reserved (RFC 2606), so the
+  address can never exist or receive mail. `emailVerified` stays `false`. One core helper,
+  `isStationOnly(email)`, is the only place that knows the domain. Every rule below goes through it, and the
+  placeholder never leaves core: contracts return `email: null` + `stationOnly: true`.
+- **`createStationUser({ name, roles, pin, idempotencyKey })`:** `name` 1–80 chars, trimmed. ≥ 1 role, never
+  `ADMIN` (`errors.users.stationOnlyAdmin`). `pin` follows the PIN rules (the dialog can **Generate** one, as for
+  Set PIN). In one transaction: create the user with the placeholder email, `active: true`, the PIN hashed as in
+  `setPin` (hashed before the transaction), and audit `user.create` with `{ stationOnly: true, roles }`. Never the
+  PIN. Returns the `UserSummary`. Names needn't be unique, as for invited users: the dialog warns when an
+  active user already has the same name (case-insensitive, trimmed) but doesn't block it (decision 13).
+- **`addUserEmail({ id, email, idempotencyKey })`:** only for a station-only user (otherwise `CONFLICT`,
+  `errors.users.notStationOnly`) who is active (otherwise `CONFLICT`, `errors.users.addEmailInactive`: a
+  deactivated user can't sign in, and reactivating doesn't resend the email, so reactivate first). The email is lowercased and can't use the reserved domain. Refused with
+  `CONFLICT` if another user has it (`errors.users.alreadyExists`) or it has an open invitation
+  (`errors.users.invitationPending`: revoke it first, so one address never leads to two accounts). In one
+  transaction: replace the placeholder, set `emailVerified: true` (decision 15), audit `user.email.add` with
+  the address, and enqueue an `email.send` job with a new **`accountEnabled`** template ("<admin> set up sign-in
+  for you", linking to `/sign-in?email=<address>`, no expiry line, English like invitations). From then on the user is regular:
+  `stationOnly` is `false`, and Admin can be given. The user keeps their `id`, roles, PIN, badge and history.
+  - **First sign-in** is by the magic link in the `accountEnabled` email, through the existing "existing active
+    user" path. `sendMagicLink` and `mayStartSession` let them in once the placeholder is gone.
+  - **Google and Discord** (checked in Better Auth 1.7.8's `handleOAuthUserInfo`, #174): we set no
+    `account.accountLinking`, so linking is on, no provider is trusted, and `requireLocalEmailVerified` is
+    `true`. An existing user with no linked account is linked implicitly only when the provider reports the
+    address as verified *and* our user is `emailVerified`. Because `addUserEmail` sets `emailVerified: true`,
+    Google (`email_verified`) and Discord (`verified`) sign the user in straight away, linked to the same
+    `userId`, even before any magic link. A Discord account whose email isn't verified there is refused with
+    `account_not_linked`, which the sign-in page shows as the generic sign-in failure. The magic link always
+    works.
+  - A typo sends the email to the wrong address, the same risk as an invitation. The dialog asks for the address
+    twice.
+- **No personal sign-in, enforced in core** (`sign-in.ts`), so the web hooks stay thin:
+  - `mayCreateAccount` refuses a station-only address, even if it appears in `ADMIN_EMAILS`.
+  - `sendMagicLink` sends nothing to a station-only address, the same silent path as for an unknown address.
+  - `session.create.before` refuses a session for a station-only user, whatever the method. This is what stops an
+    OAuth provider or account linking from reaching the row.
+  - `createInvitation` refuses the `station.invalid` domain (`errors.invitations.reservedEmail`). The check is in
+    core, not the contract, so `station-only.ts` stays the only code that knows the domain.
+- **Everything else is unchanged:** deactivate/reactivate, set/clear PIN, issue/revoke badge, preferences, PIN
+  lockout, idle lock and attribution work the same, since they already go by `userId`. Clearing the PIN of a
+  user with no badge leaves them with no way in. The PIN dialog warns about it but allows it.
+- **Last-admin guard** is unaffected: station-only users are never admins.
 
 ### Invitations
 
@@ -199,6 +271,8 @@ Exactly 6 digits. Reject all-same (`000000`) and straight runs (`123456`, `65432
 | Procedure | Route |
 |---|---|
 | `users.list` / `users.updateRoles` / `users.deactivate` / `users.reactivate` | `GET /users`, `PUT /users/{id}/roles`, `POST /users/{id}/deactivate`, `…/reactivate` |
+| *(A1)* `users.createStationUser` | `POST /users` (idempotent via `Idempotency-Key`, like other creates) |
+| *(A1)* `users.addEmail` | `PUT /users/{id}/email` |
 | `users.setPin` / `users.clearPin` | `PUT /users/{id}/pin`, `DELETE /users/{id}/pin` |
 | `users.issueBadge` / `users.revokeBadge` | `POST /users/{id}/badge`, `DELETE /users/{id}/badge` |
 | `invitations.list` / `create` / `resend` / `revoke` | `GET/POST /invitations`, `POST /invitations/{id}/resend`, `DELETE /invitations/{id}` |
@@ -215,6 +289,10 @@ badge code once. `register` sets the cookie and never returns the token in the b
 - `/users` (nav: **Users**, `user.manage`): users table with role chips and status, a row menu (Edit roles,
   Set PIN, Issue badge, Deactivate/Reactivate), and an Invitations tab with **Invite user**. **Issue badge**
   opens a print view: name, a QR code of the badge code, and the code as text (decision 5).
+  *(A1)* The Users tab gets **Add station user** (name, role checkboxes without Admin, PIN with **Generate**).
+  Station-only rows show a "Station only" chip in place of the email, and Edit roles leaves out Admin for them.
+  After creating a user, the dialog offers **Issue badge** for them. The dialog shows the duplicate-name warning
+  inline. Station-only rows get **Add email** in the row menu (address + confirm).
 - `/stations` (nav: **Stations**, `station.manage`): list with name, current user, last seen, active. Rename,
   Revoke, and **Make this device a station**.
 - `/station`: full-screen, touch-first lock screen. Large name tiles (sorted by most recent use on this station),
@@ -232,9 +310,15 @@ badge code once. `register` sets the cookie and never returns the token in the b
 
 One new dependency: `qrcode` (+ `@types/qrcode`) in `apps/web`, for badge QR codes (decision 5).
 
+*(A1)* No schema change, migration or dependency.
+
 ### Files expected to change
 
-`packages/core/src/identity/**` (+ tests), `packages/core/src/adapters/email/**`, `packages/core/src/jobs.ts`,
+*(A1)* `packages/core/src/identity/{users,sign-in,emails}.ts` (+ tests), `packages/contracts/src/{users,invitations}.ts`,
+`apps/web/src/server/{auth,router}.ts`, `apps/web/src/app/(app)/users/**`, `packages/i18n/src/messages/{en,es}.json`,
+`apps/web/e2e/identity.spec.ts` (or a new `station-users.spec.ts`), `docs/decisions.md`.
+
+Original scope: `packages/core/src/identity/**` (+ tests), `packages/core/src/adapters/email/**`, `packages/core/src/jobs.ts`,
 `packages/core/src/settings/{service,integration}.ts`, `packages/core/src/index.ts`,
 `packages/contracts/src/{users,invitations,stations,me,settings,index}.ts`, `packages/db/prisma/schema/{auth,system}.prisma`
 + a migration, `apps/web/src/server/{actor,auth,orpc,router}.ts`, `apps/web/src/app/{sign-in,station}/**`,
@@ -281,6 +365,30 @@ One new dependency: `qrcode` (+ `@types/qrcode`) in `apps/web`, for badge QR cod
     limit and the lock screen returns.
 15. Green: `pnpm lint && pnpm typecheck && pnpm test && pnpm build`, plus the Playwright suite.
 
+*(A1)*
+
+16. **Create:** `users.createStationUser` with a name, Picker and a valid PIN creates an active user who shows
+    up in `station.status` tiles and can unlock with that PIN. It writes one `user.create` audit with no PIN or
+    hash in it. The same idempotency key twice creates one user. Admin allowed; Picker, Packer, QA, Shipper
+    `FORBIDDEN`.
+17. **No Admin:** creating with `ADMIN`, or `updateUserRoles` adding `ADMIN` to a station-only user, fails with
+    `errors.users.stationOnlyAdmin`.
+18. **No personal sign-in:** for a station-only user's placeholder, `sendMagicLink` sends nothing,
+    `mayCreateAccount` refuses even when the address is in `ADMIN_EMAILS`, and `session.create.before` refuses a
+    session for the user. `invitations.create` rejects any `@station.invalid` address.
+19. **Never leaks:** no `users.*` output contains the placeholder (`email` is `null`, `stationOnly` is `true`), and
+    searching `users.list` for "station.invalid" finds nobody. Added to the no-secrets test.
+20. **E2E (tablet):** an admin adds a station user with a generated PIN and registers the device as a station.
+    The new user's tile is on the lock screen, they unlock with the PIN, and their pick is attributed to them and
+    the station.
+21. **Add email:** `users.addEmail` on a station-only user replaces the placeholder, and from then on
+    `stationOnly` is `false` and Admin can be given. It enqueues exactly one `accountEnabled` email in the same
+    transaction, and a magic link to the new address then signs in that same `userId`. It's refused for a regular
+    user, for an address another user has, for an address with an open invitation, and for the reserved domain.
+    Admin allowed; other roles `FORBIDDEN`.
+22. **Duplicate-name warning:** the Add station user dialog shows the warning for an active user's name in a
+    different case and still lets the admin create the user (component or E2E test).
+
 ## Decisions (2026-10-20)
 
 1. **Email provider:** Resend, through its HTTP API (no SDK). Recorded in `docs/decisions.md` when this ships.
@@ -296,6 +404,30 @@ One new dependency: `qrcode` (+ `@types/qrcode`) in `apps/web`, for badge QR cod
 6. **Idle lock is global** (`Settings.stationIdleLockMinutes`), the same for Admins as for everyone else.
 7. **Personal sessions** keep Better Auth's default: 7 days, extended with use.
 8. **Invitation emails are in English.** No language picker.
+
+### Amendment 1 (approved 2026-11-10)
+
+9. **Placeholder email, not a nullable column.** Better Auth's user model requires an email, and making it
+   nullable would affect every Better Auth read and its Prisma adapter for a user who never has a session. A
+   reserved `.invalid` address keeps the schema and Better Auth untouched. It's also derived, not flagged: no
+   `stationOnly` column that could disagree with the email.
+10. **No Admin role for station-only users.** Decision 4 accepts admin powers from a PIN or badge for people who
+    also have a personal account. Station-only Admins would make a 6-digit PIN the only credential for full admin
+    access. Not allowed.
+11. **A PIN is required at creation.** A user with no way in is useless; a badge can be added after.
+12. Recorded in `docs/decisions.md` (data model, stations bullet) in the same PR as the code, per that file's rule.
+13. **Duplicate names warn, don't block.** Two people really can share a name. The warning stops an admin from
+    creating the same person twice by mistake.
+14. **Adding an email is in scope, one way only.** It keeps the same `userId`, so history, PIN and badge carry
+    over. It uses its own `accountEnabled` email rather than the invitation template, since there's nothing to
+    expire or accept.
+15. **An added email is stored verified** (#174, 2026-11-10). The amendment first kept `emailVerified: false`
+    until the first magic link proved the address. Better Auth 1.7.8 can't do that here: for an existing
+    unverified user its magic-link verify runs `revokeUnprovenAccountAccess`, which reserves a `verifications`
+    row with a base64url id (a uuid only when `generateId` is `"uuid"`; ours is `false` with uuid columns), so
+    verify returns 500. A station-only user has no accounts or sessions for that step to revoke, so nothing is
+    lost. The cost: Google/Discord sign them in before any magic link, which a typo'd address already allows
+    through the magic link itself. `generateId` and the schema stay unchanged.
 
 ## Open questions
 

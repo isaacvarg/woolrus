@@ -72,7 +72,18 @@ Full model in `packages/db/prisma/schema/*.prisma`. Changes from the SRS's secti
   (or `PURCHASE_FAILED`, `VOID_REJECTED`); the `idempotencyKey` is recorded before the purchase call.
 - **Notes** have `visibility` (internal / customer) and remember `wooNoteId` so nothing is posted twice.
 - **Stations, PINs, badges:** `Station`, `StationActivation`, `User.pinHash/badgeCode`. Stations auto-lock after
-  `Settings.stationIdleLockMinutes` (default 10).
+  `Settings.stationIdleLockMinutes` (default 10). **Station-only users** (no email, unlock stations only;
+  SPEC-identity amendment 1, 2026-11-10) keep `User.email` required and unique, as Better Auth expects, by
+  holding a reserved placeholder, `<random uuid>@station.invalid` (`.invalid` can never receive mail, RFC 2606).
+  Chosen over a nullable column, which would touch every Better Auth read and its Prisma adapter for users who
+  never have a session. "Station-only" is derived from the address by one core helper, `isStationOnly`, never
+  a flag that could disagree, and the placeholder never leaves core (APIs return `email: null`). Station-only
+  users can't be **Admin**: that would make a 6-digit PIN the only credential for full admin access.
+  An admin can **add an email** to one, which makes them a regular user with the same id. The address is stored
+  with `emailVerified: true` (2026-11-10): Better Auth 1.7.8's magic-link verify returns 500 for an existing
+  unverified user, because its lock row in `verifications` gets a base64url id unless `generateId` is `"uuid"`,
+  and ours is `false` with uuid columns. A station-only user has no accounts or sessions for that step to revoke.
+  `generateId` and the schema stay as they are.
 - **WooCommerce payloads** are stored raw (`rawPayload` jsonb) so fields can be promoted to columns later.
 - **Settings** is a single row; secrets are stored AES-GCM-encrypted with `SETTINGS_ENCRYPTION_KEY`.
 - **Returns** (`ReturnRequest`, `ReturnItem`), **manifests**, **priority rules**, **webhook inbox** and

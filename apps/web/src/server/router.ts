@@ -1,5 +1,6 @@
 import {
   addPackage,
+  addUserEmail,
   archiveBox,
   archiveLabAddress,
   archiveLabGroup,
@@ -23,6 +24,7 @@ import {
   createNote,
   createPriorityRule,
   createShippingProviders,
+  createStationUser,
   customsProducts,
   deactivateUser,
   deleteBox,
@@ -94,6 +96,7 @@ import {
   permissionsFor,
   pickLine,
   previewLabRun,
+  publicEmail,
   pushErrors,
   qaRemoveLot,
   qaReplaceLot,
@@ -211,7 +214,7 @@ export const router = implementer.router({
     get: api.me.get.handler(({ context: { user, actor, station, idleLockAt } }) => ({
       id: user.id,
       name: user.name,
-      email: user.email,
+      email: publicEmail(user.email),
       image: user.image,
       roles: user.roles,
       permissions: permissionsFor(user.roles),
@@ -530,6 +533,12 @@ export const router = implementer.router({
   },
   users: {
     list: api.users.list.handler(({ input, context }) => listUsers(db, context.actor, input)),
+    createStationUser: api.users.createStationUser.handler(({ input, context }) =>
+      createStationUser(db, context.actor, input),
+    ),
+    addEmail: api.users.addEmail.handler(({ input, context }) =>
+      addUserEmail(db, context.actor, input, { appUrl: env().BETTER_AUTH_URL }),
+    ),
     updateRoles: api.users.updateRoles.handler(({ input, context }) =>
       updateUserRoles(db, context.actor, input),
     ),

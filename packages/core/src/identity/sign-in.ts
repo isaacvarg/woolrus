@@ -2,9 +2,11 @@ import type { Db, DbTx } from "@woolrus/db";
 import type { Locale } from "@woolrus/i18n";
 import type { EmailSender } from "../adapters/email/sender";
 import { renderEmail } from "./emails";
+import { isStationOnly } from "./station-only";
 
-// Who may get an account (NFR-SEC-02, SRS §7.1 #3). Better Auth's user-create hooks in the web app
-// call these, so the rule lives in core and is tested here.
+// Who may get an account or a session (NFR-SEC-02, SRS §7.1 #3). Better Auth's hooks in the web app
+// call these, so the rules live in core and are tested here. A station-only user (SPEC-identity
+// amendment 1) never signs in personally: every path below refuses their placeholder address.
 
 /** An invitation that can still be accepted: not accepted, not revoked, not expired. */
 export async function openInvitation(db: Db | DbTx, email: string, now = new Date()) {
@@ -32,7 +34,7 @@ export async function mayCreateAccount(
   { email, emailVerified }: { email: string; emailVerified: boolean },
   adminEmails: readonly string[],
 ): Promise<boolean> {
-  if (!emailVerified) return false;
+  if (!emailVerified || isStationOnly(email)) return false;
   return isAdminEmail(email, adminEmails) || (await openInvitation(db, email)) !== null;
 }
 
@@ -55,6 +57,26 @@ export async function acceptInvitation(
       });
     }
   });
+}
+
+export type SessionDecision =
+  | { allowed: true }
+  | { allowed: false; reason: "deactivated" | "stationOnly" };
+
+/**
+ * Better Auth's `session.create.before`, for every sign-in method. A deactivated user can't start a
+ * session (a Google sign-in, or a link sent before deactivation), and neither can a station-only
+ * user: this is what stops an OAuth provider or account linking from reaching their row. An
+ * unknown user id is refused like a deactivated one.
+ */
+export async function mayStartSession(db: Db, userId: string): Promise<SessionDecision> {
+  const user = await db.user.findUnique({
+    where: { id: userId },
+    select: { active: true, email: true },
+  });
+  if (!user?.active) return { allowed: false, reason: "deactivated" };
+  if (isStationOnly(user.email)) return { allowed: false, reason: "stationOnly" };
+  return { allowed: true };
 }
 
 export type MagicLinkLog = {
@@ -83,13 +105,17 @@ export async function sendMagicLink(
   },
 ): Promise<"sent" | "skipped" | "failed"> {
   const address = email.trim().toLowerCase();
+  // A station-only placeholder can't receive mail, and its user signs in by PIN only. Refused after
+  // the same lookup as any address, so the timing doesn't single it out.
   const user = await db.user.findFirst({
     where: { email: { equals: address, mode: "insensitive" } },
     select: { active: true, locale: true },
   });
-  const allowed = user
-    ? user.active
-    : isAdminEmail(address, adminEmails) || (await openInvitation(db, address)) !== null;
+  const allowed =
+    !isStationOnly(address) &&
+    (user
+      ? user.active
+      : isAdminEmail(address, adminEmails) || (await openInvitation(db, address)) !== null);
   if (!allowed) {
     log.info({ email: address }, "magic link not sent: no active user or open invitation");
     return "skipped";

@@ -29,7 +29,7 @@ export function NavFooter({
   preferences,
 }: {
   name: string;
-  email: string;
+  email: string | null;
   stationName: string | null;
   preferences: Preferences;
 }) {

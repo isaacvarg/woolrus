@@ -7,6 +7,7 @@ import { AppError, notFound } from "../errors";
 import { withIdempotency } from "../idempotency";
 import { queues } from "../jobs";
 import { type Actor, assertCan } from "../permissions";
+import { isStationOnly } from "./station-only";
 
 const VALID_FOR_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -89,6 +90,9 @@ export async function createInvitation(
   const email = input.email.trim().toLowerCase();
   const roles = [...new Set(input.roles)];
   if (roles.length === 0) throw new AppError("BAD_REQUEST", "errors.users.rolesRequired");
+  // The station-only placeholder domain (SPEC-identity amendment 1). Checked here, not in the
+  // contract, so `station-only.ts` stays the only code that knows the domain.
+  if (isStationOnly(email)) throw new AppError("BAD_REQUEST", "errors.invitations.reservedEmail");
   try {
     // Only the id is stored for replays: the stored JSON would turn the dates into strings.
     const { id } = await db.$transaction((tx) =>

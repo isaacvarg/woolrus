@@ -21,7 +21,8 @@ export type UpdatePreferencesInput = z.infer<typeof UpdatePreferencesInput>;
 export const Me = z.object({
   id: Id,
   name: z.string(),
-  email: z.string(),
+  /** Null for a station-only user, who has no real address (SPEC-identity amendment 1). */
+  email: z.string().nullable(),
   image: z.string().nullable(),
   roles: z.array(Role),
   permissions: z.array(z.string()),

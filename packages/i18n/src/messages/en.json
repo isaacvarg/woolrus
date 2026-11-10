@@ -1357,13 +1357,18 @@
       "self": "You can't deactivate yourself or remove your own Admin role.",
       "rolesRequired": "Choose at least one role.",
       "alreadyExists": "Someone with this email already has an account.",
+      "addEmailInactive": "This user is deactivated. Reactivate them first, then add their email.",
+      "notStationOnly": "This user already has an email.",
+      "invitationPending": "This email has an open invitation. Revoke it first, so the address doesn't end up with two accounts.",
       "pinFormat": "A PIN is exactly 6 digits.",
-      "pinWeak": "Too easy to guess: avoid repeated digits and runs like 123456."
+      "pinWeak": "Too easy to guess: avoid repeated digits and runs like 123456.",
+      "stationOnlyAdmin": "Station-only users can't be Admins: an Admin must also be able to sign in personally."
     },
     "invitations": {
       "emailInvalid": "Enter a valid email address.",
       "pending": "This email already has a pending invitation. Resend or revoke it instead.",
-      "notOpen": "This invitation was already accepted or revoked."
+      "notOpen": "This invitation was already accepted or revoked.",
+      "reservedEmail": "This address is reserved for station users. Use the person's real email."
     },
     "auth": {
       "deactivated": "Your account is deactivated. Ask an admin to reactivate it.",
@@ -1467,6 +1472,12 @@
       "subject": "Woolrus test email",
       "body": "This is a test email from Woolrus. If you're reading it, email is set up correctly."
     },
+    "accountEnabled": {
+      "subject": "{admin} set up sign-in for you",
+      "body": "{admin} set up Woolrus sign-in for you with this address. Your roles, PIN and badge stay the same.",
+      "action": "Sign in to Woolrus",
+      "how": "The first time, sign in with an email link sent to this address."
+    },
     "invitation": {
       "subject": "{inviter} invited you to Woolrus",
       "body": "{inviter} invited you to Woolrus, our warehouse workspace, as {roles}.",
@@ -1496,6 +1507,12 @@
     "actionsFor": "Actions for {name}",
     "editRoles": "Edit roles",
     "editRolesTitle": "Roles for {name}",
+    "addEmail": "Add email",
+    "addEmailTitle": "Add an email for {name}",
+    "addEmailHelp": "{name} becomes a regular user who can also sign in personally. Their roles, PIN, badge and history stay the same. We'll email them a sign-in link.",
+    "confirmEmail": "Confirm email",
+    "emailMismatch": "The two addresses don't match.",
+    "emailAdded": "{name} can now sign in with {email}.",
     "deactivate": "Deactivate",
     "reactivate": "Reactivate",
     "deactivateTitle": "Deactivate {name}?",
@@ -1513,8 +1530,12 @@
     },
     "setPin": "Set PIN",
     "clearPin": "Clear PIN",
+    "clearPinTitle": "Clear {name}'s PIN?",
+    "clearPinNoWayIn": "{name} has no badge, so without a PIN they can't unlock any station. Set a new PIN or issue a badge afterwards to let them back in.",
     "issueBadge": "Issue badge",
     "revokeBadge": "Revoke badge",
+    "revokeBadgeTitle": "Revoke {name}'s badge?",
+    "revokeBadgeNoWayIn": "{name} has no PIN, so without a badge they can't unlock any station. Set a PIN or issue a new badge afterwards to let them back in.",
     "pinTitle": "PIN for {name}",
     "newPin": "New PIN",
     "pinHelp": "6 digits. Avoid repeated digits and runs like 123456.",
@@ -1533,7 +1554,14 @@
     "pagination": "Pages",
     "previousPage": "Previous page",
     "nextPage": "Next page",
-    "pageOf": "Page {page} of {pages}"
+    "pageOf": "Page {page} of {pages}",
+    "addStationUser": "Add station user",
+    "addStationUserTitle": "Add station user",
+    "stationOnly": "Station only",
+    "stationOnlyHelp": "For someone with no email: they unlock stations with a PIN or badge, and can't sign in personally or be an Admin.",
+    "stationUserAdded": "{name} can now unlock any station with their PIN.",
+    "duplicateNameWarning": "An active user is already called {name}. Add this one only if it's a different person.",
+    "add": "Add"
   },
   "invitations": {
     "tab": "Invitations",

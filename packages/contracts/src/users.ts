@@ -1,12 +1,15 @@
 import { z } from "zod";
-import { base, Id } from "./base";
+import { base, Id, IdempotencyKey } from "./base";
 import { Role } from "./me";
 
 /** A user as admins see them. Has flags for a PIN and badge, never their hashes. */
 export const UserSummary = z.object({
   id: Id,
   name: z.string(),
-  email: z.string(),
+  /** Null for a station-only user: their placeholder address never leaves core (amendment 1). */
+  email: z.string().nullable(),
+  /** No email, no personal sign-in: unlocks stations only (SPEC-identity amendment 1). */
+  stationOnly: z.boolean(),
   roles: z.array(Role),
   active: z.boolean(),
   hasPin: z.boolean(),
@@ -59,6 +62,30 @@ export const IssuedBadge = z.object({
 });
 export type IssuedBadge = z.infer<typeof IssuedBadge>;
 
+/** A worker with no email: name, roles (never Admin) and a PIN (SPEC-identity amendment 1). */
+export const CreateStationUserInput = z.object({
+  idempotencyKey: IdempotencyKey,
+  name: z.string().trim().min(1).max(80),
+  roles: z
+    .array(Role)
+    .min(1, "errors.users.rolesRequired")
+    .refine((roles) => !roles.includes("ADMIN"), "errors.users.stationOnlyAdmin")
+    .transform((roles) => [...new Set(roles)]),
+  pin: Pin,
+});
+export type CreateStationUserInput = z.infer<typeof CreateStationUserInput>;
+
+/**
+ * Turns a station-only user into a regular one (SPEC-identity amendment 1). Core refuses the
+ * reserved placeholder domain, so only `station-only.ts` knows it.
+ */
+export const AddUserEmailInput = z.object({
+  idempotencyKey: IdempotencyKey,
+  id: Id,
+  email: z.string().trim().toLowerCase().pipe(z.email("errors.invitations.emailInvalid")),
+});
+export type AddUserEmailInput = z.infer<typeof AddUserEmailInput>;
+
 export const USER_LIST_PAGE_MAX = 100;
 
 export const UserListInput = z.object({
@@ -87,6 +114,26 @@ export const users = {
     })
     .input(UserListInput)
     .output(UserListPage),
+
+  createStationUser: base
+    .route({
+      method: "POST",
+      path: "/users",
+      tags: ["Users"],
+      summary: "Add a station-only user: name, roles and PIN, no email or personal sign-in",
+    })
+    .input(CreateStationUserInput)
+    .output(UserSummary),
+
+  addEmail: base
+    .route({
+      method: "PUT",
+      path: "/users/{id}/email",
+      tags: ["Users"],
+      summary: "Add an email to a station-only user, making them a regular user who can sign in",
+    })
+    .input(AddUserEmailInput)
+    .output(UserSummary),
 
   updateRoles: base
     .route({

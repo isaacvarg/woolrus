@@ -17,6 +17,12 @@ const templates = {
     paragraphs: ["emails.invitation.body", "emails.invitation.expiry"],
     action: "emails.invitation.action",
   },
+  // A station-only user given an email (SPEC-identity amendment 1): nothing to accept or expire.
+  accountEnabled: {
+    subject: "emails.accountEnabled.subject",
+    paragraphs: ["emails.accountEnabled.body", "emails.accountEnabled.how"],
+    action: "emails.accountEnabled.action",
+  },
   magicLink: {
     subject: "emails.magicLink.subject",
     paragraphs: ["emails.magicLink.body", "emails.magicLink.ignore"],

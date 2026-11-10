@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { toFieldErrors } from "./base";
-import { generatePin, Pin, SetPinInput, UpdateUserRolesInput } from "./users";
+import {
+  CreateStationUserInput,
+  generatePin,
+  Pin,
+  SetPinInput,
+  UpdateUserRolesInput,
+} from "./users";
 
 const id = "0199a1c2-0000-7000-8000-000000000001";
 
@@ -49,5 +55,27 @@ describe("Pin", () => {
 describe("generatePin", () => {
   it("always makes a valid PIN", () => {
     for (let i = 0; i < 500; i++) expect(Pin.safeParse(generatePin()).success).toBe(true);
+  });
+});
+
+describe("CreateStationUserInput", () => {
+  const valid = { idempotencyKey: "key-12345", name: "  Luis ", roles: ["PICKER"], pin: "482915" };
+
+  it("trims the name and deduplicates roles", () => {
+    expect(
+      CreateStationUserInput.parse({ ...valid, roles: ["PICKER", "PICKER", "QA"] }),
+    ).toMatchObject({ name: "Luis", roles: ["PICKER", "QA"] });
+  });
+
+  it.each([
+    [{ name: "   " }, { name: "errors.field.required" }],
+    [{ name: "x".repeat(81) }, { name: "errors.field.tooBig" }],
+    [{ roles: [] }, { roles: "errors.users.rolesRequired" }],
+    [{ roles: ["PICKER", "ADMIN"] }, { roles: "errors.users.stationOnlyAdmin" }],
+    [{ pin: "123456" }, { pin: "errors.users.pinWeak" }],
+  ])("rejects %o with a translatable field error", (overrides, errors) => {
+    const result = CreateStationUserInput.safeParse({ ...valid, ...overrides });
+    expect(result.success).toBe(false);
+    expect(toFieldErrors(result.error?.issues ?? [])).toEqual(errors);
   });
 });

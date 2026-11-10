@@ -1357,13 +1357,18 @@
       "self": "No puedes desactivarte ni quitarte tu propio rol de Admin.",
       "rolesRequired": "Elige al menos un rol.",
       "alreadyExists": "Ya existe una cuenta con este correo.",
+      "addEmailInactive": "Este usuario está desactivado. Reactívalo primero y luego añade su correo.",
+      "notStationOnly": "Este usuario ya tiene un correo.",
+      "invitationPending": "Este correo tiene una invitación abierta. Revócala primero para que la dirección no termine con dos cuentas.",
       "pinFormat": "El PIN tiene exactamente 6 dígitos.",
-      "pinWeak": "Demasiado fácil de adivinar: evita dígitos repetidos y secuencias como 123456."
+      "pinWeak": "Demasiado fácil de adivinar: evita dígitos repetidos y secuencias como 123456.",
+      "stationOnlyAdmin": "Los usuarios solo de estación no pueden ser administradores: un administrador también debe poder iniciar sesión personalmente."
     },
     "invitations": {
       "emailInvalid": "Introduce un correo electrónico válido.",
       "pending": "Este correo ya tiene una invitación pendiente. Reenvíala o revócala.",
-      "notOpen": "Esta invitación ya fue aceptada o revocada."
+      "notOpen": "Esta invitación ya fue aceptada o revocada.",
+      "reservedEmail": "Esta dirección está reservada para usuarios de estación. Usa el correo real de la persona."
     },
     "auth": {
       "deactivated": "Tu cuenta está desactivada. Pide a un administrador que la reactive.",
@@ -1467,6 +1472,12 @@
       "subject": "Correo de prueba de Woolrus",
       "body": "Este es un correo de prueba de Woolrus. Si lo estás leyendo, el correo está bien configurado."
     },
+    "accountEnabled": {
+      "subject": "{admin} configuró tu inicio de sesión",
+      "body": "{admin} configuró tu inicio de sesión en Woolrus con esta dirección. Tus roles, tu PIN y tu credencial no cambian.",
+      "action": "Iniciar sesión en Woolrus",
+      "how": "La primera vez, inicia sesión con un enlace enviado por correo a esta dirección."
+    },
     "invitation": {
       "subject": "{inviter} te invitó a Woolrus",
       "body": "{inviter} te invitó a Woolrus, nuestro espacio de trabajo del almacén, como {roles}.",
@@ -1496,6 +1507,12 @@
     "actionsFor": "Acciones para {name}",
     "editRoles": "Editar roles",
     "editRolesTitle": "Roles de {name}",
+    "addEmail": "Añadir correo",
+    "addEmailTitle": "Añadir un correo para {name}",
+    "addEmailHelp": "{name} pasa a ser un usuario normal que también puede iniciar sesión personalmente. Sus roles, PIN, credencial e historial no cambian. Le enviaremos un enlace para iniciar sesión.",
+    "confirmEmail": "Confirmar correo",
+    "emailMismatch": "Las dos direcciones no coinciden.",
+    "emailAdded": "{name} ya puede iniciar sesión con {email}.",
     "deactivate": "Desactivar",
     "reactivate": "Reactivar",
     "deactivateTitle": "¿Desactivar a {name}?",
@@ -1513,8 +1530,12 @@
     },
     "setPin": "Establecer PIN",
     "clearPin": "Borrar PIN",
+    "clearPinTitle": "¿Borrar el PIN de {name}?",
+    "clearPinNoWayIn": "{name} no tiene credencial, así que sin PIN no podrá desbloquear ninguna estación. Después, asigna un PIN nuevo o emite una credencial para que pueda volver a entrar.",
     "issueBadge": "Emitir credencial",
     "revokeBadge": "Revocar credencial",
+    "revokeBadgeTitle": "¿Revocar la credencial de {name}?",
+    "revokeBadgeNoWayIn": "{name} no tiene PIN, así que sin credencial no podrá desbloquear ninguna estación. Después, asigna un PIN o emite una credencial nueva para que pueda volver a entrar.",
     "pinTitle": "PIN de {name}",
     "newPin": "Nuevo PIN",
     "pinHelp": "6 dígitos. Evita dígitos repetidos y secuencias como 123456.",
@@ -1533,7 +1554,14 @@
     "pagination": "Páginas",
     "previousPage": "Página anterior",
     "nextPage": "Página siguiente",
-    "pageOf": "Página {page} de {pages}"
+    "pageOf": "Página {page} de {pages}",
+    "addStationUser": "Añadir usuario de estación",
+    "addStationUserTitle": "Añadir usuario de estación",
+    "stationOnly": "Solo estación",
+    "stationOnlyHelp": "Para alguien sin correo: desbloquea estaciones con un PIN o una credencial, y no puede iniciar sesión personalmente ni ser administrador.",
+    "stationUserAdded": "{name} ya puede desbloquear cualquier estación con su PIN.",
+    "duplicateNameWarning": "Ya hay un usuario activo llamado {name}. Añade este solo si es otra persona.",
+    "add": "Añadir"
   },
   "invitations": {
     "tab": "Invitaciones",
