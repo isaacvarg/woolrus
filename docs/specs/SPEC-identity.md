@@ -166,14 +166,20 @@ that would leave no active Admin. An admin can't deactivate themselves or remove
   `errors.users.notStationOnly`). The email is lowercased and can't use the reserved domain. Refused with
   `CONFLICT` if another user has it (`errors.users.alreadyExists`) or it has an open invitation
   (`errors.users.invitationPending`: revoke it first, so one address never leads to two accounts). In one
-  transaction: replace the placeholder, keep `emailVerified: false`, audit `user.email.add` with the address, and
-  enqueue an `email.send` job with a new **`accountEnabled`** template ("<admin> set up sign-in for you", linking
-  to `/sign-in?email=<address>`, no expiry line, English like invitations). From then on the user is regular:
+  transaction: replace the placeholder, set `emailVerified: true` (decision 15), audit `user.email.add` with
+  the address, and enqueue an `email.send` job with a new **`accountEnabled`** template ("<admin> set up sign-in
+  for you", linking to `/sign-in?email=<address>`, no expiry line, English like invitations). From then on the user is regular:
   `stationOnly` is `false`, and Admin can be given. The user keeps their `id`, roles, PIN, badge and history.
-  - **First sign-in is by magic link.** It goes through the existing "existing active user" path, and Better Auth
-    marks the email verified. Whether Google/Discord then sign the user in or are refused depends on Better
-    Auth's account-linking rules for an existing user. The ticket checks this and writes it down here. Refusing
-    is acceptable: the magic link always works.
+  - **First sign-in** is by the magic link in the `accountEnabled` email, through the existing "existing active
+    user" path. `sendMagicLink` and `mayStartSession` let them in once the placeholder is gone.
+  - **Google and Discord** (checked in Better Auth 1.7.8's `handleOAuthUserInfo`, #174): we set no
+    `account.accountLinking`, so linking is on, no provider is trusted, and `requireLocalEmailVerified` is
+    `true`. An existing user with no linked account is linked implicitly only when the provider reports the
+    address as verified *and* our user is `emailVerified`. Because `addUserEmail` sets `emailVerified: true`,
+    Google (`email_verified`) and Discord (`verified`) sign the user in straight away, linked to the same
+    `userId`, even before any magic link. A Discord account whose email isn't verified there is refused with
+    `account_not_linked`, which the sign-in page shows as the generic sign-in failure. The magic link always
+    works.
   - A typo sends the email to the wrong address, the same risk as an invitation. The dialog asks for the address
     twice.
 - **No personal sign-in, enforced in core** (`sign-in.ts`), so the web hooks stay thin:
@@ -413,6 +419,13 @@ Original scope: `packages/core/src/identity/**` (+ tests), `packages/core/src/ad
 14. **Adding an email is in scope, one way only.** It keeps the same `userId`, so history, PIN and badge carry
     over. It uses its own `accountEnabled` email rather than the invitation template, since there's nothing to
     expire or accept.
+15. **An added email is stored verified** (#174, 2026-11-10). The amendment first kept `emailVerified: false`
+    until the first magic link proved the address. Better Auth 1.7.8 can't do that here: for an existing
+    unverified user its magic-link verify runs `revokeUnprovenAccountAccess`, which reserves a `verifications`
+    row with a base64url id (a uuid only when `generateId` is `"uuid"`; ours is `false` with uuid columns), so
+    verify returns 500. A station-only user has no accounts or sessions for that step to revoke, so nothing is
+    lost. The cost: Google/Discord sign them in before any magic link, which a typo'd address already allows
+    through the magic link itself. `generateId` and the schema stay unchanged.
 
 ## Open questions
 

@@ -75,6 +75,17 @@ export const CreateStationUserInput = z.object({
 });
 export type CreateStationUserInput = z.infer<typeof CreateStationUserInput>;
 
+/**
+ * Turns a station-only user into a regular one (SPEC-identity amendment 1). Core refuses the
+ * reserved placeholder domain, so only `station-only.ts` knows it.
+ */
+export const AddUserEmailInput = z.object({
+  idempotencyKey: IdempotencyKey,
+  id: Id,
+  email: z.string().trim().toLowerCase().pipe(z.email("errors.invitations.emailInvalid")),
+});
+export type AddUserEmailInput = z.infer<typeof AddUserEmailInput>;
+
 export const USER_LIST_PAGE_MAX = 100;
 
 export const UserListInput = z.object({
@@ -112,6 +123,16 @@ export const users = {
       summary: "Add a station-only user: name, roles and PIN, no email or personal sign-in",
     })
     .input(CreateStationUserInput)
+    .output(UserSummary),
+
+  addEmail: base
+    .route({
+      method: "PUT",
+      path: "/users/{id}/email",
+      tags: ["Users"],
+      summary: "Add an email to a station-only user, making them a regular user who can sign in",
+    })
+    .input(AddUserEmailInput)
     .output(UserSummary),
 
   updateRoles: base

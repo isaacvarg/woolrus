@@ -1356,6 +1356,8 @@
       "self": "You can't deactivate yourself or remove your own Admin role.",
       "rolesRequired": "Choose at least one role.",
       "alreadyExists": "Someone with this email already has an account.",
+      "notStationOnly": "This user already has an email.",
+      "invitationPending": "This email has an open invitation. Revoke it first, so the address doesn't end up with two accounts.",
       "pinFormat": "A PIN is exactly 6 digits.",
       "pinWeak": "Too easy to guess: avoid repeated digits and runs like 123456.",
       "stationOnlyAdmin": "Station-only users can't be Admins: an Admin must also be able to sign in personally."
@@ -1468,6 +1470,12 @@
       "subject": "Woolrus test email",
       "body": "This is a test email from Woolrus. If you're reading it, email is set up correctly."
     },
+    "accountEnabled": {
+      "subject": "{admin} set up sign-in for you",
+      "body": "{admin} set up Woolrus sign-in for you with this address. Your roles, PIN and badge stay the same.",
+      "action": "Sign in to Woolrus",
+      "how": "The first time, sign in with an email link sent to this address."
+    },
     "invitation": {
       "subject": "{inviter} invited you to Woolrus",
       "body": "{inviter} invited you to Woolrus, our warehouse workspace, as {roles}.",
@@ -1497,6 +1505,12 @@
     "actionsFor": "Actions for {name}",
     "editRoles": "Edit roles",
     "editRolesTitle": "Roles for {name}",
+    "addEmail": "Add email",
+    "addEmailTitle": "Add an email for {name}",
+    "addEmailHelp": "{name} becomes a regular user who can also sign in personally. Their roles, PIN, badge and history stay the same. We'll email them a sign-in link.",
+    "confirmEmail": "Confirm email",
+    "emailMismatch": "The two addresses don't match.",
+    "emailAdded": "{name} can now sign in with {email}.",
     "deactivate": "Deactivate",
     "reactivate": "Reactivate",
     "deactivateTitle": "Deactivate {name}?",

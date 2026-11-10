@@ -1,5 +1,6 @@
 import {
   addPackage,
+  addUserEmail,
   archiveBox,
   archiveLabAddress,
   archiveLabGroup,
@@ -534,6 +535,9 @@ export const router = implementer.router({
     list: api.users.list.handler(({ input, context }) => listUsers(db, context.actor, input)),
     createStationUser: api.users.createStationUser.handler(({ input, context }) =>
       createStationUser(db, context.actor, input),
+    ),
+    addEmail: api.users.addEmail.handler(({ input, context }) =>
+      addUserEmail(db, context.actor, input, { appUrl: env().BETTER_AUTH_URL }),
     ),
     updateRoles: api.users.updateRoles.handler(({ input, context }) =>
       updateUserRoles(db, context.actor, input),

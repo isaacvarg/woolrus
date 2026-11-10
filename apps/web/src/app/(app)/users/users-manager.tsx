@@ -11,6 +11,7 @@ import { Menu, MenuItem } from "@/components/ui/menu";
 import { toast } from "@/components/ui/toast";
 import { useErrorMessage, useFieldErrors } from "@/lib/errors";
 import { client, orpc } from "@/lib/orpc";
+import { AddEmailDialog } from "./add-email-dialog";
 import { BadgeDialog, PinDialog } from "./credentials-dialogs";
 import { AddStationUserDialog, stationRoles } from "./station-user-dialog";
 
@@ -48,6 +49,7 @@ export function UsersManager({ currentUserId }: { currentUserId: string }) {
   const [settingPin, setSettingPin] = useState<UserSummary | null>(null);
   const [badge, setBadge] = useState<IssuedBadge | null>(null);
   const [addingStationUser, setAddingStationUser] = useState(false);
+  const [addingEmail, setAddingEmail] = useState<UserSummary | null>(null);
   const invalidate = useInvalidate();
   const reactivate = useMutation({
     mutationFn: (user: UserSummary) => client.users.reactivate({ id: user.id }),
@@ -166,6 +168,11 @@ export function UsersManager({ currentUserId }: { currentUserId: string }) {
                   {user.id !== currentUserId && (
                     <Menu label={t("users.actionsFor", { name: user.name })} trigger="⋯">
                       <MenuItem onAction={() => setEditing(user)}>{t("users.editRoles")}</MenuItem>
+                      {user.stationOnly && (
+                        <MenuItem onAction={() => setAddingEmail(user)}>
+                          {t("users.addEmail")}
+                        </MenuItem>
+                      )}
                       <MenuItem onAction={() => setSettingPin(user)}>{t("users.setPin")}</MenuItem>
                       {user.hasPin && (
                         <MenuItem onAction={() => clearPin.mutate(user)}>
@@ -214,6 +221,7 @@ export function UsersManager({ currentUserId }: { currentUserId: string }) {
       {deactivating && (
         <DeactivateDialog user={deactivating} onClose={() => setDeactivating(null)} />
       )}
+      {addingEmail && <AddEmailDialog user={addingEmail} onClose={() => setAddingEmail(null)} />}
       {settingPin && <PinDialog user={settingPin} onClose={() => setSettingPin(null)} />}
       {badge && <BadgeDialog badge={badge} onClose={() => setBadge(null)} />}
       {addingStationUser && (

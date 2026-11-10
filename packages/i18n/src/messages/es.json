@@ -1356,6 +1356,8 @@
       "self": "No puedes desactivarte ni quitarte tu propio rol de Admin.",
       "rolesRequired": "Elige al menos un rol.",
       "alreadyExists": "Ya existe una cuenta con este correo.",
+      "notStationOnly": "Este usuario ya tiene un correo.",
+      "invitationPending": "Este correo tiene una invitación abierta. Revócala primero para que la dirección no termine con dos cuentas.",
       "pinFormat": "El PIN tiene exactamente 6 dígitos.",
       "pinWeak": "Demasiado fácil de adivinar: evita dígitos repetidos y secuencias como 123456.",
       "stationOnlyAdmin": "Los usuarios solo de estación no pueden ser administradores: un administrador también debe poder iniciar sesión personalmente."
@@ -1468,6 +1470,12 @@
       "subject": "Correo de prueba de Woolrus",
       "body": "Este es un correo de prueba de Woolrus. Si lo estás leyendo, el correo está bien configurado."
     },
+    "accountEnabled": {
+      "subject": "{admin} configuró tu inicio de sesión",
+      "body": "{admin} configuró tu inicio de sesión en Woolrus con esta dirección. Tus roles, tu PIN y tu credencial no cambian.",
+      "action": "Iniciar sesión en Woolrus",
+      "how": "La primera vez, inicia sesión con un enlace enviado por correo a esta dirección."
+    },
     "invitation": {
       "subject": "{inviter} te invitó a Woolrus",
       "body": "{inviter} te invitó a Woolrus, nuestro espacio de trabajo del almacén, como {roles}.",
@@ -1497,6 +1505,12 @@
     "actionsFor": "Acciones para {name}",
     "editRoles": "Editar roles",
     "editRolesTitle": "Roles de {name}",
+    "addEmail": "Añadir correo",
+    "addEmailTitle": "Añadir un correo para {name}",
+    "addEmailHelp": "{name} pasa a ser un usuario normal que también puede iniciar sesión personalmente. Sus roles, PIN, credencial e historial no cambian. Le enviaremos un enlace para iniciar sesión.",
+    "confirmEmail": "Confirmar correo",
+    "emailMismatch": "Las dos direcciones no coinciden.",
+    "emailAdded": "{name} ya puede iniciar sesión con {email}.",
     "deactivate": "Desactivar",
     "reactivate": "Reactivar",
     "deactivateTitle": "¿Desactivar a {name}?",

@@ -1,4 +1,5 @@
 import {
+  type AddUserEmailInput,
   type CreateStationUserInput,
   Pin,
   type UpdateUserRolesInput,
@@ -7,12 +8,15 @@ import {
   type UserListPage,
   type UserSummary,
 } from "@woolrus/contracts";
-import type { Db, DbTx, Prisma, Role } from "@woolrus/db";
+import { type Db, type DbTx, Prisma, type Role } from "@woolrus/db";
 import { recordAudit } from "../audit";
+import { enqueue } from "../enqueue";
 import { AppError, notFound } from "../errors";
 import { withIdempotency } from "../idempotency";
+import { queues } from "../jobs";
 import { type Actor, assertCan } from "../permissions";
 import { hashBadgeCode, hashPin, newBadgeCode } from "./credentials";
+import { openInvitation } from "./sign-in";
 import { isStationOnly, stationOnlyEmailFilter, stationOnlyPlaceholder } from "./station-only";
 
 const summarySelect = {
@@ -171,6 +175,74 @@ export async function createStationUser(
       return { id: user.id };
     }),
   );
+  return toUserSummary(await db.user.findUniqueOrThrow({ where: { id }, select: summarySelect }));
+}
+
+/**
+ * Gives a station-only user a real email (SPEC-identity amendment 1, decision 14), so they become a
+ * regular user with the same id, roles, PIN, badge and history. `emailVerified` is set true (decision
+ * 15): Better Auth 1.7.8 fails the first magic link of an unverified existing user, and a
+ * station-only user has no accounts or sessions for that check to revoke. One address never leads to two accounts, so an address
+ * another user has, or one with an open invitation, is refused. The `accountEnabled` email is
+ * queued in the same transaction, so it exists only if the change commits. English, like
+ * invitations (decision 8).
+ */
+export async function addUserEmail(
+  db: Db,
+  actor: Actor,
+  { idempotencyKey, id, ...input }: AddUserEmailInput,
+  { appUrl }: { appUrl: string },
+): Promise<UserSummary> {
+  assertCan(actor, "user.manage");
+  // The contract already lowercases; core doesn't rely on it.
+  const email = input.email.trim().toLowerCase();
+  if (isStationOnly(email)) throw new AppError("BAD_REQUEST", "errors.invitations.reservedEmail");
+  try {
+    await db.$transaction((tx) =>
+      withIdempotency(tx, idempotencyKey, "users.addEmail", actor, async () => {
+        await tx.$queryRaw`SELECT id FROM users WHERE id = ${id}::uuid FOR NO KEY UPDATE`;
+        const user = await tx.user.findUnique({ where: { id }, select: { email: true } });
+        if (!user) throw notFound();
+        if (!isStationOnly(user.email)) {
+          throw new AppError("CONFLICT", "errors.users.notStationOnly");
+        }
+        if (await tx.user.findFirst({ where: { email: { equals: email, mode: "insensitive" } } })) {
+          throw new AppError("CONFLICT", "errors.users.alreadyExists");
+        }
+        if (await openInvitation(tx, email)) {
+          throw new AppError("CONFLICT", "errors.users.invitationPending");
+        }
+        await tx.user.update({ where: { id }, data: { email, emailVerified: true } });
+        const admin = actor.userId
+          ? (await tx.user.findUnique({ where: { id: actor.userId }, select: { name: true } }))
+              ?.name
+          : undefined;
+        await enqueue(tx, queues.emailSend, {
+          to: email,
+          template: "accountEnabled",
+          params: {
+            admin: admin ?? "Woolrus",
+            url: `${appUrl}/sign-in?email=${encodeURIComponent(email)}`,
+          },
+          locale: "en",
+          idempotencyKey: crypto.randomUUID(),
+        });
+        await recordAudit(tx, actor, {
+          entityType: "User",
+          entityId: id,
+          action: "user.email.add",
+          after: { email },
+        });
+        return { id };
+      }),
+    );
+  } catch (error) {
+    // Someone took the address between the check and the update (a sign-up or another admin).
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      throw new AppError("CONFLICT", "errors.users.alreadyExists");
+    }
+    throw error;
+  }
   return toUserSummary(await db.user.findUniqueOrThrow({ where: { id }, select: summarySelect }));
 }
 
