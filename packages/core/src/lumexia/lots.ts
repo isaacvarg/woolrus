@@ -1,5 +1,13 @@
-import type { LotIdInput, PackResult, ScanLotInput, SetLotQuantityInput } from "@woolrus/contracts";
-import type { Db, DbTx } from "@woolrus/db";
+import type {
+  LotIdInput,
+  PackResult,
+  QaLotIdInput,
+  QaReplaceLotInput,
+  QaResult,
+  ScanLotInput,
+  SetLotQuantityInput,
+} from "@woolrus/contracts";
+import type { Db, DbTx, WorkflowStatus } from "@woolrus/db";
 import type { LumexiaClient } from "../adapters/lumexia/client";
 import { isLumexiaError } from "../adapters/lumexia/errors";
 import { recordAudit } from "../audit";
@@ -8,7 +16,9 @@ import { storedResult, withIdempotency } from "../idempotency";
 import { createTextNote } from "../notes/service";
 import { type PackOptions, packResult } from "../packing/queries";
 import { lockPackage } from "../packing/service";
-import { type Actor, assertCan } from "../permissions";
+import { type Actor, assertCan, type Permission } from "../permissions";
+import { qaResult } from "../qa/queries";
+import { lockForQa } from "../qa/verify";
 import { loadSettings } from "../settings/service";
 import { touchClaim } from "../workflow/claims";
 import { notifyOrderChanged } from "../workflow/notify";
@@ -16,13 +26,14 @@ import { type LotCode, parseLotCode } from "./codes";
 import { lumexiaClientFor } from "./connection";
 import { loadLots, lotOrder, lotSnapshot, writeLots } from "./lot-store";
 import { needsLot } from "./needs-lot";
-import { type LotSlot, removeLotFrom, scanLotInto, setLotQuantityIn } from "./split";
+import { type LotSlot, removeLotFrom, replaceLotIn, scanLotInto, setLotQuantityIn } from "./split";
 
 // Lot capture at Packing (SPEC-lumexia "Capturing lots"). Each write runs like a packing write:
 // `order.pack`, the order row lock, Packing, the live claim, audit and notify. Lots don't change
 // rates, weights or QA's verification, so nothing is invalidated.
 
 const SCAN = "lumexia.scanLot";
+const QA_REPLACE = "lumexia.qaReplaceLot";
 /** A rejected scan's note has its own key, so a retried scan doesn't write a second one. */
 const REJECTED = "lumexia.scanLotRejected";
 /** Someone is waiting at the bench: a QR scan asks Lumexia for at most this long. */
@@ -129,10 +140,14 @@ type BoxLine = Awaited<ReturnType<typeof boxLines>>[number];
  * for a number, the lines with its reference code, else those whose link has no reference code
  * (validation checks them later); for an unresolved QR code, all of them.
  */
-function candidatesFor(lines: BoxLine[], lot: ScannedLot): BoxLine[] {
+type LinkedLine = {
+  orderItem: { product: { lumexiaItemId: string | null; lumexiaItemRef: string | null } | null };
+};
+
+function candidatesFor<L extends LinkedLine>(lines: L[], lot: ScannedLot): L[] {
   if (lot.itemId) return lines.filter((it) => it.orderItem.product?.lumexiaItemId === lot.itemId);
   if (!lot.referenceCode) return lines;
-  const itemRef = (it: BoxLine) => it.orderItem.product?.lumexiaItemRef?.toUpperCase() ?? null;
+  const itemRef = (it: L) => it.orderItem.product?.lumexiaItemRef?.toUpperCase() ?? null;
   const exact = lines.filter((it) => itemRef(it) === lot.referenceCode);
   return exact.length > 0 ? exact : lines.filter((it) => itemRef(it) === null);
 }
@@ -253,7 +268,7 @@ export function setLotQuantity(
   { lotId, quantity }: SetLotQuantityInput,
   options: PackOptions = {},
 ): Promise<PackResult> {
-  return editLot(db, actor, lotId, "lot.setQuantity", options, (lots) => {
+  return editLot(db, actor, packing, lotId, "lot.setQuantity", options, (lots) => {
     const plan = setLotQuantityIn(lots, lotId, quantity);
     if (!plan.ok) {
       throw new AppError("CONFLICT", "errors.lumexia.lotQuantity", undefined, {
@@ -274,27 +289,87 @@ export function removeLot(
   { lotId }: LotIdInput,
   options: PackOptions = {},
 ): Promise<PackResult> {
-  return editLot(db, actor, lotId, "lot.remove", options, (lots) => removeLotFrom(lots, lotId));
+  return editLot(db, actor, packing, lotId, "lot.remove", options, (lots) =>
+    removeLotFrom(lots, lotId),
+  );
 }
 
-/** A hand edit of one box line's lots, run like a packing write. An edit that changes nothing writes nothing. */
-async function editLot(
+/**
+ * QA removes a lot (SPEC-lumexia "QA fixes"), as at Packing: its units go to the default lot. How
+ * a `WRONG_ITEM` block is cleared without sending the order back to Packing.
+ */
+export function qaRemoveLot(
   db: Db,
   actor: Actor,
+  { lotId }: QaLotIdInput,
+  options: PackOptions = {},
+): Promise<QaResult> {
+  return editLot(db, actor, qa, lotId, "lot.qaRemove", options, (lots) =>
+    removeLotFrom(lots, lotId),
+  );
+}
+
+/** Where a lot is edited: who may, the lock that proves the order is theirs there, and the answer. */
+type Stage<R> = {
+  permission: Permission;
+  lock: (
+    tx: DbTx,
+    actor: Actor,
+    pkg: { id: string; orderId: string },
+    now: Date,
+  ) => Promise<{ id: string; status: WorkflowStatus }>;
+  result: (tx: DbTx, orderId: string) => Promise<R>;
+};
+
+const packing: Stage<PackResult> = {
+  permission: "order.pack",
+  lock: async (tx, actor, pkg, now) => (await lockPackage(tx, actor, pkg.id, now)).order,
+  result: packResult,
+};
+
+const qa: Stage<QaResult> = {
+  permission: "order.qa",
+  lock: async (tx, actor, pkg, now) => {
+    const order = await lockForQa(tx, actor, pkg.orderId, now);
+    // Read after the lock: a repack may have just discarded it.
+    const row = await tx.package.findUnique({
+      where: { id: pkg.id },
+      select: { discardedAt: true },
+    });
+    if (!row || row.discardedAt) throw notFound();
+    // Labels are being bought for what QA saw; nothing on the order changes under them.
+    const buying = await tx.shippingLabel.count({
+      where: { package: { orderId: pkg.orderId }, status: "PURCHASING" },
+    });
+    if (buying > 0) throw new AppError("CONFLICT", "errors.qa.purchaseInProgress");
+    return order;
+  },
+  result: (tx, orderId) => qaResult(tx, orderId),
+};
+
+/** A hand edit of one box line's lots, run like a write of its stage. An edit that changes nothing writes nothing. */
+async function editLot<R>(
+  db: Db,
+  actor: Actor,
+  stage: Stage<R>,
   lotId: string,
   action: string,
   { now = new Date() }: PackOptions,
   plan: (lots: LotSlot[]) => LotSlot[],
-): Promise<PackResult> {
-  assertCan(actor, "order.pack");
+): Promise<R> {
+  assertCan(actor, stage.permission);
   return db.$transaction(async (tx) => {
     const row = await tx.packageItemLot.findUnique({
       where: { id: lotId },
-      select: { packageItem: { select: { id: true, packageId: true } } },
+      select: {
+        packageItem: {
+          select: { id: true, packageId: true, package: { select: { orderId: true } } },
+        },
+      },
     });
     if (!row) throw notFound();
-    const { id: packageItemId, packageId } = row.packageItem;
-    const { order } = await lockPackage(tx, actor, packageId, now);
+    const { id: packageItemId, packageId, package: pkg } = row.packageItem;
+    const order = await stage.lock(tx, actor, { id: packageId, orderId: pkg.orderId }, now);
     // Read again under the lock: another write may have just changed or removed it.
     const before = await loadLots(tx, packageItemId);
     if (!before.some((l) => l.id === lotId)) throw notFound();
@@ -315,8 +390,98 @@ async function editLot(
       await touchClaim(tx, actor, order.id, { now });
       await notifyOrderChanged(tx, { id: order.id, status: order.status });
     }
-    return packResult(tx, order.id);
+    return stage.result(tx, order.id);
   });
+}
+
+/**
+ * QA replaces a lot (SPEC-lumexia "QA fixes"): the scanned lot goes on the same box line with the
+ * old lot's units, and the old row goes. The same item check as at Packing: a lot number for
+ * another item is refused with nothing changed and one internal note on the package. A QR code
+ * Lumexia can't resolve now is taken, unverified, as at Packing. Idempotent on `scanId`.
+ */
+export async function qaReplaceLot(
+  db: Db,
+  actor: Actor,
+  { lotId, code, scanId }: QaReplaceLotInput,
+  { now = new Date(), connect = defaultConnect }: LotOptions = {},
+): Promise<QaResult> {
+  assertCan(actor, "order.qa");
+  const parsed = parseLotCode(code);
+  if (!parsed) throw new AppError("BAD_REQUEST", "errors.lumexia.notALot");
+  const lot = await resolveLot(db, parsed, connect);
+
+  let packageId: string | null = null;
+  try {
+    return await db.$transaction(async (tx) => {
+      const row = await tx.packageItemLot.findUnique({
+        where: { id: lotId },
+        select: {
+          packageItem: {
+            select: {
+              id: true,
+              packageId: true,
+              package: { select: { orderId: true } },
+              orderItem: {
+                select: {
+                  name: true,
+                  product: { select: { lumexiaItemId: true, lumexiaItemRef: true } },
+                },
+              },
+            },
+          },
+        },
+      });
+      // A replay is answered before the checks, which may no longer pass (the lot is gone).
+      const replay = await storedResult<{ orderId: string }>(tx, scanId, QA_REPLACE, actor);
+      if (replay) return qaResult(tx, replay.orderId);
+      if (!row) throw notFound();
+      const line = row.packageItem;
+      packageId = line.packageId;
+      const order = await qa.lock(
+        tx,
+        actor,
+        { id: line.packageId, orderId: line.package.orderId },
+        now,
+      );
+      const before = await loadLots(tx, line.id);
+      if (!before.some((l) => l.id === lotId)) throw notFound();
+      if (candidatesFor([line], lot).length === 0 && lot.lotNumber) {
+        throw new WrongItem(order.id, lot.lotNumber, lot.referenceCode ?? lot.lotNumber, [
+          line.orderItem.name,
+        ]);
+      }
+
+      await withIdempotency(tx, scanId, QA_REPLACE, actor, async () => {
+        const after = replaceLotIn(before, lotId, {
+          lotNumber: lot.lotNumber,
+          lumexiaLotId: lot.lumexiaLotId,
+        });
+        await writeLots(tx, line.id, before, after, { scannedById: actor.userId, now });
+        await recordAudit(tx, actor, {
+          entityType: "PackageItem",
+          entityId: line.id,
+          action: "lot.qaReplace",
+          before: { lots: lotSnapshot(before) },
+          after: {
+            lotId,
+            lotNumber: lot.lotNumber,
+            lumexiaLotId: lot.lumexiaLotId,
+            lots: lotSnapshot(after),
+          },
+          at: now,
+        });
+        await touchClaim(tx, actor, order.id, { now });
+        await notifyOrderChanged(tx, { id: order.id, status: order.status });
+        return { orderId: order.id };
+      });
+      return qaResult(tx, order.id);
+    });
+  } catch (error) {
+    if (!(error instanceof WrongItem) || !packageId) throw error;
+    await noteRejectedLot(db, actor, packageId, scanId, error);
+    throw wrongItemError(error.lotNumber, error.itemRef);
+  }
 }
 
 /**

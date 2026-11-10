@@ -4,6 +4,7 @@ import { cheapestPurchasable } from "../carriers/compare";
 import { quoteOnlyProviders } from "../carriers/rates";
 import { notFound } from "../errors";
 import { openCriticalIssues } from "../exceptions/queries";
+import { lotOrder, toLotDtos } from "../lumexia/lot-store";
 import { lineAndPackageNoteCounts } from "../notes/targets";
 import { type Actor, assertCan } from "../permissions";
 import { toNumber } from "../units";
@@ -25,6 +26,7 @@ const packageInclude = {
     include: {
       packedBy: { select: nameFields },
       qaVerifiedBy: { select: nameFields },
+      lots: { orderBy: lotOrder },
       orderItem: { include: { pickedBy: { select: nameFields } } },
     },
   },
@@ -84,6 +86,8 @@ export async function qaResult(
     quoteOnlyProviders(tx),
   ]);
 
+  // The gate already read the lot rules for each line.
+  const lotLines = new Set(gate.lines.filter((l) => l.needsLot).map((l) => l.id));
   const issueFor = (pkgId: string, orderItemId: string) =>
     issues.find((i) => i.orderItemId === orderItemId || i.packageId === pkgId)?.id ?? null;
 
@@ -110,6 +114,8 @@ export async function qaResult(
         pickedBy: it.orderItem.pickedBy ? displayName(it.orderItem.pickedBy) : null,
         packedBy: it.packedBy ? displayName(it.packedBy) : null,
         criticalIssueId: issueFor(pkg.id, it.orderItemId),
+        needsLot: lotLines.has(it.orderItemId),
+        lots: toLotDtos(it.lots),
       })),
       label: label ? toLabel(label) : null,
       rates: pkg.rates.map((r) => ({

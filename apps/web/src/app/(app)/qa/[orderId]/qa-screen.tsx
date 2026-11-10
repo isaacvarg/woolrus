@@ -17,6 +17,7 @@ import { playScanSound, useScanner } from "@/lib/scanner";
 import { ScanBanner, type ScanOutcome } from "../../pick/[orderId]/pick-screen";
 import { hasLiveLabel } from "./live-label";
 import { QaDrawer } from "./qa-drawer";
+import { RowLots } from "./qa-lots";
 import { RatesTable, RefreshRatesButton, reasonSavesSettled } from "./qa-rates";
 import { FailedPackages, isUnknownPurchase, MarkNotBought } from "./qa-settle";
 import { isVoidable, VoidLabelButton } from "./qa-void";
@@ -521,6 +522,7 @@ function PackageCard({
           <RowButton
             key={row.id}
             row={row}
+            orderId={orderId}
             disabled={disabled}
             onTap={() => onTap(row)}
             onReport={onReport ? () => onReport(row) : undefined}
@@ -553,11 +555,13 @@ function PackageCard({
 
 function RowButton({
   row,
+  orderId,
   disabled,
   onTap,
   onReport,
 }: {
   row: QaRow;
+  orderId: string;
   disabled: boolean;
   onTap: () => void;
   onReport?: () => void;
@@ -612,6 +616,7 @@ function RowButton({
           </span>
         </span>
       </Button>
+      <RowLots row={row} orderId={orderId} disabled={disabled} />
       {onReport && (
         <div className="flex justify-end pt-1">
           <Button

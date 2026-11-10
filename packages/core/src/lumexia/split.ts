@@ -136,3 +136,23 @@ export function removeLotFrom(current: readonly LotSlot[], lotId: string): LotSl
   if (first) first.quantity += target.quantity;
   return rest;
 }
+
+/**
+ * A lot replaced at QA (SPEC-lumexia "QA fixes"): the new lot takes the old one's units and place,
+ * so the default stays the default. A lot already on the line takes the units instead, and
+ * replacing a lot by itself changes nothing.
+ */
+export function replaceLotIn(current: readonly LotSlot[], lotId: string, lot: LotRef): LotSlot[] {
+  const lots = byPosition(current);
+  const target = lots.find((l) => l.id === lotId);
+  if (!target) throw new Error(`lot ${lotId} isn't on this box line`);
+  const existing = lots.find((l) => sameLot(l, lot));
+  if (existing === target) return lots;
+  if (existing) {
+    existing.quantity += target.quantity;
+    return lots.filter((l) => l !== target);
+  }
+  return lots.map((l) =>
+    l === target ? { ...lot, quantity: target.quantity, position: target.position } : l,
+  );
+}

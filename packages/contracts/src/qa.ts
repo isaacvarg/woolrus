@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { base, Id, IdempotencyKey } from "./base";
 import { RateSelectionReason } from "./carriers";
+import { LotDto } from "./lumexia";
 import { LineAttribute, OrderDetail } from "./orders";
 
 // QA (SPEC-qa "API"). Writes need the order in QA and the caller's live claim.
@@ -51,6 +52,10 @@ export const QaRow = z.object({
   packedBy: z.string().nullable(),
   /** The open Critical issue that names this row's line or package; null when none does. */
   criticalIssueId: Id.nullable(),
+  /** The line's product needs a Lumexia lot (SPEC-lumexia). */
+  needsLot: z.boolean(),
+  /** The row's lots, the default first; a `WRONG_ITEM` one blocks the label. */
+  lots: z.array(LotDto),
 });
 export type QaRow = z.infer<typeof QaRow>;
 
@@ -185,6 +190,19 @@ export const MarkLabelNotBoughtInput = z.object({
 });
 export type MarkLabelNotBoughtInput = z.infer<typeof MarkLabelNotBoughtInput>;
 
+/** Replace a lot at QA: a new lot for the same box line, with the old one's units. */
+export const QaReplaceLotInput = z.object({
+  lotId: Id,
+  /** A printed lot number (`BASE1234.A12A0124`) or a lot label's QR code. */
+  code: z.string().trim().min(1).max(200),
+  /** One per physical scan, so a retried request doesn't replace twice. */
+  scanId: IdempotencyKey,
+});
+export type QaReplaceLotInput = z.infer<typeof QaReplaceLotInput>;
+
+export const QaLotIdInput = z.object({ lotId: Id });
+export type QaLotIdInput = z.infer<typeof QaLotIdInput>;
+
 export const qa = {
   screen: base
     .route({
@@ -248,5 +266,23 @@ export const qa = {
       summary: "Release a purchase nobody could confirm, once the provider has no label for it",
     })
     .input(MarkLabelNotBoughtInput)
+    .output(QaResult),
+  replaceLot: base
+    .route({
+      method: "POST",
+      path: "/package-lots/{lotId}/qa-replace",
+      tags,
+      summary: "Replace a lot at QA with another lot of the same item, keeping its units",
+    })
+    .input(QaReplaceLotInput)
+    .output(QaResult),
+  removeLot: base
+    .route({
+      method: "POST",
+      path: "/package-lots/{lotId}/qa-remove",
+      tags,
+      summary: "Remove a lot at QA; its units go to the box line's default lot",
+    })
+    .input(QaLotIdInput)
     .output(QaResult),
 };

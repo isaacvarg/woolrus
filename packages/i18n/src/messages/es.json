@@ -767,7 +767,19 @@
       "CHEAPEST_UNAVAILABLE": "La más barata no estaba disponible o falló",
       "OTHER": "Otro"
     },
-    "drawerReason": "Motivo: {reason}"
+    "drawerReason": "Motivo: {reason}",
+    "lots": "Lotes de {name}",
+    "lotUnits": "{count} × {lot}",
+    "lotNone": "Sin lote registrado",
+    "lotBlocks": "Bloquea la etiqueta",
+    "lotReplace": "Reemplazar lote",
+    "lotRemove": "Quitar",
+    "lotRemoveNamed": "Quitar el lote {lot}",
+    "lotReplaceTitle": "Reemplazar el lote {lot}",
+    "lotReplaceIntro": "Escanea el lote correcto de {name}. Recibe {count, plural, one {# unidad} other {# unidades}} de este lote.",
+    "lotReplaceField": "Lote nuevo",
+    "lotReplaceHint": "Escanea el código QR de la etiqueta del lote o escribe su número de lote.",
+    "lotReplaceSave": "Reemplazar"
   },
   "pick": {
     "title": "Surtir #{number}",
@@ -1278,7 +1290,8 @@
         "notReady": "El pedido no está Listo.",
         "noPackages": "El pedido no tiene paquetes.",
         "packageOverweight": "El paquete {package} supera el límite de su caja de {maxOz} oz y necesita un motivo.",
-        "lotMissing": "{line} en el paquete {package} necesita un lote."
+        "lotMissing": "{line} en el paquete {package} necesita un lote.",
+        "lotWrongItem": "{line} en el paquete {package} tiene el lote {lotNumber}, que pertenece a otro artículo. Reemplázalo o quítalo."
       }
     },
     "sync": {

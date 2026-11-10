@@ -94,6 +94,8 @@ import {
   pickLine,
   previewLabRun,
   pushErrors,
+  qaRemoveLot,
+  qaReplaceLot,
   queueCounts,
   quoteOneOff,
   reactivateUser,
@@ -405,6 +407,12 @@ export const router = implementer.router({
     ),
     markLabelNotBought: api.qa.markLabelNotBought.handler(({ input, context }) =>
       markLabelNotBought(db, context.actor, input),
+    ),
+    replaceLot: api.qa.replaceLot.handler(({ input, context }) =>
+      qaReplaceLot(db, context.actor, input),
+    ),
+    removeLot: api.qa.removeLot.handler(({ input, context }) =>
+      qaRemoveLot(db, context.actor, input),
     ),
   },
   packing: {

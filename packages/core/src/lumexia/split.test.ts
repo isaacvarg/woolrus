@@ -5,6 +5,7 @@ import {
   type LotSlot,
   removeLotFrom,
   removeUnitsFromLots,
+  replaceLotIn,
   scanLotInto,
   setLotQuantityIn,
 } from "./split";
@@ -152,6 +153,29 @@ describe("removeLotFrom", () => {
 
   it("leaves no lots when the only one goes", () => {
     expect(removeLotFrom(saved(3, ["A"]), "A")).toEqual([]);
+  });
+});
+
+describe("replaceLotIn", () => {
+  it("puts a new lot in the old one's place, with its units", () => {
+    const after = replaceLotIn(saved(5, ["A", "B", "C"]), "B", ref("D")); // A:3 B:1 C:1
+    expect(show(after)).toBe("A:3 D:1 C:1");
+    expect(after.find((l) => l.lotNumber === "D")?.id).toBeUndefined();
+  });
+
+  it("keeps the default's place when the default is replaced", () => {
+    const after = replaceLotIn(saved(5, ["A", "B"]), "A", ref("D")); // A:4 B:1
+    expect(show(after)).toBe("D:4 B:1");
+  });
+
+  it("gives the units to the lot already on the line when it's scanned again", () => {
+    const after = replaceLotIn(saved(5, ["A", "B", "C"]), "C", ref("A")); // A:3 B:1 C:1
+    expect(show(after)).toBe("A:4 B:1");
+    expect(after[0]?.id).toBe("A");
+  });
+
+  it("changes nothing when the lot is replaced by itself", () => {
+    expect(show(replaceLotIn(saved(3, ["A", "B"]), "B", ref("B")))).toBe("A:2 B:1");
   });
 });
 

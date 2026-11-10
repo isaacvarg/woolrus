@@ -767,7 +767,19 @@
       "CHEAPEST_UNAVAILABLE": "Cheapest unavailable or failed",
       "OTHER": "Other"
     },
-    "drawerReason": "Why: {reason}"
+    "drawerReason": "Why: {reason}",
+    "lots": "Lots of {name}",
+    "lotUnits": "{count} × {lot}",
+    "lotNone": "No lot recorded",
+    "lotBlocks": "Blocks the label",
+    "lotReplace": "Replace lot",
+    "lotRemove": "Remove",
+    "lotRemoveNamed": "Remove lot {lot}",
+    "lotReplaceTitle": "Replace lot {lot}",
+    "lotReplaceIntro": "Scan the right lot for {name}. It takes this lot's {count, plural, one {# unit} other {# units}}.",
+    "lotReplaceField": "New lot",
+    "lotReplaceHint": "Scan the lot label's QR code or type its lot number.",
+    "lotReplaceSave": "Replace"
   },
   "pick": {
     "title": "Pick #{number}",
@@ -1278,7 +1290,8 @@
         "notReady": "The order isn't Ready.",
         "noPackages": "The order has no packages.",
         "packageOverweight": "Package {package} is over its box's limit of {maxOz} oz and needs a reason.",
-        "lotMissing": "{line} in package {package} needs a lot."
+        "lotMissing": "{line} in package {package} needs a lot.",
+        "lotWrongItem": "{line} in package {package} has lot {lotNumber}, which belongs to a different item. Replace or remove it."
       }
     },
     "sync": {

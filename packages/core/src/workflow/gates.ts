@@ -39,8 +39,17 @@ export type GatePackage = {
   maxWeightOz: number | null;
   /** The packer gave a reason for a weight above the max (FR-PACK-09). */
   hasOverrideReason: boolean;
-  /** `lotUnits`: Σ the box line's lot quantities; once it has any lot, they cover every unit. */
-  items: { orderItemId: string; quantity: number; qaVerified: boolean; lotUnits: number }[];
+  /**
+   * `lotUnits`: Σ the box line's lot quantities; once it has any lot, they cover every unit.
+   * `wrongItemLots`: its lots Lumexia says are another item's (`WRONG_ITEM`), by number.
+   */
+  items: {
+    orderItemId: string;
+    quantity: number;
+    qaVerified: boolean;
+    lotUnits: number;
+    wrongItemLots: string[];
+  }[];
   selectedRates: number;
   activeLabels: number;
   liveLabels: number;
@@ -146,11 +155,25 @@ function verified(snap: GateSnapshot): UnmetCondition[] {
       ...(p.activeLabels !== 1 ? [unmet("packageNoLabel", { package: p.number })] : []),
     ];
   });
+  // A lot for another item is a mix-up, so it blocks the label (SPEC-lumexia decision 6).
+  // NOT_FOUND and UNVERIFIED only warn on the QA screen.
+  const lineName = new Map(snap.lines.map((l) => [l.id, l.name]));
+  const wrongLots = snap.packages.flatMap((p) =>
+    p.items.flatMap((it) =>
+      it.wrongItemLots.map((lotNumber) =>
+        unmet("lotWrongItem", {
+          line: lineName.get(it.orderItemId) ?? "",
+          package: p.number,
+          lotNumber,
+        }),
+      ),
+    ),
+  );
   const critical =
     snap.openCriticalIssues > 0
       ? [unmet("criticalIssueOpen", { count: snap.openCriticalIssues })]
       : [];
-  return [...allVoidedCondition(snap), ...conditions, ...critical];
+  return [...allVoidedCondition(snap), ...conditions, ...wrongLots, ...critical];
 }
 
 function shippable(snap: GateSnapshot): UnmetCondition[] {
@@ -249,7 +272,10 @@ export async function loadGateSnapshot(tx: DbTx, orderId: string): Promise<GateS
               orderItemId: true,
               quantity: true,
               qaVerifiedAt: true,
-              lots: { select: { quantity: true } },
+              lots: {
+                orderBy: { position: "asc" },
+                select: { quantity: true, status: true, lotNumber: true, lumexiaLotId: true },
+              },
             },
           },
           rates: { where: { selected: true }, select: { id: true } },
@@ -292,6 +318,10 @@ export async function loadGateSnapshot(tx: DbTx, orderId: string): Promise<GateS
         quantity: it.quantity,
         qaVerified: it.qaVerifiedAt !== null,
         lotUnits: it.lots.reduce((sum, l) => sum + l.quantity, 0),
+        // A QR lot Lumexia resolved has its number filled in; the id is the fallback.
+        wrongItemLots: it.lots
+          .filter((l) => l.status === "WRONG_ITEM")
+          .map((l) => l.lotNumber ?? l.lumexiaLotId ?? ""),
       })),
       selectedRates: p.rates.length,
       activeLabels: p.labels.filter((l) => l.status === "ACTIVE").length,
