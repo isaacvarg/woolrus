@@ -2,8 +2,10 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { QaPackage, QaResult, QaRow, QaView } from "@woolrus/contracts";
+import { formatWeight } from "@woolrus/core/format";
+import { ArrowUpRight, Flag, Weight } from "lucide-react";
 import Link from "next/link";
-import { useFormatter, useTranslations } from "next-intl";
+import { useFormatter, useLocale, useTranslations } from "next-intl";
 import { useState } from "react";
 import { ReportIssueFlow } from "@/components/exceptions/report-issue-flow";
 import { CustomsNotice } from "@/components/shipping/customs-notice";
@@ -26,7 +28,11 @@ import { isVoidable, VoidLabelButton } from "./qa-void";
 // it. Taps apply at once and the server confirms them (NFR-PERF-02); writes run one at a time per
 // order so they land in the order they were made.
 
-const priorityBadge: Record<number, string> = { 1: "badge-warning", 2: "badge-error" };
+const priorityBadge: Record<number, string> = {
+  0: "badge-info",
+  1: "badge-warning",
+  2: "badge-error",
+};
 
 /** What the server will make of a tap, so the screen can show it before the answer comes. */
 function applyTap(view: QaView, rowId: string, verified: boolean): QaView {
@@ -350,52 +356,27 @@ function QaLayout({
         </ul>
       )}
 
-      <footer
-        data-toast-clearance
-        className="fixed inset-x-0 bottom-0 z-10 space-y-1 border-t border-base-300 bg-base-100 p-4"
-      >
-        {purchasing && (
-          <div className="flex items-center gap-3">
-            <p className="font-semibold" data-testid="qa-buying-footer">
-              {view.purchase.kind === "purchasing" &&
-                t("qa.buying", { bought: view.purchase.bought, total: view.purchase.total })}
-            </p>
-            <Link href="/queue/qa" className="btn btn-primary ms-auto" data-testid="qa-next-order">
+      {(purchasing || mayComplete) && (
+        <footer
+          data-toast-clearance
+          className="fixed inset-x-0 bottom-0 z-10 flex justify-end border-t border-base-300 bg-base-100 p-4"
+        >
+          {purchasing ? (
+            <Link href="/queue/qa" className="btn btn-primary" data-testid="qa-next-order">
               {t("qa.nextOrder")}
             </Link>
-          </div>
-        )}
-        {!purchasing && view.unmet.length === 0 ? (
-          <div className="flex items-center gap-3">
-            <p className="font-semibold" data-testid="qa-all-done">
-              {t("qa.allDone")}
-            </p>
-            {mayComplete && (
-              <Button
-                className="btn-primary ms-auto"
-                onPress={() => complete.mutate(undefined)}
-                isDisabled={complete.isPending}
-                data-testid="qa-complete"
-              >
-                {t("qa.complete")}
-              </Button>
-            )}
-          </div>
-        ) : !purchasing ? (
-          <>
-            <p className="font-semibold">{t("qa.stillNeeded")}</p>
-            <ul className="list-disc ps-6 text-sm" data-testid="qa-unmet">
-              {view.unmet.map((condition) => (
-                <li key={`${condition.messageKey}:${JSON.stringify(condition.params)}`}>
-                  {t.has(condition.messageKey as never)
-                    ? t(condition.messageKey as never, condition.params as never)
-                    : t("errors.internal")}
-                </li>
-              ))}
-            </ul>
-          </>
-        ) : null}
-      </footer>
+          ) : (
+            <Button
+              className="btn-primary"
+              onPress={() => complete.mutate(undefined)}
+              isDisabled={complete.isPending}
+              data-testid="qa-complete"
+            >
+              {t("qa.complete")}
+            </Button>
+          )}
+        </footer>
+      )}
     </section>
   );
 }
@@ -408,13 +389,18 @@ function QaHeader({ view }: { view: QaView }) {
     <header className="space-y-2">
       <div className="flex flex-wrap items-center gap-3">
         <h1 className="text-3xl font-bold">{t("qa.title", { number: order.number })}</h1>
-        <span className={`badge badge-lg ${priorityBadge[level] ?? "badge-ghost"}`}>
-          {t(`queue.priorityLevel.${level}`)}
+        <span
+          className={`badge badge-lg gap-1.5 font-semibold ${priorityBadge[level]}`}
+          data-testid="qa-priority"
+        >
+          <Flag className="size-4" aria-hidden="true" />
+          {t("qa.priorityLabel", { level: t(`queue.priorityLevel.${level}`) })}
         </span>
         <span className="ms-auto flex items-center gap-2">
           <QaDrawer view={view} />
-          <Link href={`/orders/${order.id}`} className="btn btn-ghost btn-sm">
-            {t("pack.orderDetails")}
+          <Link href={`/orders/${order.id}`} className="btn btn-outline btn-sm min-h-12 gap-2">
+            <ArrowUpRight className="size-4" aria-hidden="true" />
+            {t("qa.openOrder")}
           </Link>
         </span>
       </div>
@@ -514,9 +500,12 @@ function PackageCard({
           {t("qa.verifiedCount", { verified, total: pkg.rows.length })}
         </span>
       </div>
-      <p className="text-sm opacity-70">
-        {pkg.boxName ? t("qa.box", { name: pkg.boxName }) : t("qa.customBox")}
-      </p>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm opacity-70">
+          {pkg.boxName ? t("qa.box", { name: pkg.boxName }) : t("qa.customBox")}
+        </p>
+        <PackageWeight weightOz={pkg.weightOz} />
+      </div>
       <ul className="grid gap-2">
         {pkg.rows.map((row) => (
           <RowButton
@@ -550,6 +539,25 @@ function PackageCard({
         </div>
       )}
     </li>
+  );
+}
+
+/** The package's weight from packing, in the store's display unit. */
+function PackageWeight({ weightOz }: { weightOz: number | null }) {
+  const t = useTranslations();
+  const locale = useLocale();
+  const settings = useQuery(orpc.settings.public.queryOptions());
+  // Until settings load, use the schema default so the card isn't held back.
+  const weightDisplay = settings.data?.weightDisplay ?? "LB_OZ";
+  return (
+    <span
+      className="flex items-center gap-1.5 font-semibold tabular-nums"
+      data-testid="qa-package-weight"
+    >
+      <Weight className="size-4" aria-hidden="true" />
+      <span className="sr-only">{t("pack.weight")}:</span>
+      {weightOz === null ? t("qa.noWeight") : formatWeight(weightOz, weightDisplay, locale)}
+    </span>
   );
 }
 

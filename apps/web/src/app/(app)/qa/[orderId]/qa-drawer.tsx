@@ -2,6 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import type { QaView } from "@woolrus/contracts";
+import { PanelRightOpen } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
 import { Dialog as AriaDialog, Heading, Modal, ModalOverlay } from "react-aria-components";
 import { HistoryPanel } from "@/app/(app)/orders/[id]/history-panel";
@@ -20,7 +21,10 @@ export function QaDrawer({ view }: { view: QaView }) {
   const t = useTranslations();
   return (
     <DialogTrigger>
-      <Button className="btn-outline btn-sm min-h-12">{t("qa.drawerOpen")}</Button>
+      <Button className="btn-outline btn-sm min-h-12 gap-2">
+        <PanelRightOpen className="size-4" aria-hidden="true" />
+        {t("qa.drawerOpen")}
+      </Button>
       <ModalOverlay isDismissable className="fixed inset-0 z-40 flex justify-end bg-black/40">
         <Modal className="h-full w-full max-w-xl overflow-y-auto bg-base-100 p-6 shadow-xl">
           <AriaDialog className="space-y-6 outline-none">

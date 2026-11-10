@@ -64,7 +64,6 @@ test.describe("the go-live journey against the dev store", () => {
           };
           await page.goto(`/qa/${order.id}`);
           await page.getByTestId("qa-row").first().click();
-          await expect(page.getByTestId("qa-all-done")).toBeVisible();
           await page.getByTestId("qa-complete").click();
           await expect(page.getByTestId("qa-next-order")).toBeVisible();
           await journey.runPurchase(qa.id);

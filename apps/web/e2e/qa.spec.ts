@@ -41,7 +41,7 @@ test("Start QA claims the order; tapping a row verifies it in full and tapping a
 
   const row = page.getByTestId("qa-row");
   await expect(page.getByTestId("qa-package-count")).toHaveText("0 of 1 verified");
-  await expect(page.getByTestId("qa-unmet")).toBeVisible();
+  await expect(page.getByTestId("qa-complete")).toHaveCount(0);
 
   await row.click();
   await expect(row).toHaveAttribute("data-verified", "true");
@@ -75,7 +75,7 @@ test("the order drawer shows picker, packer, rate and notes", async ({ page }) =
     data: { claimedById: qa.id, claimedAt: new Date() },
   });
   await page.goto(`/qa/${order.id}`);
-  await page.getByRole("button", { name: "Order details" }).click();
+  await page.getByRole("button", { name: "Quick view" }).click();
   const drawer = page.getByRole("dialog");
   await expect(drawer.getByTestId("qa-drawer-rate")).toHaveText("No rate selected");
   await expect(drawer.getByTestId("qa-drawer-row")).toContainText("Picked by Nobody recorded");
@@ -214,7 +214,6 @@ test("Complete QA records the intent and shows the labels being bought, with Nex
     });
     try {
       await page.goto(`/qa/${order.id}`);
-      await expect(page.getByTestId("qa-all-done")).toBeVisible();
       await page.getByTestId("qa-complete").click();
       await expect(page.getByTestId("qa-buying")).toHaveText("Buying labels… 0 of 1");
       await expect(page.getByTestId("qa-next-order")).toBeVisible();

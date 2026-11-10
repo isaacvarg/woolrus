@@ -47,7 +47,7 @@ test("scan and tap every item, change a rate, complete, and the order is Ready w
       await scanCode(page, o.sku);
       await expect(page.getByTestId("qa-package-count").first()).toHaveText("1 of 1 verified");
       await page.getByTestId("qa-row").nth(1).click();
-      await expect(page.getByTestId("qa-all-done")).toBeVisible();
+      await expect(page.getByTestId("qa-complete")).toBeVisible();
 
       // The dearer rate on package 2.
       await page.getByTestId("qa-package").nth(1).getByTestId("qa-rate").nth(1).click();
@@ -168,9 +168,6 @@ test("an open critical issue blocks Complete QA and says why; resolving it unblo
       await expect(page.getByTestId("qa-row")).toBeVisible();
       await expect(page.getByTestId("qa-critical")).toBeVisible();
       await expect(page.getByTestId("qa-complete")).toHaveCount(0);
-      await expect(page.getByTestId("qa-unmet")).toContainText(
-        "Resolve the 1 open critical issue(s) before the order can leave QA.",
-      );
 
       await db.qualityIssue.update({
         where: { id: issue.id },

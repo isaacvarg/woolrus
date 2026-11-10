@@ -277,9 +277,6 @@ test("pack two lots into a box, then a wrong-item lot blocks Complete QA until Q
       const wrong = page.getByTestId("qa-lot").filter({ hasText: "B07C1124" });
       await expect(wrong).toContainText("Wrong item");
       await expect(wrong.getByTestId("qa-lot-blocking")).toHaveText("Blocks the label");
-      await expect(page.getByTestId("qa-unmet")).toContainText(
-        `has lot ${ref}.B07C1124, which belongs to a different item`,
-      );
       await expect(page.getByTestId("qa-complete")).toHaveCount(0);
 
       // The REST API refuses it too.

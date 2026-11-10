@@ -260,8 +260,8 @@ as live) and one selected rate per package.
   critical flag as icon + word, **Report issue** from exceptions' dialog), the rates table from `carriers` with
   selection, and the label state once bought. A scanner in HID mode scans into the focused package (the package
   card the user last touched; the first unverified one by default), using picking's keyboard listener.
-- Footer: **Complete QA** with the unmet preconditions listed under it; while buying, "Buying labels… 1 of 3" and
-  **Next order**; after a failure, a banner per failed package with its reason and what to do (pick another rate,
+- Footer: **Complete QA** once every precondition is met, and no footer before that; while buying, **Next order**
+  (the banner above shows "Buying labels… 1 of 3"); after a failure, a banner per failed package with its reason and what to do (pick another rate,
   refresh, fix the address).
 - On a bought label, for `label.void`: **Void label** (confirm, reason). On a `purchaseUnknown` label: "Check
   <provider> for a label with reference <order number>" and **Mark not bought** (confirm, reason).

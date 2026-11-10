@@ -77,7 +77,7 @@ test("QA picks the pricier rate with a reason; the label and the drawer carry it
       expect(label).toMatchObject({ status: "ACTIVE", selectionReason: "FASTER_DELIVERY" });
 
       await page.reload();
-      await page.getByRole("button", { name: "Order details" }).click();
+      await page.getByRole("button", { name: "Quick view" }).click();
       await expect(page.getByTestId("qa-drawer-reason")).toHaveText("Why: Faster delivery");
 
       await page.goto(`/orders/${o.order.id}`);
