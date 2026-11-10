@@ -1363,7 +1363,8 @@
     "invitations": {
       "emailInvalid": "Introduce un correo electrónico válido.",
       "pending": "Este correo ya tiene una invitación pendiente. Reenvíala o revócala.",
-      "notOpen": "Esta invitación ya fue aceptada o revocada."
+      "notOpen": "Esta invitación ya fue aceptada o revocada.",
+      "reservedEmail": "Esta dirección está reservada para usuarios de estación. Usa el correo real de la persona."
     },
     "auth": {
       "deactivated": "Tu cuenta está desactivada. Pide a un administrador que la reactive.",

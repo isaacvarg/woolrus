@@ -1363,7 +1363,8 @@
     "invitations": {
       "emailInvalid": "Enter a valid email address.",
       "pending": "This email already has a pending invitation. Resend or revoke it instead.",
-      "notOpen": "This invitation was already accepted or revoked."
+      "notOpen": "This invitation was already accepted or revoked.",
+      "reservedEmail": "This address is reserved for station users. Use the person's real email."
     },
     "auth": {
       "deactivated": "Your account is deactivated. Ask an admin to reactivate it.",

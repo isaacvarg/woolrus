@@ -1,4 +1,10 @@
-import { acceptInvitation, getEmailSender, mayCreateAccount, sendMagicLink } from "@woolrus/core";
+import {
+  acceptInvitation,
+  getEmailSender,
+  mayCreateAccount,
+  mayStartSession,
+  sendMagicLink,
+} from "@woolrus/core";
 import { db } from "@woolrus/db";
 import { defaultLocale, isLocale, type Locale } from "@woolrus/i18n";
 import { createLogger } from "@woolrus/logger";
@@ -76,17 +82,14 @@ function createAuth() {
     databaseHooks: {
       session: {
         create: {
-          // A deactivated user can't start a session (e.g. a Google sign-in, or a link sent
-          // before deactivation). Better Auth then redirects with `failed_to_create_session`
-          // (magic link) or `unable_to_create_session` (OAuth), which the sign-in page shows as
-          // errors.auth.deactivated.
+          // A deactivated or station-only user can't start a session, whatever the method (the
+          // rule is core's `mayStartSession`). Better Auth then redirects with
+          // `failed_to_create_session` (magic link) or `unable_to_create_session` (OAuth), which
+          // the sign-in page shows as errors.auth.deactivated.
           before: async (session) => {
-            const user = await db.user.findUnique({
-              where: { id: session.userId },
-              select: { active: true },
-            });
-            if (user?.active) return;
-            log.info({ userId: session.userId }, "sign-in refused: user deactivated");
+            const decision = await mayStartSession(db, session.userId);
+            if (decision.allowed) return;
+            log.info({ userId: session.userId, reason: decision.reason }, "sign-in refused");
             return false;
           },
         },
