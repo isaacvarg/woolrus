@@ -176,6 +176,18 @@ describe("addUserEmail", () => {
     ).rejects.toMatchObject({ kind: "CONFLICT", messageKey: "errors.users.notStationOnly" });
   });
 
+  it("refuses a deactivated station-only user, with no email sent", async () => {
+    const actor = await admin();
+    const created = await stationUser(actor);
+    await db.user.update({ where: { id: created.id }, data: { active: false } });
+    const email = unique("gone");
+    await expect(
+      addUserEmail(db, actor, { id: created.id, email, idempotencyKey: key() }, { appUrl }),
+    ).rejects.toMatchObject({ kind: "CONFLICT", messageKey: "errors.users.addEmailInactive" });
+    expect(await emailJobs(email)).toHaveLength(0);
+    expect((await db.user.findUniqueOrThrow({ where: { id: created.id } })).email).not.toBe(email);
+  });
+
   it("refuses an address another user has, in any case", async () => {
     const actor = await admin();
     const created = await stationUser(actor);

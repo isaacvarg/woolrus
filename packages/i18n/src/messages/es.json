@@ -1356,6 +1356,7 @@
       "self": "No puedes desactivarte ni quitarte tu propio rol de Admin.",
       "rolesRequired": "Elige al menos un rol.",
       "alreadyExists": "Ya existe una cuenta con este correo.",
+      "addEmailInactive": "Este usuario está desactivado. Reactívalo primero y luego añade su correo.",
       "notStationOnly": "Este usuario ya tiene un correo.",
       "invitationPending": "Este correo tiene una invitación abierta. Revócala primero para que la dirección no termine con dos cuentas.",
       "pinFormat": "El PIN tiene exactamente 6 dígitos.",

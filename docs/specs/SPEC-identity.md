@@ -163,7 +163,8 @@ that would leave no active Admin. An admin can't deactivate themselves or remove
   PIN. Returns the `UserSummary`. Names needn't be unique, as for invited users: the dialog warns when an
   active user already has the same name (case-insensitive, trimmed) but doesn't block it (decision 13).
 - **`addUserEmail({ id, email, idempotencyKey })`:** only for a station-only user (otherwise `CONFLICT`,
-  `errors.users.notStationOnly`). The email is lowercased and can't use the reserved domain. Refused with
+  `errors.users.notStationOnly`) who is active (otherwise `CONFLICT`, `errors.users.addEmailInactive`: a
+  deactivated user can't sign in, and reactivating doesn't resend the email, so reactivate first). The email is lowercased and can't use the reserved domain. Refused with
   `CONFLICT` if another user has it (`errors.users.alreadyExists`) or it has an open invitation
   (`errors.users.invitationPending`: revoke it first, so one address never leads to two accounts). In one
   transaction: replace the placeholder, set `emailVerified: true` (decision 15), audit `user.email.add` with
@@ -187,7 +188,8 @@ that would leave no active Admin. An admin can't deactivate themselves or remove
   - `sendMagicLink` sends nothing to a station-only address, the same silent path as for an unknown address.
   - `session.create.before` refuses a session for a station-only user, whatever the method. This is what stops an
     OAuth provider or account linking from reaching the row.
-  - Invitation contracts reject the `station.invalid` domain (`errors.invitations.reservedEmail`).
+  - `createInvitation` refuses the `station.invalid` domain (`errors.invitations.reservedEmail`). The check is in
+    core, not the contract, so `station-only.ts` stays the only code that knows the domain.
 - **Everything else is unchanged:** deactivate/reactivate, set/clear PIN, issue/revoke badge, preferences, PIN
   lockout, idle lock and attribution work the same, since they already go by `userId`. Clearing the PIN of a
   user with no badge leaves them with no way in. The PIN dialog warns about it but allows it.

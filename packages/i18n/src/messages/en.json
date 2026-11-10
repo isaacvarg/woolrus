@@ -1356,6 +1356,7 @@
       "self": "You can't deactivate yourself or remove your own Admin role.",
       "rolesRequired": "Choose at least one role.",
       "alreadyExists": "Someone with this email already has an account.",
+      "addEmailInactive": "This user is deactivated. Reactivate them first, then add their email.",
       "notStationOnly": "This user already has an email.",
       "invitationPending": "This email has an open invitation. Revoke it first, so the address doesn't end up with two accounts.",
       "pinFormat": "A PIN is exactly 6 digits.",

@@ -204,11 +204,17 @@ export async function addUserEmail(
     await db.$transaction((tx) =>
       withIdempotency(tx, idempotencyKey, "users.addEmail", actor, async () => {
         await tx.$queryRaw`SELECT id FROM users WHERE id = ${id}::uuid FOR NO KEY UPDATE`;
-        const user = await tx.user.findUnique({ where: { id }, select: { email: true } });
+        const user = await tx.user.findUnique({
+          where: { id },
+          select: { email: true, active: true },
+        });
         if (!user) throw notFound();
         if (!isStationOnly(user.email)) {
           throw new AppError("CONFLICT", "errors.users.notStationOnly");
         }
+        // Their sign-in email would lead nowhere: a deactivated user can't sign in, and
+        // reactivating doesn't resend it. Reactivate first.
+        if (!user.active) throw new AppError("CONFLICT", "errors.users.addEmailInactive");
         if (await tx.user.findFirst({ where: { email: { equals: email, mode: "insensitive" } } })) {
           throw new AppError("CONFLICT", "errors.users.alreadyExists");
         }

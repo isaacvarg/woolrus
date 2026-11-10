@@ -178,7 +178,8 @@ export function UsersManager({ currentUserId }: { currentUserId: string }) {
                   {user.id !== currentUserId && (
                     <Menu label={t("users.actionsFor", { name: user.name })} trigger="⋯">
                       <MenuItem onAction={() => setEditing(user)}>{t("users.editRoles")}</MenuItem>
-                      {user.stationOnly && (
+                      {/* Core refuses a deactivated user: their sign-in email would lead nowhere. */}
+                      {user.stationOnly && user.active && (
                         <MenuItem onAction={() => setAddingEmail(user)}>
                           {t("users.addEmail")}
                         </MenuItem>

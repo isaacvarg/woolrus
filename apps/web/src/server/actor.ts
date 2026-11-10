@@ -1,4 +1,4 @@
-import { findStationByToken, stationActor, type UserActor } from "@woolrus/core";
+import { findStationByToken, isStationOnly, stationActor, type UserActor } from "@woolrus/core";
 import { db, type Station, type User } from "@woolrus/db";
 import { headers } from "next/headers";
 import { cache } from "react";
@@ -28,7 +28,9 @@ export async function resolveActor(requestHeaders: Headers): Promise<Resolved | 
   if (session) {
     // A personal session wins even on a station device (an admin signed in there on purpose).
     const user = await db.user.findUnique({ where: { id: session.user.id } });
-    if (user?.active) {
+    // A station-only user never holds a session (core refuses one at sign-in); this re-check means a
+    // session that got through some other way still can't act (SPEC-identity amendment 1).
+    if (user?.active && !isStationOnly(user.email)) {
       return {
         user,
         actor: { userId: user.id, roles: user.roles, stationId: null, requestId },
