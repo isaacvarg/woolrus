@@ -17,6 +17,7 @@ import { z } from "zod";
 import { AppError, notFound } from "../errors";
 import { issueInclude, toIssueView } from "../exceptions/issues";
 import { toVoidView, voidInclude } from "../exceptions/voids";
+import { lotOrder, toLotDtos } from "../lumexia/lot-store";
 import { lineAndPackageNoteCounts, noteCounts } from "../notes/targets";
 import { type Actor, assertCan } from "../permissions";
 import { loadSettings } from "../settings/service";
@@ -330,7 +331,10 @@ export async function getOrder(
         orderBy: { number: "asc" },
         include: {
           box: { select: { name: true } },
-          items: { select: { orderItemId: true, quantity: true }, orderBy: { packedAt: "asc" } },
+          items: {
+            select: { orderItemId: true, quantity: true, lots: { orderBy: lotOrder } },
+            orderBy: { packedAt: "asc" },
+          },
           labels: { where: { status: { in: [...liveLabelStatuses] } }, select: { id: true } },
         },
       },
@@ -401,6 +405,7 @@ export async function getOrder(
         orderItemId: it.orderItemId,
         name: names.get(it.orderItemId) ?? "",
         quantity: it.quantity,
+        lots: toLotDtos(it.lots),
       })),
       liveLabel: p.labels.length > 0,
       discarded: p.discardedAt !== null,

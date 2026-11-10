@@ -50,6 +50,7 @@ export * from "./lumexia/connection";
 export * from "./lumexia/items";
 export * from "./lumexia/lots";
 export * from "./lumexia/rules";
+export * from "./lumexia/validate";
 export * from "./notes/files";
 export * from "./notes/push";
 export * from "./notes/service";

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { base, Id } from "./base";
+import { LotDto } from "./lumexia";
 import { PrintState } from "./shipping";
 
 // Order workflow (SPEC-workflow "API"). Status moves and claims are server-owned: every mutation
@@ -311,7 +312,15 @@ export const OrderPackageSummary = z.object({
   weightOz: z.number().nullable(),
   units: z.number().int(),
   /** What is in it, per order line: a line split across boxes appears in each. */
-  items: z.array(z.object({ orderItemId: Id, name: z.string(), quantity: z.number().int() })),
+  /** `lots`: the line's lots in this package, the default first, each with its Lumexia check. */
+  items: z.array(
+    z.object({
+      orderItemId: Id,
+      name: z.string(),
+      quantity: z.number().int(),
+      lots: z.array(LotDto),
+    }),
+  ),
   /** A label exists or may exist at the carrier. */
   liveLabel: z.boolean(),
   /** Removed after a repack; kept for the label history. */

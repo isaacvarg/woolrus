@@ -1,10 +1,10 @@
 "use client";
 
 import type { AppErrorData, LotDto, PackageItemView } from "@woolrus/contracts";
-import { lotLabel } from "@woolrus/core/lot-codes";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { Form } from "react-aria-components";
+import { useLotText } from "@/components/lots/lot-status";
 import { Dialog } from "@/components/ui/dialog";
 import { Button, NumberField } from "@/components/ui/fields";
 
@@ -12,13 +12,6 @@ import { Button, NumberField } from "@/components/ui/fields";
 // **Which line?** for a lot scan that fits more than one box line.
 
 export type LineCandidate = NonNullable<AppErrorData["candidates"]>[number];
-
-/** What a chip calls a lot: its number without the reference code, or "QR lot" until resolved. */
-export function useLotText() {
-  const t = useTranslations();
-  return (lot: Pick<LotDto, "lotNumber">) =>
-    lot.lotNumber ? lotLabel(lot.lotNumber) : t("pack.lotUnresolved");
-}
 
 /** A tapped lot chip: change its count (the default lot gives or takes the rest) or remove it. */
 export function LotDialog({

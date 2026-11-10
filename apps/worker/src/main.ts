@@ -21,8 +21,10 @@ import {
   runLumexiaRefreshJob,
   runRatesFetchJob,
   runStorageDeleteJob,
+  runValidateLotsJob,
   runWooPushJob,
   s3ConfigFromEnv,
+  sweepLots,
   sweepOrphanFiles,
   syncProducts,
 } from "@woolrus/core";
@@ -214,6 +216,32 @@ await boss.work(
   runJob<JobPayloads[typeof queues.lumexiaRefreshItems]>(queues.lumexiaRefreshItems, async () =>
     runLumexiaRefreshJob(db),
   ),
+);
+
+// Lot validation (SPEC-lumexia "Validation"): queued by every lot write. Lumexia down throws and
+// the queue's policy retries (5 attempts, backoff from 30 s); a refused key ends the retries, so the
+// job shows on the failed-jobs page. Unconfigured is skipped, and the sweep queues the lot again.
+await boss.work(
+  queues.lumexiaValidateLots,
+  { ...META, localConcurrency: 2 },
+  runJob<JobPayloads[typeof queues.lumexiaValidateLots]>(
+    queues.lumexiaValidateLots,
+    async (job) => ({
+      ...(await runValidateLotsJob(db, job.data, { jobId: job.id })),
+    }),
+  ),
+);
+
+// Every 10 minutes: lots left unverified (Lumexia was down or unconfigured) and not-found lots due
+// their daily re-check go back on the validation queue.
+await boss.schedule(queues.lumexiaSweepLots, "*/10 * * * *", {});
+await boss.work(
+  queues.lumexiaSweepLots,
+  META,
+  runJob<JobPayloads[typeof queues.lumexiaSweepLots]>(queues.lumexiaSweepLots, async () => {
+    const result = await sweepLots(db);
+    return result.queued === 0 ? null : result;
+  }),
 );
 
 // Every minute, a job proves the worker consumes the queue: it upserts the heartbeat row and

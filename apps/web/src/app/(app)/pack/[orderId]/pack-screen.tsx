@@ -22,6 +22,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { useState } from "react";
 import { ReportIssueFlow } from "@/components/exceptions/report-issue-flow";
 import { VoidDialog } from "@/components/exceptions/void-dialog";
+import { LotStatus, useLotText } from "@/components/lots/lot-status";
 import { CustomsNotice } from "@/components/shipping/customs-notice";
 import { Dialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/fields";
@@ -32,7 +33,7 @@ import { client, orpc } from "@/lib/orpc";
 import { playScanSound, useScanner } from "@/lib/scanner";
 import { ScanBanner, type ScanOutcome } from "../../pick/[orderId]/pick-screen";
 import { BoxDialog } from "./box-dialog";
-import { type LineCandidate, LotDialog, useLotText, WhichLineDialog } from "./lot-dialogs";
+import { type LineCandidate, LotDialog, WhichLineDialog } from "./lot-dialogs";
 import { OrderDrawer, PackageNoteDialog } from "./order-drawer";
 import { OverweightDialog, overweightMax, WeightField } from "./weight-field";
 
@@ -1122,19 +1123,21 @@ function LotRows({
                     {onOpen ? (
                       <Button
                         className="btn-outline btn-sm h-auto min-h-10 tabular-nums"
-                        aria-label={name}
+                        aria-label={`${name}: ${t(`lots.status.${lot.status}`)}`}
                         onPress={() => onOpen(item, lot)}
                       >
                         {text}
+                        <LotStatus status={lot.status} />
                       </Button>
                     ) : (
                       <span
                         className="badge badge-outline badge-lg tabular-nums"
                         title={lot.lotNumber ?? undefined}
                         role="img"
-                        aria-label={name}
+                        aria-label={`${name}: ${t(`lots.status.${lot.status}`)}`}
                       >
                         {text}
+                        <LotStatus status={lot.status} />
                       </span>
                     )}
                   </li>

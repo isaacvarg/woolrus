@@ -1113,6 +1113,14 @@
     "voiceCapped": "La grabación se detuvo al llegar al límite de 5 minutos.",
     "micUnavailable": "No se puede usar el micrófono. Permítelo para este sitio e inténtalo de nuevo."
   },
+  "lots": {
+    "status": {
+      "UNVERIFIED": "Sin verificar",
+      "VALID": "Válido",
+      "NOT_FOUND": "No está en Lumexia",
+      "WRONG_ITEM": "Artículo equivocado"
+    }
+  },
   "status": {
     "PENDING": "Pendiente",
     "PICKING": "En surtido",

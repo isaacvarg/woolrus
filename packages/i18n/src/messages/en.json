@@ -1113,6 +1113,14 @@
     "voiceCapped": "Recording stopped at the 5-minute limit.",
     "micUnavailable": "Can't use the microphone. Allow it for this site and try again."
   },
+  "lots": {
+    "status": {
+      "UNVERIFIED": "Unverified",
+      "VALID": "Valid",
+      "NOT_FOUND": "Not found in Lumexia",
+      "WRONG_ITEM": "Wrong item"
+    }
+  },
   "status": {
     "PENDING": "Pending",
     "PICKING": "Picking",

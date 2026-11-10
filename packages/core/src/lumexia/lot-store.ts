@@ -1,5 +1,7 @@
 import type { LotDto } from "@woolrus/contracts";
 import type { DbTx, PackageItemLot } from "@woolrus/db";
+import { enqueue } from "../enqueue";
+import { queues } from "../jobs";
 import { addUnitsToLots, type LotSlot, removeUnitsFromLots } from "./split";
 
 // Reading and writing a box line's lots (SPEC-lumexia "Capturing lots"). Every caller holds the
@@ -33,7 +35,9 @@ export const lotSnapshot = (lots: readonly LotSlot[]) =>
 
 /**
  * Writes `after` over `before`: changed quantities, new lots (saved `UNVERIFIED`), and lots that
- * went. Deletes run first, so a unique lot number can't collide with a row about to go.
+ * went. Deletes run first, so a unique lot number can't collide with a row about to go. New lots
+ * get a `lumexia.validateLots` job on the same transaction (SPEC-lumexia "Validation"); a count
+ * changing doesn't change what Lumexia says about a lot, so it queues nothing.
  */
 export async function writeLots(
   tx: DbTx,
@@ -46,6 +50,7 @@ export async function writeLots(
   const gone = before.flatMap((l) => (l.id && !kept.has(l.id) ? [l.id] : []));
   if (gone.length > 0) await tx.packageItemLot.deleteMany({ where: { id: { in: gone } } });
   const was = new Map(before.map((l) => [l.id, l.quantity]));
+  const created: string[] = [];
   for (const lot of after) {
     if (lot.id) {
       if (was.get(lot.id) !== lot.quantity) {
@@ -53,7 +58,8 @@ export async function writeLots(
       }
       continue;
     }
-    await tx.packageItemLot.create({
+    const row = await tx.packageItemLot.create({
+      select: { id: true },
       data: {
         packageItemId,
         lotNumber: lot.lotNumber,
@@ -65,6 +71,10 @@ export async function writeLots(
         scannedAt: now,
       },
     });
+    created.push(row.id);
+  }
+  if (created.length > 0) {
+    await enqueue(tx, queues.lumexiaValidateLots, { packageItemLotIds: created });
   }
 }
 
