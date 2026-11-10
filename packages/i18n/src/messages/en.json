@@ -1539,6 +1539,7 @@
     "stationOnly": "Station only",
     "stationOnlyHelp": "For someone with no email: they unlock stations with a PIN or badge, and can't sign in personally or be an Admin.",
     "stationUserAdded": "{name} can now unlock any station with their PIN.",
+    "duplicateNameWarning": "An active user is already called {name}. Add this one only if it's a different person.",
     "add": "Add"
   },
   "invitations": {

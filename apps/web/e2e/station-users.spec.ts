@@ -101,3 +101,51 @@ test("tablet: an admin adds a station user who unlocks with the generated PIN an
     await db.auditEvent.findFirst({ where: { action: "pick.pickLine", actorId: user.id } }),
   ).toMatchObject({ stationId: station.id });
 });
+
+// Success criterion 22 and decision 13: a taken name warns, ignoring case and surrounding spaces,
+// but never blocks. A deactivated user's name doesn't count.
+test("desktop: adding a station user with a taken name warns but still adds them", async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "one viewport is enough for a dialog");
+  const id = unique();
+  const taken = `Dup Luis ${id}`;
+  const gone = `Gone Luis ${id}`;
+  await db.user.createMany({
+    data: [
+      { name: taken, email: `e2e-${crypto.randomUUID()}@example.test`, roles: ["PICKER"] },
+      {
+        name: gone,
+        email: `e2e-${crypto.randomUUID()}@example.test`,
+        roles: ["PICKER"],
+        active: false,
+      },
+    ],
+  });
+  await signInAs(page, ["ADMIN"]);
+  await page.goto("/users");
+  await page.getByRole("button", { name: "Add station user" }).click(slowRender);
+  const add = page.getByRole("dialog", { name: "Add station user" });
+  const warning = add.getByText(/An active user is already called/);
+
+  // A deactivated user's name: no warning.
+  const checked = page.waitForResponse(
+    (response) =>
+      response.url().includes("/rpc/users/list") && !!response.request().postData()?.includes(gone),
+  );
+  await add.getByLabel("Name").fill(gone);
+  await checked;
+  await expect(warning).toHaveCount(0);
+
+  // An active user's name in another case, with spaces: the warning shows.
+  await add.getByLabel("Name").fill(`  ${taken.toLowerCase()} `);
+  await expect(warning).toBeVisible();
+  await expect(warning).toContainText(taken);
+
+  // The admin can still add them.
+  await add.getByText("Picker", { exact: true }).click();
+  await add.getByRole("button", { name: "Generate" }).click();
+  await add.getByRole("button", { name: "Add", exact: true }).click();
+  await expect(add.getByText("can now unlock any station with their PIN.")).toBeVisible();
+  expect(await db.user.count({ where: { name: { equals: taken, mode: "insensitive" } } })).toBe(2);
+});

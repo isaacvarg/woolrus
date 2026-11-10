@@ -1539,6 +1539,7 @@
     "stationOnly": "Solo estación",
     "stationOnlyHelp": "Para alguien sin correo: desbloquea estaciones con un PIN o una credencial, y no puede iniciar sesión personalmente ni ser administrador.",
     "stationUserAdded": "{name} ya puede desbloquear cualquier estación con su PIN.",
+    "duplicateNameWarning": "Ya hay un usuario activo llamado {name}. Añade este solo si es otra persona.",
     "add": "Añadir"
   },
   "invitations": {
