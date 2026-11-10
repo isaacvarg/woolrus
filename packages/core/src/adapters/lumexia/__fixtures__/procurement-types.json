@@ -1,0 +1,7 @@
+{
+  "procurementTypes": [
+    { "id": "0193f0a1-0000-7000-8000-000000000011", "name": "Manufactured", "archived": false },
+    { "id": "0193f0a1-0000-7000-8000-000000000012", "name": "Purchased", "archived": false }
+  ],
+  "nextCursor": null
+}

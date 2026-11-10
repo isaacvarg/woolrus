@@ -1,10 +1,11 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import type { PackPackage } from "@woolrus/contracts";
+import type { OrderPackageSummary, PackPackage } from "@woolrus/contracts";
 import { useFormatter, useTranslations } from "next-intl";
 import { Dialog as AriaDialog, Heading, Modal, ModalOverlay } from "react-aria-components";
 import { HistoryPanel } from "@/app/(app)/orders/[id]/history-panel";
+import { LotList } from "@/components/lots/lot-list";
 import { NoteComposer } from "@/components/notes/note-composer";
 import { NoteList } from "@/components/notes/note-list";
 import { Dialog, DialogTrigger } from "@/components/ui/dialog";
@@ -110,6 +111,8 @@ function DrawerBody({ orderId, close }: { orderId: string; close: () => void }) 
             </ul>
           </section>
 
+          <DrawerLots packages={order.data.packages} />
+
           <HistoryPanel id={orderId} />
 
           <section aria-labelledby="drawer-notes" className="space-y-2">
@@ -121,6 +124,32 @@ function DrawerBody({ orderId, close }: { orderId: string; close: () => void }) 
         </>
       )}
     </>
+  );
+}
+
+/** Lots per package, read-only, for packages that hold a lot-needing line (SPEC-lumexia). */
+function DrawerLots({ packages }: { packages: OrderPackageSummary[] }) {
+  const t = useTranslations();
+  const withLots = packages.filter(
+    (p) => !p.discarded && p.items.some((it) => it.needsLot || it.lots.length > 0),
+  );
+  if (withLots.length === 0) return null;
+  return (
+    <section aria-labelledby="drawer-lots" className="space-y-2" data-testid="drawer-lots">
+      <h3 id="drawer-lots" className="text-xl font-bold">
+        {t("lotLookup.lots")}
+      </h3>
+      <ul className="space-y-2">
+        {withLots.map((pkg) => (
+          <li key={pkg.id} className="rounded-box bg-base-200 p-3">
+            <div className="font-semibold">
+              {t("lotLookup.lotsInPackage", { number: pkg.number })}
+            </div>
+            <LotList items={pkg.items} />
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 

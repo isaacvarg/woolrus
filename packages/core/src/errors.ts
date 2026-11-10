@@ -10,6 +10,9 @@ export type OrderFailure = {
   params: Record<string, string | number>;
 };
 
+/** A box line a lot scan could go on, offered in **Which line?** */
+export type LineCandidate = { packageItemId: string; name: string; quantity: number };
+
 export type AppErrorKind = "UNAUTHORIZED" | "FORBIDDEN" | "NOT_FOUND" | "CONFLICT" | "BAD_REQUEST";
 
 /**
@@ -30,6 +33,8 @@ export class AppError extends Error {
       failures?: readonly OrderFailure[];
       /** An unknown scanned code the caller may link to a product (SPEC-picking "Code matching"). */
       canLink?: boolean;
+      /** The box lines a lot scan could go on (`errors.lumexia.chooseLine`). */
+      candidates?: readonly LineCandidate[];
     } = {},
   ) {
     super(messageKey);
@@ -38,12 +43,14 @@ export class AppError extends Error {
     this.unmet = details.unmet;
     this.failures = details.failures;
     this.canLink = details.canLink;
+    this.candidates = details.candidates;
   }
 
   readonly params?: Record<string, string | number>;
   readonly unmet?: readonly UnmetCondition[];
   readonly failures?: readonly OrderFailure[];
   readonly canLink?: boolean;
+  readonly candidates?: readonly LineCandidate[];
 }
 
 export const notFound = () => new AppError("NOT_FOUND", "errors.notFound");

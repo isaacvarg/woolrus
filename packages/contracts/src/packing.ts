@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { base, Id, IdempotencyKey, Inches, Ounces } from "./base";
 import { Box } from "./boxes";
+import { LotDto } from "./lumexia";
 import { ExpectedVersion, LineAttribute, OrderDetail } from "./orders";
 
 // Packing (SPEC-packing "API"). Package writes need the order in Packing and the caller's live
@@ -59,6 +60,10 @@ export const PackageItemView = z.object({
   orderItemId: Id,
   name: z.string(),
   quantity: z.number().int(),
+  /** The line's product needs a Lumexia lot (read live from the lot rules). */
+  needsLot: z.boolean(),
+  /** Its lots, the default first; once there are any, they cover every unit. */
+  lots: z.array(LotDto),
 });
 export type PackageItemView = z.infer<typeof PackageItemView>;
 
@@ -163,6 +168,27 @@ export const ScanIntoPackageInput = z.object({
 });
 export type ScanIntoPackageInput = z.infer<typeof ScanIntoPackageInput>;
 
+export const ScanLotInput = z.object({
+  packageId: Id,
+  /** A printed lot number (`BASE1234.A12A0124`) or a lot label's QR code. */
+  code: z.string().trim().min(1).max(200),
+  /** One per physical scan, so a retried request doesn't move a unit twice. */
+  scanId: IdempotencyKey,
+  /** The box line chosen in **Which line?** after `errors.lumexia.chooseLine`. */
+  packageItemId: Id.optional(),
+});
+export type ScanLotInput = z.infer<typeof ScanLotInput>;
+
+export const SetLotQuantityInput = z.object({
+  lotId: Id,
+  /** The lot's new count; the default lot gives or takes the difference. */
+  quantity: z.number().int().min(1).max(100_000),
+});
+export type SetLotQuantityInput = z.infer<typeof SetLotQuantityInput>;
+
+export const LotIdInput = z.object({ lotId: Id });
+export type LotIdInput = z.infer<typeof LotIdInput>;
+
 export const CompletePackInput = z.object({
   orderId: Id,
   expectedVersion: ExpectedVersion,
@@ -258,6 +284,34 @@ export const packing = {
       summary: "Scan a product into a package: one unit of the first matching line",
     })
     .input(ScanIntoPackageInput)
+    .output(PackResult),
+  scanLot: base
+    .route({
+      method: "POST",
+      path: "/packages/{packageId}/scan-lot",
+      tags,
+      summary: "Scan a Lumexia lot into a package's box line for that lot's item (the split rule)",
+    })
+    .input(ScanLotInput)
+    .output(PackResult),
+  setLotQuantity: base
+    .route({
+      method: "PUT",
+      path: "/package-lots/{lotId}/quantity",
+      tags,
+      summary:
+        "Change a lot's count on its box line; the default lot gives or takes the difference",
+    })
+    .input(SetLotQuantityInput)
+    .output(PackResult),
+  removeLot: base
+    .route({
+      method: "DELETE",
+      path: "/package-lots/{lotId}",
+      tags,
+      summary: "Remove a lot from its box line; its units go to the default lot",
+    })
+    .input(LotIdInput)
     .output(PackResult),
   complete: base
     .route({

@@ -2,6 +2,7 @@ import {
   emailStatus,
   encryptionKey,
   fakeShippingProviders,
+  lumexiaHealth,
   shippingProviderHealth,
   woocommerceHealth,
   workerHealth,
@@ -11,7 +12,7 @@ import { storage } from "@/server/storage";
 
 export const dynamic = "force-dynamic";
 
-/** Dependency checks (NFR-OPS-02). Lumexia joins as its adapter lands. */
+/** Dependency checks (NFR-OPS-02). */
 export async function GET() {
   const checks: Record<string, "ok" | "fail"> = {};
   try {
@@ -20,6 +21,13 @@ export async function GET() {
   } catch {
     checks.database = "fail";
   }
+  // Informational, like email: Lumexia down never fails or degrades the endpoint, because the floor
+  // works without it and lots wait as unverified (SPEC-lumexia "Adapter"). Its ping (up to 3 s) is
+  // started here and awaited last, so it runs alongside the checks below instead of after them.
+  const lumexiaPending: Promise<"ok" | "unconfigured" | "down"> =
+    checks.database === "ok"
+      ? lumexiaHealth(db).catch(() => "down" as const)
+      : Promise.resolve("down" as const);
   // Without a valid key, integration secrets can't be stored or read (FR-SET-05).
   checks.encryption = encryptionKey() ? "ok" : "fail";
   // Creates a missing bucket (first use), then HEAD bucket; 2 s timeout each. Missing env counts as
@@ -64,8 +72,9 @@ export async function GET() {
     worker = "stale";
   }
   degraded ||= worker === "stale";
+  const lumexia = await lumexiaPending;
   return Response.json(
-    { ok, degraded, checks: { ...checks, email, woocommerce, worker } },
+    { ok, degraded, checks: { ...checks, email, woocommerce, worker, lumexia } },
     { status: ok ? 200 : 503 },
   );
 }

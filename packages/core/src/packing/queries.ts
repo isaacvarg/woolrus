@@ -8,6 +8,7 @@ import type {
 import type { DbTx, Prisma } from "@woolrus/db";
 import { type BoxWithUse, toBoxDto, toBoxDtoWithUse, withUse } from "../boxes/service";
 import { notFound } from "../errors";
+import { lotOrder, toLotDtos } from "../lumexia/lot-store";
 import { lineAndPackageNoteCounts } from "../notes/targets";
 import { type Actor, assertCan } from "../permissions";
 import { activeQuantity, isWorkLine, type LineRow, lineInclude } from "../picking/service";
@@ -25,7 +26,7 @@ export type PackOptions = { now?: Date };
 
 export const packageInclude = {
   box: true,
-  items: { orderBy: { packedAt: "asc" } },
+  items: { orderBy: { packedAt: "asc" }, include: { lots: { orderBy: lotOrder } } },
 } as const satisfies Prisma.PackageInclude;
 
 export type PackageRow = Prisma.PackageGetPayload<{ include: typeof packageInclude }>;
@@ -49,6 +50,7 @@ function unitOf(row: LineRow, quantity: number): SuggestUnit {
 function toPackPackage(
   pkg: PackageRow,
   names: Map<string, string>,
+  lotLines: Set<string>,
   noteCount: number,
   units: SuggestUnit[],
   boxes: BoxDto[],
@@ -80,6 +82,8 @@ function toPackPackage(
       orderItemId: it.orderItemId,
       name: names.get(it.orderItemId) ?? "",
       quantity: it.quantity,
+      needsLot: lotLines.has(it.orderItemId),
+      lots: toLotDtos(it.lots),
     })),
     units: pkg.items.reduce((sum, it) => sum + it.quantity, 0),
     noteCount,
@@ -154,6 +158,8 @@ async function readPack(
   });
 
   const names = new Map(rows.map((row) => [row.id, row.name]));
+  // The gate already read the lot rules live; the screen says the same thing it does.
+  const lotLines = new Set(gate.lines.filter((l) => l.needsLot).map((l) => l.id));
   const unassigned = lines.flatMap((line) => {
     const row = rowById.get(line.id);
     return row && line.unassigned > 0 ? [unitOf(row, line.unassigned)] : [];
@@ -165,6 +171,7 @@ async function readPack(
       toPackPackage(
         pkg,
         names,
+        lotLines,
         notes.packages.get(pkg.id) ?? 0,
         pkg.items.flatMap((it) => {
           const row = rowById.get(it.orderItemId);

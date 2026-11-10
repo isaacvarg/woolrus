@@ -1,0 +1,8 @@
+{
+  "itemTypes": [
+    { "id": "0193f0a1-0000-7000-8000-000000000001", "name": "Production base", "archived": false },
+    { "id": "0193f0a1-0000-7000-8000-000000000002", "name": "Finished good", "archived": false },
+    { "id": "0193f0a1-0000-7000-8000-000000000003", "name": "Packaging", "archived": false }
+  ],
+  "nextCursor": null
+}

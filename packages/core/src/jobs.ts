@@ -36,6 +36,12 @@ export const queues = {
   wooPush: "woo.push",
   /** Quote a Rate Lab suite run's addresses × parcels (SPEC-rate-lab "Runs"). */
   rateLabRun: "rateLab.run",
+  /** Daily: re-read linked Lumexia items' reference codes and type ids (SPEC-lumexia "Lot rules and linking"). */
+  lumexiaRefreshItems: "lumexia.refreshItems",
+  /** Check captured lots against Lumexia, after each lot write and from the sweep (SPEC-lumexia "Validation"). */
+  lumexiaValidateLots: "lumexia.validateLots",
+  /** Every 10 minutes: re-queue lots left unverified, and not-found lots due their daily re-check. */
+  lumexiaSweepLots: "lumexia.sweepLots",
 } as const;
 export type QueueName = (typeof queues)[keyof typeof queues];
 
@@ -67,6 +73,9 @@ export type JobPayloads = {
   [queues.labelsReconcile]: Record<string, never>;
   [queues.wooPush]: { orderId: string };
   [queues.rateLabRun]: { runId: string };
+  [queues.lumexiaRefreshItems]: Record<string, never>;
+  [queues.lumexiaValidateLots]: { packageItemLotIds: string[] };
+  [queues.lumexiaSweepLots]: Record<string, never>;
 };
 
 /** What can cause an order's rate fetch (Rate Lab runs have their own trigger). */
@@ -117,6 +126,11 @@ export const queueOptions: Record<QueueName, QueueSettings> = {
   // A run never retries itself: a re-run is a new run (SPEC-rate-lab decision 7). It can take hours,
   // well past pg-boss's 15-minute default expiry.
   [queues.rateLabRun]: { ...keep, retryLimit: 0, expireInSeconds: RATE_LAB_RUN_EXPIRE_SECONDS },
+  // Lumexia down: 5 attempts over about half an hour; tomorrow's run catches up anyway.
+  [queues.lumexiaRefreshItems]: { ...keep, retryLimit: 4, retryDelay: 60, retryBackoff: true },
+  // Lumexia down: 5 attempts, exponentially from 30 s; the sweep picks up whatever is left after that.
+  // A refused key ends the retries at once (`runValidateLotsJob`).
+  [queues.lumexiaValidateLots]: { ...keep, retryLimit: 4, retryDelay: 30, retryBackoff: true },
 };
 
 /** pg-boss keeps its tables in their own schema, separate from Prisma's. */

@@ -16,6 +16,7 @@
   },
   "nav": {
     "boxes": "Boxes",
+    "lotLookup": "Lot lookup",
     "settings": "Settings",
     "pending": "Pending",
     "picking": "Picking",
@@ -38,7 +39,8 @@
     "issues": "Issues",
     "customs": "Customs",
     "manifests": "Manifests",
-    "rateLab": "Rate Lab"
+    "rateLab": "Rate Lab",
+    "lumexiaItems": "Lumexia items"
   },
   "navFooter": {
     "preferences": "Preferences",
@@ -186,7 +188,28 @@
       "sendTestEmail": "Send test email",
       "sendTestEmailHint": "Sends to your own address with the saved sender and key.",
       "testEmailSent": "Sent to {to}. Check your inbox.",
-      "testEmailLogged": "Resend isn't set up, so the email to {to} was written to the server log instead of sent."
+      "testEmailLogged": "Resend isn't set up, so the email to {to} was written to the server log instead of sent.",
+      "lumexiaTestHint": "Checks the saved URL and API key.",
+      "lumexiaTestOk": "Connected to Lumexia.",
+      "lotRules": {
+        "title": "Lot rules",
+        "intro": "Choose which kinds of Lumexia item need a lot at Packing. The types come from Lumexia.",
+        "groups": {
+          "itemTypes": "Item type",
+          "procurementTypes": "Procurement type",
+          "inventoryTypes": "Inventory type"
+        },
+        "anyMatch": "A product needs a lot if any of its types is switched on.",
+        "tracked": "Tracked in Lumexia",
+        "noTypes": "Lumexia has no types of this kind.",
+        "removed": "Removed in Lumexia",
+        "switchOff": "Switch off",
+        "unnamed": "Unnamed type {id}",
+        "readOnly": "These rules can't be changed until Woolrus can reach Lumexia. Switched on now:",
+        "noneOn": "None",
+        "save": "Save lot rules",
+        "loadFailed": "The lot rules couldn't be loaded."
+      }
     },
     "shipping": {
       "title": "Shipping",
@@ -641,7 +664,23 @@
     "addNoteTitle": "Add a note to package {number}",
     "done": "Done",
     "doneNext": "Done, next order",
-    "noneLeft": "No more Packing orders to pack."
+    "noneLeft": "No more Packing orders to pack.",
+    "lotNeeded": "Lot needed",
+    "lotChip": "{count} × {lot}",
+    "lotChipLabel": "{count} from lot {lot}",
+    "lotDialogTitle": "Lot {lot}",
+    "lotDialogItem": "{name}: {count} in this package",
+    "lotCount": "Units from this lot",
+    "lotCountHint": "The first lot gives or takes the difference.",
+    "lotDefaultHint": "This is the first lot: it takes every unit the other lots don't. Change another lot's count to move units.",
+    "lotSave": "Save count",
+    "lotRemove": "Remove lot",
+    "lotUnresolved": "QR lot",
+    "whichLine": "Which line?",
+    "whichLineIntro": "This lot could go on more than one line in package {number}. Choose one.",
+    "whichLineOption": "{name} ({count} in this package)",
+    "lotsOf": "Lots of {name}",
+    "lotScanned": "Lot {lot} on {name} in package {number}."
   },
   "qa": {
     "title": "QA #{number}",
@@ -729,7 +768,19 @@
       "CHEAPEST_UNAVAILABLE": "Cheapest unavailable or failed",
       "OTHER": "Other"
     },
-    "drawerReason": "Why: {reason}"
+    "drawerReason": "Why: {reason}",
+    "lots": "Lots of {name}",
+    "lotUnits": "{count} × {lot}",
+    "lotNone": "No lot recorded",
+    "lotBlocks": "Blocks the label",
+    "lotReplace": "Replace lot",
+    "lotRemove": "Remove",
+    "lotRemoveNamed": "Remove lot {lot}",
+    "lotReplaceTitle": "Replace lot {lot}",
+    "lotReplaceIntro": "Scan the right lot for {name}. It takes this lot's {count, plural, one {# unit} other {# units}}.",
+    "lotReplaceField": "New lot",
+    "lotReplaceHint": "Scan the lot label's QR code or type its lot number.",
+    "lotReplaceSave": "Replace"
   },
   "pick": {
     "title": "Pick #{number}",
@@ -1075,6 +1126,14 @@
     "voiceCapped": "Recording stopped at the 5-minute limit.",
     "micUnavailable": "Can't use the microphone. Allow it for this site and try again."
   },
+  "lots": {
+    "status": {
+      "UNVERIFIED": "Unverified",
+      "VALID": "Valid",
+      "NOT_FOUND": "Not found in Lumexia",
+      "WRONG_ITEM": "Wrong item"
+    }
+  },
   "status": {
     "PENDING": "Pending",
     "PICKING": "Picking",
@@ -1231,7 +1290,9 @@
         "criticalIssueOpen": "Resolve the {count} open critical issue(s) before the order can leave QA.",
         "notReady": "The order isn't Ready.",
         "noPackages": "The order has no packages.",
-        "packageOverweight": "Package {package} is over its box's limit of {maxOz} oz and needs a reason."
+        "packageOverweight": "Package {package} is over its box's limit of {maxOz} oz and needs a reason.",
+        "lotMissing": "{line} in package {package} needs a lot.",
+        "lotWrongItem": "{line} in package {package} has lot {lotNumber}, which belongs to a different item. Replace or remove it."
       }
     },
     "sync": {
@@ -1384,6 +1445,20 @@
       "oneOffParcelInvalid": "That typed parcel isn't part of this quote.",
       "oneOffActive": "Your other quote is still running. Wait for it to finish.",
       "notStarted": "The run never started: the worker didn't pick it up, so it was marked failed."
+    },
+    "lumexia": {
+      "unconfigured": "Lumexia isn't set up yet. Add the API base URL and key in Settings → Integrations.",
+      "unavailable": "Lumexia couldn't be reached. Check the URL and that Lumexia is up.",
+      "unauthorized": "Lumexia refused the API key. Create a read-only key in Lumexia under Settings → User → Agents.",
+      "badResponse": "That URL doesn't look like Lumexia's API (no /api/v1 found).",
+      "itemNotFound": "Lumexia has no such item. It may have been deleted; search again.",
+      "notLinked": "Link this product to a Lumexia item first.",
+      "notALot": "That isn't a Lumexia lot number.",
+      "chooseLine": "This lot could go on more than one line. Choose which.",
+      "lotQuantity": "This lot can have {min} to {max} units: the first lot keeps at least 1.",
+      "lotNotOnPackage": "Nothing in this package needs a lot.",
+      "lotWrongItem": "Lot {lotNumber} belongs to another item ({itemRef}). It wasn't saved.",
+      "allUnitsHaveLots": "All {count} units already have a lot; tap a lot to change it."
     }
   },
   "emails": {
@@ -1592,6 +1667,85 @@
     "empty": "No products match this filter.",
     "loadMore": "Load more",
     "none": "Not set"
+  },
+  "lumexiaItems": {
+    "title": "Lumexia items",
+    "intro": "Link each product to its item in Lumexia. A linked product needs a lot when its item's type is switched on in Settings → Lumexia → Lot rules, or when its Lot setting says so.",
+    "notConfigured": "Lumexia isn't configured.",
+    "openSettings": "Open Settings",
+    "filter": "Show",
+    "filters": {
+      "all": "All",
+      "linked": "Linked",
+      "unlinked": "Not linked",
+      "needsLot": "Needs lot"
+    },
+    "columns": {
+      "product": "Product",
+      "item": "Lumexia item",
+      "itemType": "Item type",
+      "needsLot": "Needs lot",
+      "lot": "Lot",
+      "actions": "Actions"
+    },
+    "noSku": "No SKU",
+    "notLinked": "Not linked",
+    "notFound": "Not found in Lumexia",
+    "yes": "Yes",
+    "no": "No",
+    "override": "override",
+    "unknownType": "Unknown type",
+    "lotSetting": "Lot setting for {product}",
+    "lotOptions": {
+      "rules": "Follow lot rules",
+      "always": "Always",
+      "never": "Never"
+    },
+    "search": "Search Lumexia items for {product}",
+    "searchPlaceholder": "Search by name or code",
+    "searching": "Searching…",
+    "noItems": "No Lumexia items match.",
+    "link": "Link",
+    "change": "Change",
+    "unlink": "Unlink",
+    "linked": "Linked {product} to {item}.",
+    "unlinked": "Unlinked {product}. Lots already captured stay.",
+    "noProducts": "No products match.",
+    "matchBySku": "Match by SKU",
+    "matching": "Matching…",
+    "review": {
+      "title": "Review SKU matches",
+      "intro": "Each product's SKU matched one Lumexia item. Untick any that look wrong; alias matches are worth a second look, since aliases can hold other systems' ids.",
+      "none": "No unlinked product's SKU matches exactly one Lumexia item.",
+      "matchedCode": "matched reference code {value}",
+      "matchedAlias": "matched alias {value}",
+      "confirm": "{count, plural, one {Link # product} other {Link # products}}",
+      "cancel": "Cancel",
+      "done": "{count, plural, one {Linked # product.} other {Linked # products.}}"
+    }
+  },
+  "lotLookup": {
+    "title": "Lot lookup",
+    "intro": "Type a lot number or scan the QR code on a lot label to find every order and package that holds the lot.",
+    "code": "Lot number or QR code",
+    "search": "Look up",
+    "downloadCsv": "Download CSV",
+    "count": "{count, plural, one {# package item holds lot {code}.} other {# package items hold lot {code}.}}",
+    "empty": "No package holds lot {code}.",
+    "notShipped": "Not shipped",
+    "columns": {
+      "order": "Order",
+      "customer": "Customer",
+      "package": "Package",
+      "product": "Product",
+      "lot": "Lot",
+      "quantity": "Quantity",
+      "status": "Lot status",
+      "shipped": "Shipped"
+    },
+    "lots": "Lots",
+    "lotsInPackage": "Lots in package {number}",
+    "lotWithStatus": "{count} from lot {lot}, {status}"
   },
   "stuckLabels": {
     "title": "Labels that couldn't be voided",

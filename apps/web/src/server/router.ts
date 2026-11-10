@@ -38,6 +38,7 @@ import {
   getEmailSender,
   getIssue,
   getLabRun,
+  getLotRules,
   getOrder,
   getOrderHistory,
   getOrderShipping,
@@ -56,6 +57,8 @@ import {
   labTrendSeries,
   labTrendsReport,
   linkBarcode,
+  linkProduct,
+  linkProducts,
   listBoxes,
   listFailedJobs,
   listInvitations,
@@ -77,6 +80,8 @@ import {
   listUsers,
   listVoids,
   lockStation,
+  lookupLot,
+  lumexiaProducts,
   manifestCandidates,
   markLabelNotBought,
   markOutOfStock,
@@ -90,6 +95,8 @@ import {
   pickLine,
   previewLabRun,
   pushErrors,
+  qaRemoveLot,
+  qaReplaceLot,
   queueCounts,
   quoteOneOff,
   reactivateUser,
@@ -99,6 +106,7 @@ import {
   refreshRates,
   registerStation,
   removeFromBatch,
+  removeLot,
   renameLabGroup,
   renameStation,
   reopenIssue,
@@ -121,11 +129,16 @@ import {
   scan,
   scanBatch,
   scanIntoPackage,
+  scanLot,
   scanVerify,
+  searchLumexiaItems,
   selectRate,
   sendTestEmail,
   setCarrierEnabled,
   setCarrierLabel,
+  setLotOverride,
+  setLotQuantity,
+  setLotRules,
   setPackageBox,
   setPin,
   setProviderCredentials,
@@ -141,13 +154,16 @@ import {
   stationStatus,
   stuckLabels,
   substitute,
+  suggestLinks,
   syncCarriers,
+  testLumexiaConnection,
   testProvider,
   testStoreConnection,
   touchStation,
   unarchiveLabAddress,
   unarchiveLabParcel,
   undoVoid,
+  unlinkProduct,
   unlockWithBadge,
   unlockWithPin,
   unpackUnits,
@@ -393,6 +409,12 @@ export const router = implementer.router({
     markLabelNotBought: api.qa.markLabelNotBought.handler(({ input, context }) =>
       markLabelNotBought(db, context.actor, input),
     ),
+    replaceLot: api.qa.replaceLot.handler(({ input, context }) =>
+      qaReplaceLot(db, context.actor, input),
+    ),
+    removeLot: api.qa.removeLot.handler(({ input, context }) =>
+      qaRemoveLot(db, context.actor, input),
+    ),
   },
   packing: {
     view: api.packing.view.handler(({ input, context }) => getPackView(db, context.actor, input)),
@@ -423,6 +445,13 @@ export const router = implementer.router({
     scan: api.packing.scan.handler(({ input, context }) =>
       scanIntoPackage(db, context.actor, input),
     ),
+    scanLot: api.packing.scanLot.handler(({ input, context }) => scanLot(db, context.actor, input)),
+    setLotQuantity: api.packing.setLotQuantity.handler(({ input, context }) =>
+      setLotQuantity(db, context.actor, input),
+    ),
+    removeLot: api.packing.removeLot.handler(({ input, context }) =>
+      removeLot(db, context.actor, input),
+    ),
   },
   pickBatches: {
     create: api.pickBatches.create.handler(({ input, context }) =>
@@ -451,6 +480,37 @@ export const router = implementer.router({
     run: api.sync.run.handler(({ input, context }) => requestSync(db, context.actor, input)),
     testConnection: api.sync.testConnection.handler(({ context }) =>
       testStoreConnection(db, context.actor),
+    ),
+  },
+  lumexia: {
+    testConnection: api.lumexia.testConnection.handler(({ context }) =>
+      testLumexiaConnection(db, context.actor),
+    ),
+    lotRules: api.lumexia.lotRules.handler(({ context }) => getLotRules(db, context.actor)),
+    setLotRules: api.lumexia.setLotRules.handler(({ input, context }) =>
+      setLotRules(db, context.actor, input),
+    ),
+    products: api.lumexia.products.handler(({ context }) => lumexiaProducts(db, context.actor)),
+    searchItems: api.lumexia.searchItems.handler(({ input, context }) =>
+      searchLumexiaItems(db, context.actor, input),
+    ),
+    suggestLinks: api.lumexia.suggestLinks.handler(({ context }) =>
+      suggestLinks(db, context.actor),
+    ),
+    linkProduct: api.lumexia.linkProduct.handler(({ input, context }) =>
+      linkProduct(db, context.actor, input),
+    ),
+    linkProducts: api.lumexia.linkProducts.handler(({ input, context }) =>
+      linkProducts(db, context.actor, input),
+    ),
+    unlinkProduct: api.lumexia.unlinkProduct.handler(({ input, context }) =>
+      unlinkProduct(db, context.actor, input),
+    ),
+    setLotOverride: api.lumexia.setLotOverride.handler(({ input, context }) =>
+      setLotOverride(db, context.actor, input),
+    ),
+    lookupLot: api.lumexia.lookupLot.handler(({ input, context }) =>
+      lookupLot(db, context.actor, input),
     ),
   },
   priorityRules: {

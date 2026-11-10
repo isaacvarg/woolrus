@@ -1,0 +1,38 @@
+{
+  "items": [
+    {
+      "id": "0193f0a1-0000-7000-8000-000000000101",
+      "referenceCode": "BASE1234",
+      "name": "Lavender base, 1 gal",
+      "aliases": ["4417", "LAV-BASE-1G"],
+      "itemTypeId": "0193f0a1-0000-7000-8000-000000000001",
+      "procurementTypeId": "0193f0a1-0000-7000-8000-000000000011",
+      "inventoryTypeId": "0193f0a1-0000-7000-8000-000000000021",
+      "archived": false,
+      "updatedAt": "2026-11-09T14:03:00.000Z"
+    },
+    {
+      "id": "0193f0a1-0000-7000-8000-000000000102",
+      "referenceCode": "BASE9999",
+      "name": "Rose base, 1 gal",
+      "aliases": [],
+      "itemTypeId": "0193f0a1-0000-7000-8000-000000000001",
+      "procurementTypeId": "0193f0a1-0000-7000-8000-000000000011",
+      "inventoryTypeId": "0193f0a1-0000-7000-8000-000000000021",
+      "archived": false,
+      "updatedAt": "2026-10-01T08:00:00.000Z"
+    },
+    {
+      "id": "0193f0a1-0000-7000-8000-000000000103",
+      "referenceCode": "BOX-SM",
+      "name": "Small shipping box",
+      "aliases": ["BOX-SMALL"],
+      "itemTypeId": null,
+      "procurementTypeId": "0193f0a1-0000-7000-8000-000000000012",
+      "inventoryTypeId": null,
+      "archived": true,
+      "updatedAt": "2025-03-15T12:30:00.000Z"
+    }
+  ],
+  "nextCursor": null
+}

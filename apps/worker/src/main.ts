@@ -18,10 +18,13 @@ import {
   runEmailJob,
   runLabelsPurchaseJob,
   runLabRunJob,
+  runLumexiaRefreshJob,
   runRatesFetchJob,
   runStorageDeleteJob,
+  runValidateLotsJob,
   runWooPushJob,
   s3ConfigFromEnv,
+  sweepLots,
   sweepOrphanFiles,
   syncProducts,
 } from "@woolrus/core";
@@ -200,6 +203,44 @@ await boss.work(
     // puts it on the failed-jobs page instead of hiding it in a log line.
     if (result.failed > 0) throw new Error(`pii purge: ${result.failed} orders failed`);
     return result;
+  }),
+);
+
+// Lumexia item refresh (SPEC-lumexia "Lot rules and linking"): daily at 04:00 Chicago time, so an
+// item moved to another type in Lumexia follows the lot rules from the next day. Lumexia down
+// throws, and the queue's policy retries; unconfigured is skipped.
+await boss.schedule(queues.lumexiaRefreshItems, "0 4 * * *", {}, { tz: "America/Chicago" });
+await boss.work(
+  queues.lumexiaRefreshItems,
+  META,
+  runJob<JobPayloads[typeof queues.lumexiaRefreshItems]>(queues.lumexiaRefreshItems, async () =>
+    runLumexiaRefreshJob(db),
+  ),
+);
+
+// Lot validation (SPEC-lumexia "Validation"): queued by every lot write. Lumexia down throws and
+// the queue's policy retries (5 attempts, backoff from 30 s); a refused key ends the retries, so the
+// job shows on the failed-jobs page. Unconfigured is skipped, and the sweep queues the lot again.
+await boss.work(
+  queues.lumexiaValidateLots,
+  { ...META, localConcurrency: 2 },
+  runJob<JobPayloads[typeof queues.lumexiaValidateLots]>(
+    queues.lumexiaValidateLots,
+    async (job) => ({
+      ...(await runValidateLotsJob(db, job.data, { jobId: job.id })),
+    }),
+  ),
+);
+
+// Every 10 minutes: lots left unverified (Lumexia was down or unconfigured) and not-found lots due
+// their daily re-check go back on the validation queue.
+await boss.schedule(queues.lumexiaSweepLots, "*/10 * * * *", {});
+await boss.work(
+  queues.lumexiaSweepLots,
+  META,
+  runJob<JobPayloads[typeof queues.lumexiaSweepLots]>(queues.lumexiaSweepLots, async () => {
+    const result = await sweepLots(db);
+    return result.queued === 0 ? null : result;
   }),
 );
 

@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   woocommerceHealth: vi.fn(),
+  lumexiaHealth: vi.fn(),
   workerHealth: vi.fn(),
   shippingProviderHealth: vi.fn(),
   emailStatus: vi.fn(),
@@ -17,6 +18,7 @@ vi.mock("@woolrus/core", () => ({
   emailStatus: mocks.emailStatus,
   encryptionKey: mocks.encryptionKey,
   fakeShippingProviders: mocks.fakeShippingProviders,
+  lumexiaHealth: mocks.lumexiaHealth,
   shippingProviderHealth: mocks.shippingProviderHealth,
   woocommerceHealth: mocks.woocommerceHealth,
   workerHealth: mocks.workerHealth,
@@ -30,6 +32,7 @@ beforeEach(() => {
   mocks.encryptionKey.mockReturnValue("key");
   mocks.fakeShippingProviders.mockReturnValue(false);
   mocks.woocommerceHealth.mockResolvedValue("ok");
+  mocks.lumexiaHealth.mockResolvedValue("ok");
   mocks.workerHealth.mockResolvedValue("ok");
   mocks.shippingProviderHealth.mockResolvedValue({ degraded: false });
   mocks.emailStatus.mockResolvedValue("ok");
@@ -125,6 +128,35 @@ describe("GET /api/health", () => {
     const { status, body } = await health();
     expect(status).toBe(200);
     expect(body).toMatchObject({ degraded: true, checks: { email: "fail" } });
+  });
+
+  describe("lumexia (SPEC-lumexia success criterion 2)", () => {
+    it("reports ok, unconfigured or down", async () => {
+      for (const state of ["ok", "unconfigured", "down"] as const) {
+        mocks.lumexiaHealth.mockResolvedValue(state);
+        expect((await health()).body.checks.lumexia).toBe(state);
+      }
+    });
+
+    it("down neither fails nor degrades the endpoint: the floor works without Lumexia", async () => {
+      mocks.lumexiaHealth.mockResolvedValue("down");
+      const { status, body } = await health();
+      expect(status).toBe(200);
+      expect(body).toMatchObject({ ok: true, degraded: false, checks: { lumexia: "down" } });
+    });
+
+    it("a throwing check reports down", async () => {
+      mocks.lumexiaHealth.mockRejectedValue(new Error("boom"));
+      const { status, body } = await health();
+      expect(status).toBe(200);
+      expect(body.checks.lumexia).toBe("down");
+    });
+
+    it("with the database down it doesn't ask Lumexia", async () => {
+      mocks.queryRaw.mockRejectedValue(new Error("down"));
+      expect((await health()).body.checks.lumexia).toBe("down");
+      expect(mocks.lumexiaHealth).not.toHaveBeenCalled();
+    });
   });
 
   it("with the database down it doesn't ask for email or shipping status", async () => {

@@ -6,6 +6,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./format": "./src/settings/format.ts",
+    "./lot-codes": "./src/lumexia/codes.ts",
     "./units": "./src/units.ts"
   },
   "scripts": {

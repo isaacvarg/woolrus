@@ -65,6 +65,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <li className="mt-4">
             <Link href="/boxes">{t("nav.boxes")}</Link>
           </li>
+          {can(actor, "order.read") && (
+            <li>
+              <Link href="/lots">{t("nav.lotLookup")}</Link>
+            </li>
+          )}
           {can(actor, "user.manage") && (
             <li>
               <Link href="/users">{t("nav.users")}</Link>
@@ -104,6 +109,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           {can(actor, "product.manage") && (
             <li>
               <Link href="/settings/customs">{t("nav.customs")}</Link>
+            </li>
+          )}
+          {can(actor, "lumexia.manage") && (
+            <li>
+              <Link href="/lumexia">{t("nav.lumexiaItems")}</Link>
             </li>
           )}
           {can(actor, "ops.jobs") && <FailedJobsNav />}

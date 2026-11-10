@@ -1,6 +1,10 @@
 export * from "./adapters/email/log";
 export * from "./adapters/email/resend";
 export * from "./adapters/email/sender";
+export * from "./adapters/lumexia/client";
+export * from "./adapters/lumexia/errors";
+export { FakeLumexiaClient } from "./adapters/lumexia/fake";
+export * from "./adapters/lumexia/http";
 export * from "./adapters/shipping/errors";
 // For Playwright, which runs the rate fetch itself (CI has no worker).
 export { createFakeShippingProvider } from "./adapters/shipping/fake";
@@ -42,6 +46,12 @@ export * from "./identity/stations";
 export * from "./identity/users";
 export * from "./install-jobs";
 export * from "./jobs";
+export * from "./lumexia/connection";
+export * from "./lumexia/items";
+export * from "./lumexia/lookup";
+export * from "./lumexia/lots";
+export * from "./lumexia/rules";
+export * from "./lumexia/validate";
 export * from "./notes/files";
 export * from "./notes/push";
 export * from "./notes/service";

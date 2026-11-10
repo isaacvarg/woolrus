@@ -11,6 +11,7 @@ import {
 import type { Db, DbTx, Prisma } from "@woolrus/db";
 import { recordAudit } from "../audit";
 import { AppError, notFound } from "../errors";
+import { lotsAfterUnpacking } from "../lumexia/lot-store";
 import { invalidate } from "../packing/service";
 import { type Actor, assertCan } from "../permissions";
 import { reconcilePick } from "../picking/service";
@@ -87,8 +88,10 @@ async function unpackExcess(tx: DbTx, orderItemId: string) {
   for (const h of held) {
     if (excess <= 0) break;
     const take = Math.min(h.quantity, excess);
+    // A deleted box line takes its lots with it (cascade); one that shrinks gives the units back
+    // from its lots too, so they still add up to it (SPEC-lumexia split rule).
     if (take === h.quantity) await tx.packageItem.delete({ where: { id: h.id } });
-    else
+    else {
       await tx.packageItem.update({
         where: { id: h.id },
         data: {
@@ -98,6 +101,8 @@ async function unpackExcess(tx: DbTx, orderItemId: string) {
           qaVerifiedById: null,
         },
       });
+      await lotsAfterUnpacking(tx, h.id, take);
+    }
     await invalidate(tx, h.packageId, true);
     excess -= take;
   }

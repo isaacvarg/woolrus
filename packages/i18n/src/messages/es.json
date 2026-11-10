@@ -16,6 +16,7 @@
   },
   "nav": {
     "boxes": "Cajas",
+    "lotLookup": "Buscar lote",
     "settings": "Configuración",
     "pending": "Pendientes",
     "picking": "En surtido",
@@ -38,7 +39,8 @@
     "issues": "Incidencias",
     "customs": "Aduanas",
     "manifests": "Manifiestos",
-    "rateLab": "Rate Lab"
+    "rateLab": "Rate Lab",
+    "lumexiaItems": "Artículos de Lumexia"
   },
   "navFooter": {
     "preferences": "Preferencias",
@@ -186,7 +188,28 @@
       "sendTestEmail": "Enviar correo de prueba",
       "sendTestEmailHint": "Se envía a tu propia dirección con el remitente y la clave guardados.",
       "testEmailSent": "Enviado a {to}. Revisa tu bandeja de entrada.",
-      "testEmailLogged": "Resend no está configurado, así que el correo para {to} se escribió en el registro del servidor en lugar de enviarse."
+      "testEmailLogged": "Resend no está configurado, así que el correo para {to} se escribió en el registro del servidor en lugar de enviarse.",
+      "lumexiaTestHint": "Comprueba la URL y la clave de API guardadas.",
+      "lumexiaTestOk": "Conectado a Lumexia.",
+      "lotRules": {
+        "title": "Reglas de lote",
+        "intro": "Elige qué tipos de artículo de Lumexia necesitan un lote al empacar. Los tipos vienen de Lumexia.",
+        "groups": {
+          "itemTypes": "Tipo de artículo",
+          "procurementTypes": "Tipo de abastecimiento",
+          "inventoryTypes": "Tipo de inventario"
+        },
+        "anyMatch": "Un producto necesita un lote si alguno de sus tipos está activado.",
+        "tracked": "Rastreado en Lumexia",
+        "noTypes": "Lumexia no tiene tipos de esta clase.",
+        "removed": "Eliminado en Lumexia",
+        "switchOff": "Desactivar",
+        "unnamed": "Tipo sin nombre {id}",
+        "readOnly": "Estas reglas no se pueden cambiar hasta que Woolrus pueda conectarse con Lumexia. Activados ahora:",
+        "noneOn": "Ninguno",
+        "save": "Guardar reglas de lote",
+        "loadFailed": "No se pudieron cargar las reglas de lote."
+      }
     },
     "shipping": {
       "title": "Envíos",
@@ -641,7 +664,23 @@
     "addNoteTitle": "Añadir una nota al paquete {number}",
     "done": "Listo",
     "doneNext": "Listo, siguiente pedido",
-    "noneLeft": "No hay más pedidos de Empaque."
+    "noneLeft": "No hay más pedidos de Empaque.",
+    "lotNeeded": "Falta el lote",
+    "lotChip": "{count} × {lot}",
+    "lotChipLabel": "{count} del lote {lot}",
+    "lotDialogTitle": "Lote {lot}",
+    "lotDialogItem": "{name}: {count} en este paquete",
+    "lotCount": "Unidades de este lote",
+    "lotCountHint": "El primer lote da o recibe la diferencia.",
+    "lotDefaultHint": "Este es el primer lote: toma todas las unidades que no tienen los otros lotes. Cambia la cantidad de otro lote para mover unidades.",
+    "lotSave": "Guardar cantidad",
+    "lotRemove": "Quitar lote",
+    "lotUnresolved": "Lote QR",
+    "whichLine": "¿Qué línea?",
+    "whichLineIntro": "Este lote puede ir en más de una línea del paquete {number}. Elige una.",
+    "whichLineOption": "{name} ({count} en este paquete)",
+    "lotsOf": "Lotes de {name}",
+    "lotScanned": "Lote {lot} en {name} del paquete {number}."
   },
   "qa": {
     "title": "Control de calidad #{number}",
@@ -729,7 +768,19 @@
       "CHEAPEST_UNAVAILABLE": "La más barata no estaba disponible o falló",
       "OTHER": "Otro"
     },
-    "drawerReason": "Motivo: {reason}"
+    "drawerReason": "Motivo: {reason}",
+    "lots": "Lotes de {name}",
+    "lotUnits": "{count} × {lot}",
+    "lotNone": "Sin lote registrado",
+    "lotBlocks": "Bloquea la etiqueta",
+    "lotReplace": "Reemplazar lote",
+    "lotRemove": "Quitar",
+    "lotRemoveNamed": "Quitar el lote {lot}",
+    "lotReplaceTitle": "Reemplazar el lote {lot}",
+    "lotReplaceIntro": "Escanea el lote correcto de {name}. Recibe {count, plural, one {# unidad} other {# unidades}} de este lote.",
+    "lotReplaceField": "Lote nuevo",
+    "lotReplaceHint": "Escanea el código QR de la etiqueta del lote o escribe su número de lote.",
+    "lotReplaceSave": "Reemplazar"
   },
   "pick": {
     "title": "Surtir #{number}",
@@ -1075,6 +1126,14 @@
     "voiceCapped": "La grabación se detuvo al llegar al límite de 5 minutos.",
     "micUnavailable": "No se puede usar el micrófono. Permítelo para este sitio e inténtalo de nuevo."
   },
+  "lots": {
+    "status": {
+      "UNVERIFIED": "Sin verificar",
+      "VALID": "Válido",
+      "NOT_FOUND": "No está en Lumexia",
+      "WRONG_ITEM": "Artículo equivocado"
+    }
+  },
   "status": {
     "PENDING": "Pendiente",
     "PICKING": "En surtido",
@@ -1231,7 +1290,9 @@
         "criticalIssueOpen": "Resuelve los {count} problemas críticos abiertos antes de que el pedido salga de QA.",
         "notReady": "El pedido no está Listo.",
         "noPackages": "El pedido no tiene paquetes.",
-        "packageOverweight": "El paquete {package} supera el límite de su caja de {maxOz} oz y necesita un motivo."
+        "packageOverweight": "El paquete {package} supera el límite de su caja de {maxOz} oz y necesita un motivo.",
+        "lotMissing": "{line} en el paquete {package} necesita un lote.",
+        "lotWrongItem": "{line} en el paquete {package} tiene el lote {lotNumber}, que pertenece a otro artículo. Reemplázalo o quítalo."
       }
     },
     "sync": {
@@ -1384,6 +1445,20 @@
       "oneOffParcelInvalid": "Ese paquete escrito no es parte de esta cotización.",
       "oneOffActive": "Tu otra cotización sigue en curso. Espera a que termine.",
       "notStarted": "La prueba nunca empezó: el worker no la tomó, así que se marcó como fallida."
+    },
+    "lumexia": {
+      "unconfigured": "Lumexia aún no está configurado. Agrega la URL base de la API y la clave en Configuración → Integraciones.",
+      "unavailable": "No se pudo conectar con Lumexia. Revisa la URL y que Lumexia esté funcionando.",
+      "unauthorized": "Lumexia rechazó la clave de API. Crea una clave de solo lectura en Lumexia, en Settings → User → Agents.",
+      "badResponse": "Esa URL no parece ser la API de Lumexia (no se encontró /api/v1).",
+      "itemNotFound": "Lumexia no tiene ese artículo. Puede que se haya eliminado; vuelve a buscar.",
+      "notLinked": "Primero vincula este producto a un artículo de Lumexia.",
+      "notALot": "Eso no es un número de lote de Lumexia.",
+      "chooseLine": "Este lote puede ir en más de una línea. Elige cuál.",
+      "lotQuantity": "Este lote puede tener de {min} a {max} unidades: el primer lote conserva al menos 1.",
+      "lotNotOnPackage": "Nada en este paquete necesita lote.",
+      "lotWrongItem": "El lote {lotNumber} pertenece a otro artículo ({itemRef}). No se guardó.",
+      "allUnitsHaveLots": "Las {count} unidades ya tienen lote; toca un lote para cambiarlo."
     }
   },
   "emails": {
@@ -1592,6 +1667,85 @@
     "empty": "Ningún producto coincide con este filtro.",
     "loadMore": "Cargar más",
     "none": "Sin definir"
+  },
+  "lumexiaItems": {
+    "title": "Artículos de Lumexia",
+    "intro": "Vincula cada producto con su artículo en Lumexia. Un producto vinculado necesita lote cuando el tipo de su artículo está activado en Ajustes → Lumexia → Reglas de lote, o cuando su ajuste de Lote lo indica.",
+    "notConfigured": "Lumexia no está configurado.",
+    "openSettings": "Abrir Ajustes",
+    "filter": "Mostrar",
+    "filters": {
+      "all": "Todos",
+      "linked": "Vinculados",
+      "unlinked": "Sin vincular",
+      "needsLot": "Necesitan lote"
+    },
+    "columns": {
+      "product": "Producto",
+      "item": "Artículo de Lumexia",
+      "itemType": "Tipo de artículo",
+      "needsLot": "Necesita lote",
+      "lot": "Lote",
+      "actions": "Acciones"
+    },
+    "noSku": "Sin SKU",
+    "notLinked": "Sin vincular",
+    "notFound": "No encontrado en Lumexia",
+    "yes": "Sí",
+    "no": "No",
+    "override": "excepción",
+    "unknownType": "Tipo desconocido",
+    "lotSetting": "Ajuste de lote de {product}",
+    "lotOptions": {
+      "rules": "Seguir reglas de lote",
+      "always": "Siempre",
+      "never": "Nunca"
+    },
+    "search": "Buscar artículos de Lumexia para {product}",
+    "searchPlaceholder": "Buscar por nombre o código",
+    "searching": "Buscando…",
+    "noItems": "Ningún artículo de Lumexia coincide.",
+    "link": "Vincular",
+    "change": "Cambiar",
+    "unlink": "Desvincular",
+    "linked": "{product} vinculado a {item}.",
+    "unlinked": "{product} desvinculado. Los lotes ya registrados se conservan.",
+    "noProducts": "Ningún producto coincide.",
+    "matchBySku": "Emparejar por SKU",
+    "matching": "Emparejando…",
+    "review": {
+      "title": "Revisar coincidencias de SKU",
+      "intro": "El SKU de cada producto coincidió con un artículo de Lumexia. Desmarca las que parezcan incorrectas; revisa bien las coincidencias por alias, porque los alias pueden contener ids de otros sistemas.",
+      "none": "Ningún SKU de producto sin vincular coincide con exactamente un artículo de Lumexia.",
+      "matchedCode": "coincide con el código de referencia {value}",
+      "matchedAlias": "coincide con el alias {value}",
+      "confirm": "{count, plural, one {Vincular # producto} other {Vincular # productos}}",
+      "cancel": "Cancelar",
+      "done": "{count, plural, one {# producto vinculado.} other {# productos vinculados.}}"
+    }
+  },
+  "lotLookup": {
+    "title": "Buscar lote",
+    "intro": "Escribe un número de lote o escanea el código QR de una etiqueta de lote para ver todos los pedidos y paquetes que lo contienen.",
+    "code": "Número de lote o código QR",
+    "search": "Buscar",
+    "downloadCsv": "Descargar CSV",
+    "count": "{count, plural, one {# artículo de paquete contiene el lote {code}.} other {# artículos de paquete contienen el lote {code}.}}",
+    "empty": "Ningún paquete contiene el lote {code}.",
+    "notShipped": "Sin enviar",
+    "columns": {
+      "order": "Pedido",
+      "customer": "Cliente",
+      "package": "Paquete",
+      "product": "Producto",
+      "lot": "Lote",
+      "quantity": "Cantidad",
+      "status": "Estado del lote",
+      "shipped": "Enviado"
+    },
+    "lots": "Lotes",
+    "lotsInPackage": "Lotes en el paquete {number}",
+    "lotWithStatus": "{count} del lote {lot}, {status}"
   },
   "stuckLabels": {
     "title": "Etiquetas que no se pudieron anular",

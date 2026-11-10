@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { AdminSettings, SecretName } from "@woolrus/contracts";
+import type { AdminSettings, LotRules, SecretName, SetLotRulesInput } from "@woolrus/contracts";
 import { useFormatter, useTranslations } from "next-intl";
 import { useEffect, useId, useRef, useState } from "react";
 import { Form } from "react-aria-components";
@@ -65,6 +65,12 @@ export function IntegrationsSection() {
           </div>
           {id === "woocommerce" && (
             <StoreTools trackingEnabled={settings.data.wooTrackingEnabled} />
+          )}
+          {id === "lumexia" && (
+            <>
+              <LumexiaTools />
+              <LotRulesSection />
+            </>
           )}
           {id === "email" && <EmailTools />}
         </IntegrationCard>
@@ -294,6 +300,179 @@ function StoreTools({ trackingEnabled }: { trackingEnabled: boolean }) {
         </ol>
       </div>
     </div>
+  );
+}
+
+/** Test connection under the Lumexia card's key: the same ok / unconfigured / down as health. */
+function LumexiaTools() {
+  const t = useTranslations("settings.integrations");
+  const message = useTranslations();
+  const errorMessage = useErrorMessage();
+  const test = useMutation(orpc.lumexia.testConnection.mutationOptions());
+
+  return (
+    <div className="flex flex-wrap items-center gap-3 border-t border-base-200 pt-4">
+      <Button className="btn-outline" isPending={test.isPending} onPress={() => test.mutate({})}>
+        {t("testConnection")}
+      </Button>
+      <span className="text-sm text-base-content/70">{t("lumexiaTestHint")}</span>
+      <div aria-live="polite" className="basis-full" data-testid="lumexia-test-result">
+        {test.data?.status === "ok" && <p className="text-success">{t("lumexiaTestOk")}</p>}
+        {test.data && test.data.status !== "ok" && (
+          <p className={test.data.status === "unconfigured" ? "text-warning" : "text-error"}>
+            {message.has(test.data.messageKey)
+              ? message(test.data.messageKey as never)
+              : message("errors.internal")}
+          </p>
+        )}
+        {test.error && <p className="text-error">{errorMessage(test.error)}</p>}
+      </div>
+    </div>
+  );
+}
+
+const lotGroups = [
+  { group: "itemTypes", input: "itemTypeIds" },
+  { group: "procurementTypes", input: "procurementTypeIds" },
+  { group: "inventoryTypes", input: "inventoryTypeIds" },
+] as const;
+
+const savedLotRules = (rules: LotRules): SetLotRulesInput =>
+  Object.fromEntries(
+    lotGroups.map(({ group, input }) => [
+      input,
+      [
+        ...rules[group].types.filter((t) => t.needsLot).map((t) => t.id),
+        ...rules[group].unknownIds,
+      ],
+    ]),
+  ) as SetLotRulesInput;
+
+const sameIds = (a: readonly string[], b: readonly string[]) =>
+  a.length === b.length && a.every((id) => b.includes(id));
+
+/**
+ * Settings → Lumexia → Lot rules (SPEC-lumexia "Reads and UI"): a switch per Lumexia type, ids
+ * Lumexia no longer returns with **Switch off**, and the saved ids read-only while it's unreachable.
+ */
+function LotRulesSection() {
+  const t = useTranslations("settings.integrations.lotRules");
+  const saved = useTranslations("settings.integrations");
+  const message = useTranslations();
+  const errorMessage = useErrorMessage();
+  const queryClient = useQueryClient();
+  const headingId = useId();
+  const rules = useQuery(orpc.lumexia.lotRules.queryOptions());
+  const [draft, setDraft] = useState<SetLotRulesInput | null>(null);
+  const save = useMutation(
+    orpc.lumexia.setLotRules.mutationOptions({
+      onSuccess: async () => {
+        await queryClient.invalidateQueries({ queryKey: orpc.lumexia.lotRules.queryKey() });
+        setDraft(null);
+      },
+    }),
+  );
+
+  const current = rules.data && savedLotRules(rules.data);
+  const ids = draft ?? current;
+  const dirty =
+    !!current && !!ids && lotGroups.some(({ input }) => !sameIds(ids[input], current[input]));
+  const toggle = (input: keyof SetLotRulesInput, id: string, on: boolean) => {
+    if (!ids) return;
+    save.reset();
+    const without = ids[input].filter((x) => x !== id);
+    setDraft({ ...ids, [input]: on ? [...without, id] : without });
+  };
+
+  return (
+    <section aria-labelledby={headingId} className="space-y-3 border-t border-base-200 pt-4">
+      <h4 id={headingId} className="font-semibold">
+        {t("title")}
+      </h4>
+      <p className="text-sm text-base-content/70">{t("intro")}</p>
+      {rules.isPending && <span className="loading loading-spinner loading-sm" />}
+      {rules.error && (
+        <p role="alert" className="text-error">
+          {t("loadFailed")} {errorMessage(rules.error)}
+        </p>
+      )}
+      {rules.data?.readOnly && (
+        <div className="space-y-2">
+          <p role="status" className="text-warning">
+            {rules.data.messageKey && message.has(rules.data.messageKey)
+              ? message(rules.data.messageKey as never)
+              : message("errors.lumexia.unavailable")}{" "}
+            {t("readOnly")}
+          </p>
+          {lotGroups.map(({ group }) => (
+            <div key={group}>
+              <h5 className="text-sm font-medium">{t(`groups.${group}`)}</h5>
+              <p className="font-mono text-sm">
+                {rules.data[group].types.map((type) => type.id).join(", ") || t("noneOn")}
+              </p>
+            </div>
+          ))}
+        </div>
+      )}
+      {rules.data && !rules.data.readOnly && ids && (
+        <>
+          <div className="grid gap-4 md:grid-cols-3">
+            {lotGroups.map(({ group, input }) => {
+              const { types, unknownIds } = rules.data[group];
+              const removed = unknownIds.filter((id) => ids[input].includes(id));
+              return (
+                <fieldset key={group} className="space-y-1">
+                  <legend className="text-sm font-medium">{t(`groups.${group}`)}</legend>
+                  {types.length === 0 && (
+                    <p className="text-sm text-base-content/70">{t("noTypes")}</p>
+                  )}
+                  {types.map((type) => (
+                    <Switch
+                      key={type.id}
+                      isSelected={ids[input].includes(type.id)}
+                      isDisabled={save.isPending}
+                      onChange={(on) => toggle(input, type.id, on)}
+                    >
+                      <span>{type.name ?? t("unnamed", { id: type.id })}</span>
+                      {type.isTracked && (
+                        <span className="badge badge-ghost badge-sm">{t("tracked")}</span>
+                      )}
+                    </Switch>
+                  ))}
+                  {removed.map((id) => (
+                    <div key={id} className="flex flex-wrap items-center gap-2 py-2">
+                      <span className="font-mono text-sm">{id}</span>
+                      <span className="badge badge-warning badge-sm">{t("removed")}</span>
+                      <Button
+                        className="btn-ghost btn-sm"
+                        isDisabled={save.isPending}
+                        onPress={() => toggle(input, id, false)}
+                      >
+                        {t("switchOff")}
+                      </Button>
+                    </div>
+                  ))}
+                </fieldset>
+              );
+            })}
+          </div>
+          <p className="text-sm text-base-content/70">{t("anyMatch")}</p>
+          <div className="flex flex-wrap items-center gap-3">
+            <Button
+              isDisabled={!dirty}
+              isPending={save.isPending}
+              onPress={() => ids && save.mutate(ids)}
+            >
+              {t("save")}
+            </Button>
+            <div aria-live="polite">
+              {save.isSuccess && <p className="text-success">{saved("saved")}</p>}
+              {save.error && <p className="text-error">{errorMessage(save.error)}</p>}
+            </div>
+          </div>
+        </>
+      )}
+    </section>
   );
 }
 
