@@ -19,14 +19,69 @@ function useInvalidate() {
   return () => queryClient.invalidateQueries({ queryKey: orpc.users.key() });
 }
 
-/** Type a PIN, or Generate one that is shown once for the admin to hand over. */
+/**
+ * Type a PIN, or Generate one that is shown once for the admin to hand over. Shared by Set PIN and
+ * Add station user; the form around it shows `pin` field errors from the server.
+ */
+export function PinField({
+  pin,
+  onChange,
+  holderName,
+}: {
+  pin: string;
+  onChange: (pin: string) => void;
+  /** Who the generated PIN is for, in the hand-over notice. */
+  holderName: string;
+}) {
+  const t = useTranslations();
+  const [generated, setGenerated] = useState(false);
+  return (
+    <>
+      <div className="flex items-end gap-2">
+        <div className="grow">
+          <TextField
+            name="pin"
+            label={t("users.newPin")}
+            description={t("users.pinHelp")}
+            inputMode="numeric"
+            autoComplete="off"
+            maxLength={6}
+            isRequired
+            value={pin}
+            onChange={(value) => {
+              onChange(value);
+              setGenerated(false);
+            }}
+          />
+        </div>
+        <Button
+          className="btn-outline mb-7"
+          onPress={() => {
+            onChange(generatePin());
+            setGenerated(true);
+          }}
+        >
+          {t("users.generate")}
+        </Button>
+      </div>
+      {generated && (
+        <p role="status" className="alert alert-info">
+          <span>
+            {t("users.generatedPin", { name: holderName })}{" "}
+            <strong className="font-mono text-xl tracking-widest">{pin}</strong>
+          </span>
+        </p>
+      )}
+    </>
+  );
+}
+
 export function PinDialog({ user, onClose }: { user: UserSummary; onClose: () => void }) {
   const t = useTranslations();
   const errorMessage = useErrorMessage();
   const fieldErrors = useFieldErrors();
   const invalidate = useInvalidate();
   const [pin, setPin] = useState("");
-  const [generated, setGenerated] = useState(false);
   const save = useMutation({
     mutationFn: () => client.users.setPin({ id: user.id, pin }),
     onSuccess: () => {
@@ -51,41 +106,7 @@ export function PinDialog({ user, onClose }: { user: UserSummary; onClose: () =>
             save.mutate();
           }}
         >
-          <div className="flex items-end gap-2">
-            <div className="grow">
-              <TextField
-                name="pin"
-                label={t("users.newPin")}
-                description={t("users.pinHelp")}
-                inputMode="numeric"
-                autoComplete="off"
-                maxLength={6}
-                isRequired
-                value={pin}
-                onChange={(value) => {
-                  setPin(value);
-                  setGenerated(false);
-                }}
-              />
-            </div>
-            <Button
-              className="btn-outline mb-7"
-              onPress={() => {
-                setPin(generatePin());
-                setGenerated(true);
-              }}
-            >
-              {t("users.generate")}
-            </Button>
-          </div>
-          {generated && (
-            <p role="status" className="alert alert-info">
-              <span>
-                {t("users.generatedPin", { name: user.name })}{" "}
-                <strong className="font-mono text-xl tracking-widest">{pin}</strong>
-              </span>
-            </p>
-          )}
+          <PinField pin={pin} onChange={setPin} holderName={user.name} />
           {save.error && !errors.pin && (
             <p role="alert" className="text-error">
               {errorMessage(save.error)}

@@ -3,7 +3,16 @@ import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { createActor, resetDb, testDb } from "../../test/db";
 import { raceBehindLock } from "../../test/locks";
 import type { UserActor } from "../permissions";
-import { deactivateUser, listUsers, reactivateUser, updateUserRoles } from "./users";
+import { isStationOnly } from "./station-only";
+import { stationStatus, unlockWithPin } from "./station-session";
+import { findStationByToken, registerStation } from "./stations";
+import {
+  createStationUser,
+  deactivateUser,
+  listUsers,
+  reactivateUser,
+  updateUserRoles,
+} from "./users";
 
 const db: Db = testDb();
 afterAll(() => db.$disconnect());
@@ -254,6 +263,13 @@ describe("permissions", () => {
       () => updateUserRoles(db, actor, { id, roles: ["PACKER"] }),
       () => deactivateUser(db, actor, { id }),
       () => reactivateUser(db, actor, { id }),
+      () =>
+        createStationUser(db, actor, {
+          name: "Luis",
+          roles: ["PICKER"],
+          pin: PIN,
+          idempotencyKey: crypto.randomUUID(),
+        }),
     ]) {
       await expect(call()).rejects.toMatchObject({ kind: "FORBIDDEN" });
     }
@@ -261,5 +277,163 @@ describe("permissions", () => {
       active: true,
       roles: ["PICKER"],
     });
+    expect(await db.user.count({ where: { name: "Luis" } })).toBe(0);
+  });
+});
+
+// --- Station-only users (SPEC-identity amendment 1, success criteria 16, 17, 19) ---
+
+const PIN = "482916";
+
+function stationUserInput(overrides: Partial<Parameters<typeof createStationUser>[2]> = {}) {
+  return {
+    name: "Luis",
+    roles: ["PICKER"] as Role[],
+    pin: PIN,
+    idempotencyKey: crypto.randomUUID(),
+    ...overrides,
+  };
+}
+
+describe("isStationOnly", () => {
+  it("is true only for the reserved station.invalid domain, in any case", () => {
+    expect(isStationOnly(`${crypto.randomUUID()}@station.invalid`)).toBe(true);
+    expect(isStationOnly("X@STATION.INVALID")).toBe(true);
+    expect(isStationOnly("luis@example.test")).toBe(false);
+    expect(isStationOnly("luis@station.invalid.example.test")).toBe(false);
+    expect(isStationOnly("luis@notstation.invalid")).toBe(false);
+  });
+});
+
+describe("createStationUser", () => {
+  it("creates an active user with a PIN who gets a tile and unlocks with that PIN", async () => {
+    const admin = await createActor(db, ["ADMIN"]);
+    const created = await createStationUser(db, admin, stationUserInput({ name: "  Luis  " }));
+
+    expect(created).toMatchObject({
+      name: "Luis",
+      email: null,
+      stationOnly: true,
+      roles: ["PICKER"],
+      active: true,
+      hasPin: true,
+      hasBadge: false,
+    });
+    const row = await db.user.findUniqueOrThrow({ where: { id: created.id } });
+    expect(isStationOnly(row.email)).toBe(true);
+    expect(row.emailVerified).toBe(false);
+
+    const { token } = await registerStation(db, admin, { name: "Pick 1" });
+    const station = await findStationByToken(db, token);
+    if (!station) throw new Error("expected the station");
+    const status = await stationStatus(db, station);
+    expect(status.tiles).toContainEqual({ id: created.id, name: "Luis", initials: "L" });
+    await expect(unlockWithPin(db, station, { userId: created.id, pin: PIN })).resolves.toEqual({
+      userName: "Luis",
+    });
+  });
+
+  it("writes one user.create audit with stationOnly and roles, never the PIN or its hash", async () => {
+    const admin = await createActor(db, ["ADMIN"]);
+    const created = await createStationUser(db, admin, stationUserInput());
+    const row = await db.user.findUniqueOrThrow({ where: { id: created.id } });
+
+    const audit = await db.auditEvent.findMany({ where: { entityId: created.id } });
+    expect(audit).toHaveLength(1);
+    expect(audit[0]).toMatchObject({
+      action: "user.create",
+      entityType: "User",
+      actorId: admin.userId,
+      after: { stationOnly: true, roles: ["PICKER"] },
+    });
+    const json = JSON.stringify(audit);
+    expect(json).not.toContain(PIN);
+    expect(json).not.toContain(row.pinHash ?? "no hash");
+    expect(json).not.toContain(row.email);
+  });
+
+  it("creates one user for the same idempotency key twice", async () => {
+    const admin = await createActor(db, ["ADMIN"]);
+    const input = stationUserInput();
+    const first = await createStationUser(db, admin, input);
+    const second = await createStationUser(db, admin, input);
+    expect(second.id).toBe(first.id);
+    expect(second.lastActiveAt).toBeNull();
+    expect(await db.user.count({ where: { name: "Luis" } })).toBe(1);
+    expect(await db.auditEvent.count({ where: { action: "user.create" } })).toBe(1);
+  });
+
+  it("refuses the Admin role", async () => {
+    const admin = await createActor(db, ["ADMIN"]);
+    await expect(
+      createStationUser(db, admin, stationUserInput({ roles: ["PICKER", "ADMIN"] })),
+    ).rejects.toMatchObject({ kind: "BAD_REQUEST", messageKey: "errors.users.stationOnlyAdmin" });
+    expect(await db.user.count({ where: { name: "Luis" } })).toBe(0);
+  });
+
+  it("validates the name, roles and PIN", async () => {
+    const admin = await createActor(db, ["ADMIN"]);
+    for (const overrides of [
+      { name: "   " },
+      { name: "x".repeat(81) },
+      { roles: [] as Role[] },
+      { pin: "12345" },
+      { pin: "123456" },
+    ]) {
+      await expect(createStationUser(db, admin, stationUserInput(overrides))).rejects.toMatchObject(
+        {
+          kind: "BAD_REQUEST",
+        },
+      );
+    }
+    await expect(
+      createStationUser(db, admin, stationUserInput({ name: "x".repeat(80) })),
+    ).resolves.toMatchObject({ stationOnly: true });
+  });
+
+  it("allows the same name as another user (the dialog only warns)", async () => {
+    const admin = await createActor(db, ["ADMIN"]);
+    await createStationUser(db, admin, stationUserInput());
+    await createStationUser(db, admin, stationUserInput({ name: "luis" }));
+    expect(await db.user.count({ where: { name: { equals: "luis", mode: "insensitive" } } })).toBe(
+      2,
+    );
+  });
+});
+
+describe("station-only users in the other users procedures", () => {
+  it("updateUserRoles refuses adding Admin to a station-only user, but allows other roles", async () => {
+    const admin = await createActor(db, ["ADMIN"]);
+    const { id } = await createStationUser(db, admin, stationUserInput());
+    await expect(
+      updateUserRoles(db, admin, { id, roles: ["PICKER", "ADMIN"] }),
+    ).rejects.toMatchObject({ kind: "BAD_REQUEST", messageKey: "errors.users.stationOnlyAdmin" });
+    await expect(updateUserRoles(db, admin, { id, roles: ["PACKER"] })).resolves.toMatchObject({
+      roles: ["PACKER"],
+      email: null,
+      stationOnly: true,
+    });
+  });
+
+  it("listUsers returns email null and never matches the placeholder in search", async () => {
+    const admin = await createActor(db, ["ADMIN"]);
+    const created = await createStationUser(db, admin, stationUserInput());
+    const row = await db.user.findUniqueOrThrow({ where: { id: created.id } });
+
+    const all = await listUsers(db, admin);
+    expect(all.users.find((u) => u.id === created.id)).toMatchObject({
+      email: null,
+      stationOnly: true,
+    });
+    expect(all.users.find((u) => u.id === admin.userId)).toMatchObject({ stationOnly: false });
+    expect(JSON.stringify(all)).not.toContain("station.invalid");
+
+    for (const search of ["station.invalid", "invalid", row.email.slice(0, 8), "@"]) {
+      const found = await listUsers(db, admin, { search });
+      expect(found.users.map((u) => u.id)).not.toContain(created.id);
+    }
+    expect((await listUsers(db, admin, { search: "lui" })).users.map((u) => u.id)).toEqual([
+      created.id,
+    ]);
   });
 });

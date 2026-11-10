@@ -23,6 +23,7 @@ import {
   createNote,
   createPriorityRule,
   createShippingProviders,
+  createStationUser,
   customsProducts,
   deactivateUser,
   deleteBox,
@@ -48,6 +49,7 @@ import {
   getQaScreen,
   getSettings,
   getSyncStatus,
+  isStationOnly,
   issueAssignees,
   issueBadge,
   issueCounts,
@@ -211,7 +213,7 @@ export const router = implementer.router({
     get: api.me.get.handler(({ context: { user, actor, station, idleLockAt } }) => ({
       id: user.id,
       name: user.name,
-      email: user.email,
+      email: isStationOnly(user.email) ? null : user.email,
       image: user.image,
       roles: user.roles,
       permissions: permissionsFor(user.roles),
@@ -530,6 +532,9 @@ export const router = implementer.router({
   },
   users: {
     list: api.users.list.handler(({ input, context }) => listUsers(db, context.actor, input)),
+    createStationUser: api.users.createStationUser.handler(({ input, context }) =>
+      createStationUser(db, context.actor, input),
+    ),
     updateRoles: api.users.updateRoles.handler(({ input, context }) =>
       updateUserRoles(db, context.actor, input),
     ),

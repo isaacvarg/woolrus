@@ -2,7 +2,7 @@
 
 **Milestone:** M2 · **Depends on:** `settings` · **Used by:** every module (the `Actor`), `picking`/`packing`/`qa`
 (station actors on the floor), `operations` (email health) · **State:** done; amendment 1 (station-only users,
-2026-11-10) is **planned** (tickets #171–#174) · **Issue:** [#21](https://github.com/isaacvarg/woolrus/issues/21); amendment 1:
+2026-11-10) is **in progress** (tickets #171–#174) · **Issue:** [#21](https://github.com/isaacvarg/woolrus/issues/21); amendment 1:
 [#170](https://github.com/isaacvarg/woolrus/issues/170)
 
 > **Amendment 1 (approved 2026-11-10): station-only users.** Some floor staff have no email address, or shouldn't

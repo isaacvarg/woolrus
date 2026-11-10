@@ -12,8 +12,9 @@ import { toast } from "@/components/ui/toast";
 import { useErrorMessage, useFieldErrors } from "@/lib/errors";
 import { client, orpc } from "@/lib/orpc";
 import { BadgeDialog, PinDialog } from "./credentials-dialogs";
+import { AddStationUserDialog, stationRoles } from "./station-user-dialog";
 
-const roles = Role.options;
+const allRoles = Role.options;
 const PAGE_SIZE = 50;
 const SEARCH_DEBOUNCE_MS = 250;
 
@@ -46,6 +47,7 @@ export function UsersManager({ currentUserId }: { currentUserId: string }) {
   const [deactivating, setDeactivating] = useState<UserSummary | null>(null);
   const [settingPin, setSettingPin] = useState<UserSummary | null>(null);
   const [badge, setBadge] = useState<IssuedBadge | null>(null);
+  const [addingStationUser, setAddingStationUser] = useState(false);
   const invalidate = useInvalidate();
   const reactivate = useMutation({
     mutationFn: (user: UserSummary) => client.users.reactivate({ id: user.id }),
@@ -74,20 +76,23 @@ export function UsersManager({ currentUserId }: { currentUserId: string }) {
 
   return (
     <div className="space-y-4">
-      <SearchField
-        value={searchText}
-        onChange={setSearchText}
-        className="fieldset w-full max-w-md"
-        aria-label={t("users.search")}
-      >
-        <Label className="sr-only">{t("users.search")}</Label>
-        <Input
-          className="input w-full"
-          placeholder={t("users.searchPlaceholder")}
-          // The API rejects longer searches.
-          maxLength={100}
-        />
-      </SearchField>
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <SearchField
+          value={searchText}
+          onChange={setSearchText}
+          className="fieldset w-full max-w-md"
+          aria-label={t("users.search")}
+        >
+          <Label className="sr-only">{t("users.search")}</Label>
+          <Input
+            className="input w-full"
+            placeholder={t("users.searchPlaceholder")}
+            // The API rejects longer searches.
+            maxLength={100}
+          />
+        </SearchField>
+        <Button onPress={() => setAddingStationUser(true)}>{t("users.addStationUser")}</Button>
+      </div>
       <div className="overflow-x-auto rounded-box bg-base-100 shadow-sm">
         <table className="table">
           <thead>
@@ -120,7 +125,11 @@ export function UsersManager({ currentUserId }: { currentUserId: string }) {
               <tr key={user.id} className={user.active ? "" : "opacity-60"}>
                 <td>
                   <div className="font-medium">{user.name}</div>
-                  <div className="text-sm opacity-70">{user.email}</div>
+                  {user.stationOnly ? (
+                    <span className="badge badge-soft badge-sm">{t("users.stationOnly")}</span>
+                  ) : (
+                    <div className="text-sm opacity-70">{user.email}</div>
+                  )}
                 </td>
                 <td>
                   <div className="flex flex-wrap gap-1">
@@ -207,6 +216,12 @@ export function UsersManager({ currentUserId }: { currentUserId: string }) {
       )}
       {settingPin && <PinDialog user={settingPin} onClose={() => setSettingPin(null)} />}
       {badge && <BadgeDialog badge={badge} onClose={() => setBadge(null)} />}
+      {addingStationUser && (
+        <AddStationUserDialog
+          onClose={() => setAddingStationUser(false)}
+          onIssueBadge={(user) => issueBadge.mutate(user)}
+        />
+      )}
     </div>
   );
 }
@@ -223,6 +238,8 @@ function RolesDialog({ user, onClose }: { user: UserSummary; onClose: () => void
     onSettled: invalidate,
   });
   const rolesError = fieldErrors(update.error).roles;
+  // Station-only users can't be Admins (SPEC-identity amendment 1, decision 10).
+  const roles = user.stationOnly ? stationRoles : allRoles;
 
   return (
     <Dialog

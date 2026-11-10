@@ -1,4 +1,4 @@
-import { can } from "@woolrus/core";
+import { can, isStationOnly } from "@woolrus/core";
 import { headers } from "next/headers";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -120,7 +120,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           {user && (
             <NavFooter
               name={user.name}
-              email={user.email}
+              email={isStationOnly(user.email) ? null : user.email}
               stationName={station?.name ?? null}
               preferences={{
                 locale: user.locale,

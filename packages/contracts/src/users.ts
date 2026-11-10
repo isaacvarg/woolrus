@@ -1,12 +1,15 @@
 import { z } from "zod";
-import { base, Id } from "./base";
+import { base, Id, IdempotencyKey } from "./base";
 import { Role } from "./me";
 
 /** A user as admins see them. Has flags for a PIN and badge, never their hashes. */
 export const UserSummary = z.object({
   id: Id,
   name: z.string(),
-  email: z.string(),
+  /** Null for a station-only user: their placeholder address never leaves core (amendment 1). */
+  email: z.string().nullable(),
+  /** No email, no personal sign-in: unlocks stations only (SPEC-identity amendment 1). */
+  stationOnly: z.boolean(),
   roles: z.array(Role),
   active: z.boolean(),
   hasPin: z.boolean(),
@@ -59,6 +62,19 @@ export const IssuedBadge = z.object({
 });
 export type IssuedBadge = z.infer<typeof IssuedBadge>;
 
+/** A worker with no email: name, roles (never Admin) and a PIN (SPEC-identity amendment 1). */
+export const CreateStationUserInput = z.object({
+  idempotencyKey: IdempotencyKey,
+  name: z.string().trim().min(1).max(80),
+  roles: z
+    .array(Role)
+    .min(1, "errors.users.rolesRequired")
+    .refine((roles) => !roles.includes("ADMIN"), "errors.users.stationOnlyAdmin")
+    .transform((roles) => [...new Set(roles)]),
+  pin: Pin,
+});
+export type CreateStationUserInput = z.infer<typeof CreateStationUserInput>;
+
 export const USER_LIST_PAGE_MAX = 100;
 
 export const UserListInput = z.object({
@@ -87,6 +103,16 @@ export const users = {
     })
     .input(UserListInput)
     .output(UserListPage),
+
+  createStationUser: base
+    .route({
+      method: "POST",
+      path: "/users",
+      tags: ["Users"],
+      summary: "Add a station-only user: name, roles and PIN, no email or personal sign-in",
+    })
+    .input(CreateStationUserInput)
+    .output(UserSummary),
 
   updateRoles: base
     .route({

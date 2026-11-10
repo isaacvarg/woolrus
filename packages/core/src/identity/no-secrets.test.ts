@@ -14,12 +14,14 @@ import {
   unlockWithPin,
 } from "./station-session";
 import { findStationByToken, listStations, registerStation } from "./stations";
-import { issueBadge, listUsers, setPin } from "./users";
+import { createStationUser, issueBadge, listUsers, setPin, updateUserRoles } from "./users";
 
 // SPEC-identity success criterion 9: one session that sets a PIN, issues a badge, registers a
 // station and sets the Resend key. Every response and audit row is serialized and searched; none
 // may hold a PIN, PIN hash, badge hash, station token (or its hash) or the Resend key (or its
 // ciphertext). The badge code may appear in the issueBadge response only: it's printed from there.
+// Amendment 1 (criterion 19): it also adds a station-only user, whose placeholder email must not
+// appear in any users.* output either.
 
 const db: Db = testDb();
 afterAll(() => db.$disconnect());
@@ -73,7 +75,23 @@ describe("no secrets out", () => {
       { appUrl: "http://localhost:3000" },
     );
     responses.invitations = await listInvitations(db, admin);
+    const stationUser = await createStationUser(db, admin, {
+      name: "Luis",
+      roles: ["PICKER"],
+      pin: "739104",
+      idempotencyKey: crypto.randomUUID(),
+    });
+    responses.createStationUser = stationUser;
+    responses.stationUserRoles = await updateUserRoles(db, admin, {
+      id: stationUser.id,
+      roles: ["PICKER", "PACKER"],
+    });
+    responses.stationUserPin = await setPin(db, admin, { id: stationUser.id, pin: "739104" });
+    const stationBadge = await issueBadge(db, admin, { id: stationUser.id });
+    responses.stationUserBadge = { ...stationBadge, code: undefined };
     responses.users = await listUsers(db, admin);
+    responses.usersSearch = await listUsers(db, admin, { search: "station.invalid" });
+    expect(responses.usersSearch).toMatchObject({ users: [], total: 0 });
     responses.stations = await listStations(db, admin);
 
     // The floor: the station device, then the worker on it.
@@ -89,6 +107,7 @@ describe("no secrets out", () => {
     const userRow = await db.user.findUniqueOrThrow({ where: { id: worker.userId } });
     const stationRow = await db.station.findUniqueOrThrow({ where: { id: station.id } });
     const settingsRow = await db.settings.findFirstOrThrow();
+    const stationUserRow = await db.user.findUniqueOrThrow({ where: { id: stationUser.id } });
     const secrets = {
       pin: PIN,
       pinHash: userRow.pinHash ?? fail(),
@@ -97,6 +116,10 @@ describe("no secrets out", () => {
       stationTokenHash: stationRow.tokenHash,
       resendKey: RESEND_KEY,
       resendKeyCiphertext: settingsRow.resendApiKeyEnc ?? fail(),
+      stationPin: "739104",
+      stationPinHash: stationUserRow.pinHash ?? fail(),
+      placeholder: stationUserRow.email,
+      placeholderDomain: "station.invalid",
     };
 
     const audit = await db.auditEvent.findMany();

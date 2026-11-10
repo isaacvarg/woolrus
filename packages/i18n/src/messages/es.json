@@ -1357,7 +1357,8 @@
       "rolesRequired": "Elige al menos un rol.",
       "alreadyExists": "Ya existe una cuenta con este correo.",
       "pinFormat": "El PIN tiene exactamente 6 dígitos.",
-      "pinWeak": "Demasiado fácil de adivinar: evita dígitos repetidos y secuencias como 123456."
+      "pinWeak": "Demasiado fácil de adivinar: evita dígitos repetidos y secuencias como 123456.",
+      "stationOnlyAdmin": "Los usuarios solo de estación no pueden ser administradores: un administrador también debe poder iniciar sesión personalmente."
     },
     "invitations": {
       "emailInvalid": "Introduce un correo electrónico válido.",
@@ -1532,7 +1533,13 @@
     "pagination": "Páginas",
     "previousPage": "Página anterior",
     "nextPage": "Página siguiente",
-    "pageOf": "Página {page} de {pages}"
+    "pageOf": "Página {page} de {pages}",
+    "addStationUser": "Añadir usuario de estación",
+    "addStationUserTitle": "Añadir usuario de estación",
+    "stationOnly": "Solo estación",
+    "stationOnlyHelp": "Para alguien sin correo: desbloquea estaciones con un PIN o una credencial, y no puede iniciar sesión personalmente ni ser administrador.",
+    "stationUserAdded": "{name} ya puede desbloquear cualquier estación con su PIN.",
+    "add": "Añadir"
   },
   "invitations": {
     "tab": "Invitaciones",

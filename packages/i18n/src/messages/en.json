@@ -1357,7 +1357,8 @@
       "rolesRequired": "Choose at least one role.",
       "alreadyExists": "Someone with this email already has an account.",
       "pinFormat": "A PIN is exactly 6 digits.",
-      "pinWeak": "Too easy to guess: avoid repeated digits and runs like 123456."
+      "pinWeak": "Too easy to guess: avoid repeated digits and runs like 123456.",
+      "stationOnlyAdmin": "Station-only users can't be Admins: an Admin must also be able to sign in personally."
     },
     "invitations": {
       "emailInvalid": "Enter a valid email address.",
@@ -1532,7 +1533,13 @@
     "pagination": "Pages",
     "previousPage": "Previous page",
     "nextPage": "Next page",
-    "pageOf": "Page {page} of {pages}"
+    "pageOf": "Page {page} of {pages}",
+    "addStationUser": "Add station user",
+    "addStationUserTitle": "Add station user",
+    "stationOnly": "Station only",
+    "stationOnlyHelp": "For someone with no email: they unlock stations with a PIN or badge, and can't sign in personally or be an Admin.",
+    "stationUserAdded": "{name} can now unlock any station with their PIN.",
+    "add": "Add"
   },
   "invitations": {
     "tab": "Invitations",
