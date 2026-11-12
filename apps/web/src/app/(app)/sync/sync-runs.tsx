@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/fields";
 import { toast } from "@/components/ui/toast";
 import { useErrorMessage, useMessage } from "@/lib/errors";
 import { orpc } from "@/lib/orpc";
+import { randomUUID } from "@/lib/uuid";
 
 /** While a run is going or was just queued, the log refreshes quickly; otherwise now and then. */
 const ACTIVE_REFRESH_MS = 2_000;
@@ -60,8 +61,7 @@ export function SyncRuns() {
     }),
   );
   // One key per click: a retried request can't queue a second run.
-  const request = (target: SyncTarget) =>
-    run.mutate({ idempotencyKey: crypto.randomUUID(), target });
+  const request = (target: SyncTarget) => run.mutate({ idempotencyKey: randomUUID(), target });
 
   const rows = runs.data?.pages.flatMap((p) => p.rows) ?? [];
   const lastWebhookAt = status.data?.lastWebhookAt;

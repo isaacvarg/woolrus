@@ -17,6 +17,7 @@ import { toast } from "@/components/ui/toast";
 import { useErrorMessage } from "@/lib/errors";
 import { client, orpc } from "@/lib/orpc";
 import { playScanSound, useScanner } from "@/lib/scanner";
+import { randomUUID } from "@/lib/uuid";
 import { LineMenu } from "../../[orderId]/line-dialogs";
 import { canLinkOf, ScanBanner, type ScanOutcome } from "../../[orderId]/pick-screen";
 import { SlotLegend } from "../../slot-legend";
@@ -91,7 +92,7 @@ export function BatchScreen({ batchId, userId, canPick }: { batchId: string } & 
       });
     },
   });
-  useScanner((code) => scan.mutate({ code, scanId: crypto.randomUUID() }), canAct);
+  useScanner((code) => scan.mutate({ code, scanId: randomUUID() }), canAct);
 
   const link = useMutation({
     mutationFn: ({ line, code }: { line: PickLine; code: string }) =>

@@ -8,6 +8,7 @@ import { Button, Checkbox, SelectField, TextField } from "@/components/ui/fields
 import { formatAddress } from "@/lib/address";
 import { useErrorMessage } from "@/lib/errors";
 import { orpc } from "@/lib/orpc";
+import { randomUUID } from "@/lib/uuid";
 import { AddressDialog } from "./address-dialog";
 import { GroupsDialog } from "./groups-dialog";
 
@@ -165,7 +166,7 @@ export function AddressesManager({ canManage }: { canManage: boolean }) {
                       className="btn-ghost btn-sm"
                       isPending={duplicate.isPending && duplicate.variables?.id === address.id}
                       onPress={() =>
-                        duplicate.mutate({ idempotencyKey: crypto.randomUUID(), id: address.id })
+                        duplicate.mutate({ idempotencyKey: randomUUID(), id: address.id })
                       }
                     >
                       {t("duplicate")}

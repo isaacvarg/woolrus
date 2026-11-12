@@ -4,6 +4,7 @@ import { useTranslations } from "next-intl";
 import { toast } from "@/components/ui/toast";
 import { useErrorMessage } from "@/lib/errors";
 import { client, orpc } from "@/lib/orpc";
+import { randomUUID } from "@/lib/uuid";
 
 /**
  * Records a print, then opens its PDF in a new tab. The tab is opened on the tap itself (browsers
@@ -19,7 +20,7 @@ export function useLabelPrint({ onPrinted }: { onPrinted?: () => void } = {}) {
       try {
         const { printId } = await client.shipping.createLabelPrint({
           ...input,
-          idempotencyKey: crypto.randomUUID(),
+          idempotencyKey: randomUUID(),
         } as CreateLabelPrintInput);
         if (tab) tab.location.href = `/api/label-prints/${printId}.pdf`;
         else toast.error(t("print.popupBlocked"));

@@ -11,6 +11,7 @@ import { Dialog } from "@/components/ui/dialog";
 import { Button, Checkbox, NumberField, TextAreaField, TextField } from "@/components/ui/fields";
 import { useErrorMessage, useFieldErrors } from "@/lib/errors";
 import { orpc } from "@/lib/orpc";
+import { randomUUID } from "@/lib/uuid";
 import { ParcelSizeFields, type SizeSource, type TypedSize } from "../parcel-size-fields";
 
 type Item = { product: LabParcelProduct; quantity: number };
@@ -51,7 +52,7 @@ export function ParcelDialog({
   const [productSearch, setProductSearch] = useState("");
   const [groupIds, setGroupIds] = useState(new Set(parcel?.groups.map((g) => g.id) ?? []));
   // One key per dialog: a retried submit can't create two parcels.
-  const [idempotencyKey] = useState(() => crypto.randomUUID());
+  const [idempotencyKey] = useState(() => randomUUID());
   const choices = [
     ...groups,
     ...(parcel?.groups.filter((g) => !groups.some((active) => active.id === g.id)) ?? []),

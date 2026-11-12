@@ -10,6 +10,7 @@ import { Button, NumberField, Radio, RadioGroup, Switch, TextField } from "@/com
 import { toast } from "@/components/ui/toast";
 import { useErrorMessage, useFieldErrors } from "@/lib/errors";
 import { client, orpc } from "@/lib/orpc";
+import { randomUUID } from "@/lib/uuid";
 
 type ConditionType = PriorityRuleCondition["type"];
 type Level = 0 | 1 | 2;
@@ -210,7 +211,7 @@ function RuleDialog({ rule }: { rule?: PriorityRule }) {
   const invalidate = useInvalidate();
   const [form, setForm] = useState(() => (rule ? toForm(rule) : emptyForm));
   // One key per dialog opening: a retried submission can't create two rules.
-  const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
+  const [idempotencyKey, setIdempotencyKey] = useState(() => randomUUID());
   const edit = (patch: Partial<FormState>) => setForm((current) => ({ ...current, ...patch }));
 
   const save = useMutation({
@@ -234,7 +235,7 @@ function RuleDialog({ rule }: { rule?: PriorityRule }) {
       onOpenChange={(open) => {
         if (!open) return;
         setForm(rule ? toForm(rule) : emptyForm);
-        setIdempotencyKey(crypto.randomUUID());
+        setIdempotencyKey(randomUUID());
         save.reset();
       }}
     >

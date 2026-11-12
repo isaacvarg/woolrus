@@ -9,6 +9,7 @@ import { Dialog } from "@/components/ui/dialog";
 import { Button, TextField } from "@/components/ui/fields";
 import { useErrorMessage } from "@/lib/errors";
 import { orpc } from "@/lib/orpc";
+import { randomUUID } from "@/lib/uuid";
 
 /** Groups of one kind: add, rename and archive. Archived groups drop out of this list and the filters. */
 export function GroupsDialog({
@@ -25,7 +26,7 @@ export function GroupsDialog({
     orpc.rateLab.groups.queryOptions({ input: { kind, includeArchived: false } }),
   );
   const [name, setName] = useState("");
-  const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
+  const [idempotencyKey, setIdempotencyKey] = useState(() => randomUUID());
   const [renaming, setRenaming] = useState<LabGroup | null>(null);
 
   const refresh = () => queryClient.invalidateQueries({ queryKey: orpc.rateLab.key() });
@@ -33,7 +34,7 @@ export function GroupsDialog({
     orpc.rateLab.createGroup.mutationOptions({
       onSuccess: async () => {
         setName("");
-        setIdempotencyKey(crypto.randomUUID());
+        setIdempotencyKey(randomUUID());
         await refresh();
       },
     }),

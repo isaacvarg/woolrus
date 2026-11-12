@@ -8,6 +8,7 @@ import { Dialog } from "@/components/ui/dialog";
 import { Button, Checkbox } from "@/components/ui/fields";
 import { useErrorMessage } from "@/lib/errors";
 import { orpc } from "@/lib/orpc";
+import { randomUUID } from "@/lib/uuid";
 
 type Key = keyof LabRunSelection;
 
@@ -26,7 +27,7 @@ export function NewRunDialog({ onClose }: { onClose: () => void }) {
     parcelIds: [],
   });
   // One key per dialog: a retried start can't queue two runs.
-  const [idempotencyKey] = useState(() => crypto.randomUUID());
+  const [idempotencyKey] = useState(() => randomUUID());
 
   const active = { includeArchived: false } as const;
   const addressGroups = useQuery(

@@ -9,6 +9,7 @@ import { Button, TextAreaField } from "@/components/ui/fields";
 import { toast } from "@/components/ui/toast";
 import { useErrorMessage } from "@/lib/errors";
 import { client, orpc } from "@/lib/orpc";
+import { randomUUID } from "@/lib/uuid";
 
 /**
  * Sends the ticked Ready orders back to Packing (SPEC-shipping "Repack"): asks for a reason and warns
@@ -28,7 +29,7 @@ export function RepackButton({
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState("");
-  const [attempt, setAttempt] = useState(() => crypto.randomUUID());
+  const [attempt, setAttempt] = useState(() => randomUUID());
 
   const repack = useMutation({
     mutationFn: () =>
@@ -40,7 +41,7 @@ export function RepackButton({
     onSuccess: ({ orders }: RepackResult) => {
       setOpen(false);
       setReason("");
-      setAttempt(crypto.randomUUID());
+      setAttempt(randomUUID());
       const done = orders.filter((o) => o.repacked).length;
       if (done > 0) toast.success(t("repack.repacked", { count: done }));
       for (const o of orders) {
@@ -66,7 +67,7 @@ export function RepackButton({
       onRepacked?.();
     },
     onError: (error) => {
-      setAttempt(crypto.randomUUID());
+      setAttempt(randomUUID());
       toast.error(errorMessage(error));
     },
     onSettled: () => {

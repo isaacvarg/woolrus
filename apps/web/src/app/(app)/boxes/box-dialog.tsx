@@ -9,6 +9,7 @@ import { Dialog } from "@/components/ui/dialog";
 import { Button, NumberField, TextField } from "@/components/ui/fields";
 import { useErrorMessage } from "@/lib/errors";
 import { orpc } from "@/lib/orpc";
+import { randomUUID } from "@/lib/uuid";
 import { WeightInput } from "./weight-input";
 
 const nan = (value: number | null | undefined) => value ?? Number.NaN;
@@ -40,7 +41,7 @@ export function BoxDialog({
   const [maxWeightOz, setMaxWeightOz] = useState(box?.maxWeightOz ?? null);
   const [tareWeightOz, setTareWeightOz] = useState(box?.tareWeightOz ?? null);
   // One key per dialog: a retried submit can't create two boxes.
-  const [idempotencyKey] = useState(() => crypto.randomUUID());
+  const [idempotencyKey] = useState(() => randomUUID());
 
   const save = useMutation({
     mutationFn: () => {

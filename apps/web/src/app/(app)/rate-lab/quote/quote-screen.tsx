@@ -13,6 +13,7 @@ import { Button, Checkbox, TextField } from "@/components/ui/fields";
 import { useErrorMessage, useFieldErrors } from "@/lib/errors";
 import { money } from "@/lib/money";
 import { orpc } from "@/lib/orpc";
+import { randomUUID } from "@/lib/uuid";
 import { AddressFields, addressForm } from "../address-fields";
 import {
   blankSize,
@@ -34,7 +35,7 @@ type TypedParcel = {
 };
 
 const newParcel = (): TypedParcel => ({
-  key: crypto.randomUUID(),
+  key: randomUUID(),
   source: "box",
   boxId: null,
   size: blankSize(),
@@ -358,7 +359,7 @@ function SaveButton({
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
   // One key per button: a retried save can't create two items.
-  const [idempotencyKey] = useState(() => crypto.randomUUID());
+  const [idempotencyKey] = useState(() => randomUUID());
   const mutation = useMutation({
     mutationFn: () => save(title, idempotencyKey),
     onSuccess: async () => {

@@ -11,6 +11,7 @@ import { Menu, MenuItem } from "@/components/ui/menu";
 import { toast } from "@/components/ui/toast";
 import { useErrorMessage, useFieldErrors } from "@/lib/errors";
 import { client, orpc } from "@/lib/orpc";
+import { randomUUID } from "@/lib/uuid";
 
 const roles = Role.options;
 
@@ -135,7 +136,7 @@ function InviteDialog({ onClose }: { onClose: () => void }) {
   const [email, setEmail] = useState("");
   const [selected, setSelected] = useState(new Set<Role>());
   // One key per dialog: a retried submit (flaky Wi-Fi) can't invite twice.
-  const [idempotencyKey] = useState(() => crypto.randomUUID());
+  const [idempotencyKey] = useState(() => randomUUID());
   const create = useMutation({
     mutationFn: () => client.invitations.create({ idempotencyKey, email, roles: [...selected] }),
     onSuccess: (invitation) => {

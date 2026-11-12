@@ -14,6 +14,7 @@ import { nextCookies } from "better-auth/next-js";
 import { bearer } from "better-auth/plugins/bearer";
 import { magicLink } from "better-auth/plugins/magic-link";
 import { after } from "next/server";
+import { lanDevHosts } from "@/lib/dev-hosts";
 import { env } from "./env";
 
 const log = createLogger({ module: "auth" });
@@ -36,9 +37,24 @@ function pageLocale(headers: Headers | undefined): Locale {
   return isLocale(cookie) ? cookie : defaultLocale;
 }
 
+/**
+ * In development, also answer to LAN hosts (a tablet on the network): their requests pass the
+ * origin check and their magic links point back at the host they came from. Elsewhere, only
+ * BETTER_AUTH_URL.
+ */
+function baseURL() {
+  const configured = env().BETTER_AUTH_URL;
+  if (env().NODE_ENV !== "development") return configured;
+  return {
+    allowedHosts: [new URL(configured).host, ...lanDevHosts.map((host) => `${host}:*`)],
+    protocol: "http" as const,
+    fallback: configured,
+  };
+}
+
 function createAuth() {
   return betterAuth({
-    baseURL: env().BETTER_AUTH_URL,
+    baseURL: baseURL(),
     secret: env().BETTER_AUTH_SECRET,
     database: prismaAdapter(db, { provider: "postgresql" }),
     advanced: {

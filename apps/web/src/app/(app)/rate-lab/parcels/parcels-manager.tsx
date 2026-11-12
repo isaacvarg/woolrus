@@ -8,6 +8,7 @@ import { useDeferredValue, useState } from "react";
 import { Button, Checkbox, SelectField, TextField } from "@/components/ui/fields";
 import { useErrorMessage } from "@/lib/errors";
 import { orpc } from "@/lib/orpc";
+import { randomUUID } from "@/lib/uuid";
 import { GroupsDialog } from "../addresses/groups-dialog";
 import { ParcelDialog } from "./parcel-dialog";
 
@@ -181,7 +182,7 @@ export function ParcelsManager({ canManage }: { canManage: boolean }) {
                       className="btn-ghost btn-sm"
                       isPending={duplicate.isPending && duplicate.variables?.id === parcel.id}
                       onPress={() =>
-                        duplicate.mutate({ idempotencyKey: crypto.randomUUID(), id: parcel.id })
+                        duplicate.mutate({ idempotencyKey: randomUUID(), id: parcel.id })
                       }
                     >
                       {t("duplicate")}

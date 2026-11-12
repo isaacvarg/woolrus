@@ -31,6 +31,7 @@ import { toast } from "@/components/ui/toast";
 import { useErrorMessage } from "@/lib/errors";
 import { client, orpc } from "@/lib/orpc";
 import { playScanSound, useScanner } from "@/lib/scanner";
+import { randomUUID } from "@/lib/uuid";
 import { ScanBanner, type ScanOutcome } from "../../pick/[orderId]/pick-screen";
 import { BoxDialog } from "./box-dialog";
 import { type LineCandidate, LotDialog, WhichLineDialog } from "./lot-dialogs";
@@ -294,7 +295,7 @@ function PackLayout({
     }
     // One scan field: a lot label goes to the lot, anything else packs a product (SPEC-lumexia).
     const write = isLotCode(code) ? scanLot : scan;
-    write.mutate({ pkg: selected, code, scanId: crypto.randomUUID() });
+    write.mutate({ pkg: selected, code, scanId: randomUUID() });
   }, canPack);
 
   const move = useMutation({
@@ -575,7 +576,7 @@ function PackLayout({
           suggestion={view.suggestion}
           weightDisplay={weightDisplay}
           isPending={add.isPending}
-          onChoose={(box) => add.mutate({ box, idempotencyKey: crypto.randomUUID() })}
+          onChoose={(box) => add.mutate({ box, idempotencyKey: randomUUID() })}
           onClose={closeDialog}
         />
       )}
