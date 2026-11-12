@@ -19,28 +19,46 @@ export function isTypingTarget(target: unknown): boolean {
   return typeof closest === "function" && closest.call(target, typingSelector) != null;
 }
 
-/** Collects keys into codes. `handle` returns true when the key ended a scan and should go no further. */
-export function createScanBuffer(onScan: (code: string) => void) {
+/**
+ * The burst rule alone, wherever the keys come from. `handle` returns the code when this key is
+ * the Enter that ends a scan, else null. A field that may receive a scan (the approval dialog's
+ * reason) uses it directly; `createScanBuffer` adds the page-level rule of leaving fields alone.
+ */
+export function createScanBurst() {
   let buffer = "";
   let last = Number.NEGATIVE_INFINITY;
   return {
-    handle({ key, time, target }: ScanKey): boolean {
-      if (isTypingTarget(target)) {
-        buffer = "";
-        return false;
-      }
+    handle({ key, time }: Omit<ScanKey, "target">): string | null {
       if (key === "Enter") {
         const code = time - last <= MAX_GAP_MS ? buffer : "";
         buffer = "";
-        if (code.length < MIN_LENGTH) return false;
-        onScan(code);
-        return true;
+        return code.length < MIN_LENGTH ? null : code;
       }
       // Shift (scanners hold it for capitals) and other named keys don't break a burst.
-      if (key.length !== 1) return false;
+      if (key.length !== 1) return null;
       buffer = time - last > MAX_GAP_MS ? key : buffer + key;
       last = time;
-      return false;
+      return null;
+    },
+    reset() {
+      buffer = "";
+    },
+  };
+}
+
+/** Collects keys into codes. `handle` returns true when the key ended a scan and should go no further. */
+export function createScanBuffer(onScan: (code: string) => void) {
+  const burst = createScanBurst();
+  return {
+    handle({ key, time, target }: ScanKey): boolean {
+      if (isTypingTarget(target)) {
+        burst.reset();
+        return false;
+      }
+      const code = burst.handle({ key, time });
+      if (code === null) return false;
+      onScan(code);
+      return true;
     },
   };
 }

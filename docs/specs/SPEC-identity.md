@@ -221,7 +221,7 @@ that would leave no active Admin. An admin can't deactivate themselves or remove
 ### Approvals (A2) (`packages/core/src/identity/approvals.ts`)
 
 An action that may need approval takes an optional `approval: { credential, reason }` in its input, where
-`credential` is `{ userId, pin }` or `{ badgeCode }` (contracts: `approvalInput`, reusing the PIN rules). Nothing is
+`credential` is `{ userId, pin }` or `{ badgeCode }` (contracts: `ApprovalInput`, reusing the lock screen's credential shapes). Nothing is
 stored before the action runs, so there is no "approved but not used yet" state to replay or let go stale (decision 16).
 
 Two core functions, used by the action that needs approval:
@@ -256,8 +256,8 @@ supplies, such as the list of tripped checks. An approval through `/api/v1` work
 the request body.
 
 **Approver tiles:** `listApprovers(db, actor, { permission })` (any signed-in or station actor) returns the active users who
-hold `permission` and have a PIN, excluding the actor, sorted by name. It returns name, initials and `hasPin`
-only, the same exposure as the station lock tiles. A badge works for anyone who has one, whether or not they
+hold `permission` and have a PIN, excluding the actor, sorted by name. It returns name and initials only
+(every tile has a PIN by construction), the same exposure as the station lock tiles. A badge works for anyone who has one, whether or not they
 appear on a tile.
 
 **No PIN, no approving (decision 19):** a personal session alone never approves. An Admin at a desktop sets a PIN
@@ -381,7 +381,8 @@ badge code once. `register` sets the cookie and never returns the token in the b
   The dialog contains:
   - approver tiles and a PIN pad, laid out like the lock screen and reusing its PIN pad component;
   - an always-focused badge input;
-  - a reason field.
+  - a reason field. A scan typed into it (the scanner's fast burst ending in Enter, `lib/scanner.ts`) is taken
+    out of the text and used as the badge, so a badge code is never saved as a reason.
 
   On submit it calls the caller's `onApprove({ credential, reason })`, which sends the action. It shows the
   action's error in place (bad PIN, locked, not permitted) and keeps the reason the user typed. It closes only on
@@ -527,7 +528,8 @@ Original scope: `packages/core/src/identity/**` (+ tests), `packages/core/src/ad
 27. **Tiles:** `approvers.list` returns active users with the permission and a PIN, without the caller, as name and
     initials only. Added to the no-secrets test, along with the `Approval` row and its audit.
 28. **Dialog (component test):** a bad PIN shows the error and keeps the reason; success calls `onApprove` once
-    with the credential and reason; the badge input is focused on open.
+    with the credential and reason; the badge input is focused on open; a scan into the reason field approves
+    with the badge and leaves the code out of the reason.
 
 ## Decisions (2026-10-20)
 

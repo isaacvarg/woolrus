@@ -44,7 +44,12 @@ function open(onApprove: (approval: unknown) => Promise<unknown>) {
       </QueryClientProvider>
     </NextIntlClientProvider>,
   );
-  return { onOpenChange, user: userEvent.setup() };
+  // A person types slower than a scanner's 50 ms burst; `scanner` types the way a HID scanner does.
+  return {
+    onOpenChange,
+    user: userEvent.setup({ delay: 60 }),
+    scanner: userEvent.setup({ delay: null }),
+  };
 }
 
 const badPin = () =>
@@ -124,6 +129,21 @@ describe("ApprovalDialog (criterion 28)", () => {
     expect(onApprove).toHaveBeenCalledWith({
       credential: { badgeCode: "WRB-MARIA" },
       reason: "checked",
+    });
+  });
+
+  it("a scan into the reason field approves with the badge and keeps it out of the reason", async () => {
+    const onApprove = vi.fn().mockResolvedValue({ ok: true });
+    const { onOpenChange, user, scanner } = open(onApprove);
+
+    await user.type(screen.getByLabelText("Reason"), "rate checked");
+    await scanner.keyboard("WRB-MARIA{Enter}"); // The reason field still has focus.
+
+    await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
+    expect(onApprove).toHaveBeenCalledTimes(1);
+    expect(onApprove).toHaveBeenCalledWith({
+      credential: { badgeCode: "WRB-MARIA" },
+      reason: "rate checked",
     });
   });
 });

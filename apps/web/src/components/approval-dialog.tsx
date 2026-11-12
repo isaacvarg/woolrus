@@ -10,6 +10,7 @@ import { PIN_LENGTH, PinPad } from "@/components/pin-pad";
 import { Button } from "@/components/ui/fields";
 import { useErrorMessage } from "@/lib/errors";
 import { orpc } from "@/lib/orpc";
+import { createScanBurst } from "@/lib/scanner";
 
 const REASON_MAX = 200;
 
@@ -71,6 +72,9 @@ function ApprovalForm({
   // A PIN or badge given before the reason waits here until the reason is in.
   const [held, setHeld] = useState<ApprovalCredential | null>(null);
   const [pending, setPending] = useState(false);
+  // A scanner types into whatever has focus, the reason field included: a burst there is a badge,
+  // taken out of the reason so the code is never saved as text.
+  const [reasonScan] = useState(createScanBurst);
   const badgeInput = useRef<HTMLInputElement>(null);
   const pinInput = useRef<HTMLInputElement>(null);
   const reasonInput = useRef<HTMLInputElement>(null);
@@ -87,8 +91,8 @@ function ApprovalForm({
     setError(null);
   };
 
-  const submit = async (credential: ApprovalCredential) => {
-    const trimmed = reason.trim();
+  const submit = async (credential: ApprovalCredential, reasonText = reason) => {
+    const trimmed = reasonText.trim();
     if (trimmed.length < 1 || trimmed.length > REASON_MAX) {
       setHeld(credential);
       setError(tk("errors.approval.reasonRequired"));
@@ -149,6 +153,17 @@ function ApprovalForm({
           maxLength={REASON_MAX}
           disabled={pending}
           onChange={(e) => setReason(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.ctrlKey || e.altKey || e.metaKey) return;
+            const code = reasonScan.handle({ key: e.key, time: e.timeStamp });
+            if (code === null) return;
+            e.preventDefault(); // The scanner's Enter mustn't also submit the reason form.
+            const value = e.currentTarget.value;
+            const at = value.lastIndexOf(code);
+            const rest = at < 0 ? value : value.slice(0, at) + value.slice(at + code.length);
+            setReason(rest);
+            void submit({ badgeCode: code }, rest);
+          }}
           className="input input-lg w-full"
         />
         <p className="label whitespace-normal">{t("reasonHelp")}</p>
