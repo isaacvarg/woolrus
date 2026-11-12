@@ -4,7 +4,27 @@
 `picking` (code matching, the finish options it hands over to packing), `notes` (package notes in the drawer) ·
 **Used by:** `carriers` (reads package box, dimensions and weight; adds the rate fetch on Packing → QA), `qa`
 (verifies `PackageItem`s), `exceptions` (packaging issues on a package), `lumexia` (lot per `PackageItem`) ·
-**State:** done
+**State:** done; amendment 1 (packing checks, approved 2026-11-12) is **planned** (tickets #181–#186) · **Issue:**
+[#24](https://github.com/isaacvarg/woolrus/issues/24); amendment 1:
+[#178](https://github.com/isaacvarg/woolrus/issues/178)
+
+> **Amendment 1 (approved 2026-11-12): packing checks.** The team's concern: a packer physically uses one box but
+> selects another in the app, so the label declares the wrong size and UPS bills an adjustment.
+>
+> - **The checks.** Each package is checked against a set of rules (over the box's max weight, under its new
+>   minimum, off the estimate, weighed before the contents changed, items with dimensions that don't fit, box
+>   chosen without scanning its barcode, custom dimensions). Each check is set to off, warn or block.
+> - **Trips.** A check that fails is a **trip**. Trips show live on the pack screen and are saved when packing
+>   completes.
+> - **Blocking.** A blocking trip stops Complete packing until a QA or Admin user approves it (`identity` A2).
+> - **At QA.** A package with trips is a yellow card on the QA screen. Each trip must be acknowledged, and QA can
+>   be required to confirm the physical box, before a label is bought.
+> - **Box barcodes.** Each box gets the barcode posted at its shelf area, and scanning it adds a package with that
+>   box.
+>
+> **Dependencies.** This amendment depends on `identity` A2 and `settings`. It edits `workflow`'s gates and `qa`'s
+> screen and gate, the way the original spec edited the packed gate. Everything marked *(A1)* below belongs to this
+> amendment.
 
 Project-wide commands, structure, code style, testing levels and boundaries are in [`../../SPEC.md`](../../SPEC.md);
 this spec only adds what is specific to `packing`.
@@ -43,6 +63,22 @@ a reason (FR-PACK-09). Admins keep the box sizes the packers choose from.
 7. I open the drawer to see the order basics, shipping address, who picked what, and every note on the order.
 8. As an admin, on **Boxes** I add, edit, archive, restore and delete box sizes, with inner and outer dimensions,
    tare weight and max weight. A box any package has used can only be archived, and its dimensions are locked.
+9. *(A1)* As a packer, I grab two Medium boxes and one Large and scan the barcode at each box's shelf. Each scan adds
+   a package with that box, so I have Packages 1–3 before I've scanned a single item.
+10. *(A1)* As a packer, I put a 5-gallon pail into Package 1, a Small box. Its card turns amber: "Pail 5 gal doesn't
+    fit Small box (12×10×8)". I change the box to Large and the warning goes away. Had the check been set to block,
+    the card would say "Needs approval to complete" instead.
+11. *(A1)* As a packer with a blocking trip I can't fix, I tap **Complete packing**. The approval dialog lists the
+    trips ("Package 2: 3 lb 2 oz is under Large box's minimum of 4 lb"). Maria from QA enters her PIN with a reason,
+    and the order goes to QA.
+12. *(A1)* As QA, package 2's card is yellow and lists its trips: who approved it and why, or the packer's
+    overweight reason. I check the box on the bench, tap **Medium box (14×12×10): confirmed**, which also
+    acknowledges its box trips, and acknowledge the weight trip. Until then **Buy labels** stays disabled, and the
+    QA queue row shows "⚠ 2 checks".
+13. *(A1)* As an admin, on **Settings → Packing checks** I set each check to off, warn or block, the estimate
+    threshold, and whether QA confirms boxes. Next to each check I see its trips and approvals for the last 30 days,
+    so I can tell when a check is ready to be set to block.
+14. *(A1)* As an admin, on **Boxes** I give a box a minimum weight and the barcode posted at its shelf.
 
 ## Scope
 
@@ -56,8 +92,21 @@ a reason (FR-PACK-09). Admins keep the box sizes the packers choose from.
   and tare in the form.
 - UI: the pack screen, the order drawer, packages on the order detail page, and the full Boxes admin page.
 - Schema: one unique index on `package_items` and a re-weigh flag on `packages`. Listed under *Schema additions*.
+- *(A1)* The checks below (pure), live on the pack screen, and saved as `PackageCheckTrip` rows when an order leaves
+  Packing for QA.
+- *(A1)* A mode per check plus two more settings, the estimate threshold and QA box confirmation, on a new
+  settings page with 30-day trip counts.
+- *(A1)* Blocking at the **packed** gate, which an approval (`identity` A2) lets through.
+- *(A1)* QA: yellow package cards, acknowledging trips, box confirmation, two new **verified** gate conditions, and
+  a trip badge in the QA queue.
+- *(A1)* Boxes gain a minimum weight and a barcode. Scanning a box barcode on the pack screen adds a package.
 
 **Out (owned elsewhere or later):**
+- *(A1)* A "bigger box than suggested" check. It needs dimensions on every item to be trusted, and over-boxing is
+  a postage cost rather than a carrier adjustment (decision 15).
+- *(A1)* Per-box or per-product check modes. Modes are warehouse-wide (decision 10).
+- *(A1)* Reports beyond the 30-day counts (`reporting`). Editing product dimensions in Woolrus: they come from
+  WooCommerce, as before (assumption 4).
 - Reading a scale (the rest of FR-PACK-10). Weight is typed (decision 1). A keyboard-wedge scale that types its
   reading works in the field as it is; WebHID or Web Bluetooth drivers wait until the station hardware is chosen.
 - Fetching rates when packing completes (FR-PACK-07): `carriers` adds that job to Packing → QA (decision 4).
@@ -107,18 +156,29 @@ bad rate (SRS §8 #4), but forcing a re-weigh is wrong when the packer swapped a
 app to match what's really in the box. So when `packUnits`, `unpackUnits`, `packRemaining`, `scanIntoPackage` or
 `setPackageBox` change a package that has a weight, the weight is **kept** and `Package.weightStale` is set. The
 package card shows "Contents changed since weighed: re-weigh or confirm" with a **Weight still right** button
-(`setWeight` with the same value). It doesn't block the gate.
+(`setWeight` with the same value). It doesn't block the gate. *(A1)* It now does when the **re-weigh** check is
+set to block (decision 13).
 
 If `completePack` moves an order with a package still flagged, it writes one internal note on each such package in
 the same transaction (`notes`' `createTextNote`, extended to take a `packageId`): "Contents changed after weighing;
 weight 2 lb 7 oz not re-checked", so QA sees it on the package. A package weighed or confirmed after its last
-change gets no note.
+change gets no note. *(A1)* The note is written only while the **re-weigh** check is off. Otherwise the trip
+carries the same message to QA, and a note as well would say it twice.
 
 **Weight warning (FR-PACK-10).** When a package's estimate exists (below) and the typed weight differs from it by
 more than `WEIGHT_WARNING_RATIO` (25%, a constant), the card shows a non-blocking warning: "2 lb 7 oz is 40% off
 the estimate of 1 lb 12 oz". With no estimate, because some product in the box has no weight in the store, no
 warning is shown, so a store that doesn't keep product weights never sees it. The warning is computed in the
-view; nothing is stored.
+view; nothing is stored. *(A1)* This warning becomes the **off the estimate** check. The threshold moves from the
+constant to `Settings.packCheckWeightOffPercent`, and the mode decides whether the warning shows and whether it
+blocks.
+
+**Overweight *(A1)*.** What happens above the box's max depends on the **over max** check's mode, which can be
+warn or block but not off (decision 11):
+- **Warn:** as today. `setWeight` refuses without a reason, and the reason is saved and shown on the trip.
+- **Block:** `setWeight` saves the weight without asking for a reason, because the packer's own reason isn't enough
+  here. The trip blocks Complete packing until someone approves it, and the approval's reason is the one on record.
+  `weightOverrideReason` stays null.
 
 `packUnits` / `unpackUnits` add or subtract, so the client sends them only after the previous one for the same
 line is confirmed (the card stays optimistic; a queue per line keeps the order). `scanIntoPackage` takes a
@@ -130,6 +190,80 @@ line is confirmed (the card stays optimistic; a queue per line keeps the order).
 `unmet("packageOverweight", { package, maxOz })`. It can only happen if the box's max is lowered or the box is
 changed under an existing weight, but the gate is the rule, so it checks it. `GateSnapshot` packages gain
 `maxWeightOz` and `hasOverrideReason`.
+
+*(A1)* The gate changes as follows:
+
+- **`packageOverweight`** applies only while **over max** is on warn.
+- **Every blocking trip** adds `unmet("packCheckBlocked", { package, check })` to **packed**, unless the
+  transition carries an approval. `completePacking` (packing's `completePack` and `workflow`'s
+  `/api/v1/…/complete-packing` alike) takes an optional `approval` (`identity` A2's `approvalInput`).
+  - When the approval is present, `verifyApprover(…, { permission: "packCheck.approve" })` runs before the
+    transaction.
+  - The transition then evaluates the gate with `approved: true`, which drops `packCheckBlocked`. Every other
+    condition still applies.
+  - It then calls `recordApproval` with kind `PACKING_CHECKS`, entity `Order`, and `details` = the blocking trips.
+  - An approval sent when nothing blocks is ignored. No row is written, so a careless client can't create
+    approvals.
+- **`GateSnapshot` packages gain `trips`**, the live evaluation below with the current settings, so the gate,
+  the pack view and the saved rows share one function.
+- **`verified` gains two conditions per package**, read from the saved rows:
+  - `unmet("packCheckUnacknowledged", { package, count })`;
+  - `unmet("packageBoxUnconfirmed", { package })` when box confirmation is required for it.
+
+  `qa`'s `purchaseConditions` already derives from `verified`, so label purchase is refused on the server too.
+
+### Packing checks *(A1)* (`packages/core/src/packing/checks.ts`, pure)
+
+`evaluateChecks(pkg, units, settings)` → `Trip[]`, where `Trip = { check, mode: "WARN" | "BLOCK", details }`.
+Checks set to off are never evaluated. A discarded package is never checked.
+
+| Check (`PackCheck`) | Trips when | `details` | Modes |
+|---|---|---|---|
+| `OVER_MAX` | the package has a box with a max, and weight > max | `{ weightOz, maxOz, reason? }` | warn, block |
+| `UNDER_MIN` | the package has a box with a min, and weight < min | `{ weightOz, minOz }` | off, warn, block |
+| `WEIGHT_OFF` | an estimate exists and the weight is more than `packCheckWeightOffPercent` off it | `{ weightOz, estimateOz, percent }` | off, warn, block |
+| `WEIGHT_STALE` | `weightStale` | `{ weightOz }` | off, warn, block |
+| `NO_FIT` | at least one unit has all three dimensions, and those units fail the fit rule against the box's inner dimensions (or the custom dimensions) | `{ boxName?, items: [names] }` | off, warn, block |
+| `BOX_NOT_SCANNED` | the package has a box and `boxScanned` is false | `{ boxName }` | off, warn, block |
+| `CUSTOM_DIMENSIONS` | the package has custom dimensions | `{ lengthIn, widthIn, heightIn }` | off, warn, block |
+
+Notes on the checks:
+- **Fit rule:** the fit test is pulled out of `suggestBox` into `fitsIn(units, innerDims)` (each unit's sorted
+  dimensions ≤ the sorted inner ones, Σ volume ≤ inner volume × `FILL_FACTOR`). The suggestion and `NO_FIT` then
+  can't disagree.
+- **Partial dimensions:** units without dimensions take no space, so one pail with dimensions in a box of unmeasured
+  jars is still checked (decision 12). Weight isn't part of `NO_FIT`; `OVER_MAX` covers it.
+- **Unweighed packages:** a package with no weight trips nothing that needs a weight. The gate's `packageNoWeight`
+  already stops it.
+- **Custom-size packages:** they skip `OVER_MAX` and `UNDER_MIN`, since there's no box to read limits from
+  (assumption 2). They are fit-checked against the typed dimensions, and trip `CUSTOM_DIMENSIONS` (decision 14).
+
+**Live:** `getPackView` returns each package's `trips`. `weightWarning` is removed, since `WEIGHT_OFF` replaces it.
+The pack view also returns `blocking: boolean` for the footer. Trips are recalculated on every package write's
+response, and nothing is stored while the order is in Packing.
+
+**Saved (`PackageCheckTrip`):**
+- **When they're saved:** in the same transaction that moves an order from `PACKING` to `QA`, by `completePacking`
+  or by an Admin's `forceStatus` (decision 16). Each WARN and BLOCK trip becomes one row: package, check, mode,
+  `details`, and the transition's `approvalId` on blocking rows.
+- **Force-status:** it skips the gate and brings no approval, so its blocking rows have no `approvalId`. QA sees
+  "moved by force-status" with the force-status reason instead (read from the stage event).
+- **Clearing them:** a transition into `PACKING` (repack, or `forceStatus` back) deletes the order's trip rows and
+  clears every package's box confirmation in the same transaction, the way `repackOne` already clears QA
+  verification (decision 17). `Approval` rows stay as history.
+- **Settings changes:** trips in QA are never re-evaluated. Changing a mode affects orders still in Packing only.
+  Box confirmation is the exception: it is read live (below).
+
+**Box barcodes:**
+- **In box admin:** a box's optional `barcode` is unique among boxes. It's refused when it normalizes (with
+  `picking`'s code normalization) to a product's or variation's barcode or SKU, or looks like a lot code
+  (`isLotCode`) (decision 18). It's editable while the box is in use, unlike its dimensions.
+- **On the pack screen:** the scanner handler checks codes in this order: lot code, then box barcode (the view
+  carries the active boxes' barcodes), then product. A box code calls `addPackage` with `box: { barcode }`. Core
+  resolves the barcode itself and sets `boxScanned: true`, so a client can't mark a tapped box as scanned.
+- **What a scan does:** every box scan adds a new package, and no package needs to be selected (decision 9). An
+  archived box's barcode is refused with `errors.packing.boxArchived`. An unknown code goes on to the product match
+  as today. Changing an existing package's box stays a tap (`setPackageBox`, `boxScanned: false`).
 
 ### Box suggestion (`packages/core/src/packing/suggest.ts`, pure)
 
@@ -171,6 +305,51 @@ the same transaction:
 A gate failure moves nothing and returns the unmet list. `picking`'s **Done, open in Packing** now opens
 `/pack/[orderId]` instead of the order detail page.
 
+*(A1)* `completePack` takes the optional `approval` and passes it to `completePacking` (see *Gate change*). A
+refused approval (bad PIN, locked, not permitted, self) moves nothing. The wrong-PIN count still goes up, because
+`verifyApprover` commits on its own.
+
+### QA side *(A1)* (`packages/core/src/qa/`, `apps/web/src/app/(app)/qa/[orderId]/`)
+
+- **The QA view:** `getQaView` packages gain:
+  - `trips`: the saved rows, with an approval summary (approver name, reason, time) or the packer's overweight
+    reason;
+  - `boxConfirmRequired` and `boxConfirmed` (by whom and when).
+- **When box confirmation is required:** `Settings.qaBoxConfirm` is `OFF` (never), `WHEN_TRIPPED` (packages with
+  any trip, the default) or `ALWAYS` (every package). It's read live, so changing it affects orders already in QA.
+- **`acknowledgeCheck({ tripId })`** (`order.qa`, `lockForQa`: status QA and the actor's live claim) sets
+  `acknowledgedAt/ById` and audits `packCheckTrip.acknowledge`. It's idempotent, and there's no un-acknowledge.
+- **`confirmBox({ packageId })`** (same guard) sets `Package.boxConfirmedAt/ById`, acknowledges that package's
+  box-related trips (`NO_FIT`, `UNDER_MIN`, `OVER_MAX`, `BOX_NOT_SCANNED`, `CUSTOM_DIMENSIONS`) in the same
+  transaction, and audits `package.confirmBox`. It's allowed even when not required. The weight trips (`WEIGHT_OFF`,
+  `WEIGHT_STALE`) still need their own acknowledgement (decision 19).
+- **The QA screen:** a package card with any trip gets the warning style (daisyUI `border-warning` +
+  `bg-warning/10`) and a ⚠ icon with "N checks", so it's not shown by colour alone. Each trip is listed with its
+  message, details and approval, with an **Acknowledge** button or "Acknowledged by …". When required, a
+  **Confirm box** row shows the box's name and inner dimensions large enough to compare at a glance. **Buy labels**
+  shows the new unmet conditions with the others.
+- **The QA queue:** `listQueue` rows gain `packCheckTrips` (unacknowledged trips on the order).
+  `queue-table.tsx` shows "⚠ N checks" next to the issue and void badges, on the QA queue only.
+
+### Settings *(A1)*
+
+New columns on `Settings`, edited on **Settings → Packing checks** (`settings.manage`, a sub-page like
+`settings/shipping/cost-check`) and returned in `PublicSettings` so the pack and QA screens can read them:
+
+| Setting | Values | Default |
+|---|---|---|
+| `packCheckOverMax` | `WARN`, `BLOCK` (`OFF` refused: `errors.settings.checkCannotBeOff`) | `WARN` |
+| `packCheckUnderMin`, `packCheckWeightOff`, `packCheckWeightStale`, `packCheckNoFit`, `packCheckCustomDimensions` | `OFF`, `WARN`, `BLOCK` | `WARN` |
+| `packCheckBoxNotScanned` | `OFF`, `WARN`, `BLOCK` | `OFF` (until box barcodes are entered) |
+| `packCheckWeightOffPercent` | whole percent, 5–100 | 25 |
+| `qaBoxConfirm` | `OFF`, `WHEN_TRIPPED`, `ALWAYS` | `WHEN_TRIPPED` |
+
+**30-day counts:** `packChecks.stats` (`settings.manage`) returns, per check, the trips saved in the last 30 days
+and how many of them were approved, from `PackageCheckTrip.createdAt` (decision 20). The page shows these next to
+each mode.
+
+**Permission:** `packCheck.approve` is new, given to QA (and to Admin, who has every permission).
+
 ### Box admin (`packages/core/src/boxes/service.ts`)
 
 | Function | Rule |
@@ -182,6 +361,12 @@ A gate failure moves nothing and returns the unmet list. `picking`'s **Done, ope
 | `deleteBox` | `box.manage`. Only when unused (`errors.box.inUse`: "archive it instead"). Audited. |
 
 `Box` DTO gains `outerLengthIn/WidthIn/HeightIn` (nullable) and `inUse`.
+
+*(A1)* `createBox` / `updateBox` take optional `minWeightOz` and `barcode`:
+- `minWeightOz` must be below `maxWeightOz` when both are set (`errors.box.minNotBelowMax`).
+- The barcode rules are under *Box barcodes* (`errors.box.barcodeTaken`, `errors.box.barcodeIsProduct`).
+
+Both are always editable, and the DTO returns both.
 
 ### API (oRPC, `packages/contracts/src/packing.ts`, `boxes.ts`)
 
@@ -200,6 +385,17 @@ A gate failure moves nothing and returns the unmet list. `picking`'s **Done, ope
 
 Package operations return the updated pack view's packages and lines (one round trip refreshes both sides).
 
+*(A1)*
+
+| Procedure | Route / change |
+|---|---|
+| `packing.addPackage` | `box` also accepts `{ barcode }` |
+| `packing.complete`, `orders.completePacking` | input gains optional `approval` |
+| `qa.acknowledgeCheck` | `POST /pack-check-trips/{tripId}/acknowledge` |
+| `qa.confirmBox` | `POST /packages/{packageId}/confirm-box` |
+| `packChecks.stats` | `GET /settings/packing-checks/stats` |
+| `settings.update` / `settings.get` | the new columns |
+
 ### Schema additions (approved with this spec)
 
 One migration, no new tables:
@@ -210,6 +406,49 @@ One migration, no new tables:
 
 The init migration's hand-written constraints (positive quantities and dimensions) already cover the rest and are
 untouched. No new permissions (`order.pack`, `box.read`, `box.manage` exist) and no new settings.
+
+*(A1)* One migration (ask-first, listed for approval), after `identity` A2's:
+
+```prisma
+enum PackCheck { OVER_MAX UNDER_MIN WEIGHT_OFF WEIGHT_STALE NO_FIT BOX_NOT_SCANNED CUSTOM_DIMENSIONS }
+enum PackCheckMode { OFF WARN BLOCK }
+enum QaBoxConfirm { OFF WHEN_TRIPPED ALWAYS }
+
+// Box
+minWeightOz Decimal? @map("min_weight_oz") @db.Decimal(10, 2)
+barcode     String?  @unique
+
+// Package
+boxScanned       Boolean   @default(false) @map("box_scanned")
+boxConfirmedAt   DateTime? @map("box_confirmed_at") @db.Timestamptz(3)
+boxConfirmedById String?   @map("box_confirmed_by_id") @db.Uuid
+
+/// A check that tripped on a package when its order left Packing (SPEC-packing A1).
+model PackageCheckTrip {
+  id                String        @id @default(uuid(7)) @db.Uuid
+  packageId         String        @map("package_id") @db.Uuid
+  check             PackCheck
+  mode              PackCheckMode // WARN or BLOCK (hand-written CHECK)
+  details           Json          @default("{}")
+  approvalId        String?       @map("approval_id") @db.Uuid
+  acknowledgedAt    DateTime?     @map("acknowledged_at") @db.Timestamptz(3)
+  acknowledgedById  String?       @map("acknowledged_by_id") @db.Uuid
+  createdAt         DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+  // relations: Package (cascade), Approval, User
+  @@unique([packageId, check])
+  @@index([createdAt])
+  @@map("package_check_trips")
+}
+
+// Settings: the columns in *Settings* above (enums, with their defaults)
+```
+
+Hand-written constraints:
+- `CHECK (mode <> 'OFF')` on trips;
+- `CHECK (min_weight_oz IS NULL OR max_weight_oz IS NULL OR min_weight_oz < max_weight_oz)` on boxes;
+- `CHECK (pack_check_over_max <> 'OFF')` and `CHECK (pack_check_weight_off_percent BETWEEN 5 AND 100)` on settings.
+
+New permission `packCheck.approve` (QA).
 
 ### UI (`apps/web/src/app/(app)/`)
 
@@ -232,6 +471,22 @@ untouched. No new permissions (`order.pack`, `box.read`, `box.manage` exist) and
   reason when in use), Archive/Restore, Delete (only when unused). Weights shown and entered in the display unit.
 - The pack screen follows the order's SSE events: a takeover or hold elsewhere shows a banner and disables editing.
   All strings in `en` and `es`; toasts for results (NFR-UX-04).
+- *(A1)* **Pack screen:**
+  - **Package cards:** each card lists its live trips. A warn trip is amber with a ⚠ icon. A block trip is red
+    with "Needs approval to complete". The weight warning is now the `WEIGHT_OFF` trip, and the overweight reason
+    dialog appears only in warn mode.
+  - **Box scans:** a box barcode scan announces "Package 3 added: Medium box" through the scan banner and
+    `aria-live`.
+  - **Footer:** with blocking trips and an otherwise empty unmet list, **Done** and **Done, next order** read
+    "… (needs approval)" and open `identity`'s `ApprovalDialog`. It lists the blocking trips and loads tiles for
+    `packCheck.approve`. On approve it sends `completePack` with the approval.
+- *(A1)* **QA screen and queue:** as in *QA side*.
+- *(A1)* **Settings → Packing checks:**
+  - a mode select per check, with its 30-day trips and approvals beside it;
+  - the threshold field;
+  - QA box confirmation;
+  - a one-line explanation of each check.
+- *(A1)* **Boxes:** the form gains min weight (display unit) and barcode, and the table shows both.
 
 ### Dev data
 
@@ -240,7 +495,18 @@ whose items need two boxes, and a line of 6. Seeded boxes gain tare and one gain
 
 ### Files expected to change
 
-`packages/core/src/packing/{service,suggest,queries}.ts` (+ tests), `packages/core/src/boxes/service.ts` (+ test),
+*(A1)* `packages/core/src/packing/{checks,service,suggest,queries,complete}.ts` (+ tests),
+`packages/core/src/boxes/service.ts`, `packages/core/src/workflow/{gates,service}.ts`,
+`packages/core/src/qa/{verify,queries,complete}.ts`, `packages/core/src/shipping/repack.ts`,
+`packages/core/src/workflow/queries.ts` (queue count), `packages/core/src/settings/service.ts`,
+`packages/core/src/permissions.ts`, `packages/contracts/src/{packing,boxes,orders,qa,settings,index}.ts`,
+`apps/web/src/server/router.ts`, `apps/web/src/app/(app)/{pack/**,qa/**,queue/**,boxes/**,settings/**}`,
+`packages/db/prisma/schema/{shipping,system}.prisma` + one migration, `packages/db/prisma/seed.ts` (box min weights
+and barcodes; dimensions on a demo pail), `packages/i18n/src/messages/{en,es}.json`,
+`apps/web/e2e/{packing,qa}.spec.ts` (or a new `packing-checks.spec.ts`), `docs/decisions.md`, `docs/specs/SPEC-qa.md`
+(a pointer to this amendment).
+
+Original scope: `packages/core/src/packing/{service,suggest,queries}.ts` (+ tests), `packages/core/src/boxes/service.ts` (+ test),
 `packages/core/src/workflow/{gates,detail}.ts` (overweight, packages on the detail), `packages/core/src/notes/service.ts`
 (`createTextNote` takes a `packageId`), `packages/core/src/index.ts`,
 `packages/core/test/factories.ts`, `packages/contracts/src/{packing,boxes,orders,index}.ts`,
@@ -297,6 +563,62 @@ whose items need two boxes, and a line of 6. Seeded boxes gain tare and one gain
     taking over the order disables the pack screen without a reload.
 17. Green: `pnpm lint && pnpm typecheck && pnpm test && pnpm build` plus Playwright.
 
+*(A1)*
+
+18. **Checks (pure):** each check trips and doesn't trip at its boundary:
+    - `OVER_MAX`: max + 0.01 trips, max doesn't.
+    - `UNDER_MIN`: min − 0.01 trips, min doesn't.
+    - `WEIGHT_OFF`: trips at threshold + 1%, not at the threshold; it reads the setting, not the constant.
+    - `NO_FIT`:
+      - a pail too tall for Small trips, and the same pail in Large doesn't;
+      - a box holding one pail with dimensions and three jars without them is checked, while a box with no
+        measured units isn't;
+      - custom dimensions are fit-checked;
+      - it agrees with `suggestBox` on every suggestion test case.
+
+    An unweighed package trips no weight check, and a check set to off never trips.
+19. **Block and approve:** with `NO_FIT` on block, `completePack` and `/api/v1/…/complete-packing` fail with
+    `packCheckBlocked` and move nothing.
+    - With a QA user's approval, both move the order to QA. They write one `Approval` (kind `PACKING_CHECKS`,
+      `details` = the blocking trips) and trip rows whose blocking ones point at it.
+    - The packer's own PIN, a Packer's PIN, or a wrong PIN is refused, and nothing moves.
+    - An approval sent with nothing blocking writes no `Approval` row.
+    - With every check on warn, nothing needs approval.
+20. **Overweight modes:** in warn, `setWeight` above the max needs a reason, as before (criterion 4 holds). In
+    block, it saves without one, the gate reports `packCheckBlocked` instead of `packageOverweight`, and an approval
+    lets it through. `packCheckOverMax: OFF` is refused by the contract and by the database CHECK.
+21. **Saved trips:** completing writes exactly one row per WARN or BLOCK trip and none for off checks. Force-status
+    from Packing to QA writes them too, without an approval. A repack, or force-status back to Packing, deletes them
+    and clears box confirmations, while `Approval` rows remain. Changing a mode while an order is in QA leaves its
+    trips unchanged.
+22. **Re-weigh note:** with `WEIGHT_STALE` off, completing still writes the internal note (criterion 5). With it on,
+    no note is written and the trip is saved instead.
+23. **QA:**
+    - `acknowledgeCheck` and `confirmBox` need `order.qa` and the live claim.
+    - `confirmBox` acknowledges exactly the box-related trips on its package.
+    - **verified:**
+      - With an unacknowledged trip, `packCheckUnacknowledged` refuses label purchase on the server.
+      - With `qaBoxConfirm` set to `WHEN_TRIPPED`, a tripped package needs confirmation and a clean one doesn't.
+      - With `ALWAYS`, every package needs it.
+      - With `OFF`, none do.
+    - The QA queue row's count matches the unacknowledged trips.
+24. **Box admin:** a min weight not below the max, a barcode already on another box, a barcode equal to a
+    product's barcode or SKU after normalization, and a lot-code-shaped barcode are all refused. Min weight and
+    barcode are editable on a box in use.
+25. **Box scan:** scanning a box barcode adds a package with that box and `boxScanned: true`, with or without a
+    selected package; three scans give three packages; an archived box's barcode is refused; tapping a box or
+    changing it gives `boxScanned: false`; a replayed `idempotencyKey` (one per scan) adds nothing.
+26. **Settings and stats:** the new fields save with audit before/after. The percent must be 5–100. `packChecks.stats`
+    counts only the last 30 days, per check, with the approved count.
+27. **Permissions:** `packCheck.approve` holders are QA and Admin only. `acknowledgeCheck`, `confirmBox` and
+    `packChecks.stats` each have an allowed and a forbidden test.
+28. **E2E (tablet):**
+    - **Pack:** scan two box barcodes, which adds two packages, then pack the demo pail into the Small one. The
+      card shows the `NO_FIT` trip, which is set to block. **Done** opens the approval dialog; a wrong PIN shows the
+      error, and a QA user's PIN with a reason completes it.
+    - **QA:** the package card is yellow, and **Buy labels** lists the unacknowledged trip and the unconfirmed box.
+      **Confirm box** clears both. The queue row showed "⚠ 1 check" before that.
+
 ## Assumptions
 
 1. The weight typed in is the **gross** weight of the packed box (what the carrier bills); max weight is compared
@@ -308,6 +630,11 @@ whose items need two boxes, and a line of 6. Seeded boxes gain tare and one gain
    Woolrus.
 5. A box's dimensions being locked once used is acceptable: a resized box is a new box, and the old one is archived.
 6. Weight up to 2400 oz (150 lb), the common parcel-carrier limit; heavier shipments aren't handled.
+7. *(A1)* Every product has a weight in WooCommerce. Dimensions are entered in WooCommerce for the bulky items that
+   matter (gallons, pails) and arrive through `store-sync` as today.
+8. *(A1)* The six boxes are visually distinct and kept in designated areas, each with one barcode posted there.
+   Individual boxes aren't labelled, so a scan proves the packer was at that shelf, not which box they're holding.
+9. *(A1)* There is always a QA or Admin user on shift to approve, so blocking never strands an order.
 
 ## Decisions (2026-10-26)
 
@@ -323,6 +650,43 @@ whose items need two boxes, and a line of 6. Seeded boxes gain tare and one gain
 6. **Weight warning:** shown when the weight is more than 25% off the estimate, and only when every product in the
    package has a weight, so a store that doesn't keep weights never sees it.
 
+### Amendment 1 (approved 2026-11-12, from the packing-checks grilling)
+
+7. **An amendment to packing, not a new module.** The checks are about packages and boxes. The edits to `workflow`,
+   `qa` and `settings` are described here, the way the original spec edited the packed gate.
+8. **Checks are per package.** A wrong box belongs to one package, and QA confirms packages one at a time.
+9. **Every box scan adds a package**, as **Add package** with that box does, since the UI always creates a package
+   with its box. Changing a box stays a tap, which is what `BOX_NOT_SCANNED` watches for. Tapping isn't removed,
+   so a dead scanner doesn't stop packing.
+10. **One warehouse-wide mode per check.** With six boxes and one store, per-box or per-product exceptions are
+    complexity nobody would use.
+11. **Over max can't be turned off.** It's a physical limit. Its warn mode is the old decision 3 (the packer's
+    reason). Block mode needs an approval, which closes the self-override gap.
+12. **Partial dimensions are enough for `NO_FIT`.** The bulky items cause the costly mistakes, and they're the
+    ones worth measuring. The fit test is shared with the suggestion.
+13. **Re-weigh can block.** This replaces decision 5 only when the check is set to block. On off it behaves
+    exactly as decision 5 says.
+14. **Custom sizes are flagged, not exempt.** They're fit-checked against the typed size and trip
+    `CUSTOM_DIMENSIONS`. They have no min or max to compare against.
+15. **No "bigger than suggested" check.** It needs every item measured, and its mistake costs postage rather than a
+    carrier adjustment. `UNDER_MIN` roughly covers over-boxing.
+16. **Trips are saved when packing ends.** QA sees what the packer saw, and settings changes don't rewrite it.
+    Force-status still saves them, so skipping the gate doesn't hide anything.
+17. **Going back to Packing clears trips and box confirmations**, the same way a repack clears verification. The
+    contents may change.
+18. **A box barcode can never be mistaken for a product.** Otherwise a scan could add a package when the packer
+    meant to pack an item.
+19. **QA acknowledges every trip, and box confirmation is a setting** (off, when tripped, always). Confirming the
+    box acknowledges the box-related trips so QA doesn't tap twice. Without an acknowledgement, the yellow card
+    would be easy to ignore.
+20. **Start on warn and measure first.** Everything starts on warn except `BOX_NOT_SCANNED` (off until barcodes
+    are entered). The 30-day counts show when a check trips rarely enough, and correctly enough, to set to block.
+21. **The estimate threshold is a setting** (5–100%, default 25), replacing `WEIGHT_WARNING_RATIO`.
+22. Recorded in `docs/decisions.md` in the same PR as the code.
+
 ## Open questions
 
-None open.
+1. *(A1)* **A product barcode that arrives later and matches a box barcode.** Box admin refuses a barcode a
+   product already has, but `store-sync` could later import a product with the same code. The pack screen checks
+   box codes first, so that product couldn't be scanned in, only tapped. Options: have sync log a warning and
+   show a banner on Boxes (recommended), or accept the risk for six barcodes we control.

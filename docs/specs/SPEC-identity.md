@@ -2,13 +2,21 @@
 
 **Milestone:** M2 · **Depends on:** `settings` · **Used by:** every module (the `Actor`), `picking`/`packing`/`qa`
 (station actors on the floor), `operations` (email health) · **State:** done; amendment 1 (station-only users,
-2026-11-10) is **done** (tickets #171–#174) · **Issue:** [#21](https://github.com/isaacvarg/woolrus/issues/21); amendment 1:
-[#170](https://github.com/isaacvarg/woolrus/issues/170)
+2026-11-10) is **done** (tickets #171–#174); amendment 2 (approvals, approved 2026-11-12) is **planned** (tickets #179–#180) · **Issue:**
+[#21](https://github.com/isaacvarg/woolrus/issues/21); amendment 1:
+[#170](https://github.com/isaacvarg/woolrus/issues/170); amendment 2:
+[#177](https://github.com/isaacvarg/woolrus/issues/177)
 
 > **Amendment 1 (approved 2026-11-10): station-only users.** Some floor staff have no email address, or shouldn't
 > need one to work. An admin can now create a user with just a name, roles and a PIN. That user can only unlock
 > stations and never signs in personally, until an admin adds an email for them. Everything marked *(A1)* below
 > belongs to this amendment.
+
+> **Amendment 2 (approved 2026-11-12): approvals.** Some actions need a second person's say-so. A QA or Admin user
+> approves one action on someone else's screen with their PIN or badge, and the station stays on the person who
+> asked. The approval travels with the action, is checked in its transaction and is stored as an `Approval` row.
+> It's a general mechanism: each kind of approval names its own permission. The first kind is `packing`
+> amendment 1's blocked packing checks. Everything marked *(A2)* below belongs to this amendment.
 
 Project-wide commands, structure, code style, testing levels and boundaries are in [`../../SPEC.md`](../../SPEC.md);
 this spec only adds what is specific to `identity`.
@@ -69,6 +77,14 @@ or allow-listed users") intact: they can't sign in anywhere, only unlock.
 11. *(A1)* As an admin, Luis now has an email address. I choose **Add email** on his row and enter it. He gets an
     email telling him he can now sign in, and signs in with a magic link. He's the same user, with the same
     history, PIN and badge, and he can now sign in personally like anyone else.
+12. *(A2)* As a packer, I try to complete an order that needs approval. A dialog lists what's being approved,
+    shows tiles for the people who may approve it (never me), and asks for a reason. Maria (QA) taps her tile and
+    enters her PIN, or scans her badge, and types "pail is in the large box, rate checked". The order moves on. The
+    station is still mine, and the record shows that I asked, Maria approved, on "Pack 2", and why.
+13. *(A2)* As an approver, five wrong PINs in the approval dialog lock my PIN for 15 minutes, the same as five wrong
+    PINs on the lock screen. A wrong PIN never completes the action.
+14. *(A2)* As an admin at my desk, I can approve too, but only once I have a PIN or badge. Being signed in isn't
+    enough.
 
 ## Scope
 
@@ -86,8 +102,15 @@ or allow-listed users") intact: they can't sign in anywhere, only unlock.
 - *(A1)* Station-only users: create one with name + roles + PIN; the same admin actions as for any other user;
   marked "Station only" in the users list; no email, personal sign-in or Admin role.
 - *(A1)* Adding an email to a station-only user, which makes them a regular user.
+- *(A2)* Approvals: checking an approver's PIN or badge against the shared lockout, the rules every approval
+  follows, the `Approval` table, the approver tiles read, and a reusable approval dialog in `apps/web`.
 
 **Out (owned elsewhere or later):**
+- *(A2)* Deciding which actions need an approval, and their permission. Each kind belongs to the module whose
+  action it guards (the first is `packing` A1).
+- *(A2)* Approvals that wait for someone, such as a request queue, notifications, or approving later from another
+  device. An approval is only ever given in person, at the moment the action runs.
+- *(A2)* An approvals report or screen. Rows are written now; reading them waits for `reporting`.
 - *(A1)* Going the other way: removing a regular user's email to make them station-only.
 - *(A1)* Bulk import of station users (CSV).
 - Native Android station auth (bearer device token). The design keeps it possible: the station token is opaque and
@@ -195,6 +218,51 @@ that would leave no active Admin. An admin can't deactivate themselves or remove
   user with no badge leaves them with no way in. The PIN dialog warns about it but allows it.
 - **Last-admin guard** is unaffected: station-only users are never admins.
 
+### Approvals (A2) (`packages/core/src/identity/approvals.ts`)
+
+An action that may need approval takes an optional `approval: { credential, reason }` in its input, where
+`credential` is `{ userId, pin }` or `{ badgeCode }` (contracts: `approvalInput`, reusing the PIN rules). Nothing is
+stored before the action runs, so there is no "approved but not used yet" state to replay or let go stale (decision 16).
+
+Two core functions, used by the action that needs approval:
+
+1. **`verifyApprover(db, actor, { credential, permission, now })`** runs **before** the action's transaction, in its
+   own transaction, so a failed attempt is counted even though the action then fails. It returns `{ approverId }`
+   or throws:
+   - The PIN path shares the lock screen's code. The attempt check is pulled out of `unlockWithPin` into one helper
+     (`checkPin(tx, userId, pin, now)`: the row lock, a decoy hash for unknown or PIN-less users, the
+     5-tries/15-minute lock, and the reset on success). Both callers use it, so the lock screen and the dialog share one
+     counter (decision 18). Errors are the lock screen's: `errors.station.badPin`, `errors.station.pinLocked`
+     with the unlock time.
+   - Badge: SHA-256 of the code matched against `badgeCode`, as for unlock. An unknown badge gives
+     `errors.station.badBadge`.
+   - The approver must be active and hold `permission` by their roles (`can`). Otherwise `FORBIDDEN` /
+     `errors.approval.notPermitted`.
+   - The approver must not be `actor.userId` (`CONFLICT` / `errors.approval.self`, decision 20). This applies to
+     every kind of approval.
+2. **`recordApproval(tx, actor, { approverId, kind, entityType, entityId, reason, details, now })`** runs
+   **inside** the action's transaction, after the action's own checks have passed:
+   - It re-reads the approver and re-checks that they are active and hold the permission, so a deactivation between
+     the two steps counts.
+   - `reason` is trimmed to 1–200 characters (`errors.approval.reasonRequired`).
+   - It writes the `Approval` row and audits `approval.grant` (actor = the requester, `after` = `{ approvalId,
+     kind, approverId, entityType, entityId }`).
+   - It returns the row's id so the action can point at it.
+
+   If the action then fails, the row rolls back with it.
+
+Neither function knows what is being approved: `kind` is an enum value, and `details` is a JSON copy the caller
+supplies, such as the list of tripped checks. An approval through `/api/v1` works the same way: the credential is in
+the request body.
+
+**Approver tiles:** `listApprovers(db, actor, { permission })` (any signed-in or station actor) returns the active users who
+hold `permission` and have a PIN, excluding the actor, sorted by name. It returns name, initials and `hasPin`
+only, the same exposure as the station lock tiles. A badge works for anyone who has one, whether or not they
+appear on a tile.
+
+**No PIN, no approving (decision 19):** a personal session alone never approves. An Admin at a desktop sets a PIN
+or gets a badge first, through the Users page like anyone else.
+
 ### Invitations
 
 - `createInvitation({ email, roles, idempotencyKey })`: email is lowercased; ≥ 1 role; expires after **7 days**.
@@ -280,6 +348,10 @@ Exactly 6 digits. Reject all-same (`000000`) and straight runs (`123456`, `65432
 | `station.status` / `unlockPin` / `unlockBadge` / `lock` / `touch` | `GET /station`, `POST /station/unlock/pin`, `…/unlock/badge`, `POST /station/lock`, `POST /station/touch` |
 | `me.get` (adds `stationName`, `idleLockAt`) / `me.updatePreferences` | `GET /me`, `PATCH /me/preferences` |
 | `settings.sendTestEmail` | `POST /settings/email/test` |
+| *(A2)* `approvers.list` (input `permission`) | `GET /approvers?permission=…` |
+
+*(A2)* No procedure approves on its own. Each action that takes an approval documents its `approval` field in its own module's
+spec.
 
 No output schema has a field for a PIN, a PIN hash, a badge hash or a station token. `issueBadge` returns the
 badge code once. `register` sets the cookie and never returns the token in the body.
@@ -300,6 +372,20 @@ badge code once. `register` sets the cookie and never returns the token in the b
 - Nav footer: current user, station name when on one, a preferences menu (language, theme), sidebar collapse, and
   Log out or Lock. Preferences save to the user and set the `locale` cookie; theme sets `data-theme` on `<html>`.
 - All strings in en + es; React Aria primitives from `components/ui`.
+- *(A2)* **`ApprovalDialog`** (`apps/web/src/components/approval-dialog.tsx`), a React Aria modal any screen can
+  open with:
+  - a title;
+  - the list of what is being approved (passed in by the caller);
+  - the permission, used to load the tiles.
+
+  The dialog contains:
+  - approver tiles and a PIN pad, laid out like the lock screen and reusing its PIN pad component;
+  - an always-focused badge input;
+  - a reason field.
+
+  On submit it calls the caller's `onApprove({ credential, reason })`, which sends the action. It shows the
+  action's error in place (bad PIN, locked, not permitted) and keeps the reason the user typed. It closes only on
+  success. Targets are ≥ 48 px.
 
 ### Schema changes (ask-first: listed here for approval)
 
@@ -312,7 +398,42 @@ One new dependency: `qrcode` (+ `@types/qrcode`) in `apps/web`, for badge QR cod
 
 *(A1)* No schema change, migration or dependency.
 
+*(A2)* One migration in `auth.prisma`, no dependency:
+
+```prisma
+enum ApprovalKind {
+  PACKING_CHECKS // packing A1: completing packing past blocked checks
+  @@map("approval_kind")
+}
+
+/// A second person's say-so for one action, given in person with a PIN or badge (SPEC-identity A2).
+model Approval {
+  id            String       @id @default(uuid(7)) @db.Uuid
+  kind          ApprovalKind
+  entityType    String       @map("entity_type")
+  entityId      String       @map("entity_id") @db.Uuid
+  requestedById String       @map("requested_by_id") @db.Uuid
+  approvedById  String       @map("approved_by_id") @db.Uuid
+  stationId     String?      @map("station_id") @db.Uuid
+  reason        String
+  /// What was approved, as the caller described it (e.g. the tripped checks).
+  details       Json         @default("{}")
+  createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  // relations to User (×2) and Station; index on (entityType, entityId)
+  @@map("approvals")
+}
+```
+
+The migration adds a hand-written `CHECK (requested_by_id <> approved_by_id)`, so self-approval is refused by
+the database as well as by core.
+
 ### Files expected to change
+
+*(A2)* `packages/core/src/identity/{approvals,station-session}.ts` (+ tests), `packages/core/src/index.ts`,
+`packages/contracts/src/{approvals,index}.ts`, `apps/web/src/server/router.ts`,
+`apps/web/src/components/approval-dialog.tsx` (+ the PIN pad pulled out of `apps/web/src/app/station/`),
+`packages/db/prisma/schema/auth.prisma` + one migration, `packages/i18n/src/messages/{en,es}.json`,
+`docs/decisions.md`.
 
 *(A1)* `packages/core/src/identity/{users,sign-in,emails}.ts` (+ tests), `packages/contracts/src/{users,invitations}.ts`,
 `apps/web/src/server/{auth,router}.ts`, `apps/web/src/app/(app)/users/**`, `packages/i18n/src/messages/{en,es}.json`,
@@ -389,6 +510,25 @@ Original scope: `packages/core/src/identity/**` (+ tests), `packages/core/src/ad
 22. **Duplicate-name warning:** the Add station user dialog shows the warning for an active user's name in a
     different case and still lets the admin create the user (component or E2E test).
 
+*(A2)* Tested through a throwaway test-only action that takes an approval, so the mechanism is proven without
+`packing`:
+
+23. **Happy path:** a QA user's PIN with a reason passes `verifyApprover`, and `recordApproval` writes one
+    `Approval` row (kind, entity, requester, approver, station, reason, details) and one `approval.grant` audit. The
+    approval works from a station actor and from a desktop session. A badge works the same as a PIN.
+24. **Shared lockout:** four wrong PINs in approvals and one wrong PIN on the lock screen lock the PIN for 15
+    minutes on both, and the action fails each time without moving anything. A correct approval PIN resets the
+    count. Wrong PIN and unknown user give the same error.
+25. **Refusals:** an approver who lacks the permission, is deactivated, is the requester, or gives an empty or
+    201-character reason is refused, and nothing is written (no `Approval` row and no audit). A database insert with
+    the same requester and approver fails on the CHECK.
+26. **Atomic:** when the action fails after `recordApproval` (for example a stale `expectedVersion`), the
+    `Approval` row rolls back with it.
+27. **Tiles:** `approvers.list` returns active users with the permission and a PIN, without the caller, as name and
+    initials only. Added to the no-secrets test, along with the `Approval` row and its audit.
+28. **Dialog (component test):** a bad PIN shows the error and keeps the reason; success calls `onApprove` once
+    with the credential and reason; the badge input is focused on open.
+
 ## Decisions (2026-10-20)
 
 1. **Email provider:** Resend, through its HTTP API (no SDK). Recorded in `docs/decisions.md` when this ships.
@@ -428,6 +568,24 @@ Original scope: `packages/core/src/identity/**` (+ tests), `packages/core/src/ad
     verify returns 500. A station-only user has no accounts or sessions for that step to revoke, so nothing is
     lost. The cost: Google/Discord sign them in before any magic link, which a typo'd address already allows
     through the magic link itself. `generateId` and the schema stay unchanged.
+
+### Amendment 2 (approved 2026-11-12, from the packing-checks grilling)
+
+16. **Approve and act in one call.** The credential travels with the action. Credential checks happen before
+    the action's transaction (so failures count). The `Approval` row is written inside it (so it lives or dies
+    with the action). There is never a stored approval waiting to be used.
+17. **Approvals live in identity, not a new module.** It's the PIN and badge checking identity already owns, plus
+    one table. A module of its own would add a roadmap node for one service.
+18. **One PIN lockout.** Wrong PINs in the approval dialog and on the lock screen share one counter, so the dialog
+    can't become a second place to guess PINs.
+19. **An approver needs a PIN or badge, everywhere.** One way to approve. A personal session doesn't count, so an
+    Admin left signed in on a desktop can't be used to approve.
+20. **Never your own request.** It's a rule of the mechanism, not of each kind, and the database enforces it too.
+    `Settings.qaMustDifferFromPacker` is unrelated and unchanged.
+21. **Each kind names a permission.** Who may approve is decided by roles through `permissions.ts`, never
+    hardcoded. The kind's module adds the permission.
+22. **A reason is always required** (1–200 characters), as for every other override in the app.
+23. Recorded in `docs/decisions.md` (data model) in the same PR as the code.
 
 ## Open questions
 
