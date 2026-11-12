@@ -2,6 +2,7 @@ import path from "node:path";
 import { config as loadEnv } from "dotenv";
 import type { NextConfig } from "next";
 import createNextIntlPlugin from "next-intl/plugin";
+import { lanDevHosts } from "./src/lib/dev-hosts";
 
 // One .env at the repo root serves every app in development. In production, env comes from the container.
 loadEnv({ path: path.resolve(import.meta.dirname, "../../.env"), quiet: true });
@@ -21,6 +22,8 @@ const config: NextConfig = {
   ],
   serverExternalPackages: ["pino", "pg", "@prisma/adapter-pg", "sharp"],
   typedRoutes: true,
+  // Lets LAN devices load dev chunks and HMR; without it the page never hydrates there.
+  allowedDevOrigins: lanDevHosts,
   // PDFs are addressed as `/api/label-prints/<id>.pdf`; the route segment itself is the bare id.
   async rewrites() {
     return [{ source: "/api/label-prints/:id.pdf", destination: "/api/label-prints/:id" }];
