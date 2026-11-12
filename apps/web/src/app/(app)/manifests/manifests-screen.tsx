@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/fields";
 import { toast } from "@/components/ui/toast";
 import { useErrorMessage } from "@/lib/errors";
 import { client, orpc } from "@/lib/orpc";
+import { randomUUID } from "@/lib/uuid";
 
 /** The browser's calendar day as YYYY-MM-DD: the warehouse's "today". */
 function today(): string {
@@ -37,7 +38,7 @@ export function ManifestsScreen() {
   const create = useMutation({
     mutationFn: ({ carrierId, date }: { carrierId: string; date: string }) => {
       const slot = `${carrierId}:${date}`;
-      const idempotencyKey = keys.current.get(slot) ?? crypto.randomUUID();
+      const idempotencyKey = keys.current.get(slot) ?? randomUUID();
       keys.current.set(slot, idempotencyKey);
       return client.shipping.createManifest({ carrierId, shipDate: date, idempotencyKey });
     },

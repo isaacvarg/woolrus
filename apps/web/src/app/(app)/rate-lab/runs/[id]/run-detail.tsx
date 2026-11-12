@@ -16,6 +16,7 @@ import { Button, SelectField } from "@/components/ui/fields";
 import { useErrorMessage, useMessage } from "@/lib/errors";
 import { money } from "@/lib/money";
 import { orpc } from "@/lib/orpc";
+import { randomUUID } from "@/lib/uuid";
 import { ReportLink } from "../../report-link";
 import { duration, isActive, Side, statusBadge } from "../runs-manager";
 
@@ -100,7 +101,7 @@ export function Header({
   const router = useRouter();
   const queryClient = useQueryClient();
   // One key per page view: a retried press can't queue two runs.
-  const [idempotencyKey] = useState(() => crypto.randomUUID());
+  const [idempotencyKey] = useState(() => randomUUID());
   const again = useMutation(
     orpc.rateLab.startRun.mutationOptions({
       onSuccess: async (next) => {

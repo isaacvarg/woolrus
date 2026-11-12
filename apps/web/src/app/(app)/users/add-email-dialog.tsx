@@ -10,6 +10,7 @@ import { Button, TextField } from "@/components/ui/fields";
 import { toast } from "@/components/ui/toast";
 import { useErrorMessage, useFieldErrors } from "@/lib/errors";
 import { client, orpc } from "@/lib/orpc";
+import { randomUUID } from "@/lib/uuid";
 
 /**
  * Add email, for a station-only user (SPEC-identity amendment 1): they become a regular user with
@@ -25,7 +26,7 @@ export function AddEmailDialog({ user, onClose }: { user: UserSummary; onClose: 
   const [confirm, setConfirm] = useState("");
   const [mismatch, setMismatch] = useState(false);
   // One key per dialog: a retried submit (flaky Wi-Fi) can't send the email twice.
-  const [idempotencyKey] = useState(() => crypto.randomUUID());
+  const [idempotencyKey] = useState(() => randomUUID());
   const add = useMutation({
     mutationFn: () => client.users.addEmail({ idempotencyKey, id: user.id, email }),
     onSuccess: (updated) => {

@@ -16,6 +16,7 @@ import { costConfirmOf, useErrorMessage } from "@/lib/errors";
 import { money } from "@/lib/money";
 import { client, orpc } from "@/lib/orpc";
 import { playScanSound, useScanner } from "@/lib/scanner";
+import { randomUUID } from "@/lib/uuid";
 import { ScanBanner, type ScanOutcome } from "../../pick/[orderId]/pick-screen";
 import { hasLiveLabel } from "./live-label";
 import { QaDrawer } from "./qa-drawer";
@@ -214,7 +215,7 @@ function QaLayout({
   });
   useScanner((code) => {
     if (!focused) return;
-    scan.mutate({ pkg: focused, code, scanId: crypto.randomUUID() });
+    scan.mutate({ pkg: focused, code, scanId: randomUUID() });
   }, mayVerify);
 
   // The cost guard's question; confirming resends with `confirmCost`.
@@ -256,7 +257,7 @@ function QaLayout({
       client.qa.setVerified({
         packageItemId: row.id,
         verified,
-        idempotencyKey: crypto.randomUUID(),
+        idempotencyKey: randomUUID(),
       }),
     onMutate: async ({ row, verified }) => {
       await queryClient.cancelQueries({ queryKey: viewKey });

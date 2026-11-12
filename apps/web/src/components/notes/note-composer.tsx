@@ -9,6 +9,7 @@ import { Button, Switch, TextAreaField } from "@/components/ui/fields";
 import { toast } from "@/components/ui/toast";
 import { useErrorMessage, useFieldErrors } from "@/lib/errors";
 import { client, orpc } from "@/lib/orpc";
+import { randomUUID } from "@/lib/uuid";
 import { PhotoPicker, UploadProgress } from "./photo-picker";
 import { type VoiceMemo, VoiceRecorder } from "./voice-recorder";
 
@@ -91,7 +92,7 @@ export function NoteComposer({
   const fileCount = photos.length + (voice ? 1 : 0);
   const [progress, setProgress] = useState<number | null>(null);
   // One key per draft: a retry after a dropped response returns the note instead of adding twice.
-  const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
+  const [idempotencyKey, setIdempotencyKey] = useState(() => randomUUID());
 
   const create = useMutation({
     mutationFn: () =>
@@ -112,7 +113,7 @@ export function NoteComposer({
       setVisibility("INTERNAL");
       setPhotos([]);
       setVoice(null);
-      setIdempotencyKey(crypto.randomUUID());
+      setIdempotencyKey(randomUUID());
       toast.success(t("notes.added"));
       onAdded?.();
     },

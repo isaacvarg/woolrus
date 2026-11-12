@@ -22,6 +22,7 @@ import { toast } from "@/components/ui/toast";
 import { useErrorMessage } from "@/lib/errors";
 import { client, orpc } from "@/lib/orpc";
 import { playScanSound, useScanner } from "@/lib/scanner";
+import { randomUUID } from "@/lib/uuid";
 import { type Unmet, UnmetList, unmetOf } from "../../orders/[id]/order-actions";
 import { LineMenu } from "./line-dialogs";
 
@@ -206,7 +207,7 @@ function PickLayout({
       });
     },
   });
-  useScanner((code) => scan.mutate({ code, scanId: crypto.randomUUID() }), canPick);
+  useScanner((code) => scan.mutate({ code, scanId: randomUUID() }), canPick);
 
   const link = useMutation({
     mutationFn: ({ line, code }: { line: PickLine; code: string }) =>

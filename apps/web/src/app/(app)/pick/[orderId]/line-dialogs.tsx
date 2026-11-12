@@ -11,6 +11,7 @@ import { Menu, MenuItem } from "@/components/ui/menu";
 import { toast } from "@/components/ui/toast";
 import { useErrorMessage, useFieldErrors } from "@/lib/errors";
 import { client } from "@/lib/orpc";
+import { randomUUID } from "@/lib/uuid";
 
 // A card's menu and its Out of Stock / Substituted dialogs (SPEC-picking "UI", FR-PICK-04). Both
 // write a line note, so each open dialog carries one idempotency key: a retried submit can't note twice.
@@ -64,7 +65,7 @@ function useLineWrite<I extends { idempotencyKey: string }>(
   done: string,
 ) {
   const errorMessage = useErrorMessage();
-  const [idempotencyKey] = useState(() => crypto.randomUUID());
+  const [idempotencyKey] = useState(() => randomUUID());
   return useMutation({
     scope: { id: scope },
     mutationFn: (input: Omit<I, "idempotencyKey">) => call({ ...input, idempotencyKey } as I),

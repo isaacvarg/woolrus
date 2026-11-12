@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/fields";
 import { toast } from "@/components/ui/toast";
 import { failuresOf, type OrderFailure, useErrorMessage } from "@/lib/errors";
 import { client, orpc } from "@/lib/orpc";
+import { randomUUID } from "@/lib/uuid";
 
 // **Pick together** on the Pending queue (SPEC-picking "UI"): the ticked orders all become the
 // picker's batch, or none do and the panel says which order failed and why.
@@ -34,7 +35,7 @@ export function PickTogether({
   const create = useMutation({
     mutationFn: (rows: QueueRow[]) =>
       client.pickBatches.create({
-        idempotencyKey: crypto.randomUUID(),
+        idempotencyKey: randomUUID(),
         orders: rows.map((row) => ({ id: row.id, expectedVersion: row.version })),
       }),
     onMutate: () => setRefused(null),

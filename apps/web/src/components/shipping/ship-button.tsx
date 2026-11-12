@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/fields";
 import { toast } from "@/components/ui/toast";
 import { useErrorMessage } from "@/lib/errors";
 import { client, orpc } from "@/lib/orpc";
+import { randomUUID } from "@/lib/uuid";
 
 /** The most orders one call ships (`ShipOrdersInput`); past it the button is off rather than shipping a prefix. */
 const MAX_SHIP_ORDERS = 50;
@@ -35,7 +36,7 @@ export function ShipButton({
   const queryClient = useQueryClient();
   const [unprinted, setUnprinted] = useState<string | null>(null);
   // One key per click-through, so a resend after confirming is a new call but a retry is a replay.
-  const [attempt, setAttempt] = useState(() => crypto.randomUUID());
+  const [attempt, setAttempt] = useState(() => randomUUID());
 
   const ship = useMutation({
     mutationFn: (confirmUnprinted: boolean) =>
@@ -46,7 +47,7 @@ export function ShipButton({
       }),
     onSuccess: ({ results }: ShipOrdersResult) => {
       setUnprinted(null);
-      setAttempt(crypto.randomUUID());
+      setAttempt(randomUUID());
       const failed = results.filter((r) => !r.ok);
       const shipped = results.length - failed.length;
       if (shipped > 0) toast.success(t("ship.shipped", { count: shipped }));
@@ -69,7 +70,7 @@ export function ShipButton({
         // The server wrote nothing, so the same key can carry the confirmed resend.
         return;
       }
-      setAttempt(crypto.randomUUID());
+      setAttempt(randomUUID());
       toast.error(errorMessage(error));
     },
     onSettled: () => {

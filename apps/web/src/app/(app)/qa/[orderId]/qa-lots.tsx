@@ -11,6 +11,7 @@ import { Button, TextField } from "@/components/ui/fields";
 import { toast } from "@/components/ui/toast";
 import { useErrorMessage } from "@/lib/errors";
 import { client, orpc } from "@/lib/orpc";
+import { randomUUID } from "@/lib/uuid";
 
 // A QA row's lots (SPEC-lumexia "Reads and UI"): each with its Lumexia status. `NOT_FOUND` and
 // `UNVERIFIED` only warn; a `WRONG_ITEM` lot blocks the label until QA replaces or removes it.
@@ -150,7 +151,7 @@ function ReplaceLotDialog({
             if (!code.trim()) return;
             // One id per scan, so a retried request doesn't replace twice.
             replace.mutate(
-              { code, scanId: crypto.randomUUID() },
+              { code, scanId: randomUUID() },
               { onSuccess: () => close(), onError: () => setCode("") },
             );
           }}

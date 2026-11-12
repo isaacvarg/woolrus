@@ -9,6 +9,7 @@ import { Dialog } from "@/components/ui/dialog";
 import { Button, Checkbox, TextField } from "@/components/ui/fields";
 import { useErrorMessage, useFieldErrors } from "@/lib/errors";
 import { client, orpc } from "@/lib/orpc";
+import { randomUUID } from "@/lib/uuid";
 import { PinField } from "./credentials-dialogs";
 
 /** Station-only users can't be Admins (SPEC-identity amendment 1, decision 10). */
@@ -56,7 +57,7 @@ export function AddStationUserDialog({
   const [selected, setSelected] = useState(new Set<Role>());
   const [pin, setPin] = useState("");
   // One key per dialog: a retried submit (flaky Wi-Fi) can't add the same person twice.
-  const [idempotencyKey] = useState(() => crypto.randomUUID());
+  const [idempotencyKey] = useState(() => randomUUID());
   const create = useMutation({
     mutationFn: () =>
       client.users.createStationUser({ idempotencyKey, name, roles: [...selected], pin }),

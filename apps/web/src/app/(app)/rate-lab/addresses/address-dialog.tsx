@@ -10,6 +10,7 @@ import { Dialog } from "@/components/ui/dialog";
 import { Button, Checkbox, TextAreaField, TextField } from "@/components/ui/fields";
 import { errorData, useErrorMessage, useFieldErrors } from "@/lib/errors";
 import { orpc } from "@/lib/orpc";
+import { randomUUID } from "@/lib/uuid";
 import { AddressFields, addressForm } from "../address-fields";
 
 /**
@@ -40,7 +41,7 @@ export function AddressDialog({
   const [form, setForm] = useState(() => addressForm(address?.original));
   const [groupIds, setGroupIds] = useState(new Set(address?.groups.map((g) => g.id) ?? []));
   // One key per dialog: a retried submit can't create two addresses.
-  const [idempotencyKey] = useState(() => crypto.randomUUID());
+  const [idempotencyKey] = useState(() => randomUUID());
   const choices = [
     ...groups,
     ...(address?.groups.filter((g) => !groups.some((active) => active.id === g.id)) ?? []),
@@ -121,7 +122,7 @@ export function AddressDialog({
                       className="btn-sm"
                       isPending={duplicate.isPending}
                       onPress={() =>
-                        duplicate.mutate({ idempotencyKey: crypto.randomUUID(), id: shown.id })
+                        duplicate.mutate({ idempotencyKey: randomUUID(), id: shown.id })
                       }
                     >
                       {t("duplicate")}
