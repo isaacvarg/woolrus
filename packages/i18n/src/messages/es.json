@@ -1389,6 +1389,11 @@
       "badBadge": "No se reconoce esa credencial.",
       "notStation": "Solo se puede bloquear una estación."
     },
+    "approval": {
+      "notPermitted": "Esa persona no puede aprobar esto.",
+      "self": "No puedes aprobar tu propia solicitud. Pídeselo a otra persona.",
+      "reasonRequired": "Escribe un motivo de hasta 200 caracteres."
+    },
     "notes": {
       "empty": "Escribe algo en la nota primero.",
       "notAuthor": "Solo el autor de la nota o un administrador puede cambiarla.",

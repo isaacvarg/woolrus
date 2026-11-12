@@ -19,6 +19,7 @@ import { sync } from "./sync";
 import { users } from "./users";
 import { voids } from "./voids";
 
+export * from "./approvals";
 export * from "./base";
 export * from "./boxes";
 export * from "./carriers";
