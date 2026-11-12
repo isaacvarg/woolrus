@@ -5,12 +5,11 @@ import type { StationStatus, UnlockTile } from "@woolrus/contracts";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useEffect, useRef, useState } from "react";
+import { NameTiles } from "@/components/name-tiles";
+import { PIN_LENGTH, PinPad } from "@/components/pin-pad";
 import { Button } from "@/components/ui/fields";
 import { useErrorMessage } from "@/lib/errors";
 import { orpc } from "@/lib/orpc";
-
-const PIN_LENGTH = 6;
-const PAD = ["1", "2", "3", "4", "5", "6", "7", "8", "9"] as const;
 
 /**
  * Tap your name and enter your PIN, or scan your badge (SPEC-identity "UI"). A HID scanner types
@@ -45,8 +44,7 @@ export function LockScreen({ status }: { status: StationStatus }) {
     setError(null);
   };
 
-  const enter = (next: string) => {
-    const digits = next.replace(/\D/g, "").slice(0, PIN_LENGTH);
+  const enter = (digits: string) => {
     setPin(digits);
     setError(null);
     if (chosen && digits.length === PIN_LENGTH) {
@@ -75,50 +73,14 @@ export function LockScreen({ status }: { status: StationStatus }) {
 
       {chosen ? (
         <section className="flex w-full max-w-sm flex-col items-center gap-4">
-          <label htmlFor="pin" className="text-2xl font-semibold">
-            {t("enterPin", { name: chosen.name })}
-          </label>
-          <input
-            ref={pinInput}
+          <PinPad
             id="pin"
-            type="password"
-            inputMode="numeric"
-            autoComplete="off"
-            maxLength={PIN_LENGTH}
+            label={t("enterPin", { name: chosen.name })}
             value={pin}
-            disabled={pending}
-            onChange={(e) => enter(e.target.value)}
-            className="input input-lg w-full text-center text-3xl tracking-[0.5em]"
+            onChange={enter}
+            isDisabled={pending}
+            inputRef={pinInput}
           />
-          <div className="grid w-full grid-cols-3 gap-3">
-            {PAD.map((digit) => (
-              <Button
-                key={digit}
-                className="btn-outline h-20 text-3xl"
-                isDisabled={pending}
-                onPress={() => enter(pin + digit)}
-              >
-                {digit}
-              </Button>
-            ))}
-            <Button className="btn-ghost h-20" isDisabled={pending} onPress={() => enter("")}>
-              {t("clear")}
-            </Button>
-            <Button
-              className="btn-outline h-20 text-3xl"
-              isDisabled={pending}
-              onPress={() => enter(`${pin}0`)}
-            >
-              0
-            </Button>
-            <Button
-              className="btn-ghost h-20"
-              isDisabled={pending}
-              onPress={() => enter(pin.slice(0, -1))}
-            >
-              {t("backspace")}
-            </Button>
-          </div>
           <Button className="btn-ghost btn-lg" onPress={() => choose(null)}>
             {t("cancel")}
           </Button>
@@ -130,21 +92,7 @@ export function LockScreen({ status }: { status: StationStatus }) {
             {status.tiles.length === 0 ? (
               <p className="text-lg">{t("noTiles")}</p>
             ) : (
-              <ul className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-                {status.tiles.map((tile) => (
-                  <li key={tile.id}>
-                    <Button
-                      className="btn-outline flex h-28 w-full flex-col gap-1"
-                      onPress={() => choose(tile)}
-                    >
-                      <span aria-hidden className="text-3xl font-bold">
-                        {tile.initials}
-                      </span>
-                      <span className="text-lg">{tile.name}</span>
-                    </Button>
-                  </li>
-                ))}
-              </ul>
+              <NameTiles tiles={status.tiles} onChoose={choose} />
             )}
           </section>
           <form
