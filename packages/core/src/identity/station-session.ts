@@ -169,10 +169,70 @@ const decoyPinHash = () => {
 
 const badPin = () => new AppError("UNAUTHORIZED", "errors.station.badPin");
 
+/** What one PIN attempt came to. `ok` carries the user, read under the row lock. */
+export type PinCheck =
+  | { kind: "ok"; user: User }
+  | { kind: "bad" }
+  | { kind: "locked"; until: Date };
+
 /**
- * Tap your name, enter your PIN (SPEC-identity "Unlock with PIN"). 5 wrong PINs in a row lock that
- * user's PIN for 15 minutes on every station. The counter must survive the refusal, so the
- * transaction returns the outcome and the error is thrown after it commits.
+ * One PIN attempt for `userId`, inside the caller's transaction. The lock screen and approvals
+ * share it, so they share one counter (SPEC-identity decision 18): 5 wrong PINs in a row lock that
+ * user's PIN for 15 minutes on every station and in every approval; the right PIN resets the count.
+ * An unknown, inactive or PIN-less user is checked against a decoy hash and comes back `bad`, the
+ * same as a wrong PIN, so tiles can't be used to probe. The count must survive the refusal: return
+ * the outcome from the transaction, then throw `pinCheckError` after it commits.
+ */
+export async function checkPin(
+  tx: DbTx,
+  userId: string,
+  pin: string,
+  now: Date,
+): Promise<PinCheck> {
+  // Serializes attempts for this user, so parallel guesses can't each see a count below 5.
+  // NO KEY: a plain FOR UPDATE would also block inserts that reference the user (sessions).
+  await tx.$queryRaw`SELECT id FROM users WHERE id = ${userId}::uuid FOR NO KEY UPDATE`;
+  const user = await tx.user.findUnique({ where: { id: userId } });
+  if (!user?.active || !user.pinHash) {
+    await verifyPin(pin, await decoyPinHash());
+    return { kind: "bad" };
+  }
+  if (user.pinLockedUntil && user.pinLockedUntil > now) {
+    return { kind: "locked", until: user.pinLockedUntil };
+  }
+  if (!(await verifyPin(pin, user.pinHash))) {
+    const attempts = user.pinFailedAttempts + 1;
+    if (attempts < PIN_MAX_ATTEMPTS) {
+      await tx.user.update({ where: { id: userId }, data: { pinFailedAttempts: attempts } });
+      return { kind: "bad" };
+    }
+    const until = new Date(now.getTime() + PIN_LOCK_MINUTES * 60_000);
+    await tx.user.update({
+      where: { id: userId },
+      data: { pinFailedAttempts: 0, pinLockedUntil: until },
+    });
+    return { kind: "locked", until };
+  }
+  if (user.pinFailedAttempts > 0 || user.pinLockedUntil) {
+    await tx.user.update({
+      where: { id: userId },
+      data: { pinFailedAttempts: 0, pinLockedUntil: null },
+    });
+  }
+  return { kind: "ok", user };
+}
+
+/** The lock screen's error for a refused attempt: `badPin`, or `pinLocked` with the unlock time. */
+export function pinCheckError(check: Exclude<PinCheck, { kind: "ok" }>): AppError {
+  if (check.kind === "bad") return badPin();
+  return new AppError("UNAUTHORIZED", "errors.station.pinLocked", undefined, {
+    params: { until: check.until.toISOString() },
+  });
+}
+
+/**
+ * Tap your name, enter your PIN (SPEC-identity "Unlock with PIN"). The attempt is `checkPin`'s; the
+ * transaction returns its outcome and the error is thrown after the commit, so the count sticks.
  */
 export async function unlockWithPin(
   db: Db,
@@ -181,45 +241,12 @@ export async function unlockWithPin(
   now: Date = new Date(),
 ): Promise<StationUnlocked> {
   const outcome = await db.$transaction(async (tx) => {
-    // Serializes attempts for this user, so parallel guesses can't each see a count below 5.
-    // NO KEY: a plain FOR UPDATE would also block inserts that reference the user (sessions).
-    await tx.$queryRaw`SELECT id FROM users WHERE id = ${userId}::uuid FOR NO KEY UPDATE`;
-    const user = await tx.user.findUnique({ where: { id: userId } });
-    if (!user?.active || !user.pinHash) {
-      await verifyPin(pin, await decoyPinHash());
-      return { kind: "bad" } as const;
-    }
-    if (user.pinLockedUntil && user.pinLockedUntil > now) {
-      return { kind: "locked", until: user.pinLockedUntil } as const;
-    }
-    if (!(await verifyPin(pin, user.pinHash))) {
-      const attempts = user.pinFailedAttempts + 1;
-      if (attempts < PIN_MAX_ATTEMPTS) {
-        await tx.user.update({ where: { id: userId }, data: { pinFailedAttempts: attempts } });
-        return { kind: "bad" } as const;
-      }
-      const until = new Date(now.getTime() + PIN_LOCK_MINUTES * 60_000);
-      await tx.user.update({
-        where: { id: userId },
-        data: { pinFailedAttempts: 0, pinLockedUntil: until },
-      });
-      return { kind: "locked", until } as const;
-    }
-    if (user.pinFailedAttempts > 0 || user.pinLockedUntil) {
-      await tx.user.update({
-        where: { id: userId },
-        data: { pinFailedAttempts: 0, pinLockedUntil: null },
-      });
-    }
-    await activate(tx, station, user, "PIN", now);
-    return { kind: "ok", userName: user.name } as const;
+    const check = await checkPin(tx, userId, pin, now);
+    if (check.kind !== "ok") return check;
+    await activate(tx, station, check.user, "PIN", now);
+    return { kind: "ok", userName: check.user.name } as const;
   });
-  if (outcome.kind === "bad") throw badPin();
-  if (outcome.kind === "locked") {
-    throw new AppError("UNAUTHORIZED", "errors.station.pinLocked", undefined, {
-      params: { until: outcome.until.toISOString() },
-    });
-  }
+  if (outcome.kind !== "ok") throw pinCheckError(outcome);
   return { userName: outcome.userName };
 }
 
