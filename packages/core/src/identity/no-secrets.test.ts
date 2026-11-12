@@ -3,7 +3,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vites
 import { createActor, resetDb, testDb } from "../../test/db";
 import type { EmailSender } from "../adapters/email/sender";
 import { getPublicSettings, getSettings, setSecret } from "../settings/service";
-import { recordApproval, verifyApprover } from "./approvals";
+import { listApprovers, recordApproval, verifyApprover } from "./approvals";
 import { sendTestEmail } from "./email";
 import { createInvitation, listInvitations } from "./invitations";
 import {
@@ -106,7 +106,10 @@ describe("no secrets out", () => {
     responses.lock = await lockStation(db, actor);
     responses.stationsAfter = await listStations(db, admin);
 
-    // Amendment 2 (criterion 27): the worker approves the admin's request by PIN, then by badge.
+    // Amendment 2 (criterion 27): the approver tiles, then the worker approves the admin's
+    // request by PIN, then by badge.
+    responses.approvers = await listApprovers(db, admin, { permission: "order.pack" });
+    expect(responses.approvers).toContainEqual(expect.objectContaining({ id: worker.userId }));
     for (const credential of [{ userId: worker.userId, pin: PIN }, { badgeCode: badge.code }]) {
       const verified = await verifyApprover(db, admin, { credential, permission: "order.pack" });
       responses[`verify${"pin" in credential ? "Pin" : "Badge"}`] = verified;

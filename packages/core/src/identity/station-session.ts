@@ -15,7 +15,8 @@ import { hashBadgeCode, hashPin, verifyPin } from "./credentials";
 // unlocking by PIN or badge, switching users, idle lock and Lock. Each turn is a
 // StationActivation; the station only says where an action happened, never what is allowed.
 
-function initials(name: string): string {
+/** Up to two letters for a name tile. */
+export function initials(name: string): string {
   return name
     .trim()
     .split(/\s+/)

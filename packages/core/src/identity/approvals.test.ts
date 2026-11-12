@@ -5,8 +5,8 @@ import { createActor, resetDb, testDb } from "../../test/db";
 import { createOrder } from "../../test/factories";
 import { recordAudit } from "../audit";
 import { AppError } from "../errors";
-import type { UserActor } from "../permissions";
-import { recordApproval, verifyApprover } from "./approvals";
+import { systemActor, type UserActor } from "../permissions";
+import { listApprovers, recordApproval, verifyApprover } from "./approvals";
 import { hashBadgeCode, hashPin } from "./credentials";
 import { stationActor, unlockWithPin } from "./station-session";
 import { findStationByToken, registerStation } from "./stations";
@@ -446,5 +446,50 @@ describe("approvals: atomic with the action (criterion 26)", () => {
     ).rejects.toMatchObject({ messageKey: "errors.workflow.stale" });
 
     await nothingWritten(order.id);
+  });
+});
+
+describe("approver tiles (criterion 27)", () => {
+  it("lists active users with the permission and a PIN, by name, never the caller", async () => {
+    const { actor, packer } = await packerOnStation();
+    await person("Zoe", ["QA"]);
+    const maria = await person("Maria", ["QA"]);
+    const admin = await person("Ana", ["ADMIN"]);
+    await person("Pete", ["PACKER"]); // no order.qa
+    const gone = await person("Gus", ["QA"]);
+    await db.user.update({ where: { id: gone.userId }, data: { active: false } });
+    const noPin = await person("Nell", ["QA"]);
+    await db.user.update({ where: { id: noPin.userId }, data: { pinHash: null } });
+
+    const tiles = await listApprovers(db, actor, { permission: "order.qa" });
+
+    expect(tiles.map((t) => t.name)).toEqual(["Ana", "Maria", "Zoe"]);
+    expect(tiles.find((t) => t.name === "Maria")).toEqual({
+      id: maria.userId,
+      name: "Maria",
+      initials: "M",
+    });
+    expect(tiles.map((t) => t.id)).not.toContain(packer.userId);
+    expect(tiles.map((t) => t.id)).toContain(admin.userId);
+  });
+
+  it("leaves out the caller even when they could approve, from a desk too", async () => {
+    const qa = await person("Quinn", ["QA"]);
+    await person("Maria", ["QA"]);
+    const desk = { userId: qa.userId, roles: qa.roles, stationId: null };
+
+    const tiles = await listApprovers(db, desk, { permission: "order.qa" });
+
+    expect(tiles.map((t) => t.name)).toEqual(["Maria"]);
+  });
+
+  it("refuses an unknown permission and a background job", async () => {
+    const qa = await person("Quinn", ["QA"]);
+    await expect(listApprovers(db, qa, { permission: "order.fly" })).rejects.toMatchObject({
+      kind: "BAD_REQUEST",
+    });
+    await expect(listApprovers(db, systemActor, { permission: "order.qa" })).rejects.toMatchObject({
+      kind: "FORBIDDEN",
+    });
   });
 });

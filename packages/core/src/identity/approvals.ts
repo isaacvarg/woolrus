@@ -1,10 +1,17 @@
-import type { ApprovalCredential } from "@woolrus/contracts";
-import type { ApprovalKind, Db, DbTx, Prisma, User } from "@woolrus/db";
+import type { ApprovalCredential, UnlockTile } from "@woolrus/contracts";
+import type { ApprovalKind, Db, DbTx, Prisma, Role, User } from "@woolrus/db";
 import { recordAudit } from "../audit";
 import { AppError } from "../errors";
-import { type Actor, can, type Permission, type UserActor } from "../permissions";
+import {
+  type Actor,
+  can,
+  type Permission,
+  permissions,
+  rolePermissions,
+  type UserActor,
+} from "../permissions";
 import { hashBadgeCode } from "./credentials";
-import { checkPin, pinCheckError } from "./station-session";
+import { checkPin, initials, pinCheckError } from "./station-session";
 
 // A second person's say-so for one action, given in person with a PIN or badge (SPEC-identity A2).
 // The credential travels with the action (decision 16): `verifyApprover` runs before the action's
@@ -133,4 +140,39 @@ export async function recordApproval(
     at: now,
   });
   return id;
+}
+
+/**
+ * The approver tiles (`approvers.list`): active users who hold `permission` by their roles and have
+ * a PIN, never the caller, sorted by name. Name and initials only, the same exposure as the lock
+ * screen's tiles; every tile has a PIN by construction. A badge works for anyone who has one,
+ * whether or not they're on a tile. Any person may ask, at a station or a desk.
+ */
+export async function listApprovers(
+  db: Db,
+  actor: Actor,
+  { permission }: { permission: string },
+): Promise<UnlockTile[]> {
+  const asker = requester(actor);
+  if (!isPermission(permission)) {
+    throw new AppError("BAD_REQUEST", "errors.validation", { permission: "errors.field.invalid" });
+  }
+  const roles = (Object.keys(rolePermissions) as Role[]).filter((role) =>
+    rolePermissions[role].includes(permission),
+  );
+  const users = await db.user.findMany({
+    where: {
+      active: true,
+      pinHash: { not: null },
+      roles: { hasSome: roles },
+      id: { not: asker.userId },
+    },
+    select: { id: true, name: true },
+    orderBy: { name: "asc" },
+  });
+  return users.map((u) => ({ id: u.id, name: u.name, initials: initials(u.name) }));
+}
+
+function isPermission(value: string): value is Permission {
+  return (permissions as readonly string[]).includes(value);
 }

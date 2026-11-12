@@ -1611,6 +1611,15 @@
     "activeUser": "{name} está en esta estación.",
     "keepWorking": "Seguir como {name}"
   },
+  "approval": {
+    "reason": "Motivo",
+    "reasonHelp": "Por qué está bien, hasta 200 caracteres. Se guarda con la aprobación.",
+    "approvers": "¿Quién aprueba?",
+    "noApprovers": "Nadie aquí puede aprobar esto con PIN. Escanea una credencial.",
+    "approve": "Aprobar",
+    "cancel": "Cancelar",
+    "badgeHeld": "Credencial escaneada. Añade el motivo y aprueba."
+  },
   "stations": {
     "title": "Estaciones",
     "name": "Nombre",

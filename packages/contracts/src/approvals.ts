@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { UnlockBadgeInput, UnlockPinInput } from "./stations";
+import { base } from "./base";
+import { UnlockBadgeInput, UnlockPinInput, UnlockTile } from "./stations";
 
 // A second person's say-so for one action (SPEC-identity A2). It travels in the action's own input
 // as an optional `approval` field; no procedure approves on its own (decision 16).
@@ -24,3 +25,20 @@ export const ApprovalReason = z
 /** Embed as `approval: ApprovalInput.optional()` in an action that may need one. */
 export const ApprovalInput = z.object({ credential: ApprovalCredential, reason: ApprovalReason });
 export type ApprovalInput = z.infer<typeof ApprovalInput>;
+
+/** Which permission the approval needs; core checks it's a real one. */
+export const ListApproversInput = z.object({ permission: z.string().min(1).max(64) });
+export type ListApproversInput = z.infer<typeof ListApproversInput>;
+
+export const approvers = {
+  list: base
+    .route({
+      method: "GET",
+      path: "/approvers",
+      tags: ["Approvals"],
+      summary:
+        "Who may approve: active users with the permission and a PIN, never the caller (name tiles only)",
+    })
+    .input(ListApproversInput)
+    .output(z.array(UnlockTile)),
+};

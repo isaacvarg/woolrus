@@ -1611,6 +1611,15 @@
     "activeUser": "{name} is on this station.",
     "keepWorking": "Keep working as {name}"
   },
+  "approval": {
+    "reason": "Reason",
+    "reasonHelp": "Why this is OK, up to 200 characters. It is saved with the approval.",
+    "approvers": "Who is approving?",
+    "noApprovers": "Nobody here can approve this with a PIN. Scan a badge instead.",
+    "approve": "Approve",
+    "cancel": "Cancel",
+    "badgeHeld": "Badge scanned. Add the reason, then approve."
+  },
   "stations": {
     "title": "Stations",
     "name": "Name",

@@ -175,6 +175,7 @@ archive: api.boxes.archive.handler(({ input, context }) => archiveBox(db, contex
 | Unit | Vitest | `packages/*/src/**/*.test.ts` | Pure logic: state machine, gates, split/merge, units, crypto |
 | Integration | Vitest + real Postgres (`woolrus_test`) | `packages/core/src/**/*.test.ts` | Services end to end through Prisma: permissions, transactions, audit, idempotency |
 | Adapter | Vitest + recorded fixtures; dev WooCommerce for opt-in live tests | `packages/core/src/adapters/**` | Mapping external payloads; live tests are tagged and skipped in CI |
+| Component | Vitest + jsdom + Testing Library (opt in per file: `// @vitest-environment jsdom`) | `apps/web/src/**/*.test.tsx` | Reusable UI behaviour no screen exercises yet, e.g. the approval dialog |
 | End to end | Playwright (desktop + Galaxy Tab) | `apps/web/e2e` | User journeys per module; the full order journey by go-live |
 
 - Write the failing test first (TDD); every bug fix starts with a test that reproduces it.
