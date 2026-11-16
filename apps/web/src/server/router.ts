@@ -61,6 +61,7 @@ import {
   linkBarcode,
   linkProduct,
   linkProducts,
+  listApprovers,
   listBoxes,
   listFailedJobs,
   listInvitations,
@@ -641,6 +642,11 @@ export const router = implementer.router({
       return { ok: true as const };
     }),
     touch: api.station.touch.handler(({ context }) => touchStation(db, context.actor)),
+  },
+  approvers: {
+    list: api.approvers.list.handler(({ input, context }) =>
+      listApprovers(db, context.actor, input),
+    ),
   },
   carriers: {
     providers: api.carriers.providers.handler(({ context }) => listProviders(db, context.actor)),

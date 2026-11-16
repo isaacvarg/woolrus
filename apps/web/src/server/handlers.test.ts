@@ -34,6 +34,7 @@ vi.mock("@woolrus/core", async (original) => {
     listBoxes: record,
     listVoids: record,
     listIssues: record,
+    listApprovers: record,
   };
 });
 
@@ -106,6 +107,13 @@ describe("GET inputs over /api/v1", () => {
     ).toMatchObject({ addressGroupIds: [a, b] });
     expect((await get(`/rate-lab/addresses?groupIds=${a}`)).input).toMatchObject({
       groupIds: [a],
+    });
+  });
+
+  it("reads the approver tiles' permission from the query string (SPEC-identity A2)", async () => {
+    expect(await get("/approvers?permission=order.qa")).toEqual({
+      status: 404,
+      input: { permission: "order.qa" },
     });
   });
 });

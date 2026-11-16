@@ -81,6 +81,8 @@ model User {
   labAddresses       RateLabAddress[]
   labParcels         RateLabParcel[]
   labRuns            RateLabRun[]
+  approvalsRequested Approval[]          @relation("ApprovalRequestedBy")
+  approvalsGiven     Approval[]          @relation("ApprovalApprovedBy")
 
   @@map("users")
 }
@@ -167,6 +169,7 @@ model Station {
   activations  StationActivation[]
   stageEvents  OrderStageEvent[]
   auditEvents  AuditEvent[]
+  approvals    Approval[]
 
   @@map("stations")
 }
@@ -204,4 +207,37 @@ model StationActivation {
 
   @@index([stationId, endedAt])
   @@map("station_activations")
+}
+
+/// What an approval is for. Each kind belongs to the module whose action it guards, and names the
+/// permission an approver needs (SPEC-identity A2, decision 21).
+enum ApprovalKind {
+  /// packing A1: completing packing past blocked checks
+  PACKING_CHECKS
+
+  @@map("approval_kind")
+}
+
+/// A second person's say-so for one action, given in person with a PIN or badge (SPEC-identity A2).
+/// Written in the action's own transaction, so it exists only if the action committed. A
+/// hand-written CHECK refuses requester = approver (decision 20).
+model Approval {
+  id            String       @id @default(uuid(7)) @db.Uuid
+  kind          ApprovalKind
+  entityType    String       @map("entity_type")
+  entityId      String       @map("entity_id") @db.Uuid
+  requestedById String       @map("requested_by_id") @db.Uuid
+  approvedById  String       @map("approved_by_id") @db.Uuid
+  stationId     String?      @map("station_id") @db.Uuid
+  reason        String
+  /// What was approved, as the caller described it (e.g. the tripped checks).
+  details       Json         @default("{}")
+  createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  requestedBy User     @relation("ApprovalRequestedBy", fields: [requestedById], references: [id])
+  approvedBy  User     @relation("ApprovalApprovedBy", fields: [approvedById], references: [id])
+  station     Station? @relation(fields: [stationId], references: [id], onDelete: SetNull)
+
+  @@index([entityType, entityId])
+  @@map("approvals")
 }

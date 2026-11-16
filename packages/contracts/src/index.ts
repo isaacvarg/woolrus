@@ -1,3 +1,4 @@
+import { approvers } from "./approvals";
 import { boxes } from "./boxes";
 import { carriers } from "./carriers";
 import { invitations } from "./invitations";
@@ -19,6 +20,7 @@ import { sync } from "./sync";
 import { users } from "./users";
 import { voids } from "./voids";
 
+export * from "./approvals";
 export * from "./base";
 export * from "./boxes";
 export * from "./carriers";
@@ -64,6 +66,7 @@ export const contract = {
   invitations,
   stations,
   station,
+  approvers,
   voids,
   issues,
   carriers,

@@ -1389,6 +1389,11 @@
       "badBadge": "That badge isn't recognized.",
       "notStation": "Only a station can be locked."
     },
+    "approval": {
+      "notPermitted": "That person can't approve this.",
+      "self": "You can't approve your own request. Ask someone else.",
+      "reasonRequired": "Give a reason of up to 200 characters."
+    },
     "notes": {
       "empty": "Write something in the note first.",
       "notAuthor": "Only the note's author or an admin can change it.",
@@ -1605,6 +1610,15 @@
     "noTiles": "Nobody has a PIN yet. Scan your badge, or ask an admin to set your PIN.",
     "activeUser": "{name} is on this station.",
     "keepWorking": "Keep working as {name}"
+  },
+  "approval": {
+    "reason": "Reason",
+    "reasonHelp": "Why this is OK, up to 200 characters. It is saved with the approval.",
+    "approvers": "Who is approving?",
+    "noApprovers": "Nobody here can approve this with a PIN. Scan a badge instead.",
+    "approve": "Approve",
+    "cancel": "Cancel",
+    "badgeHeld": "Badge scanned. Add the reason, then approve."
   },
   "stations": {
     "title": "Stations",

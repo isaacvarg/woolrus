@@ -35,6 +35,7 @@ export * from "./exceptions/stage";
 export * from "./exceptions/voids";
 export * from "./exceptions/voids-queries";
 export * from "./idempotency";
+export * from "./identity/approvals";
 export * from "./identity/credentials";
 export * from "./identity/email";
 export * from "./identity/emails";

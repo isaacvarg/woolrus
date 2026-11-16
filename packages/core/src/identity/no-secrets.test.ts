@@ -3,6 +3,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vites
 import { createActor, resetDb, testDb } from "../../test/db";
 import type { EmailSender } from "../adapters/email/sender";
 import { getPublicSettings, getSettings, setSecret } from "../settings/service";
+import { listApprovers, recordApproval, verifyApprover } from "./approvals";
 import { sendTestEmail } from "./email";
 import { createInvitation, listInvitations } from "./invitations";
 import {
@@ -21,7 +22,8 @@ import { createStationUser, issueBadge, listUsers, setPin, updateUserRoles } fro
 // may hold a PIN, PIN hash, badge hash, station token (or its hash) or the Resend key (or its
 // ciphertext). The badge code may appear in the issueBadge response only: it's printed from there.
 // Amendment 1 (criterion 19): it also adds a station-only user, whose placeholder email must not
-// appear in any users.* output either.
+// appear in any users.* output either. Amendment 2 (criterion 27): approvals by PIN and badge, their
+// Approval rows and approval.grant audits are swept too.
 
 const db: Db = testDb();
 afterAll(() => db.$disconnect());
@@ -104,6 +106,28 @@ describe("no secrets out", () => {
     responses.lock = await lockStation(db, actor);
     responses.stationsAfter = await listStations(db, admin);
 
+    // Amendment 2 (criterion 27): the approver tiles, then the worker approves the admin's
+    // request by PIN, then by badge.
+    responses.approvers = await listApprovers(db, admin, { permission: "order.pack" });
+    expect(responses.approvers).toContainEqual(expect.objectContaining({ id: worker.userId }));
+    for (const credential of [{ userId: worker.userId, pin: PIN }, { badgeCode: badge.code }]) {
+      const verified = await verifyApprover(db, admin, { credential, permission: "order.pack" });
+      responses[`verify${"pin" in credential ? "Pin" : "Badge"}`] = verified;
+      responses[`record${"pin" in credential ? "Pin" : "Badge"}`] = await db.$transaction((tx) =>
+        recordApproval(tx, admin, {
+          ...verified,
+          permission: "order.pack",
+          kind: "PACKING_CHECKS",
+          entityType: "Station",
+          entityId: station.id,
+          reason: "sweep",
+          details: { checks: ["sweep"] },
+        }),
+      );
+    }
+    responses.approvals = await db.approval.findMany();
+    expect(responses.approvals).toHaveLength(2);
+
     const userRow = await db.user.findUniqueOrThrow({ where: { id: worker.userId } });
     const stationRow = await db.station.findUniqueOrThrow({ where: { id: station.id } });
     const settingsRow = await db.settings.findFirstOrThrow();
@@ -124,6 +148,7 @@ describe("no secrets out", () => {
 
     const audit = await db.auditEvent.findMany();
     expect(audit.length).toBeGreaterThan(5);
+    expect(audit.filter((row) => row.action === "approval.grant")).toHaveLength(2);
     expect(leaks(audit, { ...secrets, badgeCode: badge.code })).toEqual([]);
     for (const [name, response] of Object.entries(responses)) {
       expect({ name, leaks: leaks(response, { ...secrets, badgeCode: badge.code }) }).toEqual({

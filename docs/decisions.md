@@ -84,6 +84,18 @@ Full model in `packages/db/prisma/schema/*.prisma`. Changes from the SRS's secti
   unverified user, because its lock row in `verifications` gets a base64url id unless `generateId` is `"uuid"`,
   and ours is `false` with uuid columns. A station-only user has no accounts or sessions for that step to revoke.
   `generateId` and the schema stay as they are.
+- **Approvals** (SPEC-identity amendment 2, 2026-11-12): some actions need a second person's say-so, given in
+  person with their PIN or badge on the requester's screen; the station stays on the requester. It lives in
+  `identity` (`core/src/identity/approvals.ts`, one `Approval` table), not a module of its own: it's identity's
+  PIN and badge checking plus a row. The credential travels with the action and is checked before the action's
+  transaction, so a wrong PIN is counted even though the action fails; the `Approval` row is written inside it,
+  so it exists only if the action committed. Nothing is stored ahead, so there's no unused approval to replay.
+  **One PIN lockout:** approval PINs and lock-screen PINs share the 5-tries/15-minute counter, so the dialog is
+  not a second place to guess PINs. **A PIN or badge is required everywhere:** a personal session never
+  approves, so an Admin left signed in at a desk can't be used to approve. **Never your own request**, for every
+  kind; a hand-written `CHECK (requested_by_id <> approved_by_id)` enforces it in the database too. Each
+  `ApprovalKind` names a permission (`permissions.ts`), never hardcoded names, and the kind's module adds it.
+  A reason (1–200 characters) is always required.
 - **WooCommerce payloads** are stored raw (`rawPayload` jsonb) so fields can be promoted to columns later.
 - **Settings** is a single row; secrets are stored AES-GCM-encrypted with `SETTINGS_ENCRYPTION_KEY`.
 - **Returns** (`ReturnRequest`, `ReturnItem`), **manifests**, **priority rules**, **webhook inbox** and
