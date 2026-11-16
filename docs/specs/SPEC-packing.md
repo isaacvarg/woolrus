@@ -4,7 +4,7 @@
 `picking` (code matching, the finish options it hands over to packing), `notes` (package notes in the drawer) ·
 **Used by:** `carriers` (reads package box, dimensions and weight; adds the rate fetch on Packing → QA), `qa`
 (verifies `PackageItem`s), `exceptions` (packaging issues on a package), `lumexia` (lot per `PackageItem`) ·
-**State:** done; amendment 1 (packing checks, approved 2026-11-12) is **planned** (tickets #181–#186) · **Issue:**
+**State:** done; amendment 1 (packing checks, approved 2026-11-12) is **done** (tickets #181–#186) · **Issue:**
 [#24](https://github.com/isaacvarg/woolrus/issues/24); amendment 1:
 [#178](https://github.com/isaacvarg/woolrus/issues/178)
 
