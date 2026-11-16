@@ -301,7 +301,8 @@
       "percent": "Lejos de la estimación en más de (%)",
       "percentHint": "De 5 a 100.",
       "save": "Guardar",
-      "saved": "Controles de empaque guardados."
+      "saved": "Controles de empaque guardados.",
+      "stats": "Últimos 30 días: {trips, plural, one {# aviso} other {# avisos}}, {approved, plural, one {# aprobado} other {# aprobados}}"
     }
   },
   "priorityRules": {

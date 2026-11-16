@@ -11,6 +11,14 @@ const db: Db = testDb();
 afterAll(() => db.$disconnect());
 beforeEach(() => resetDb(db));
 
+/** The re-weigh note is written only while the re-weigh check is off (SPEC-packing A1, criterion 22). */
+const weightStaleOff = () =>
+  db.settings.upsert({
+    where: { id: 1 },
+    create: { id: 1, packCheckWeightStale: "OFF" },
+    update: { packCheckWeightStale: "OFF" },
+  });
+
 const minutesAgo = (n: number) => new Date(Date.now() - n * 60_000);
 const orderRow = (id: string) => db.order.findUniqueOrThrow({ where: { id } });
 
@@ -134,7 +142,8 @@ describe("completePack", () => {
   });
 });
 
-describe("the re-weigh note", () => {
+describe("the re-weigh note, with the re-weigh check off", () => {
+  beforeEach(weightStaleOff);
   const notesOn = (packageId: string) => db.note.findMany({ where: { packageId } });
 
   it("writes one internal note on each still-flagged package and none on the others", async () => {
@@ -240,6 +249,7 @@ describe("the overweight gate, end to end", () => {
 });
 
 describe("the re-weigh note, through the screen's own writes", () => {
+  beforeEach(weightStaleOff);
   const notesOf = (orderId: string) => db.note.findMany({ where: { orderId } });
 
   async function reweighable() {

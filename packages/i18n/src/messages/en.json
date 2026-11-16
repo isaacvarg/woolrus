@@ -301,7 +301,8 @@
       "percent": "Off the estimate by more than (%)",
       "percentHint": "From 5 to 100.",
       "save": "Save",
-      "saved": "Packing checks saved."
+      "saved": "Packing checks saved.",
+      "stats": "Last 30 days: {trips, plural, one {# trip} other {# trips}}, {approved} approved"
     }
   },
   "priorityRules": {

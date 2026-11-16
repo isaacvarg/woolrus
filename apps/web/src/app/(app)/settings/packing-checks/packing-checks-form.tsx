@@ -1,7 +1,12 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { AdminSettings, PackCheckMode, UpdateSettingsInput } from "@woolrus/contracts";
+import type {
+  AdminSettings,
+  PackCheck,
+  PackCheckMode,
+  UpdateSettingsInput,
+} from "@woolrus/contracts";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { Form } from "react-aria-components";
@@ -57,6 +62,9 @@ function PackingChecksForm({ settings }: { settings: AdminSettings }) {
     () => Object.fromEntries(checks.map((field) => [field, settings[field]])) as never,
   );
   const [percent, setPercent] = useState(settings.packCheckWeightOffPercent);
+  // The 30-day counts beside each mode; the form works without them while they load.
+  const stats = useQuery(orpc.packChecks.stats.queryOptions());
+  const statOf = (check: PackCheck) => stats.data?.find((s) => s.check === check);
 
   const save = useMutation(
     orpc.settings.update.mutationOptions({
@@ -109,9 +117,14 @@ function PackingChecksForm({ settings }: { settings: AdminSettings }) {
                     }
                   }}
                 />
-                <p className="text-sm text-base-content/70">
-                  {t(`settings.packingChecks.${check}Hint`)}
-                </p>
+                <div className="text-sm">
+                  <p className="text-base-content/70">{t(`settings.packingChecks.${check}Hint`)}</p>
+                  {statOf(check) ? (
+                    <p className="mt-1 font-medium" data-stat={check}>
+                      {t("settings.packingChecks.stats", statOf(check))}
+                    </p>
+                  ) : null}
+                </div>
               </li>
             );
           })}

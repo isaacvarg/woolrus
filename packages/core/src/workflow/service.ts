@@ -2,6 +2,7 @@ import type { Db, DbTx, Order, WorkflowStatus } from "@woolrus/db";
 import { recordAudit } from "../audit";
 import { requestRateFetch } from "../carriers/rates";
 import { AppError } from "../errors";
+import { clearTrips, saveTrips } from "../packing/trips";
 import { type Actor, assertCan } from "../permissions";
 import { claimExpiryMinutes, holdsClaim, isClaimLive } from "./claims";
 import { evaluateGate, loadGateSnapshot } from "./gates";
@@ -117,6 +118,10 @@ export async function transition(
     after: { status: to, version: updated.version, ...(reasonText ? { reason: reasonText } : {}) },
     at: now,
   });
+  // SPEC-packing A1: leaving Packing for QA saves the trips as they stand (completePacking and an
+  // Admin's forceStatus alike); any way back into Packing deletes them, as QA verification is reset.
+  if (order.status === "PACKING" && to === "QA") await saveTrips(tx, orderId, { now });
+  else if (to === "PACKING") await clearTrips(tx, orderId);
   await notifyOrderChanged(tx, { id: orderId, status: to });
 
   // FR-PACK-07: rates for every package, on this transaction so a rolled-back move asks for none.

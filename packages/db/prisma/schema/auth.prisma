@@ -83,6 +83,7 @@ model User {
   labRuns            RateLabRun[]
   approvalsRequested Approval[]          @relation("ApprovalRequestedBy")
   approvalsGiven     Approval[]          @relation("ApprovalApprovedBy")
+  checkTripsAcked    PackageCheckTrip[]  @relation("PackCheckTripAcknowledgedBy")
 
   @@map("users")
 }
@@ -234,9 +235,10 @@ model Approval {
   details       Json         @default("{}")
   createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
 
-  requestedBy User     @relation("ApprovalRequestedBy", fields: [requestedById], references: [id])
-  approvedBy  User     @relation("ApprovalApprovedBy", fields: [approvedById], references: [id])
-  station     Station? @relation(fields: [stationId], references: [id], onDelete: SetNull)
+  requestedBy User               @relation("ApprovalRequestedBy", fields: [requestedById], references: [id])
+  approvedBy  User               @relation("ApprovalApprovedBy", fields: [approvedById], references: [id])
+  station     Station?           @relation(fields: [stationId], references: [id], onDelete: SetNull)
+  checkTrips  PackageCheckTrip[]
 
   @@index([entityType, entityId])
   @@map("approvals")
