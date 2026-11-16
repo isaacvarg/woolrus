@@ -446,6 +446,103 @@ describe("setPackageBox", () => {
   });
 });
 
+describe("box scans (SPEC-packing A1, criterion 25)", () => {
+  const scanned = (name: string, barcode: string, extra: { archivedAt?: Date } = {}) =>
+    db.box.create({
+      data: { name, lengthIn: 12, widthIn: 10, heightIn: 8, barcode, ...extra },
+    });
+
+  it("adds a package per box scan with boxScanned, a tap without it", async () => {
+    const { packer, order } = await packing();
+    const medium = await scanned("Medium", "BOX-MED");
+    const large = await scanned("Large", "BOX-LRG");
+    const scan = (barcode: string) =>
+      addPackage(db, packer, { orderId: order.id, box: { barcode }, idempotencyKey: key() });
+
+    await scan("box-med");
+    await scan(" BOX-MED ");
+    const third = await scan("BOX-LRG");
+    expect(third.packages.map((p) => [p.number, p.box?.name, p.boxScanned])).toEqual([
+      [1, "Medium", true],
+      [2, "Medium", true],
+      [3, "Large", true],
+    ]);
+
+    const tapped = await addPackage(db, packer, {
+      orderId: order.id,
+      box: { boxId: large.id },
+      idempotencyKey: key(),
+    });
+    expect(tapped.packages[3]?.boxScanned).toBe(false);
+
+    // Changing a scanned package's box is a tap.
+    const changed = await setPackageBox(db, packer, {
+      packageId: id(third.packages[0]),
+      box: { boxId: large.id },
+    });
+    expect(changed.packages[0]).toMatchObject({ boxScanned: false });
+    expect(changed.packages[0]?.box?.id).toBe(large.id);
+    expect(medium.id).not.toBe(large.id);
+  });
+
+  it("adds nothing on a replayed key", async () => {
+    const { packer, order } = await packing();
+    await scanned("Medium", "BOX-MED");
+    const input = { orderId: order.id, box: { barcode: "BOX-MED" }, idempotencyKey: key() };
+    await addPackage(db, packer, input);
+    const replay = await addPackage(db, packer, input);
+    expect(replay.packages).toHaveLength(1);
+    expect(await db.package.count({ where: { orderId: order.id } })).toBe(1);
+  });
+
+  it("refuses an archived box's barcode and an unknown one", async () => {
+    const { packer, order } = await packing();
+    await scanned("Old", "BOX-OLD", { archivedAt: new Date() });
+    const scan = (barcode: string) =>
+      addPackage(db, packer, { orderId: order.id, box: { barcode }, idempotencyKey: key() });
+    await expect(scan("BOX-OLD")).rejects.toMatchObject({
+      messageKey: "errors.packing.boxArchived",
+    });
+    await expect(scan("NOPE")).rejects.toMatchObject({ kind: "NOT_FOUND" });
+    expect(await db.package.count({ where: { orderId: order.id } })).toBe(0);
+  });
+
+  it("trips BOX_NOT_SCANNED only for a tapped box, and only while the check is on", async () => {
+    const { packer, order } = await packing();
+    const box = await scanned("Medium", "BOX-MED");
+    await addPackage(db, packer, {
+      orderId: order.id,
+      box: { barcode: "BOX-MED" },
+      idempotencyKey: key(),
+    });
+    await addPackage(db, packer, {
+      orderId: order.id,
+      box: { boxId: box.id },
+      idempotencyKey: key(),
+    });
+    const tripsOf = async () =>
+      (await getPackView(db, packer, { orderId: order.id })).packages.map((p) =>
+        p.trips.filter((t) => t.check === "BOX_NOT_SCANNED"),
+      );
+
+    // Off by default.
+    expect(await tripsOf()).toEqual([[], []]);
+    await db.settings.update({ where: { id: 1 }, data: { packCheckBoxNotScanned: "WARN" } });
+    expect(await tripsOf()).toEqual([
+      [],
+      [{ check: "BOX_NOT_SCANNED", mode: "WARN", details: { boxName: "Medium" } }],
+    ]);
+  });
+
+  it("offers the active boxes' barcodes in the pack view", async () => {
+    const { packer, order } = await packing();
+    await scanned("Medium", "BOX-MED");
+    await scanned("Old", "BOX-OLD", { archivedAt: new Date() });
+    const view = await getPackView(db, packer, { orderId: order.id });
+    expect(view.boxes.map((b) => b.barcode)).toEqual(["BOX-MED"]);
+  });
+});
+
 describe("deletePackage", () => {
   it("returns units to unassigned and renumbers later packages", async () => {
     const { packer, order, items } = await packing([{ quantity: 3 }]);
@@ -880,7 +977,7 @@ describe("setWeight", () => {
   });
 });
 
-describe("box suggestion, estimate and weight warning", () => {
+describe("box suggestion, estimate and packing checks", () => {
   const size = { lengthIn: 4, widthIn: 4, heightIn: 3, weightOz: 3.5 };
   const tared = (name: string, tareWeightOz: number, dims = [10, 8, 4]) =>
     db.box.create({
@@ -936,7 +1033,7 @@ describe("box suggestion, estimate and weight warning", () => {
     expect(view.suggestion).toMatchObject({ box: { name: "Huge" }, estimatedWeightOz: 19 });
   });
 
-  it("estimates a package's weight and warns beyond 25% off, never without an estimate", async () => {
+  it("estimates a package's weight and trips WEIGHT_OFF beyond the setting, never without an estimate", async () => {
     const { packer, order } = await packing([
       { quantity: 4, size },
       { quantity: 1, size: { weightOz: 1 } },
@@ -959,14 +1056,26 @@ describe("box suggestion, estimate and weight warning", () => {
       quantity: 4,
     });
     // 4 × 3.5 + 4 tare
-    expect(first.packages[0]).toMatchObject({ estimatedWeightOz: 18, weightWarning: null });
+    expect(first.packages[0]).toMatchObject({ estimatedWeightOz: 18, trips: [] });
+    expect(first.packages[0]).not.toHaveProperty("weightWarning");
 
     const near = await setWeight(db, packer, { packageId: pkg, weightOz: 22 });
-    expect(near.packages[0]?.weightWarning).toBeNull();
+    expect(near.packages[0]?.trips).toEqual([]);
     const far = await setWeight(db, packer, { packageId: pkg, weightOz: 30 });
-    expect(far.packages[0]?.weightWarning).toEqual({ percent: 67 });
+    expect(far.packages[0]?.trips).toEqual([
+      { check: "WEIGHT_OFF", mode: "WARN", details: { weightOz: 30, estimateOz: 18, percent: 67 } },
+    ]);
+    // The threshold is the setting's, read live: 22 is 22% off, so a 20% threshold trips it.
+    await db.settings.update({ where: { id: 1 }, data: { packCheckWeightOffPercent: 20 } });
+    const tight = await setWeight(db, packer, { packageId: pkg, weightOz: 22 });
+    expect(tight.packages[0]?.trips.map((t) => t.check)).toEqual(["WEIGHT_OFF"]);
+    // Off: never evaluated.
+    await db.settings.update({ where: { id: 1 }, data: { packCheckWeightOff: "OFF" } });
+    const view = await getPackView(db, packer, { orderId: order.id });
+    expect(view.packages[0]?.trips).toEqual([]);
 
-    // Without a weight on one product there is no estimate, so no warning.
+    // Without a weight on one product there is no estimate, so no trip.
+    await db.settings.update({ where: { id: 1 }, data: { packCheckWeightOff: "WARN" } });
     const noEstimate = await packing([
       { quantity: 1, size: { lengthIn: 1, widthIn: 1, heightIn: 1 } },
     ]);
@@ -977,12 +1086,114 @@ describe("box suggestion, estimate and weight warning", () => {
     });
     const p2 = id(added.packages[0]);
     await packRemaining(db, noEstimate.packer, { packageId: p2 });
-    const weighed = await setWeight(db, noEstimate.packer, { packageId: p2, weightOz: 500 }).catch(
-      () => null,
+    const weighed = await setWeight(db, noEstimate.packer, { packageId: p2, weightOz: 300 });
+    expect(weighed.packages[0]).toMatchObject({ estimatedWeightOz: null, trips: [] });
+  });
+
+  it("shows NO_FIT, WEIGHT_STALE and CUSTOM_DIMENSIONS live, updated by each package write", async () => {
+    const pail = { lengthIn: 7, widthIn: 7, heightIn: 8, weightOz: 40 };
+    const { packer, order, items } = await packing([
+      { name: "Pail 5 gal", quantity: 1, size: pail },
+      { name: "Jar", quantity: 3 },
+    ]);
+    const smallBox = await tared("Small", 1, [6, 4, 2]);
+    const large = await tared("Large", 9, [14, 12, 8]);
+    const { packages } = await addPackage(db, packer, {
+      orderId: order.id,
+      box: { boxId: smallBox.id },
+      idempotencyKey: key(),
+    });
+    const pkg = id(packages[0]);
+    // Empty, then three unmeasured jars: nothing measured, nothing to check.
+    expect(packages[0]?.trips).toEqual([]);
+    const jars = await packUnits(db, packer, {
+      packageId: pkg,
+      orderItemId: id(items[1]),
+      quantity: 3,
+    });
+    expect(jars.packages[0]?.trips).toEqual([]);
+
+    const withPail = await packUnits(db, packer, { packageId: pkg, orderItemId: id(items[0]) });
+    expect(withPail.packages[0]?.trips).toEqual([
+      { check: "NO_FIT", mode: "WARN", details: { boxName: "Small", items: ["Pail 5 gal"] } },
+    ]);
+
+    const inLarge = await setPackageBox(db, packer, { packageId: pkg, box: { boxId: large.id } });
+    expect(inLarge.packages[0]?.trips).toEqual([]);
+
+    // An unweighed package trips no weight check; a weighed one whose contents change does.
+    await setWeight(db, packer, { packageId: pkg, weightOz: 80 });
+    const stale = await unpackUnits(db, packer, { packageId: pkg, orderItemId: id(items[1]) });
+    expect(stale.packages[0]?.trips).toEqual([
+      { check: "WEIGHT_STALE", mode: "WARN", details: { weightOz: 80 } },
+    ]);
+
+    const custom = await setPackageBox(db, packer, {
+      packageId: pkg,
+      box: { lengthIn: 7, widthIn: 7, heightIn: 7 },
+    });
+    expect(custom.packages[0]?.trips.map((t) => t.check)).toEqual([
+      "WEIGHT_STALE",
+      "NO_FIT",
+      "CUSTOM_DIMENSIONS",
+    ]);
+    expect(custom.packages[0]?.trips[1]).toEqual({
+      check: "NO_FIT",
+      mode: "WARN",
+      details: { items: ["Pail 5 gal"] },
+    });
+  });
+
+  it("puts the packer's overweight reason on the OVER_MAX trip, which still needs it", async () => {
+    const { packer, order } = await packing([{ quantity: 1, size }]);
+    const box = await tared("Medium", 4);
+    const { packages } = await addPackage(db, packer, {
+      orderId: order.id,
+      box: { boxId: box.id },
+      idempotencyKey: key(),
+    });
+    const pkg = id(packages[0]);
+    await packRemaining(db, packer, { packageId: pkg });
+    await expect(setWeight(db, packer, { packageId: pkg, weightOz: 320.01 })).rejects.toMatchObject(
+      {
+        messageKey: "errors.packing.overweight",
+      },
     );
-    const view = await getPackView(db, noEstimate.packer, { orderId: noEstimate.order.id });
-    expect(view.packages[0]).toMatchObject({ estimatedWeightOz: null, weightWarning: null });
-    expect(weighed === null || weighed.packages[0]?.weightWarning === null).toBe(true);
+    const kept = await setWeight(db, packer, {
+      packageId: pkg,
+      weightOz: 320.01,
+      overrideReason: "Dense kit",
+    });
+    expect(kept.packages[0]?.trips[0]).toEqual({
+      check: "OVER_MAX",
+      mode: "WARN",
+      details: { weightOz: 320.01, maxOz: 320, reason: "Dense kit" },
+    });
+  });
+
+  it("trips UNDER_MIN on a package lighter than its box's min (SPEC-packing A1)", async () => {
+    const { packer, order } = await packing([{ quantity: 1, size }]);
+    const box = await tared("Medium", 4);
+    await db.box.update({ where: { id: box.id }, data: { minWeightOz: 12 } });
+    const { packages } = await addPackage(db, packer, {
+      orderId: order.id,
+      box: { boxId: box.id },
+      idempotencyKey: key(),
+    });
+    const pkg = id(packages[0]);
+    await packRemaining(db, packer, { packageId: pkg });
+    // 3.5 + 4 tare: the estimate puts it near 8 oz, so the weight check stays quiet at 7.
+    const light = await setWeight(db, packer, { packageId: pkg, weightOz: 7 });
+    expect(light.packages[0]?.trips).toEqual([
+      { check: "UNDER_MIN", mode: "WARN", details: { weightOz: 7, minOz: 12 } },
+    ]);
+    const atMin = await setWeight(db, packer, { packageId: pkg, weightOz: 12 });
+    expect(atMin.packages[0]?.trips.map((t) => t.check)).not.toContain("UNDER_MIN");
+
+    await setWeight(db, packer, { packageId: pkg, weightOz: 7 });
+    await db.settings.update({ where: { id: 1 }, data: { packCheckUnderMin: "OFF" } });
+    const view = await getPackView(db, packer, { orderId: order.id });
+    expect(view.packages[0]?.trips).toEqual([]);
   });
 });
 

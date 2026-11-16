@@ -61,10 +61,14 @@ export async function linkBarcode(
     const { product, variation } = item;
     if (!product) throw new AppError("CONFLICT", "errors.picking.noProductToLink");
 
-    const owner = await findCodeOwner(tx, wanted, {
-      productId: product.id,
-      variationId: variation?.id ?? null,
-    });
+    // A box's area barcode is matched before products on the pack screen (SPEC-packing A1
+    // decision 18), so an item linked to one could never be scanned in.
+    const owner =
+      (await tx.box.findFirst({ where: { barcode: wanted }, select: { name: true } })) ??
+      (await findCodeOwner(tx, wanted, {
+        productId: product.id,
+        variationId: variation?.id ?? null,
+      }));
     if (owner) {
       throw new AppError("CONFLICT", "errors.picking.codeInUse", undefined, {
         params: { name: owner.name },

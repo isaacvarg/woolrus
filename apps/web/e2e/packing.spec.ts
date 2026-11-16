@@ -202,7 +202,7 @@ test("a weight over the box's max needs a reason; changing a weighed package ask
   await expect(page.getByTestId("pack-package").getByTestId("pack-weight")).toHaveText("3 lb");
 });
 
-test("the suggested box is listed first and adding it works; a weight far off the estimate warns", async ({
+test("the suggested box is listed first and adding it works; a weight far off the estimate trips WEIGHT_OFF", async ({
   page,
 }) => {
   // Smaller than any other box, so it is the smallest fit for a 1 in cube.
@@ -239,13 +239,13 @@ test("the suggested box is listed first and adding it works; a weight far off th
   await pkg.getByLabel("oz", { exact: true }).fill("11");
   await pkg.getByRole("button", { name: "Save weight" }).click();
   await expect(pkg.getByTestId("pack-weight")).toHaveText("11 oz");
-  await expect(pkg.getByTestId("pack-weight-warning")).toHaveCount(0);
+  await expect(pkg.getByTestId("pack-trip")).toHaveCount(0);
 
   await pkg.getByRole("button", { name: "Edit weight of package 1" }).click();
   await pkg.getByLabel("lb", { exact: true }).fill("1");
   await pkg.getByLabel("oz", { exact: true }).fill("0");
   await pkg.getByRole("button", { name: "Save weight" }).click();
-  await expect(pkg.getByTestId("pack-weight-warning")).toContainText(
+  await expect(pkg.locator("[data-check=WEIGHT_OFF]")).toContainText(
     "60% heavier than the estimate",
   );
 });
@@ -331,4 +331,40 @@ test("the order drawer shows the address, who picked, and a package note; Escape
 
   await page.keyboard.press("Escape");
   await expect(drawer).toBeHidden();
+});
+
+test("scanning two box barcodes adds two packages with those boxes (SPEC-packing A1)", async ({
+  page,
+}) => {
+  const tag = crypto.randomUUID().slice(0, 8).toUpperCase();
+  const made = await Promise.all(
+    ["Medium", "Large"].map((size, i) =>
+      db.box.create({
+        data: {
+          name: `E2E ${size} ${tag}`,
+          lengthIn: 10 + i * 4,
+          widthIn: 8 + i * 4,
+          heightIn: 4 + i * 4,
+          barcode: `E2E-BOX-${size.toUpperCase()}-${tag}`,
+        },
+      }),
+    ),
+  );
+  boxIds.push(...made.map((b) => b.id));
+  await startPacking(page, 2);
+  const banner = page.getByTestId("scan-banner");
+  const cards = page.getByTestId("pack-package");
+
+  // No package is selected yet: a box scan needs none.
+  await scanCode(page, `e2e-box-medium-${tag.toLowerCase()}`);
+  await expect(banner).toHaveAttribute("data-ok", "true");
+  await expect(banner).toContainText(`Package 1 added: E2E Medium ${tag}`);
+  await scanCode(page, `E2E-BOX-LARGE-${tag}`);
+  await expect(banner).toContainText(`Package 2 added: E2E Large ${tag}`);
+  await expect(cards).toHaveCount(2);
+
+  await page.reload();
+  await expect(cards).toHaveCount(2);
+  await expect(cards.filter({ hasText: `E2E Medium ${tag}` })).toHaveCount(1);
+  await expect(cards.filter({ hasText: `E2E Large ${tag}` })).toHaveCount(1);
 });

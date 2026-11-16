@@ -1,11 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  estimateWeightOz,
-  FILL_FACTOR,
-  type SuggestBox,
-  suggestBox,
-  weightOffPercent,
-} from "./suggest";
+import { estimateWeightOz, FILL_FACTOR, type SuggestBox, suggestBox } from "./suggest";
 
 const box = (over: Partial<SuggestBox> & { name: string }): SuggestBox => ({
   id: over.name,
@@ -116,18 +110,5 @@ describe("estimateWeightOz", () => {
   it("is null when any weight is missing, or there are no units", () => {
     expect(estimateWeightOz([unit(), unit({ weightOz: null })], null)).toBeNull();
     expect(estimateWeightOz([], null)).toBeNull();
-  });
-});
-
-describe("weightOffPercent", () => {
-  it("warns above 25% off in either direction, not within it", () => {
-    expect(weightOffPercent(125, 100)).toBeNull();
-    expect(weightOffPercent(75, 100)).toBeNull();
-    expect(weightOffPercent(126, 100)).toBe(26);
-    expect(weightOffPercent(70, 100)).toBe(-30);
-  });
-  it("never warns without an estimate or a weight", () => {
-    expect(weightOffPercent(500, null)).toBeNull();
-    expect(weightOffPercent(null, 100)).toBeNull();
   });
 });

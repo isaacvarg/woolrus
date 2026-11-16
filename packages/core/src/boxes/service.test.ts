@@ -14,11 +14,13 @@ const input = {
   lengthIn: 10,
   widthIn: 8.5,
   heightIn: 4,
+  minWeightOz: null,
   maxWeightOz: 320,
   tareWeightOz: null,
   outerLengthIn: null,
   outerWidthIn: null,
   outerHeightIn: null,
+  barcode: null,
 };
 
 describe("box service", () => {
@@ -154,6 +156,128 @@ describe("box service", () => {
     await expect(
       updateBox(db, admin, { id, lengthIn: 10, widthIn: 8, heightIn: 4 }),
     ).resolves.toBeDefined();
+  });
+
+  it("takes a min weight below the max, editable on a box in use (SPEC-packing A1)", async () => {
+    const admin = await createActor(db, ["ADMIN"]);
+    const refused = { kind: "BAD_REQUEST", messageKey: "errors.box.minNotBelowMax" };
+    await expect(createBox(db, admin, { ...input, minWeightOz: 320 })).rejects.toMatchObject(
+      refused,
+    );
+    const created = await createBox(db, admin, { ...input, minWeightOz: 16 });
+    expect(created.minWeightOz).toBe(16);
+
+    const { packages } = await createOrder(db, { status: "PACKING", packages: [{}] });
+    const id = packages[0]?.boxId as string;
+    await updateBox(db, admin, { id, maxWeightOz: 100 });
+    const used = await updateBox(db, admin, { id, minWeightOz: 12.5 });
+    expect(used).toMatchObject({ minWeightOz: 12.5, inUse: true });
+    // Against the stored max, and against a max sent in the same patch.
+    await expect(updateBox(db, admin, { id, minWeightOz: 100 })).rejects.toMatchObject(refused);
+    await expect(updateBox(db, admin, { id, maxWeightOz: 12 })).rejects.toMatchObject(refused);
+    // No max: any min goes; clearing the min is always fine.
+    await updateBox(db, admin, { id, maxWeightOz: null });
+    expect((await updateBox(db, admin, { id, minWeightOz: 5000 })).minWeightOz).toBe(5000);
+    expect((await updateBox(db, admin, { id, minWeightOz: null })).minWeightOz).toBeNull();
+  });
+
+  it("takes a barcode unique among boxes, editable on a box in use (SPEC-packing A1)", async () => {
+    const admin = await createActor(db, ["ADMIN"]);
+    const created = await createBox(db, admin, { ...input, barcode: "  box-med " });
+    // Stored normalized, as a scan is compared.
+    expect(created.barcode).toBe("BOX-MED");
+    const taken = { kind: "CONFLICT", messageKey: "errors.box.barcodeTaken" };
+    await expect(
+      createBox(db, admin, {
+        ...input,
+        idempotencyKey: "key-00000002",
+        name: "Other",
+        barcode: "Box-Med",
+      }),
+    ).rejects.toMatchObject(taken);
+
+    const { packages } = await createOrder(db, { status: "PACKING", packages: [{}] });
+    const id = packages[0]?.boxId as string;
+    const used = await updateBox(db, admin, { id, barcode: "BOX-SMALL" });
+    expect(used).toMatchObject({ barcode: "BOX-SMALL", inUse: true });
+    await expect(updateBox(db, admin, { id, barcode: "box-med" })).rejects.toMatchObject(taken);
+    // Its own barcode again is fine; an empty one clears it.
+    await expect(updateBox(db, admin, { id, barcode: "box-small" })).resolves.toBeDefined();
+    expect((await updateBox(db, admin, { id, barcode: " " })).barcode).toBeNull();
+    expect((await updateBox(db, admin, { id, barcode: null })).barcode).toBeNull();
+  });
+
+  it("refuses a barcode that is a product's code or looks like a lot code", async () => {
+    const admin = await createActor(db, ["ADMIN"]);
+    const now = new Date();
+    const product = await db.product.create({
+      data: {
+        wooProductId: 9001,
+        type: "variable",
+        name: "Lavender soap",
+        sku: "LAV-8OZ",
+        barcode: "0123456789012",
+        rawPayload: {},
+        syncedAt: now,
+      },
+    });
+    await db.productVariation.create({
+      data: {
+        productId: product.id,
+        wooVariationId: 9002,
+        name: "Lavender soap - Large",
+        sku: " lav-16oz",
+        barcode: "999000111",
+        attributes: [],
+        rawPayload: {},
+        syncedAt: now,
+      },
+    });
+    const isProduct = { kind: "BAD_REQUEST", messageKey: "errors.box.barcodeIsProduct" };
+    let n = 0;
+    const create = (barcode: string) =>
+      createBox(db, admin, { ...input, idempotencyKey: `key-1000000${n++}`, barcode });
+    for (const code of [
+      "lav-8oz",
+      "0123456789012",
+      "LAV-16OZ",
+      " 999000111 ",
+      "BASE1234.A12A0124",
+      "0195d3a8-7f6c-7a2e-9b1d-3c4e5f6a7b8c",
+    ]) {
+      await expect(create(code)).rejects.toMatchObject(isProduct);
+    }
+    const box = await create("BOX-MED");
+    await expect(updateBox(db, admin, { id: box.id, barcode: "lav-8oz" })).rejects.toMatchObject(
+      isProduct,
+    );
+  });
+
+  it("keeps a box editable when a product synced later takes its barcode", async () => {
+    const admin = await createActor(db, ["ADMIN"]);
+    const box = await createBox(db, admin, { ...input, barcode: "BOX-MED" });
+    // Store sync doesn't check box barcodes (SPEC-packing A1 open question 1).
+    await createOrder(db, { lines: [{ name: "Clash", sku: "BOX-MED" }] });
+
+    // The dialog sends the barcode it already has with every edit.
+    const updated = await updateBox(db, admin, { id: box.id, barcode: "box-med", minWeightOz: 4 });
+
+    expect(updated).toMatchObject({ barcode: "BOX-MED", minWeightOz: 4 });
+  });
+
+  it("refuses a min not below the max in the database too", async () => {
+    await expect(
+      db.box.create({
+        data: {
+          name: "Bad",
+          lengthIn: 1,
+          widthIn: 1,
+          heightIn: 1,
+          minWeightOz: 10,
+          maxWeightOz: 10,
+        },
+      }),
+    ).rejects.toThrow(/boxes_min_weight_below_max/);
   });
 
   it("keeps names unique on update", async () => {

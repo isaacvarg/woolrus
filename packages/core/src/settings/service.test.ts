@@ -42,6 +42,15 @@ describe("settings service", () => {
       labelCostConfirmFreeCents: 1500,
       wooTrackingEnabled: false,
       rateLabMaxCombinations: 250,
+      packCheckOverMax: "WARN",
+      packCheckUnderMin: "WARN",
+      packCheckWeightOff: "WARN",
+      packCheckWeightStale: "WARN",
+      packCheckNoFit: "WARN",
+      packCheckBoxNotScanned: "OFF",
+      packCheckCustomDimensions: "WARN",
+      packCheckWeightOffPercent: 25,
+      qaBoxConfirm: "WHEN_TRIPPED",
       secrets: {
         wooConsumerKey: { configured: false },
         wooConsumerSecret: { configured: false },
@@ -156,6 +165,15 @@ describe("settings service", () => {
         claimExpiryMinutes: 30,
         pickBatchMaxOrders: 10,
         stageSlaMinutes: { QA: 30 },
+        packCheckOverMax: "WARN",
+        packCheckUnderMin: "WARN",
+        packCheckWeightOff: "WARN",
+        packCheckWeightStale: "WARN",
+        packCheckNoFit: "WARN",
+        packCheckBoxNotScanned: "OFF",
+        packCheckCustomDimensions: "WARN",
+        packCheckWeightOffPercent: 25,
+        qaBoxConfirm: "WHEN_TRIPPED",
       });
     }
   });
@@ -172,6 +190,62 @@ describe("settings service", () => {
     const audit = await db.auditEvent.findFirstOrThrow({ where: { entityType: "Settings" } });
     expect(audit.before).toEqual({ rateLabMaxCombinations: 250 });
     expect(audit.after).toEqual({ rateLabMaxCombinations: 10 });
+  });
+
+  it("saves the packing checks with an audit before/after (SPEC-packing A1, criterion 26)", async () => {
+    const admin = await createActor(db, ["ADMIN"]);
+    const updated = await updateSettings(db, admin, {
+      packCheckNoFit: "OFF",
+      packCheckWeightOffPercent: 10,
+      qaBoxConfirm: "ALWAYS",
+    });
+    expect(updated).toMatchObject({
+      packCheckNoFit: "OFF",
+      packCheckWeightOffPercent: 10,
+      qaBoxConfirm: "ALWAYS",
+    });
+    expect(await getPublicSettings(db, admin)).toMatchObject({
+      packCheckNoFit: "OFF",
+      packCheckWeightOffPercent: 10,
+      qaBoxConfirm: "ALWAYS",
+    });
+    const audit = await db.auditEvent.findFirstOrThrow({ where: { entityType: "Settings" } });
+    expect(audit.before).toEqual({
+      packCheckNoFit: "WARN",
+      packCheckWeightOffPercent: 25,
+      qaBoxConfirm: "WHEN_TRIPPED",
+    });
+    expect(audit.after).toEqual({
+      packCheckNoFit: "OFF",
+      packCheckWeightOffPercent: 10,
+      qaBoxConfirm: "ALWAYS",
+    });
+  });
+
+  it("refuses over max off and a threshold outside 5–100 in the database too", async () => {
+    const admin = await createActor(db, ["ADMIN"]);
+    await getSettings(db, admin);
+    await expect(db.$executeRaw`UPDATE settings SET pack_check_over_max = 'OFF'`).rejects.toThrow(
+      /settings_pack_check_over_max_not_off/,
+    );
+    for (const percent of [4, 101]) {
+      await expect(
+        db.$executeRaw`UPDATE settings SET pack_check_weight_off_percent = ${percent}`,
+      ).rejects.toThrow(/settings_pack_check_weight_off_percent_range/);
+    }
+    expect(await getSettings(db, admin)).toMatchObject({
+      packCheckOverMax: "WARN",
+      packCheckUnderMin: "WARN",
+      packCheckWeightOffPercent: 25,
+    });
+  });
+
+  it.each(nonAdmins)("forbids %s from changing the packing checks", async (role) => {
+    const actor = await createActor(db, [role]);
+    await expect(updateSettings(db, actor, { packCheckNoFit: "OFF" })).rejects.toMatchObject({
+      kind: "FORBIDDEN",
+    });
+    expect(await db.auditEvent.count()).toBe(0);
   });
 
   it.each(nonAdmins)("forbids %s from reading or updating admin settings", async (role) => {

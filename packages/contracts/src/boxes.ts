@@ -8,16 +8,23 @@ export const Box = z.object({
   widthIn: z.number(),
   heightIn: z.number(),
   maxWeightOz: z.number().nullable(),
+  /** A package lighter than this trips UNDER_MIN; below the max when both are set. */
+  minWeightOz: z.number().nullable(),
   tareWeightOz: z.number().nullable(),
   /** What the carrier measures; all three or none. */
   outerLengthIn: z.number().nullable(),
   outerWidthIn: z.number().nullable(),
   outerHeightIn: z.number().nullable(),
+  /** The barcode posted at the box's shelf area, normalized; scanning it adds a package (SPEC-packing A1). */
+  barcode: z.string().nullable(),
   /** A package references this box: its dimensions are locked and it can only be archived. */
   inUse: z.boolean(),
   archived: z.boolean(),
 });
 export type Box = z.infer<typeof Box>;
+
+/** A box barcode as typed; stored trimmed and upper-cased, and blank clears it. */
+const BoxBarcode = z.string().max(64);
 
 export const CreateBoxInput = z.object({
   idempotencyKey: IdempotencyKey,
@@ -26,14 +33,16 @@ export const CreateBoxInput = z.object({
   widthIn: Inches,
   heightIn: Inches,
   maxWeightOz: Ounces.nullable().default(null),
+  minWeightOz: Ounces.nullable().default(null),
   tareWeightOz: Ounces.nullable().default(null),
   outerLengthIn: Inches.nullable().default(null),
   outerWidthIn: Inches.nullable().default(null),
   outerHeightIn: Inches.nullable().default(null),
+  barcode: BoxBarcode.nullable().default(null),
 });
 export type CreateBoxInput = z.infer<typeof CreateBoxInput>;
 
-/** Only the fields present change; `null` clears max, tare or the outer dimensions. */
+/** Only the fields present change; `null` clears min, max, tare, the barcode or the outer dimensions. */
 export const UpdateBoxInput = z.object({
   id: Id,
   name: z.string().trim().min(1).max(80).optional(),
@@ -41,10 +50,12 @@ export const UpdateBoxInput = z.object({
   widthIn: Inches.optional(),
   heightIn: Inches.optional(),
   maxWeightOz: Ounces.nullable().optional(),
+  minWeightOz: Ounces.nullable().optional(),
   tareWeightOz: Ounces.nullable().optional(),
   outerLengthIn: Inches.nullable().optional(),
   outerWidthIn: Inches.nullable().optional(),
   outerHeightIn: Inches.nullable().optional(),
+  barcode: BoxBarcode.nullable().optional(),
 });
 export type UpdateBoxInput = z.infer<typeof UpdateBoxInput>;
 

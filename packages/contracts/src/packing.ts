@@ -3,6 +3,7 @@ import { base, Id, IdempotencyKey, Inches, Ounces } from "./base";
 import { Box } from "./boxes";
 import { LotDto } from "./lumexia";
 import { ExpectedVersion, LineAttribute, OrderDetail } from "./orders";
+import { PackApprovalInput, Trip } from "./pack-checks";
 
 // Packing (SPEC-packing "API"). Package writes need the order in Packing and the caller's live
 // claim. Units move by adding or subtracting, so the client sends them one at a time per line.
@@ -77,12 +78,14 @@ export const PackPackage = z.object({
   weightOz: z.number().nullable(),
   /** Why a weight above the box's max was kept; null within the max. */
   overrideReason: z.string().nullable(),
-  /** The contents or box changed after weighing: re-weigh or confirm. Never blocks the gate. */
+  /** The contents or box changed after weighing: re-weigh or confirm. Trips WEIGHT_STALE (decision 13). */
   weightStale: z.boolean(),
+  /** The box was chosen by scanning its barcode; a tapped box trips BOX_NOT_SCANNED. */
+  boxScanned: z.boolean(),
   /** Σ unit weight + the box's tare; null when any product has no weight. Never fills the field. */
   estimatedWeightOz: z.number().nullable(),
-  /** Set when the weight is more than 25% off the estimate (signed percent); computed, not stored. */
-  weightWarning: z.object({ percent: z.number() }).nullable(),
+  /** The packing checks this package fails right now (SPEC-packing A1); computed, not stored. */
+  trips: z.array(Trip),
   /** A box for this package's contents, for changing its box. */
   suggestion: BoxSuggestion,
   items: z.array(PackageItemView),
@@ -106,8 +109,13 @@ export const PackView = z.object({
   suggestion: BoxSuggestion,
   /** The active boxes a packer can choose from. */
   boxes: z.array(Box),
-  /** What the packed gate still needs; empty when the order can complete. */
+  /**
+   * What the packed gate still needs besides approval; empty when the order can complete, or can
+   * with an approval when `blocking`.
+   */
   unmet: z.array(Unmet),
+  /** Some package has a trip set to block: completing needs a QA or Admin approval (SPEC-packing A1). */
+  blocking: z.boolean(),
 });
 export type PackView = z.infer<typeof PackView>;
 
@@ -117,13 +125,25 @@ export const PackResult = z.object({
   packages: z.array(PackPackage),
   /** A box for the units not in any package, for adding one. */
   suggestion: BoxSuggestion,
+  /** As in `PackView`. */
   unmet: z.array(Unmet),
+  blocking: z.boolean(),
 });
 export type PackResult = z.infer<typeof PackResult>;
 
+/**
+ * A new package's box: tapped, typed, or scanned by the barcode at its shelf. Core resolves the
+ * barcode, so only a scan sets `boxScanned` (SPEC-packing A1 "Box barcodes").
+ */
+export const AddPackageBoxInput = z.union([
+  PackageBoxInput,
+  z.object({ barcode: z.string().trim().min(1).max(64) }),
+]);
+export type AddPackageBoxInput = z.infer<typeof AddPackageBoxInput>;
+
 export const AddPackageInput = z.object({
   orderId: Id,
-  box: PackageBoxInput,
+  box: AddPackageBoxInput,
   /** A retried request must not add a second package. */
   idempotencyKey: IdempotencyKey,
 });
@@ -194,6 +214,8 @@ export const CompletePackInput = z.object({
   expectedVersion: ExpectedVersion,
   /** Where the packer goes next: the Packing queue, or the next unclaimed Packing order. */
   after: z.enum(["queue", "next"]),
+  /** A QA or Admin user's say-so for the blocking trips (SPEC-packing A1); ignored when none block. */
+  approval: PackApprovalInput.optional(),
 });
 export type CompletePackInput = z.infer<typeof CompletePackInput>;
 

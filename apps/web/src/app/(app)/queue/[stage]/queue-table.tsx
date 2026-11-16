@@ -343,6 +343,15 @@ export function QueueTable({
                         <span aria-hidden="true">⊘</span>
                       </span>
                     )}
+                    {stage === "QA" && row.packCheckTrips > 0 && (
+                      <span
+                        data-testid="queue-pack-checks"
+                        className="badge badge-sm badge-warning ms-2 gap-1"
+                      >
+                        <span aria-hidden="true">⚠</span>
+                        {t("queue.packChecks", { count: row.packCheckTrips })}
+                      </span>
+                    )}
                   </td>
                   <td>
                     {row.piiRedacted ? (

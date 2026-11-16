@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { base, Id } from "./base";
 import { LotDto } from "./lumexia";
+import { PackApprovalInput } from "./pack-checks";
 import { PrintState } from "./shipping";
 
 // Order workflow (SPEC-workflow "API"). Status moves and claims are server-owned: every mutation
@@ -61,6 +62,12 @@ export const CompleteQaOrderInput = OrderVersionInput.extend({
   confirmCost: z.boolean().optional(),
 });
 export type CompleteQaOrderInput = z.infer<typeof CompleteQaOrderInput>;
+
+/** `approval`: a QA or Admin user's say-so for blocking packing checks (SPEC-packing A1). */
+export const CompletePackingOrderInput = OrderVersionInput.extend({
+  approval: PackApprovalInput.optional(),
+});
+export type CompletePackingOrderInput = z.infer<typeof CompletePackingOrderInput>;
 
 export const OrderReasonInput = OrderVersionInput.extend({ reason: Reason });
 export type OrderReasonInput = z.infer<typeof OrderReasonInput>;
@@ -143,6 +150,8 @@ export const QueueRow = z.object({
   topOpenSeverity: QualityIssueSeverity.nullable(),
   /** Voids that are neither undone nor resolved yet. */
   unresolvedVoidCount: z.number().int(),
+  /** Saved packing check trips on the order QA hasn't acknowledged yet (SPEC-packing A1). */
+  packCheckTrips: z.number().int(),
   /** Label purchase state for QA's badge; `none` outside QA and when nothing went wrong. */
   labelState: z.enum(["none", "purchasing", "failed", "unknown"]),
   /** Ready queue only (zero/none elsewhere): packages, carrier and service, and printing. */
@@ -518,7 +527,16 @@ export const orders = {
 
   beginPicking: move("begin-picking", "Begin picking a Pending order and claim it"),
   completePicking: move("complete-picking", "Finish picking; refused while lines are unpicked"),
-  completePacking: move("complete-packing", "Finish packing; refused until every unit is packed"),
+  completePacking: base
+    .route({
+      method: "POST",
+      path: "/orders/{id}/complete-packing",
+      tags,
+      summary:
+        "Finish packing; refused until every unit is packed, and blocking checks need an approval",
+    })
+    .input(CompletePackingOrderInput)
+    .output(OrderDetail),
   completeQa: base
     .route({
       method: "POST",

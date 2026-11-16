@@ -149,6 +149,20 @@ describe("completeQaWithLabels", () => {
       await untouched();
     });
 
+    // SPEC-packing A1 criterion 23.
+    it("a packing check trip is unacknowledged, or a tripped package's box unconfirmed", async () => {
+      const { request, order } = await ready();
+      const pkg = await db.package.findFirstOrThrow({ where: { orderId: order.id } });
+      await db.packageCheckTrip.create({
+        data: { packageId: pkg.id, check: "WEIGHT_OFF", mode: "WARN" },
+      });
+      expect(await unmetKeys(request())).toEqual([
+        "errors.workflow.gate.packCheckUnacknowledged",
+        "errors.workflow.gate.packageBoxUnconfirmed",
+      ]);
+      await untouched();
+    });
+
     it("a package has no selected rate", async () => {
       const { request } = await ready();
       await db.shippingRate.updateMany({ data: { selected: false } });

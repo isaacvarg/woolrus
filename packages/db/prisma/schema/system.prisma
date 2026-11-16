@@ -7,6 +7,24 @@ enum WeightDisplay {
   @@map("weight_display")
 }
 
+/// How a packing check runs (SPEC-packing A1): not at all, as a warning, or blocking the packed gate.
+enum PackCheckMode {
+  OFF
+  WARN
+  BLOCK
+
+  @@map("pack_check_mode")
+}
+
+/// Which packages QA confirms the physical box of before buying labels (SPEC-packing A1).
+enum QaBoxConfirm {
+  OFF
+  WHEN_TRIPPED
+  ALWAYS
+
+  @@map("qa_box_confirm")
+}
+
 /// Single-row table (id is always 1). Secrets are AES-GCM encrypted with SETTINGS_ENCRYPTION_KEY
 /// and never leave the server (FR-SET-05, NFR-SEC-03).
 model Settings {
@@ -49,6 +67,19 @@ model Settings {
 
   /// Most address × parcel combinations one Rate Lab run may quote, 1–2000 (SPEC-rate-lab decision 11).
   rateLabMaxCombinations Int @default(250) @map("rate_lab_max_combinations")
+
+  /// Packing checks, one warehouse-wide mode each (SPEC-packing A1). Over max can't be OFF (hand-written CHECK).
+  packCheckOverMax          PackCheckMode @default(WARN) @map("pack_check_over_max")
+  packCheckUnderMin         PackCheckMode @default(WARN) @map("pack_check_under_min")
+  packCheckWeightOff        PackCheckMode @default(WARN) @map("pack_check_weight_off")
+  packCheckWeightStale      PackCheckMode @default(WARN) @map("pack_check_weight_stale")
+  packCheckNoFit            PackCheckMode @default(WARN) @map("pack_check_no_fit")
+  packCheckBoxNotScanned    PackCheckMode @default(OFF) @map("pack_check_box_not_scanned")
+  packCheckCustomDimensions PackCheckMode @default(WARN) @map("pack_check_custom_dimensions")
+  /// A weight further than this whole percent from the estimate trips the off-the-estimate check, 5–100.
+  packCheckWeightOffPercent Int           @default(25) @map("pack_check_weight_off_percent")
+  /// Read live by the verified gate, so a change applies to orders already in QA.
+  qaBoxConfirm              QaBoxConfirm  @default(WHEN_TRIPPED) @map("qa_box_confirm")
 
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 

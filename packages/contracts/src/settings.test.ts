@@ -52,6 +52,35 @@ describe("UpdateSettingsInput", () => {
     }
   });
 
+  it("takes packing check modes off or warn, and a 5–100 estimate threshold (SPEC-packing A1)", () => {
+    expect(
+      fieldErrors({
+        packCheckOverMax: "WARN",
+        packCheckUnderMin: "WARN",
+        packCheckWeightOff: "OFF",
+        packCheckWeightStale: "WARN",
+        packCheckNoFit: "OFF",
+        packCheckBoxNotScanned: "WARN",
+        packCheckCustomDimensions: "WARN",
+        packCheckWeightOffPercent: 5,
+      }),
+    ).toEqual({});
+    expect(fieldErrors({ packCheckWeightOffPercent: 100 })).toEqual({});
+    for (const percent of [4, 101, 12.5, null]) {
+      expect(Object.keys(fieldErrors({ packCheckWeightOffPercent: percent }))).toEqual([
+        "packCheckWeightOffPercent",
+      ]);
+    }
+    // Block is selectable for every check (SPEC-packing A1, over max included).
+    expect(fieldErrors({ packCheckNoFit: "BLOCK", packCheckOverMax: "BLOCK" })).toEqual({});
+  });
+
+  it("refuses switching the over max check off", () => {
+    expect(fieldErrors({ packCheckOverMax: "OFF" })).toEqual({
+      packCheckOverMax: "errors.settings.checkCannotBeOff",
+    });
+  });
+
   it("normalizes the state code to upper case", () => {
     const result = UpdateSettingsInput.parse({ shipFromAddress: { ...address, state: " tx " } });
     expect(result.shipFromAddress?.state).toBe("TX");

@@ -4,6 +4,7 @@ import { seedRateLab } from "./seed-rate-lab";
 
 const db = createDb();
 
+// Each box's barcode is the one posted at its shelf (SPEC-packing A1): scanning it adds a package.
 const boxes = [
   {
     name: "Small mailer",
@@ -12,19 +13,31 @@ const boxes = [
     heightIn: 2,
     maxWeightOz: 64,
     tareWeightOz: 1.5,
+    barcode: "BOX-SMALL",
   },
   {
     name: "Medium box",
     lengthIn: 10,
     widthIn: 8,
     heightIn: 4,
+    minWeightOz: 12,
     maxWeightOz: 320,
     tareWeightOz: 5,
+    barcode: "BOX-MEDIUM",
     outerLengthIn: 10.25,
     outerWidthIn: 8.25,
     outerHeightIn: 4.25,
   },
-  { name: "Large box", lengthIn: 14, widthIn: 12, heightIn: 8, maxWeightOz: 800, tareWeightOz: 9 },
+  {
+    name: "Large box",
+    lengthIn: 14,
+    widthIn: 12,
+    heightIn: 8,
+    minWeightOz: 32,
+    maxWeightOz: 800,
+    tareWeightOz: 9,
+    barcode: "BOX-LARGE",
+  },
 ];
 
 async function main() {

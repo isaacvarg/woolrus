@@ -31,7 +31,11 @@ const pkg = (overrides: Partial<GatePackage> = {}): GatePackage => ({
   weightOz: 16,
   maxWeightOz: null,
   hasOverrideReason: false,
+  trips: [],
   items: [{ orderItemId: "line-1", quantity: 2, qaVerified: true, lotUnits: 0, wrongItemLots: [] }],
+  unacknowledgedTrips: 0,
+  boxConfirmRequired: false,
+  boxConfirmed: false,
   selectedRates: 1,
   activeLabels: 1,
   liveLabels: 1,
@@ -43,6 +47,7 @@ const snapshot = (overrides: Partial<GateSnapshot> = {}): GateSnapshot => ({
   lines: [line()],
   packages: [pkg()],
   openCriticalIssues: 0,
+  overMaxMode: "WARN",
   ...overrides,
 });
 
@@ -115,6 +120,44 @@ describe("packed gate: weight", () => {
     expect(evaluateGate("packed", over({ hasOverrideReason: true }))).toEqual([]);
     expect(evaluateGate("packed", over({ weightOz: 40 }))).toEqual([]);
     expect(evaluateGate("packed", over({ maxWeightOz: null }))).toEqual([]);
+  });
+
+  // SPEC-packing A1: on block the OVER_MAX trip stands in for it.
+  it("doesn't report it while over max is on block", () => {
+    expect(evaluateGate("packed", { ...over(), overMaxMode: "BLOCK" })).toEqual([]);
+  });
+});
+
+describe("packed gate: blocking trips (SPEC-packing A1)", () => {
+  const tripping = snapshot({
+    packages: [
+      pkg({
+        trips: [
+          { check: "NO_FIT", mode: "BLOCK", details: { boxName: "Small", items: ["Pail"] } },
+          { check: "WEIGHT_STALE", mode: "WARN", details: { weightOz: 16 } },
+        ],
+      }),
+    ],
+  });
+
+  it("reports each blocking trip, not the warnings", () => {
+    expect(evaluateGate("packed", tripping)).toEqual([
+      {
+        messageKey: "errors.workflow.gate.packCheckBlocked",
+        params: { package: 1, check: "NO_FIT" },
+      },
+    ]);
+  });
+
+  it("lets them through with an approval, but nothing else", () => {
+    expect(evaluateGate("packed", tripping, { approved: true })).toEqual([]);
+    const unweighed = {
+      ...tripping,
+      packages: tripping.packages.map((p) => ({ ...p, weightOz: null })),
+    };
+    expect(evaluateGate("packed", unweighed, { approved: true })).toEqual([
+      { messageKey: "errors.workflow.gate.packageNoWeight", params: { package: 1 } },
+    ]);
   });
 });
 
@@ -264,6 +307,21 @@ describe("packed gate", () => {
 });
 
 describe("verified gate", () => {
+  // SPEC-packing A1 criterion 23: saved trips and box confirmation stop the labels.
+  it("reports unacknowledged trips and an unconfirmed box per package", () => {
+    const packages = [
+      pkg({ unacknowledgedTrips: 2, boxConfirmRequired: true }),
+      pkg({ id: "pkg-2", number: 2, boxConfirmRequired: true, boxConfirmed: true }),
+    ];
+    expect(evaluateGate("verified", snapshot({ packages }))).toEqual([
+      {
+        messageKey: "errors.workflow.gate.packCheckUnacknowledged",
+        params: { package: 1, count: 2 },
+      },
+      { messageKey: "errors.workflow.gate.packageBoxUnconfirmed", params: { package: 1 } },
+    ]);
+  });
+
   it("passes when every item is verified and every package has one rate and one active label", () => {
     expect(evaluateGate("verified", snapshot())).toEqual([]);
   });
@@ -434,6 +492,11 @@ describe("loadGateSnapshot", () => {
         weightOz: 16,
         maxWeightOz: null,
         hasOverrideReason: false,
+        // Trips are read only in Packing.
+        trips: [],
+        unacknowledgedTrips: 0,
+        boxConfirmRequired: false,
+        boxConfirmed: false,
         items: [
           {
             orderItemId: items[0]?.id,
@@ -454,6 +517,35 @@ describe("loadGateSnapshot", () => {
         weightOz: null,
         items: [],
       }),
+    ]);
+  });
+
+  it("reads the live packing check trips and the over max mode in Packing (SPEC-packing A1)", async () => {
+    await db.settings.upsert({
+      where: { id: 1 },
+      create: { id: 1, packCheckCustomDimensions: "BLOCK", packCheckOverMax: "BLOCK" },
+      update: { packCheckCustomDimensions: "BLOCK", packCheckOverMax: "BLOCK" },
+    });
+    const { order } = await createOrder(db, {
+      status: "PACKING",
+      lines: [{ quantity: 1, pickStatus: "PICKED" }],
+      packages: [
+        {
+          items: [{ line: 0, quantity: 1 }],
+          dimensions: { lengthIn: 5, widthIn: 5, heightIn: 5 },
+        },
+      ],
+    });
+
+    const snap = await db.$transaction((tx) => loadGateSnapshot(tx, order.id));
+
+    expect(snap.overMaxMode).toBe("BLOCK");
+    expect(snap.packages[0]?.trips).toEqual([
+      {
+        check: "CUSTOM_DIMENSIONS",
+        mode: "BLOCK",
+        details: { lengthIn: 5, widthIn: 5, heightIn: 5 },
+      },
     ]);
   });
 
@@ -484,6 +576,52 @@ describe("loadGateSnapshot", () => {
     for (const gate of ["picked", "packed", "verified", "shippable"] as const) {
       expect(evaluateGate(gate, snap)).toEqual([]);
     }
+  });
+
+  // SPEC-packing A1 criterion 23: qaBoxConfirm is read live; trips come from the saved rows.
+  it("counts unacknowledged trips and needs box confirmation by qaBoxConfirm", async () => {
+    const { order, packages } = await createOrder(db, {
+      status: "QA",
+      lines: [{ quantity: 2, pickStatus: "PICKED" }],
+      packages: [
+        { items: [{ line: 0, quantity: 1, verified: true }] },
+        { items: [{ line: 0, quantity: 1, verified: true }] },
+      ],
+    });
+    const [tripped, clean] = packages;
+    if (!tripped || !clean) throw new Error("no packages");
+    await db.packageCheckTrip.createMany({
+      data: [
+        { packageId: tripped.id, check: "NO_FIT", mode: "WARN" },
+        { packageId: tripped.id, check: "WEIGHT_OFF", mode: "WARN", acknowledgedAt: new Date() },
+      ],
+    });
+    const read = async (qaBoxConfirm: "OFF" | "WHEN_TRIPPED" | "ALWAYS") => {
+      await db.settings.upsert({
+        where: { id: 1 },
+        create: { id: 1, qaBoxConfirm },
+        update: { qaBoxConfirm },
+      });
+      const snap = await db.$transaction((tx) => loadGateSnapshot(tx, order.id));
+      return snap.packages.map((p) => [p.unacknowledgedTrips, p.boxConfirmRequired]);
+    };
+
+    expect(await read("WHEN_TRIPPED")).toEqual([
+      [1, true],
+      [0, false],
+    ]);
+    expect(await read("ALWAYS")).toEqual([
+      [1, true],
+      [0, true],
+    ]);
+    expect(await read("OFF")).toEqual([
+      [1, false],
+      [0, false],
+    ]);
+
+    await db.package.update({ where: { id: tripped.id }, data: { boxConfirmedAt: new Date() } });
+    const snap = await db.$transaction((tx) => loadGateSnapshot(tx, order.id));
+    expect(snap.packages[0]?.boxConfirmed).toBe(true);
   });
 });
 

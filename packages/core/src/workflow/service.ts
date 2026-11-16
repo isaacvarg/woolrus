@@ -1,10 +1,18 @@
+import type { PackApprovalInput } from "@woolrus/contracts";
 import type { Db, DbTx, Order, WorkflowStatus } from "@woolrus/db";
 import { recordAudit } from "../audit";
 import { requestRateFetch } from "../carriers/rates";
 import { AppError } from "../errors";
+import {
+  assertApprovalCovers,
+  recordPackApproval,
+  type VerifiedApproval,
+  verifyPackApproval,
+} from "../packing/approval";
+import { clearTrips, saveTrips } from "../packing/trips";
 import { type Actor, assertCan } from "../permissions";
 import { claimExpiryMinutes, holdsClaim, isClaimLive } from "./claims";
-import { evaluateGate, loadGateSnapshot } from "./gates";
+import { evaluateGate, type GateSnapshot, loadGateSnapshot } from "./gates";
 import { lockOrder } from "./lock";
 import { ruleFor, type TransitionKind, transitionFor } from "./machine";
 import { notifyOrderChanged } from "./notify";
@@ -19,6 +27,8 @@ export type TransitionInput = {
   to: WorkflowStatus;
   kind: TransitionKind;
   reason?: string;
+  /** Lets blocking packing check trips through the packed gate (SPEC-packing A1); verified first. */
+  approval?: VerifiedApproval;
 };
 
 export type TransitionOptions = {
@@ -35,7 +45,7 @@ const activeStatuses: readonly WorkflowStatus[] = ["PENDING", "PICKING", "PACKIN
 export async function transition(
   tx: DbTx,
   actor: Actor,
-  { orderId, expectedVersion, to, kind, reason }: TransitionInput,
+  { orderId, expectedVersion, to, kind, reason, approval }: TransitionInput,
   { now = new Date(), ignoreClaimExpiry = false }: TransitionOptions = {},
 ): Promise<Order> {
   const reasonText = reason?.trim() || null;
@@ -76,8 +86,11 @@ export async function transition(
     }
   }
 
+  let snapshot: GateSnapshot | undefined;
   if (move.gate) {
-    const unmet = evaluateGate(move.gate, await loadGateSnapshot(tx, orderId));
+    snapshot = await loadGateSnapshot(tx, orderId);
+    if (approval) assertApprovalCovers(snapshot, approval);
+    const unmet = evaluateGate(move.gate, snapshot, { approved: approval !== undefined });
     if (unmet.length > 0)
       throw new AppError("CONFLICT", "errors.workflow.gateFailed", undefined, { unmet });
   }
@@ -117,6 +130,23 @@ export async function transition(
     after: { status: to, version: updated.version, ...(reasonText ? { reason: reasonText } : {}) },
     at: now,
   });
+  // SPEC-packing A1: leaving Packing for QA saves the trips as they stand (completePacking and an
+  // Admin's forceStatus alike, including from a hold placed in Packing: decision 16, skipping the
+  // gate hides nothing); any way back into Packing deletes them, as QA verification is reset.
+  // An approval is recorded only for the trips it let through; its id goes on their rows.
+  const fromPacking =
+    order.status === "PACKING" ||
+    (order.status === "ON_HOLD" && order.heldFromStatus === "PACKING");
+  if (fromPacking && to === "QA") {
+    const approvalId = await recordPackApproval(tx, actor, { orderId, approval, snapshot, now });
+    // The gate's own evaluation when it ran (it reads trips only in Packing), so the saved rows
+    // are exactly what it passed.
+    const evaluated =
+      snapshot && order.status === "PACKING"
+        ? snapshot.packages.map((p) => ({ packageId: p.id, number: p.number, trips: p.trips }))
+        : undefined;
+    await saveTrips(tx, orderId, { now, approvalId, evaluated });
+  } else if (to === "PACKING") await clearTrips(tx, orderId);
   await notifyOrderChanged(tx, { id: orderId, status: to });
 
   // FR-PACK-07: rates for every package, on this transaction so a rolled-back move asks for none.
@@ -137,8 +167,29 @@ const stageMove =
 export const beginPicking = stageMove("beginPicking", "PICKING");
 /** Picking → Packing; needs the actor's live claim and the **picked** gate. */
 export const completePicking = stageMove("completePicking", "PACKING");
-/** Packing → QA; needs the actor's live claim and the **packed** gate. */
-export const completePacking = stageMove("completePacking", "QA");
+/**
+ * Packing → QA; needs the actor's live claim and the **packed** gate. An `approval` lets blocking
+ * packing check trips through: its credential is checked before the transaction, so a wrong PIN
+ * counts even though the move fails (SPEC-packing A1).
+ */
+export async function completePacking(
+  db: Db,
+  actor: Actor,
+  { approval, ...input }: StageInput & { approval?: PackApprovalInput },
+  options: TransitionOptions = {},
+): Promise<Order> {
+  // Permission before the credential: a caller who can't pack can't probe PINs through this.
+  assertCan(actor, ruleFor("completePacking").permission);
+  const verified = await verifyPackApproval(db, actor, approval, options.now ?? new Date());
+  return db.$transaction((tx) =>
+    transition(
+      tx,
+      actor,
+      { ...input, to: "QA", kind: "completePacking", approval: verified },
+      options,
+    ),
+  );
+}
 /** QA → Ready; needs the actor's live claim and the **verified** gate. */
 export const completeQa = stageMove("completeQa", "READY");
 

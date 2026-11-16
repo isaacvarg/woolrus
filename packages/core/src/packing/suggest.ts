@@ -3,8 +3,6 @@
 
 /** Share of a box's inner volume the units may fill; the rest is padding. */
 export const FILL_FACTOR = 0.8;
-/** A typed weight further than this from the estimate gets a warning (decision 6). */
-export const WEIGHT_WARNING_RATIO = 0.25;
 
 /** A line's units for suggesting: dimensions and weight from the variation, else the product. */
 export type SuggestUnit = {
@@ -54,40 +52,46 @@ export function estimateWeightOz(
   return round2(total);
 }
 
-/** How far `weightOz` is from `estimateOz`, in whole percent (negative = lighter), when more than 25%. */
-export function weightOffPercent(
-  weightOz: number | null,
-  estimateOz: number | null,
-): number | null {
-  if (weightOz === null || estimateOz === null || estimateOz <= 0) return null;
-  const ratio = (weightOz - estimateOz) / estimateOz;
-  return Math.abs(ratio) > WEIGHT_WARNING_RATIO ? Math.round(ratio * 100) : null;
+/** A unit with all three dimensions: the only kind that takes space in a fit test. */
+export type MeasuredUnit = SuggestUnit & { lengthIn: number; widthIn: number; heightIn: number };
+
+export const isMeasured = (u: SuggestUnit): u is MeasuredUnit =>
+  u.lengthIn !== null && u.widthIn !== null && u.heightIn !== null;
+
+export type InnerDims = { lengthIn: number; widthIn: number; heightIn: number };
+
+/** Whether one unit fits the space on its own: each sorted dimension ≤ the sorted inner one. */
+export function unitFits(unit: MeasuredUnit, inner: InnerDims): boolean {
+  const space = sorted(inner.lengthIn, inner.widthIn, inner.heightIn);
+  return sorted(unit.lengthIn, unit.widthIn, unit.heightIn).every(
+    (d, i) => d <= (space[i] as number),
+  );
+}
+
+/**
+ * The fit rule the suggestion and the `NO_FIT` check share (SPEC-packing A1), so they can't
+ * disagree: every unit fits on its own, and their total volume is at most the inner volume ×
+ * `FILL_FACTOR`. Weight isn't part of it.
+ */
+export function fitsIn(units: MeasuredUnit[], inner: InnerDims): boolean {
+  if (!units.every((u) => unitFits(u, inner))) return false;
+  const unitVolume = units.reduce(
+    (sum, u) => sum + volume(u.lengthIn, u.widthIn, u.heightIn) * count(u),
+    0,
+  );
+  return unitVolume <= volume(inner.lengthIn, inner.widthIn, inner.heightIn) * FILL_FACTOR;
 }
 
 export function suggestBox<B extends SuggestBox>(units: SuggestUnit[], boxes: B[]): Suggestion<B> {
   if (units.length === 0) return { kind: "none" };
-  const missing = units
-    .filter(
-      (u) =>
-        u.lengthIn === null || u.widthIn === null || u.heightIn === null || u.weightOz === null,
-    )
-    .map((u) => u.name);
+  const missing = units.filter((u) => !isMeasured(u) || u.weightOz === null).map((u) => u.name);
   if (missing.length > 0) return { kind: "unknown", missing };
-
-  const shapes = units.map((u) =>
-    sorted(u.lengthIn as number, u.widthIn as number, u.heightIn as number),
-  );
-  const unitVolume = units.reduce((sum, u, i) => {
-    const [a, b, c] = shapes[i] as [number, number, number];
-    return sum + volume(a, b, c) * count(u);
-  }, 0);
+  const measured = units as MeasuredUnit[];
 
   const fits = boxes
     .filter((box) => !box.archived)
     .filter((box) => {
-      const inner = sorted(box.lengthIn, box.widthIn, box.heightIn);
-      if (!shapes.every((s) => s.every((d, i) => d <= (inner[i] as number)))) return false;
-      if (unitVolume > volume(...inner) * FILL_FACTOR) return false;
+      if (!fitsIn(measured, box)) return false;
       const gross = estimateWeightOz(units, box);
       return box.maxWeightOz === null || (gross as number) <= box.maxWeightOz;
     })

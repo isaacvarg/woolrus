@@ -24,6 +24,12 @@ Woolrus first spends real money (M4: "first real labels bought in Woolrus").
 - **Why now:** `carriers` is done, so every package in QA has rates, and the **verified** gate already fails on
   `packageNotVerified` and `packageNoLabel` with no way to satisfy them.
 
+> **Amended by [`SPEC-packing`](SPEC-packing.md) amendment 1 (packing checks), "QA side".** Packages arrive with the
+> trips saved when the order left Packing. A tripped card is yellow; QA acknowledges each trip and confirms the box
+> when `Settings.qaBoxConfirm` asks (`qa.acknowledgeCheck`, `qa.confirmBox`). **verified** gains
+> `packCheckUnacknowledged` and `packageBoxUnconfirmed`, so label purchase waits for both, and the QA queue shows
+> "⚠ N checks". That spec is the authority for these parts.
+
 ### User stories
 
 1. As QA, I open an order from the QA queue. It's claimed to me (as in picking and packing). I see each package with

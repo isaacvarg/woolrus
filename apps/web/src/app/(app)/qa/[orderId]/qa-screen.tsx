@@ -19,6 +19,7 @@ import { playScanSound, useScanner } from "@/lib/scanner";
 import { randomUUID } from "@/lib/uuid";
 import { ScanBanner, type ScanOutcome } from "../../pick/[orderId]/pick-screen";
 import { hasLiveLabel } from "./live-label";
+import { ChecksBadge, PackageChecks, QaUnmet, trippedCard } from "./qa-checks";
 import { QaDrawer } from "./qa-drawer";
 import { RowLots } from "./qa-lots";
 import { RatesTable, RefreshRatesButton, reasonSavesSettled } from "./qa-rates";
@@ -357,6 +358,10 @@ function QaLayout({
         </ul>
       )}
 
+      {canPurchase && order.status === "QA" && order.claim?.userId === userId && !purchasing && (
+        <QaUnmet unmet={view.unmet} />
+      )}
+
       {(purchasing || mayComplete) && (
         <footer
           data-toast-clearance
@@ -487,7 +492,7 @@ function PackageCard({
   return (
     <li
       onPointerDown={onFocus}
-      className={`space-y-3 rounded-box bg-base-100 p-4 shadow-sm ${isFocused ? "ring-2 ring-primary" : ""}`}
+      className={`space-y-3 rounded-box p-4 shadow-sm ${pkg.trips.length > 0 ? trippedCard : "bg-base-100"} ${isFocused ? "ring-2 ring-primary" : ""}`}
       data-testid="qa-package"
       data-package={pkg.number}
       data-focused={isFocused || undefined}
@@ -496,6 +501,7 @@ function PackageCard({
         <h2 className="text-xl font-bold">
           {t("qa.package", { number: pkg.number })}
           {isFocused && <span className="badge badge-primary ms-2">{t("qa.scanningHere")}</span>}
+          <ChecksBadge pkg={pkg} />
         </h2>
         <span className="text-sm" data-testid="qa-package-count">
           {t("qa.verifiedCount", { verified, total: pkg.rows.length })}
@@ -507,6 +513,7 @@ function PackageCard({
         </p>
         <PackageWeight weightOz={pkg.weightOz} />
       </div>
+      <PackageChecks pkg={pkg} orderId={orderId} disabled={disabled} />
       <ul className="grid gap-2">
         {pkg.rows.map((row) => (
           <RowButton

@@ -48,6 +48,11 @@ model Box {
   outerHeightIn Decimal?  @map("outer_height_in") @db.Decimal(8, 2)
   tareWeightOz  Decimal?  @map("tare_weight_oz") @db.Decimal(10, 2)
   maxWeightOz   Decimal?  @map("max_weight_oz") @db.Decimal(10, 2)
+  /// A package lighter than this trips UNDER_MIN (SPEC-packing A1). Below the max (hand-written CHECK).
+  minWeightOz   Decimal?  @map("min_weight_oz") @db.Decimal(10, 2)
+  /// The barcode posted at the box's shelf area, stored normalized (trimmed, upper-cased). Scanning it on
+  /// the pack screen adds a package with this box (SPEC-packing A1).
+  barcode       String?   @unique
   archivedAt    DateTime? @map("archived_at") @db.Timestamptz(3)
   createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
@@ -70,6 +75,8 @@ model Package {
   weightOverrideReason String?     @map("weight_override_reason")
   /// The contents or box changed after the package was weighed: re-weigh or confirm. Never blocks a gate.
   weightStale          Boolean     @default(false) @map("weight_stale")
+  /// The box was chosen by scanning its barcode, not tapped: a tapped box trips BOX_NOT_SCANNED.
+  boxScanned           Boolean     @default(false) @map("box_scanned")
   // Override for non-standard boxes; falls back to the box's outer dimensions.
   lengthIn             Decimal?    @map("length_in") @db.Decimal(8, 2)
   widthIn              Decimal?    @map("width_in") @db.Decimal(8, 2)
@@ -80,20 +87,63 @@ model Package {
   rateErrors           Json        @default("[]") @map("rate_errors")
   /// Set when a repack throws the package away; numbers are not reused.
   discardedAt          DateTime?   @map("discarded_at") @db.Timestamptz(3)
-  createdAt            DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+  /// QA checked the physical box on the bench (SPEC-packing A1). Cleared when the order re-enters Packing.
+  boxConfirmedAt       DateTime?   @map("box_confirmed_at") @db.Timestamptz(3)
+  boxConfirmedById     String?     @map("box_confirmed_by_id") @db.Uuid
+  createdAt           DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt            DateTime    @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  order         Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  box           Box?            @relation(fields: [boxId], references: [id], onDelete: Restrict)
+  order         Order              @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  box           Box?               @relation(fields: [boxId], references: [id], onDelete: Restrict)
+  boxConfirmedBy User?             @relation("PackageBoxConfirmedBy", fields: [boxConfirmedById], references: [id], onDelete: SetNull)
   items         PackageItem[]
   rates         ShippingRate[]
   labels        ShippingLabel[]
   notes         Note[]
   qualityIssues QualityIssue[]
   rateFetches   RateFetch[]
+  checkTrips    PackageCheckTrip[]
 
   @@unique([orderId, number])
   @@map("packages")
+}
+
+/// A packing check (SPEC-packing A1 "Packing checks").
+enum PackCheck {
+  OVER_MAX
+  UNDER_MIN
+  WEIGHT_OFF
+  WEIGHT_STALE
+  NO_FIT
+  BOX_NOT_SCANNED
+  CUSTOM_DIMENSIONS
+
+  @@map("pack_check")
+}
+
+/// A check that tripped on a package when its order left Packing (SPEC-packing A1). Saved as it
+/// stood, so QA sees what the packer saw and later settings changes don't rewrite it. Deleted when
+/// the order goes back to Packing.
+model PackageCheckTrip {
+  id               String        @id @default(uuid(7)) @db.Uuid
+  packageId        String        @map("package_id") @db.Uuid
+  check            PackCheck
+  /// WARN or BLOCK (hand-written CHECK): an off check never trips.
+  mode             PackCheckMode
+  details          Json          @default("{}")
+  /// The approval that let a blocking trip through.
+  approvalId       String?       @map("approval_id") @db.Uuid
+  acknowledgedAt   DateTime?     @map("acknowledged_at") @db.Timestamptz(3)
+  acknowledgedById String?       @map("acknowledged_by_id") @db.Uuid
+  createdAt        DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  package        Package   @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  approval       Approval? @relation(fields: [approvalId], references: [id], onDelete: SetNull)
+  acknowledgedBy User?     @relation("PackCheckTripAcknowledgedBy", fields: [acknowledgedById], references: [id], onDelete: SetNull)
+
+  @@unique([packageId, check])
+  @@index([createdAt])
+  @@map("package_check_trips")
 }
 
 /// How many units of an order line are in a package. Splitting a line across boxes creates

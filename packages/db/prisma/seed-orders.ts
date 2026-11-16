@@ -92,6 +92,15 @@ const products: DemoProduct[] = [
     customs: { hsCode: "6117.10", countryOfOrigin: "PE", description: "Knitted alpaca scarf" },
   },
   { sku: "SCARF-CA-NOHS", name: "Wool hat", bin: "E-01-2", weightOz: 5, dims: [9, 7, 3] },
+  // Bulky and measured (SPEC-packing A1): it only fits the Large box, so a smaller box trips NO_FIT.
+  {
+    sku: "DYE-PAIL-5",
+    name: "Dye pail 5 gal",
+    bin: "F-01-1",
+    weightOz: 48,
+    dims: [7, 7, 8],
+    barcode: "0700000000059",
+  },
 ];
 
 /** How far the floor got with an order's lines and packages, independent of its status. */
