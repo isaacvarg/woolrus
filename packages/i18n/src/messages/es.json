@@ -409,6 +409,7 @@
       "oldest": "Más antiguo #{number}, {age}",
       "shared": "{name} ×{units} · {orders} pedidos",
       "pickThese": "Surtir estos",
+      "selectThese": "Seleccionar estos",
       "finishFirst": "Termina primero el lote {number}"
     },
     "begunPicking": "El pedido {number} está ahora en surtido.",

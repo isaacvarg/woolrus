@@ -7,7 +7,7 @@ import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/fields";
 import { orpc } from "@/lib/orpc";
 import { ageParts } from "./age";
-import { BatchRefusals, useCreateBatch } from "./pick-together";
+import { type BatchOrder, BatchRefusals, useCreateBatch } from "./pick-together";
 
 // Suggested batches on the Pending queue (SPEC-picking A1, "UI"). The server builds them on every
 // read; live order events refetch everything under `pickBatches`, these included. A card only ever
@@ -17,6 +17,7 @@ export function SuggestedBatches({
   hidden,
   onBeginPicking,
   beginningId,
+  onSelect,
 }: {
   /** While the queue is searched: search finds one order, it doesn't plan a walk. */
   hidden: boolean;
@@ -24,6 +25,8 @@ export function SuggestedBatches({
   onBeginPicking: (order: { id: string; version: number }) => void;
   /** The order a Begin Picking is in flight for. */
   beginningId: string | null;
+  /** **Select these**: the card's orders replace the queue's ticks, at the versions it was built from. */
+  onSelect: (orders: BatchOrder[]) => void;
 }) {
   const t = useTranslations();
   const query = useQuery({ ...orpc.pickBatches.suggestions.queryOptions(), enabled: !hidden });
@@ -57,13 +60,22 @@ export function SuggestedBatches({
                     {t("queue.beginPicking")}
                   </Button>
                 ) : (
-                  <Button
-                    isDisabled={openBatch !== null}
-                    isPending={create.isPending && create.variables === suggestion.orders}
-                    onPress={() => create.mutate(suggestion.orders)}
-                  >
-                    {t("queue.suggestions.pickThese")}
-                  </Button>
+                  <>
+                    <Button
+                      className="btn-outline"
+                      isDisabled={openBatch !== null}
+                      onPress={() => onSelect(suggestion.orders)}
+                    >
+                      {t("queue.suggestions.selectThese")}
+                    </Button>
+                    <Button
+                      isDisabled={openBatch !== null}
+                      isPending={create.isPending && create.variables === suggestion.orders}
+                      onPress={() => create.mutate(suggestion.orders)}
+                    >
+                      {t("queue.suggestions.pickThese")}
+                    </Button>
+                  </>
                 )
               }
             />

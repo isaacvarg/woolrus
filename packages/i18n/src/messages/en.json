@@ -409,6 +409,7 @@
       "oldest": "Oldest #{number}, {age}",
       "shared": "{name} ×{units} · {orders} orders",
       "pickThese": "Pick these",
+      "selectThese": "Select these",
       "finishFirst": "Finish Batch {number} first"
     },
     "begunPicking": "Order {number} is now in Picking.",

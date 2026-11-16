@@ -17,7 +17,7 @@ import { useErrorMessage } from "@/lib/errors";
 import { orpc } from "@/lib/orpc";
 import { useReasonText } from "@/lib/reasons";
 import { ageParts } from "./age";
-import { PickTogether } from "./pick-together";
+import { type BatchOrder, PickTogether } from "./pick-together";
 import { SuggestedBatches } from "./suggested-batches";
 
 const SEARCH_DEBOUNCE_MS = 250;
@@ -96,10 +96,11 @@ export function QueueTable({
     (showPrint ? 1 : 0) +
     (showReady ? 2 : 0);
   // Ticked for Pick together, by id. Rows keep the version they were ticked at: if one changes
-  // meanwhile the batch is refused as stale and the panel says so.
-  const [selected, setSelected] = useState<Map<string, QueueRow>>(() => new Map());
+  // meanwhile the batch is refused as stale and the panel says so. **Select these** (A1) ticks a
+  // suggestion's orders at the versions the card was built from, so entries are `BatchOrder`s.
+  const [selected, setSelected] = useState<Map<string, BatchOrder>>(() => new Map());
   const printLabels = useLabelPrint({ onPrinted: () => setSelected(new Map()) });
-  const toggle = (row: QueueRow, on: boolean) =>
+  const toggle = (row: BatchOrder, on: boolean) =>
     setSelected((current) => {
       const next = new Map(current);
       if (on) next.set(row.id, row);
@@ -164,6 +165,7 @@ export function QueueTable({
             beginPicking.mutate({ id, expectedVersion: version })
           }
           beginningId={beginPicking.isPending ? (beginPicking.variables?.id ?? null) : null}
+          onSelect={(orders) => setSelected(new Map(orders.map((order) => [order.id, order])))}
         />
       )}
 

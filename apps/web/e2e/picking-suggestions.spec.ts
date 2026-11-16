@@ -113,3 +113,43 @@ test("suggestions hide while the queue is searched", async ({ page }) => {
   await page.getByRole("searchbox", { name: "Search orders" }).fill("E2E");
   await expect(heading).toHaveCount(0);
 });
+
+// Ticket #193: the picker adjusts a suggestion before picking it.
+test("Select these ticks exactly the card's orders; unticking one picks the rest together", async ({
+  page,
+}) => {
+  const orders = await sharingOrders();
+  const [first, dropped, last] = orders as [
+    Awaited<ReturnType<typeof createOrder>>,
+    Awaited<ReturnType<typeof createOrder>>,
+    Awaited<ReturnType<typeof createOrder>>,
+  ];
+  // Ticked before the tap, and not on the card: Select these clears it.
+  const other = await createOrder({ sku: `E2E-SUG-${crypto.randomUUID()}`, priority: TOP });
+  await signInAs(page, ["PICKER"]);
+  await page.goto("/queue/pending");
+
+  const box = (number: string) => page.getByRole("checkbox", { name: `Select #${number}` });
+  const toggle = (number: string) => page.locator("label", { has: box(number) }).click();
+  const pickTogether = page.getByRole("button", { name: /^Pick together/ });
+
+  await toggle(other.number);
+  await expect(box(other.number)).toBeChecked();
+
+  const card = cardOf(page, first.number);
+  await card.getByRole("button", { name: "Select these" }).click();
+
+  for (const order of orders) await expect(box(order.number)).toBeChecked();
+  await expect(box(other.number)).not.toBeChecked();
+  await expect(pickTogether).toHaveText("Pick together (3)");
+
+  await toggle(dropped.number);
+  await expect(box(dropped.number)).not.toBeChecked();
+  await expect(pickTogether).toHaveText("Pick together (2)");
+  await pickTogether.click();
+
+  await expect(page).toHaveURL(/\/pick\/batch\/[0-9a-f-]+$/);
+  await expect(page.getByTestId("slot-1")).toContainText(`#${first.number}`);
+  await expect(page.getByTestId("slot-2")).toContainText(`#${last.number}`);
+  await expect(page.getByTestId("slot-3")).toHaveCount(0);
+});
