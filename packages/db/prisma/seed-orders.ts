@@ -21,7 +21,8 @@ type DemoProduct = {
   sku: string;
   name: string;
   bin: string;
-  weightOz: number;
+  /** Ounces; none on one product, so a suggested batch with it reads "weight incomplete". */
+  weightOz?: number;
   /** Length, width, height in inches; none on one product, so the box suggestion shows "unknown". */
   dims?: [number, number, number];
   physical?: boolean;
@@ -101,6 +102,17 @@ const products: DemoProduct[] = [
     dims: [7, 7, 8],
     barcode: "0700000000059",
   },
+  // Suggested batches dev data (SPEC-picking A1): about 45 lb a pail, so a few fill a 200 lb cart.
+  {
+    sku: "WAX-PAIL-5",
+    name: "Beeswax pail 5 gal",
+    bin: "F-02-1",
+    weightOz: 720,
+    dims: [12, 12, 15],
+  },
+  { sku: "WAX-PAIL-LID", name: "Pail lid", bin: "F-02-2", weightOz: 16, dims: [12, 12, 1] },
+  // Never weighed in the store.
+  { sku: "MARKERS-10", name: "Stitch markers, 10 pack", bin: "B-02-1", dims: [4, 3, 1] },
 ];
 
 /** How far the floor got with an order's lines and packages, independent of its status. */
@@ -207,6 +219,14 @@ const orders: DemoOrder[] = [
   // Added last: demo order ids follow list position.
   { customer: "Mateo Rivas", status: "PENDING", lines: [["WOOL-MER-RED", 3], ["KIT-BEANIE", 1]], progress: "none", ageHours: 4, inStageMinutes: 240 },
   { customer: "Nora Salas", status: "PENDING", lines: [["WOOL-MER-RED", 1], ["NDL-CIRC-5", 1]], progress: "none", ageHours: 6, inStageMinutes: 360 },
+  // Five pails, three with a lid: at the default 200 lb limit their card stops at four (A1 "Dev data"), and
+  // the unweighed stitch markers ride along on red merino's card as "weight incomplete".
+  { customer: "Omar Quiroga", status: "PENDING", lines: [["WAX-PAIL-5", 1], ["WAX-PAIL-LID", 1]], progress: "none", ageHours: 30, inStageMinutes: 30 * 60 },
+  { customer: "Pilar Ibáñez", status: "PENDING", lines: [["WAX-PAIL-5", 1], ["WAX-PAIL-LID", 1]], progress: "none", ageHours: 29, inStageMinutes: 29 * 60 },
+  { customer: "Ramón Esteve", status: "PENDING", lines: [["WAX-PAIL-5", 1], ["WAX-PAIL-LID", 1]], progress: "none", ageHours: 28, inStageMinutes: 28 * 60 },
+  { customer: "Sara Bello", status: "PENDING", lines: [["WAX-PAIL-5", 1]], progress: "none", ageHours: 27, inStageMinutes: 27 * 60 },
+  { customer: "Tomás Gallo", status: "PENDING", lines: [["WAX-PAIL-5", 1]], progress: "none", ageHours: 26, inStageMinutes: 26 * 60 },
+  { customer: "Olga Paredes", status: "PENDING", lines: [["WOOL-MER-RED", 2], ["MARKERS-10", 1]], progress: "none", ageHours: 2.5, inStageMinutes: 150 },
 ];
 
 const flow: WorkflowStatus[] = ["PENDING", "PICKING", "PACKING", "QA", "READY", "COMPLETED"];
@@ -278,7 +298,7 @@ export async function upsertProducts(
         name: p.name,
         sku: p.sku,
         priceCents: physical ? 1800 : 1500,
-        weightOz: p.weightOz,
+        weightOz: p.weightOz ?? null,
         ...dimensionColumns(p),
         binLocation: p.bin || null,
         physical,

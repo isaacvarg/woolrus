@@ -53,6 +53,8 @@ model Settings {
   pickBatchMaxOrders     Int           @default(10) @map("pick_batch_max_orders")
   /// Suggested batches the Pending queue shows, 1–10 (SPEC-picking A1).
   pickBatchSuggestionCount Int         @default(3) @map("pick_batch_suggestion_count")
+  /// Cart weight limit for suggested batches in ounces, 16–8000; null is off (SPEC-picking A1).
+  pickBatchMaxWeightOz     Int?        @default(3200) @map("pick_batch_max_weight_oz")
   qaMustDifferFromPacker Boolean       @default(false) @map("qa_must_differ_from_packer")
   weightDisplay          WeightDisplay @default(LB_OZ) @map("weight_display")
   /// Per-stage SLA thresholds in minutes, e.g. { "PENDING": 240, "PICKING": 60 } (FR-LIST-05).

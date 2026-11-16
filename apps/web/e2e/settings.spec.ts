@@ -341,6 +341,53 @@ test("switching weight display to decimal pounds changes the boxes page", async 
   });
 });
 
+test("the cart weight limit is entered in the weight display unit and can be turned off (SPEC-picking A1)", async ({
+  page,
+}) => {
+  await signInAs(page, ["ADMIN"]);
+  await withSettingsLock(async () => {
+    const before = await (await page.request.get("/api/v1/settings")).json();
+    try {
+      await page.request.patch("/api/v1/settings", {
+        data: { pickBatchMaxWeightOz: 3200, weightDisplay: "LB_OZ" },
+      });
+      await page.goto("/settings");
+      const general = page.getByRole("form", { name: "General" });
+      const pounds = general.getByLabel("Cart weight limit (lb)");
+      await expect(pounds).toHaveValue("200");
+
+      await pounds.fill("60");
+      await general.getByRole("button", { name: "Save" }).click();
+      await expect(general.getByRole("status")).toHaveText("Settings saved.");
+      expect((await (await page.request.get("/api/v1/settings")).json()).pickBatchMaxWeightOz).toBe(
+        960,
+      );
+
+      await page.request.patch("/api/v1/settings", { data: { weightDisplay: "LB_DECIMAL" } });
+      await page.reload();
+      await expect(pounds).toHaveValue("60");
+      await expect(general.getByLabel("Cart weight limit (oz)")).toHaveCount(0);
+
+      await general.getByText("No cart weight limit").click();
+      await expect(pounds).toHaveCount(0);
+      await general.getByRole("button", { name: "Save" }).click();
+      await expect(general.getByRole("status")).toHaveText("Settings saved.");
+      await page.reload();
+      await expect(general.getByRole("checkbox", { name: "No cart weight limit" })).toBeChecked();
+      expect((await (await page.request.get("/api/v1/settings")).json()).pickBatchMaxWeightOz).toBe(
+        null,
+      );
+    } finally {
+      await page.request.patch("/api/v1/settings", {
+        data: {
+          pickBatchMaxWeightOz: before.pickBatchMaxWeightOz,
+          weightDisplay: before.weightDisplay,
+        },
+      });
+    }
+  });
+});
+
 test("signed-out callers can't read public settings", async ({ request }) => {
   const response = await request.get("/api/v1/settings/public");
   expect(response.status()).toBe(401);

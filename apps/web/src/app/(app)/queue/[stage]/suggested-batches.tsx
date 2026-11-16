@@ -1,9 +1,10 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import type { BatchSuggestion } from "@woolrus/contracts";
+import type { BatchSuggestion, WeightDisplay } from "@woolrus/contracts";
+import { formatWeight } from "@woolrus/core/format";
 import Link from "next/link";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { Button } from "@/components/ui/fields";
 import { orpc } from "@/lib/orpc";
 import { ageParts } from "./age";
@@ -31,6 +32,8 @@ export function SuggestedBatches({
   const t = useTranslations();
   const query = useQuery({ ...orpc.pickBatches.suggestions.queryOptions(), enabled: !hidden });
   const { create, refused } = useCreateBatch();
+  const settings = useQuery(orpc.settings.public.queryOptions());
+  const weightDisplay = settings.data?.weightDisplay ?? "LB_OZ";
 
   const suggestions = query.data?.suggestions ?? [];
   if (hidden || (suggestions.length === 0 && !refused)) return null;
@@ -50,6 +53,7 @@ export function SuggestedBatches({
               label={t("queue.suggestions.card", { index: index + 1 })}
               now={now}
               openBatch={openBatch}
+              weightDisplay={weightDisplay}
               action={
                 suggestion.orders.length === 1 ? (
                   <Button
@@ -92,15 +96,18 @@ function SuggestionCard({
   label,
   now,
   openBatch,
+  weightDisplay,
   action,
 }: {
   suggestion: BatchSuggestion;
   label: string;
   now: number;
   openBatch: { id: string; number: number } | null;
+  weightDisplay: WeightDisplay;
   action: React.ReactNode;
 }) {
   const t = useTranslations();
+  const locale = useLocale();
   const age = ageParts(suggestion.oldest.orderedAt, now);
   return (
     <article aria-label={label} className="card h-full bg-base-100 shadow-sm">
@@ -111,6 +118,17 @@ function SuggestionCard({
             units: suggestion.units,
             stops: suggestion.stops,
           })}
+        </p>
+        <p className="flex flex-wrap items-center gap-x-2 text-sm" data-testid="suggestion-weight">
+          <span>{formatWeight(suggestion.weightOz, weightDisplay, locale)}</span>
+          {suggestion.missingWeightCount > 0 && (
+            <span className="text-base-content/70">{t("queue.suggestions.weightIncomplete")}</span>
+          )}
+          {suggestion.overWeight && (
+            <span className="badge badge-warning badge-sm">
+              {t("queue.suggestions.overWeight")}
+            </span>
+          )}
         </p>
         <p className="text-sm text-base-content/70">
           {t("queue.suggestions.oldest", {

@@ -311,6 +311,12 @@ export const BatchSuggestion = z.object({
   units: z.number().int(),
   /** Distinct products: one stop each. */
   stops: z.number().int(),
+  /** Total weight in ounces; lines without a weight count as 0. */
+  weightOz: z.number(),
+  /** Lines with no variation or product weight, so `weightOz` is low by their share. */
+  missingWeightCount: z.number().int(),
+  /** One order over the cart weight limit by itself. */
+  overWeight: z.boolean(),
   oldest: z.object({ number: z.string(), orderedAt: z.date() }),
   /** At most three, most shared first. */
   shared: z.array(BatchSuggestionShared),

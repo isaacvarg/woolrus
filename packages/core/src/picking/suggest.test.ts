@@ -4,8 +4,14 @@ import { type SuggestionOrder, suggestBatches } from "./suggest";
 // SPEC-picking A1, success criteria 17 and 19: the grouping is pure, so these need no database.
 
 let n = 0;
-/** An order in queue order (the caller sorts), with one line per product key, 1 unit unless given. */
-function order(products: (string | [string, number])[], extra: Partial<SuggestionOrder> = {}) {
+/**
+ * An order in queue order (the caller sorts), with one line per product key, 1 unit unless given.
+ * A line's product weighs 1 lb a unit unless a third element gives its ounces (null: no weight).
+ */
+function order(
+  products: (string | [string, number] | [string, number, number | null])[],
+  extra: Partial<SuggestionOrder> = {},
+): SuggestionOrder {
   n += 1;
   return {
     id: `order-${n}`,
@@ -13,14 +19,14 @@ function order(products: (string | [string, number])[], extra: Partial<Suggestio
     version: 1,
     orderedAt: new Date(2026, 10, 1, 0, n),
     lines: products.map((p) => {
-      const [key, quantity] = typeof p === "string" ? [p, 1] : p;
-      return { key, name: `Name of ${key}`, quantity };
+      const [key, quantity = 1, productWeightOz = 16] = typeof p === "string" ? [p] : p;
+      return { key, name: `Name of ${key}`, quantity, productWeightOz, variationWeightOz: null };
     }),
     ...extra,
-  } satisfies SuggestionOrder;
+  };
 }
 
-const limits = { maxOrders: 10, count: 3 };
+const limits = { maxOrders: 10, count: 3, maxWeightOz: null };
 const ids = (s: { orders: { id: string }[] }) => s.orders.map((o) => o.id);
 
 describe("suggestBatches", () => {
@@ -54,7 +60,7 @@ describe("suggestBatches", () => {
     const c = order(["b", "c"]);
 
     // b1 and b2 tie on "a"; b1 is first. Then b2 shares a and b, c only b: b2 before c.
-    const [first] = suggestBatches([top, c, b1, b2], { maxOrders: 3, count: 3 });
+    const [first] = suggestBatches([top, c, b1, b2], { maxOrders: 3, count: 3, maxWeightOz: null });
 
     expect(ids(first as never)).toEqual([top.id, b1.id, b2.id]);
   });
@@ -72,7 +78,7 @@ describe("suggestBatches", () => {
   it("stops at maxOrders, never repeats an order and returns at most `count`", () => {
     const orders = Array.from({ length: 12 }, () => order(["gallon"]));
 
-    const suggestions = suggestBatches(orders, { maxOrders: 3, count: 3 });
+    const suggestions = suggestBatches(orders, { maxOrders: 3, count: 3, maxWeightOz: null });
 
     expect(suggestions.map((s) => s.orders.length)).toEqual([3, 3, 3]);
     const all = suggestions.flatMap(ids);
@@ -153,5 +159,92 @@ describe("suggestBatches", () => {
 
   it("suggests nothing for no orders", () => {
     expect(suggestBatches([], limits)).toEqual([]);
+  });
+});
+
+// SPEC-picking A1, success criterion 18.
+describe("suggestBatches weight", () => {
+  const lb = (pounds: number) => pounds * 16;
+  const at50lb = { ...limits, maxWeightOz: lb(50) };
+
+  it("skips an order that would go over and takes a lighter match instead", () => {
+    const top = order([["gallon", 1, lb(20)]]);
+    const heavy = order([
+      ["gallon", 1, lb(20)],
+      ["pail", 1, lb(25)],
+    ]);
+    const light = order([["gallon", 1, lb(20)]]);
+
+    const [first] = suggestBatches([top, heavy, light], at50lb);
+
+    // heavy shares as much as light and comes first in the queue, but 20 + 45 lb is over 50.
+    expect(ids(first as never)).toEqual([top.id, light.id]);
+    expect(first).toMatchObject({ weightOz: lb(40), missingWeightCount: 0, overWeight: false });
+  });
+
+  it("lets a suggestion reach the limit exactly", () => {
+    const top = order([["gallon", 1, lb(25)]]);
+    const mate = order([["gallon", 1, lb(25)]]);
+
+    const [first] = suggestBatches([top, mate], at50lb);
+
+    expect(ids(first as never)).toEqual([top.id, mate.id]);
+  });
+
+  it("makes an order over the limit by itself a one-order overWeight card, even a later one", () => {
+    const top = order([["gallon", 1, lb(10)]]);
+    const mate = order([["gallon", 1, lb(10)]]);
+    const pallet = order([["gallon", 3, lb(20)]]);
+    const c = order(["z"]);
+    const d = order(["z"]);
+
+    const suggestions = suggestBatches([top, mate, pallet, c, d], at50lb);
+
+    expect(suggestions.map(ids)).toEqual([[top.id, mate.id], [pallet.id], [c.id, d.id]]);
+    expect(suggestions.map((s) => s.overWeight)).toEqual([false, true, false]);
+    expect(suggestions[1]?.weightOz).toBe(lb(60));
+  });
+
+  it("adds nothing to an order over the limit by itself", () => {
+    const top = order([["pail", 2, lb(45)]]);
+    const mate = order([["pail", 1, lb(1)]]);
+
+    const suggestions = suggestBatches([top, mate], at50lb);
+
+    expect(suggestions.map(ids)).toEqual([[top.id]]);
+    expect(suggestions[0]?.overWeight).toBe(true);
+  });
+
+  it("counts a line without a weight as 0 and reports it as missing", () => {
+    const top = order([
+      ["gallon", 2, lb(10)],
+      ["mystery", 3, null],
+    ]);
+    const mate = order([["mystery", 1, null]]);
+
+    const [first] = suggestBatches([top, mate], at50lb);
+
+    expect(first).toMatchObject({ weightOz: lb(20), missingWeightCount: 2 });
+  });
+
+  it("uses a variation's weight before its product's", () => {
+    const top = order([]);
+    top.lines.push(
+      { key: "v1", name: "Red", quantity: 2, variationWeightOz: 100, productWeightOz: 5 },
+      { key: "v2", name: "Blue", quantity: 1, variationWeightOz: null, productWeightOz: 5 },
+    );
+
+    const [first] = suggestBatches([top], limits);
+
+    expect(first).toMatchObject({ weightOz: 205, missingWeightCount: 0 });
+  });
+
+  it("never stops an order joining when the limit is off", () => {
+    const orders = Array.from({ length: 4 }, () => order([["pail", 1, lb(400)]]));
+
+    const [first] = suggestBatches(orders, limits);
+
+    expect(ids(first as never)).toEqual(orders.map((o) => o.id));
+    expect(first).toMatchObject({ weightOz: lb(1600), overWeight: false });
   });
 });

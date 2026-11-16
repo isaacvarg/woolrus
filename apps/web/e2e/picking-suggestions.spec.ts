@@ -2,6 +2,7 @@ import { type APIResponse, expect, type Page, test } from "@playwright/test";
 import { createDb } from "@woolrus/db";
 import { signInAs } from "./support/auth";
 import { createOrder, deleteCreatedOrders } from "./support/orders";
+import { withSettingsLock } from "./support/settings-lock";
 
 // Suggested batches on the Pending queue (SPEC-picking A1, criterion 22; ticket #191).
 //
@@ -152,4 +153,46 @@ test("Select these ticks exactly the card's orders; unticking one picks the rest
   await expect(page.getByTestId("slot-1")).toContainText(`#${first.number}`);
   await expect(page.getByTestId("slot-2")).toContainText(`#${last.number}`);
   await expect(page.getByTestId("slot-3")).toHaveCount(0);
+});
+
+test("cards show their weight, weight incomplete, and an order too heavy for the cart (ticket #192)", async ({
+  page,
+}) => {
+  await signInAs(page, ["ADMIN", "PICKER"]);
+  await withSettingsLock(async () => {
+    const before = await (await page.request.get("/api/v1/settings")).json();
+    try {
+      await page.request.patch("/api/v1/settings", {
+        data: { pickBatchMaxWeightOz: 3200, weightDisplay: "LB_OZ" },
+      });
+      // 9000 oz is over any limit (8000 at most), so it's a card of its own. Its date puts it ahead
+      // of the other tests' top orders; the lock keeps the desktop and tablet runs apart.
+      const heavy = await createOrder({
+        priority: TOP,
+        quantity: 1,
+        orderedAt: new Date(2000, 0, 1),
+        productSize: { weightOz: 9000, lengthIn: 20, widthIn: 20, heightIn: 20 },
+      });
+      // E2E lines have no product, so no weight: 0 oz, and the card says so.
+      const sharing = await sharingOrders();
+      await page.goto("/queue/pending");
+
+      const heavyCard = cardOf(page, heavy.number);
+      await expect(heavyCard).toContainText("562 lb 8 oz");
+      await expect(heavyCard).toContainText("Over cart weight");
+      await expect(heavyCard).not.toContainText("weight incomplete");
+      await expect(heavyCard.getByRole("button", { name: "Begin Picking" })).toBeVisible();
+
+      const card = cardOf(page, sharing[0]?.number as string);
+      await expect(card.getByTestId("suggestion-weight")).toHaveText("0 ozweight incomplete");
+      await expect(card).not.toContainText("Over cart weight");
+    } finally {
+      await page.request.patch("/api/v1/settings", {
+        data: {
+          pickBatchMaxWeightOz: before.pickBatchMaxWeightOz,
+          weightDisplay: before.weightDisplay,
+        },
+      });
+    }
+  });
 });

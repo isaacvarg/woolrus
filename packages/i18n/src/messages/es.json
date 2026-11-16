@@ -120,6 +120,9 @@
     "pickBatchMaxOrdersHint": "Cuántos pedidos puede tomar un surtidor con Surtir juntos: un carrito. Los lotes ya abiertos conservan sus pedidos.",
     "pickBatchSuggestionCount": "Lotes sugeridos visibles",
     "pickBatchSuggestionCountHint": "Cuántos lotes sugeridos ve el surtidor en la cola de Pendientes, de 1 a 10.",
+    "pickBatchMaxWeight": "Límite de peso del carrito",
+    "pickBatchMaxWeightHint": "Los lotes sugeridos no pasan de este peso, de 1 a 500 lb. Un pedido que lo excede por sí solo tiene su propia tarjeta.",
+    "pickBatchMaxWeightOff": "Sin límite de peso del carrito",
     "sla": {
       "title": "SLA por etapa (minutos)",
       "hint": "Marca los pedidos que permanecen más tiempo que esto en una etapa. Déjalo vacío para no tener límite.",
@@ -407,6 +410,8 @@
       "card": "Lote sugerido {index}",
       "summary": "{orders, plural, one {# pedido} other {# pedidos}} · {units, plural, one {# artículo} other {# artículos}} · {stops, plural, one {# parada} other {# paradas}}",
       "oldest": "Más antiguo #{number}, {age}",
+      "weightIncomplete": "peso incompleto",
+      "overWeight": "Excede el peso del carrito",
       "shared": "{name} ×{units} · {orders} pedidos",
       "pickThese": "Surtir estos",
       "selectThese": "Seleccionar estos",
