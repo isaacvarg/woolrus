@@ -44,15 +44,21 @@ const packagesOf = (orderId: string) => ({ package: { orderId } });
 /**
  * Writes one row per WARN or BLOCK trip of the order's packages, replacing any left over (an
  * order put into Packing by hand never had its old rows cleared). `approvalId` goes on the BLOCK
- * rows: the approval that let them through, or null (force-status). Returns the trips it saved.
+ * rows: the approval that let them through, or null (force-status). `evaluated` is the trips the
+ * gate just passed, so the rows match what it (and any approval) saw; without a gate they are
+ * evaluated here. Returns the trips it saved.
  */
 export async function saveTrips(
   tx: DbTx,
   orderId: string,
-  { now = new Date(), approvalId = null }: { now?: Date; approvalId?: string | null } = {},
+  {
+    now = new Date(),
+    approvalId = null,
+    evaluated: passed,
+  }: { now?: Date; approvalId?: string | null; evaluated?: PackageTrips[] } = {},
 ): Promise<PackageTrips[]> {
   await clearTrips(tx, orderId);
-  const evaluated = await evaluateOrderTrips(tx, orderId);
+  const evaluated = passed ?? (await evaluateOrderTrips(tx, orderId));
   const data = evaluated.flatMap(({ packageId, trips }) =>
     trips.map((trip) => ({
       packageId,

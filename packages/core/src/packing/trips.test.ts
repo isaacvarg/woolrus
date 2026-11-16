@@ -151,6 +151,28 @@ describe("completing packing saves the trips", () => {
     ]);
   });
 
+  it("force-status to QA from a hold placed in Packing writes them too (decision 16)", async () => {
+    const admin = await createActor(db, ["ADMIN"]);
+    const { order } = await tripping();
+    await db.order.update({
+      where: { id: order.id },
+      data: { status: "ON_HOLD", heldFromStatus: "PACKING", claimedById: null },
+    });
+
+    await forceStatus(db, admin, {
+      orderId: order.id,
+      expectedVersion: 3,
+      to: "QA",
+      reason: "Released straight to QA",
+    });
+
+    expect((await summary(order.id)).map((t) => t.check)).toEqual([
+      "OVER_MAX",
+      "WEIGHT_STALE",
+      "CUSTOM_DIMENSIONS",
+    ]);
+  });
+
   it("a mode changed while the order is in QA leaves its trips unchanged", async () => {
     const { packer, order } = await tripping();
     await finish(packer, order.id);
@@ -314,9 +336,11 @@ describe("packCheckStats", () => {
 
     expect(stats).toEqual([
       { check: "OVER_MAX", trips: 0, approved: 0 },
+      { check: "UNDER_MIN", trips: 0, approved: 0 },
       { check: "WEIGHT_OFF", trips: 1, approved: 0 },
       { check: "WEIGHT_STALE", trips: 0, approved: 0 },
       { check: "NO_FIT", trips: 2, approved: 1 },
+      { check: "BOX_NOT_SCANNED", trips: 0, approved: 0 },
       { check: "CUSTOM_DIMENSIONS", trips: 0, approved: 0 },
     ]);
   });

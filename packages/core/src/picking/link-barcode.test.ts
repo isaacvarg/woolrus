@@ -136,6 +136,25 @@ describe("linkBarcode", () => {
       expect(await db.auditEvent.count()).toBe(0);
     });
 
+    it("a code that is a box's area barcode, naming the box (SPEC-packing A1 decision 18)", async () => {
+      const { actor, item } = await picking([{ sku: "LAV-8" }]);
+      await db.box.create({
+        data: { name: "Medium", lengthIn: 12, widthIn: 10, heightIn: 8, barcode: "BOX-MEDIUM" },
+      });
+
+      await expect(
+        linkBarcode(db, actor, { orderItemId: item.id, code: " box-medium " }),
+      ).rejects.toMatchObject({
+        kind: "CONFLICT",
+        messageKey: "errors.picking.codeInUse",
+        params: { name: "Medium" },
+      });
+      const product = await db.product.findUniqueOrThrow({
+        where: { id: item.productId as string },
+      });
+      expect(product.barcode).toBeNull();
+    });
+
     it("a line with no product to link to", async () => {
       const { actor, item } = await picking([{ noProduct: true }]);
 

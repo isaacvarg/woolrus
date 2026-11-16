@@ -80,6 +80,8 @@ const barcodeTaken = () =>
  */
 async function checkBarcode(tx: DbTx, barcode: string | null | undefined, boxId?: string) {
   if (!barcode) return;
+  // The lock `linkBarcode` takes, so a box and a product can't claim the same code at once.
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`barcode:${barcode}`}))`;
   if (isLotCode(barcode) || (await findCodeOwner(tx, barcode))) {
     throw new AppError("BAD_REQUEST", "errors.box.barcodeIsProduct", {
       barcode: "errors.box.barcodeIsProduct",

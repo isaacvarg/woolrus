@@ -19,29 +19,33 @@ export function TripList({
   weightDisplay: WeightDisplay;
 }) {
   const t = useTranslations();
-  if (trips.length === 0) return null;
+  // One live region that is always there, so a trip appearing is announced and the list keeps its
+  // list semantics.
   return (
-    <ul className="space-y-2 px-4 pb-4">
-      {trips.map((trip) => (
-        <li
-          key={trip.check}
-          role="status"
-          className={`alert ${trip.mode === "BLOCK" ? "alert-error" : "alert-warning"}`}
-          data-testid="pack-trip"
-          data-check={trip.check}
-        >
-          <TriangleAlert className="size-5 shrink-0" aria-hidden="true" />
-          <span>
-            <TripMessage pkg={pkg} trip={trip} weightDisplay={weightDisplay} />
-            {trip.mode === "BLOCK" && (
-              <span className="block font-semibold" data-testid="pack-trip-blocks">
-                {t("pack.tripNeedsApproval")}
+    <div role="status">
+      {trips.length > 0 && (
+        <ul className="space-y-2 px-4 pb-4">
+          {trips.map((trip) => (
+            <li
+              key={trip.check}
+              className={`alert ${trip.mode === "BLOCK" ? "alert-error" : "alert-warning"}`}
+              data-testid="pack-trip"
+              data-check={trip.check}
+            >
+              <TriangleAlert className="size-5 shrink-0" aria-hidden="true" />
+              <span>
+                <TripMessage pkg={pkg} trip={trip} weightDisplay={weightDisplay} />
+                {trip.mode === "BLOCK" && (
+                  <span className="block font-semibold" data-testid="pack-trip-blocks">
+                    {t("pack.tripNeedsApproval")}
+                  </span>
+                )}
               </span>
-            )}
-          </span>
-        </li>
-      ))}
-    </ul>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 
@@ -61,7 +65,10 @@ export function TripMessage({
     case "OVER_MAX":
       return (
         <span>
-          {t("pack.tripOverMax", { max: formatWeight(trip.details.maxOz, weightDisplay, locale) })}
+          {t("pack.tripOverMax", {
+            weight: formatWeight(trip.details.weightOz, weightDisplay, locale),
+            max: formatWeight(trip.details.maxOz, weightDisplay, locale),
+          })}
           {trip.details.reason && (
             <span className="block" data-testid="pack-override">
               {trip.details.reason}
@@ -72,7 +79,10 @@ export function TripMessage({
     case "UNDER_MIN":
       return (
         <span>
-          {t("pack.tripUnderMin", { min: formatWeight(trip.details.minOz, weightDisplay, locale) })}
+          {t("pack.tripUnderMin", {
+            weight: formatWeight(trip.details.weightOz, weightDisplay, locale),
+            min: formatWeight(trip.details.minOz, weightDisplay, locale),
+          })}
         </span>
       );
     case "WEIGHT_OFF":

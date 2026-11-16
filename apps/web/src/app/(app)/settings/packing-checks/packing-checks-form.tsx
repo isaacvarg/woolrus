@@ -113,6 +113,8 @@ function PackingChecksForm({ settings }: { settings: AdminSettings }) {
                 <SelectField
                   label={t(`settings.packingChecks.${check}`)}
                   name={field}
+                  // The hint and 30-day counts sit beside it on wide screens; they describe it.
+                  aria-describedby={`${field}-about`}
                   options={allowed.map((id) => ({
                     id,
                     label: t(`settings.packingChecks.mode${id}`),
@@ -123,7 +125,7 @@ function PackingChecksForm({ settings }: { settings: AdminSettings }) {
                     if (mode) setModes((current) => ({ ...current, [field]: mode }));
                   }}
                 />
-                <div className="text-sm">
+                <div className="text-sm" id={`${field}-about`}>
                   <p className="text-base-content/70">{t(`settings.packingChecks.${check}Hint`)}</p>
                   {statOf(check) ? (
                     <p className="mt-1 font-medium" data-stat={check}>
@@ -149,6 +151,7 @@ function PackingChecksForm({ settings }: { settings: AdminSettings }) {
           <SelectField
             label={t("settings.packingChecks.qaBoxConfirm")}
             name="qaBoxConfirm"
+            aria-describedby="qaBoxConfirm-about"
             options={boxConfirmModes.map((id) => ({
               id,
               label: t(`settings.packingChecks.qaBoxConfirm${id}`),
@@ -159,7 +162,7 @@ function PackingChecksForm({ settings }: { settings: AdminSettings }) {
               if (mode) setBoxConfirm(mode);
             }}
           />
-          <p className="text-sm text-base-content/70">
+          <p className="text-sm text-base-content/70" id="qaBoxConfirm-about">
             {t("settings.packingChecks.qaBoxConfirmHint")}
           </p>
         </div>

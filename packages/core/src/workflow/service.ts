@@ -125,11 +125,21 @@ export async function transition(
     at: now,
   });
   // SPEC-packing A1: leaving Packing for QA saves the trips as they stand (completePacking and an
-  // Admin's forceStatus alike); any way back into Packing deletes them, as QA verification is reset.
+  // Admin's forceStatus alike, including from a hold placed in Packing: decision 16, skipping the
+  // gate hides nothing); any way back into Packing deletes them, as QA verification is reset.
   // An approval is recorded only for the trips it let through; its id goes on their rows.
-  if (order.status === "PACKING" && to === "QA") {
+  const fromPacking =
+    order.status === "PACKING" ||
+    (order.status === "ON_HOLD" && order.heldFromStatus === "PACKING");
+  if (fromPacking && to === "QA") {
     const approvalId = await recordPackApproval(tx, actor, { orderId, approval, snapshot, now });
-    await saveTrips(tx, orderId, { now, approvalId });
+    // The gate's own evaluation when it ran (it reads trips only in Packing), so the saved rows
+    // are exactly what it passed.
+    const evaluated =
+      snapshot && order.status === "PACKING"
+        ? snapshot.packages.map((p) => ({ packageId: p.id, number: p.number, trips: p.trips }))
+        : undefined;
+    await saveTrips(tx, orderId, { now, approvalId, evaluated });
   } else if (to === "PACKING") await clearTrips(tx, orderId);
   await notifyOrderChanged(tx, { id: orderId, status: to });
 

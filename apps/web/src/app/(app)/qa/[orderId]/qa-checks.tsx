@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { QaPackage, QaResult, QaTrip, QaView } from "@woolrus/contracts";
 import { Check, TriangleAlert } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
+import { useId } from "react";
 import { Button } from "@/components/ui/fields";
 import { toast } from "@/components/ui/toast";
 import { useErrorMessage } from "@/lib/errors";
@@ -104,6 +105,8 @@ function TripRow({
   const t = useTranslations();
   const settings = useQuery(orpc.settings.public.queryOptions());
   const acknowledged = trip.acknowledgedAt !== null;
+  // Several trips on one card each have an Acknowledge button: each is described by its trip.
+  const messageId = useId();
   return (
     <li
       className="flex flex-wrap items-center gap-3 rounded-box border border-warning bg-base-100 p-3"
@@ -112,7 +115,7 @@ function TripRow({
       data-acknowledged={acknowledged}
     >
       <TriangleAlert className="size-5 shrink-0 text-warning" aria-hidden="true" />
-      <span className="grow">
+      <span className="grow" id={messageId}>
         <TripMessage
           pkg={pkg}
           trip={trip.trip}
@@ -139,6 +142,7 @@ function TripRow({
           className="btn-warning min-h-12"
           isDisabled={disabled}
           onPress={onAcknowledge}
+          aria-describedby={messageId}
           data-testid="qa-trip-acknowledge"
         >
           {t("qa.acknowledge")}
@@ -201,12 +205,15 @@ function ConfirmBoxRow({
   );
 }
 
-/** What still stops **Complete QA** (buying the labels), one line per condition. */
+/**
+ * What still stops **Complete QA** (buying the labels), one line per condition. Not a live region:
+ * it changes on every verified item, and re-reading the whole list each tap drowns the screen.
+ */
 export function QaUnmet({ unmet }: { unmet: Unmet[] }) {
   const t = useTranslations();
   if (unmet.length === 0) return null;
   return (
-    <div role="status" className="alert alert-warning flex-col items-start" data-testid="qa-unmet">
+    <div className="alert alert-warning flex-col items-start" data-testid="qa-unmet">
       <p className="font-semibold">{t("qa.unmetTitle")}</p>
       <ul className="list-disc ps-6">
         {unmet.map((condition) => (

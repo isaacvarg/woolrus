@@ -1080,8 +1080,13 @@ function PackageCard({
       )}
       <TripList
         pkg={pkg}
-        // When selected, the re-weigh banner below says it, with its Weight still right button.
-        trips={isSelected ? pkg.trips.filter((trip) => trip.check !== "WEIGHT_STALE") : pkg.trips}
+        // When selected, the re-weigh banner below says a warning, with its Weight still right
+        // button; a blocking one stays, as only the trip says it needs approval.
+        trips={
+          isSelected
+            ? pkg.trips.filter((trip) => !(trip.check === "WEIGHT_STALE" && trip.mode === "WARN"))
+            : pkg.trips
+        }
         weightDisplay={weightDisplay}
       />
       {isSelected && (
