@@ -1,4 +1,4 @@
-import { expect, type Page, test } from "@playwright/test";
+import { type APIResponse, expect, type Page, test } from "@playwright/test";
 import { createDb } from "@woolrus/db";
 import { signInAs } from "./support/auth";
 import { createOrder, deleteCreatedOrders } from "./support/orders";
@@ -65,13 +65,22 @@ test("an order someone else took first is refused by name, and the cards refresh
     Awaited<ReturnType<typeof createOrder>>,
     Awaited<ReturnType<typeof createOrder>>,
   ];
+  // The race a live refresh can't close: the cards were read just before someone else took an
+  // order. Any order event (another test's, in the shared queue) refetches them, so the first
+  // read is held until the tap; the refetch after the refusal goes through.
+  let held: APIResponse | undefined;
+  let tapped = false;
+  await page.route(/suggestions/, async (route) => {
+    if (tapped) return route.continue();
+    held ??= await route.fetch();
+    return route.fulfill({ response: held });
+  });
   await signInAs(page, ["PICKER"]);
   await page.goto("/queue/pending");
   const card = cardOf(page, first.number);
   await expect(card).toContainText(`#${taken.number}`);
 
-  // Another picker claims it on their own browser. Written quietly (no order event), so this
-  // screen still shows the card as it was: the race a live refresh can't close.
+  // Another picker claims it on their own browser.
   const other = await browser.newContext();
   try {
     const holder = await signInAs(await other.newPage(), ["PICKER", "PACKER"]);
@@ -80,6 +89,7 @@ test("an order someone else took first is refused by name, and the cards refresh
       data: { claimedById: holder.id, claimedAt: new Date() },
     });
 
+    tapped = true;
     await card.getByRole("button", { name: "Pick these" }).click();
 
     const alert = page.getByRole("alert").filter({ hasText: "couldn't" });
