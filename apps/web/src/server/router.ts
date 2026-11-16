@@ -39,6 +39,7 @@ import {
   duplicateLabParcel,
   finishBatch,
   getBatch,
+  getBatchSuggestions,
   getEmailSender,
   getIssue,
   getLabRun,
@@ -472,6 +473,9 @@ export const router = implementer.router({
   pickBatches: {
     create: api.pickBatches.create.handler(({ input, context }) =>
       createBatch(db, context.actor, input),
+    ),
+    suggestions: api.pickBatches.suggestions.handler(({ context }) =>
+      getBatchSuggestions(db, context.actor),
     ),
     get: api.pickBatches.get.handler(({ input, context }) => getBatch(db, context.actor, input)),
     scan: api.pickBatches.scan.handler(({ input, context }) => scanBatch(db, context.actor, input)),

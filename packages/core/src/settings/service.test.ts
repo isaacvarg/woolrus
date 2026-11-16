@@ -34,6 +34,7 @@ describe("settings service", () => {
       stationIdleLockMinutes: 10,
       claimExpiryMinutes: 30,
       pickBatchMaxOrders: 10,
+      pickBatchSuggestionCount: 3,
       stageSlaMinutes: {},
       weightDisplay: "LB_OZ",
       piiRetentionDays: null,
@@ -111,6 +112,7 @@ describe("settings service", () => {
       stationIdleLockMinutes: 20,
       claimExpiryMinutes: 45,
       pickBatchMaxOrders: 6,
+      pickBatchSuggestionCount: 5,
       stageSlaMinutes: { QA: 30 },
       weightDisplay: "LB_DECIMAL",
       piiRetentionDays: 90,
@@ -238,6 +240,28 @@ describe("settings service", () => {
       packCheckUnderMin: "WARN",
       packCheckWeightOffPercent: 25,
     });
+  });
+
+  it("lets only an admin change how many batches are suggested, 1–10 in the database too (SPEC-picking A1)", async () => {
+    const admin = await createActor(db, ["ADMIN"]);
+    const picker = await createActor(db, ["PICKER"]);
+    await expect(updateSettings(db, picker, { pickBatchSuggestionCount: 5 })).rejects.toMatchObject(
+      { kind: "FORBIDDEN" },
+    );
+
+    const updated = await updateSettings(db, admin, { pickBatchSuggestionCount: 5 });
+    expect(updated.pickBatchSuggestionCount).toBe(5);
+    const audit = await db.auditEvent.findFirstOrThrow({ where: { entityType: "Settings" } });
+    expect(audit.before).toEqual({ pickBatchSuggestionCount: 3 });
+    expect(audit.after).toEqual({ pickBatchSuggestionCount: 5 });
+
+    for (const count of [0, 11]) {
+      await expect(
+        db.$executeRaw`UPDATE settings SET pick_batch_suggestion_count = ${count}`,
+      ).rejects.toThrow(/settings_pick_batch_suggestion_count_range/);
+    }
+    // Only the server reads it.
+    expect(await getPublicSettings(db, picker)).not.toHaveProperty("pickBatchSuggestionCount");
   });
 
   it.each(nonAdmins)("forbids %s from changing the packing checks", async (role) => {

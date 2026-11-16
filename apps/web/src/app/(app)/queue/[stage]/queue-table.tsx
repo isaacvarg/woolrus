@@ -16,19 +16,13 @@ import { toast } from "@/components/ui/toast";
 import { useErrorMessage } from "@/lib/errors";
 import { orpc } from "@/lib/orpc";
 import { useReasonText } from "@/lib/reasons";
+import { ageParts } from "./age";
 import { PickTogether } from "./pick-together";
+import { SuggestedBatches } from "./suggested-batches";
 
 const SEARCH_DEBOUNCE_MS = 250;
 /** The most orders one print covers (`CreateLabelPrintInput`); past it the button is off rather than printing a prefix. */
 const MAX_PRINT_ORDERS = 50;
-
-/** Time in stage, coarsened for a glance: minutes, then hours, then days. */
-function ageParts(since: Date, now: number): { unit: "Minutes" | "Hours" | "Days"; count: number } {
-  const minutes = Math.max(0, Math.floor((now - since.getTime()) / 60_000));
-  if (minutes < 60) return { unit: "Minutes", count: minutes };
-  if (minutes < 24 * 60) return { unit: "Hours", count: Math.floor(minutes / 60) };
-  return { unit: "Days", count: Math.floor(minutes / (24 * 60)) };
-}
 
 /** Shape and colour together, so severity isn't colour alone. */
 const severityIcon = { MINOR: "●", MAJOR: "▲", CRITICAL: "⬣" } as const;
@@ -162,6 +156,16 @@ export function QueueTable({
         <Label className="sr-only">{t("queue.search")}</Label>
         <Input className="input input-lg w-full" placeholder={t("queue.searchPlaceholder")} />
       </SearchField>
+
+      {showBeginPicking && (
+        <SuggestedBatches
+          hidden={search !== ""}
+          onBeginPicking={({ id, version }) =>
+            beginPicking.mutate({ id, expectedVersion: version })
+          }
+          beginningId={beginPicking.isPending ? (beginPicking.variables?.id ?? null) : null}
+        />
+      )}
 
       {showBeginPicking && (
         <PickTogether selected={[...selected.values()]} onStarted={() => setSelected(new Map())} />

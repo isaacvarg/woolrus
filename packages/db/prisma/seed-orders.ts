@@ -202,6 +202,11 @@ const orders: DemoOrder[] = [
   { customer: "Jimena Ortiz", status: "READY", lines: [["KIT-BEANIE", 1], ["NDL-CIRC-5", 1]], progress: "labeled", ageHours: 27, inStageMinutes: 45, splitPackages: true, address2: "VOID-REJECT-2" },
   { customer: "Kevin Lund", status: "READY", lines: [["SCARF-CA-HS", 2]], progress: "labeled", ageHours: 29, inStageMinutes: 50, country: "CA" },
   { customer: "Lucia Maple", status: "READY", lines: [["SCARF-CA-NOHS", 1]], progress: "labeled", ageHours: 31, inStageMinutes: 55, country: "CA" },
+  // Suggested batches dev data (SPEC-picking A1 "Dev data"): with Ana's and Felipe's orders above, red
+  // merino is on four Pending orders and the beanie kit on three, so the queue shows a multi-order card.
+  // Added last: demo order ids follow list position.
+  { customer: "Mateo Rivas", status: "PENDING", lines: [["WOOL-MER-RED", 3], ["KIT-BEANIE", 1]], progress: "none", ageHours: 4, inStageMinutes: 240 },
+  { customer: "Nora Salas", status: "PENDING", lines: [["WOOL-MER-RED", 1], ["NDL-CIRC-5", 1]], progress: "none", ageHours: 6, inStageMinutes: 360 },
 ];
 
 const flow: WorkflowStatus[] = ["PENDING", "PICKING", "PACKING", "QA", "READY", "COMPLETED"];

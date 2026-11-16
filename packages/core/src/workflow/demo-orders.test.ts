@@ -3,6 +3,7 @@ import { seedDemoOrders } from "@woolrus/db/demo";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { createActor, resetDb, testDb } from "../../test/db";
 import type { Actor } from "../permissions";
+import { getBatchSuggestions } from "../picking/queries";
 import { evaluateGate, loadGateSnapshot } from "./gates";
 import { recomputePriorities } from "./priority-rules";
 import { getOrder, getOrderHistory, listQueue, queueCounts } from "./queries";
@@ -61,6 +62,17 @@ describe("seedDemoOrders", () => {
     await seedDemoOrders(db);
 
     expect(await db.product.count({ where: { barcode: { not: null } } })).toBeGreaterThan(2);
+  });
+
+  it("seeds Pending orders that share products, so the queue suggests a batch (SPEC-picking A1)", async () => {
+    await seedDemoOrders(db);
+    const picker = await createActor(db, ["PICKER"]);
+
+    const { suggestions } = await getBatchSuggestions(db, picker);
+
+    const shared = suggestions.flatMap((s) => s.shared);
+    expect(shared).toContainEqual(expect.objectContaining({ name: "Merino yarn, Red", orders: 4 }));
+    expect(suggestions.some((s) => s.orders.length >= 3)).toBe(true);
   });
 
   it("puts a non-physical Rush Order line on an Urgent order, at the top of Pending", async () => {

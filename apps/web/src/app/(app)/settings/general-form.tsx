@@ -46,6 +46,7 @@ type FormState = {
   stationIdleLockMinutes: number;
   claimExpiryMinutes: number;
   pickBatchMaxOrders: number;
+  pickBatchSuggestionCount: number;
   sla: Record<Stage, number>;
   weightDisplay: WeightDisplay;
   piiRetentionDays: number;
@@ -63,6 +64,7 @@ function toForm(settings: AdminSettings): FormState {
     stationIdleLockMinutes: settings.stationIdleLockMinutes,
     claimExpiryMinutes: settings.claimExpiryMinutes,
     pickBatchMaxOrders: settings.pickBatchMaxOrders,
+    pickBatchSuggestionCount: settings.pickBatchSuggestionCount,
     sla: Object.fromEntries(
       stages.map((s) => [s, settings.stageSlaMinutes[s] ?? Number.NaN]),
     ) as Record<Stage, number>,
@@ -88,6 +90,7 @@ function toInput(form: FormState): UpdateSettingsInput {
     stationIdleLockMinutes: form.stationIdleLockMinutes,
     claimExpiryMinutes: form.claimExpiryMinutes,
     pickBatchMaxOrders: form.pickBatchMaxOrders,
+    pickBatchSuggestionCount: form.pickBatchSuggestionCount,
     stageSlaMinutes: Object.fromEntries(
       stages.filter((s) => !Number.isNaN(form.sla[s])).map((s) => [s, form.sla[s]]),
     ),
@@ -248,6 +251,19 @@ function GeneralForm({ settings }: { settings: AdminSettings }) {
             formatOptions={{ maximumFractionDigits: 0 }}
             value={form.pickBatchMaxOrders}
             onChange={(pickBatchMaxOrders) => edit("pickBatchMaxOrders", { pickBatchMaxOrders })}
+          />
+          <NumberField
+            label={t("settings.pickBatchSuggestionCount")}
+            description={t("settings.pickBatchSuggestionCountHint")}
+            name="pickBatchSuggestionCount"
+            isRequired
+            minValue={1}
+            maxValue={10}
+            formatOptions={{ maximumFractionDigits: 0 }}
+            value={form.pickBatchSuggestionCount}
+            onChange={(pickBatchSuggestionCount) =>
+              edit("pickBatchSuggestionCount", { pickBatchSuggestionCount })
+            }
           />
         </div>
 

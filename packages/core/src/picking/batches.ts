@@ -20,8 +20,8 @@ import { claimExpiryMinutes, holdsClaim, isClaimLive, touchClaim } from "../work
 import { lockOrders } from "../workflow/lock";
 import { displayName, holderName, nameFields } from "../workflow/people";
 import { transition } from "../workflow/service";
-import { normalizeCode } from "./codes";
-import { isDone, isWorkLine, type LineRow, lineInclude, toPickLine } from "./service";
+import { isDone, isWorkLine, lineInclude, toPickLine } from "./service";
+import { shelfKey } from "./shelf";
 import { pickOrder } from "./sort";
 
 // Pick batches (SPEC-picking "Pick batches"). A batch is stored so it survives a reload or a change of
@@ -105,14 +105,6 @@ function toPickBatch(
     }),
     groups,
   };
-}
-
-/** What's on the shelf: the variation, else the product, else the SKU as a scanner reads it, else the name. */
-function shelfKey(row: LineRow): string {
-  if (row.variationId) return `variation:${row.variationId}`;
-  if (row.productId) return `product:${row.productId}`;
-  const sku = normalizeCode(row.sku ?? "");
-  return sku ? `sku:${sku}` : `name:${row.name.trim().toLowerCase()}`;
 }
 
 const sameAttributes = (a: LineAttribute[], b: LineAttribute[]) =>
