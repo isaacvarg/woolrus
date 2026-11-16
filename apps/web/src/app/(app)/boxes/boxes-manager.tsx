@@ -44,7 +44,7 @@ export function BoxesManager({ canManage }: { canManage: boolean }) {
   const rowError = archive.error ?? restore.error;
   const weight = (oz: number | null) =>
     oz === null ? "—" : formatWeight(oz, weightDisplay, locale);
-  const columns = canManage ? 8 : 7;
+  const columns = canManage ? 9 : 8;
 
   return (
     <div className="space-y-4">
@@ -67,6 +67,7 @@ export function BoxesManager({ canManage }: { canManage: boolean }) {
               <th>{t("dimensions")}</th>
               <th>{t("outerDimensions")}</th>
               <th>{t("tare")}</th>
+              <th>{t("minWeightColumn")}</th>
               <th>{t("maxWeightColumn")}</th>
               <th>{t("status")}</th>
               {canManage && (
@@ -100,6 +101,7 @@ export function BoxesManager({ canManage }: { canManage: boolean }) {
                 <td>{size(box.lengthIn, box.widthIn, box.heightIn)}</td>
                 <td>{size(box.outerLengthIn, box.outerWidthIn, box.outerHeightIn)}</td>
                 <td>{weight(box.tareWeightOz)}</td>
+                <td>{weight(box.minWeightOz)}</td>
                 <td>{weight(box.maxWeightOz)}</td>
                 <td className="space-x-1">
                   {box.inUse && <span className="badge badge-info">{t("inUse")}</span>}

@@ -6,6 +6,7 @@ import { type SuggestBox, type SuggestUnit, suggestBox } from "./suggest";
 
 const settings: CheckSettings = {
   packCheckOverMax: "WARN",
+  packCheckUnderMin: "WARN",
   packCheckWeightOff: "WARN",
   packCheckWeightStale: "WARN",
   packCheckNoFit: "WARN",
@@ -14,6 +15,7 @@ const settings: CheckSettings = {
 };
 const allOff: CheckSettings = {
   ...settings,
+  packCheckUnderMin: "OFF",
   packCheckWeightOff: "OFF",
   packCheckWeightStale: "OFF",
   packCheckNoFit: "OFF",
@@ -25,6 +27,7 @@ const small = {
   lengthIn: 6,
   widthIn: 4,
   heightIn: 2,
+  minWeightOz: null,
   maxWeightOz: 64,
   tareWeightOz: 0,
 };
@@ -33,6 +36,7 @@ const large = {
   lengthIn: 14,
   widthIn: 12,
   heightIn: 8,
+  minWeightOz: null,
   maxWeightOz: 800,
   tareWeightOz: 0,
 };
@@ -81,6 +85,30 @@ describe("OVER_MAX", () => {
     ).toEqual([]);
     const custom = pkg({ box: null, dimensions: { lengthIn: 10, widthIn: 10, heightIn: 10 } });
     expect(checks({ ...custom, weightOz: 5000 }, units, allOff)).toEqual([]);
+  });
+});
+
+describe("UNDER_MIN", () => {
+  const units = [unit({ weightOz: 1 })];
+  const withMin = { ...large, minWeightOz: 40 };
+  const underMinOnly: CheckSettings = { ...allOff, packCheckUnderMin: "WARN" };
+
+  it("trips at min − 0.01, not at the min", () => {
+    expect(checks(pkg({ box: withMin, weightOz: 40 }), units, underMinOnly)).toEqual([]);
+    expect(evaluateChecks(pkg({ box: withMin, weightOz: 39.99 }), units, underMinOnly)).toEqual([
+      { check: "UNDER_MIN", mode: "WARN", details: { weightOz: 39.99, minOz: 40 } },
+    ]);
+  });
+
+  it("skips a box without a min and a custom size", () => {
+    expect(checks(pkg({ weightOz: 0.5 }), units, underMinOnly)).toEqual([]);
+    const custom = pkg({ box: null, dimensions: { lengthIn: 14, widthIn: 12, heightIn: 8 } });
+    expect(checks({ ...custom, weightOz: 0.5 }, units, underMinOnly)).toEqual([]);
+  });
+
+  it("needs a weight, and doesn't run when off", () => {
+    expect(checks(pkg({ box: withMin }), units, underMinOnly)).toEqual([]);
+    expect(checks(pkg({ box: withMin, weightOz: 1 }), units, allOff)).toEqual([]);
   });
 });
 
@@ -201,9 +229,10 @@ describe("NO_FIT", () => {
           archived: false,
         };
         const suggested = suggestBox(units, [box]).kind === "box";
-        const tripped = checks(pkg({ box: { ...box, maxWeightOz: null } }), units).includes(
-          "NO_FIT",
-        );
+        const tripped = checks(
+          pkg({ box: { ...box, minWeightOz: null, maxWeightOz: null } }),
+          units,
+        ).includes("NO_FIT");
         expect({ units, box: b.name, fits: !tripped }).toEqual({
           units,
           box: b.name,

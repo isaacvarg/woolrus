@@ -86,6 +86,7 @@ function toAdminSettings(row: Settings): AdminSettings {
     wooTrackingEnabled: row.wooTrackingEnabled,
     rateLabMaxCombinations: row.rateLabMaxCombinations,
     packCheckOverMax: row.packCheckOverMax,
+    packCheckUnderMin: row.packCheckUnderMin,
     packCheckWeightOff: row.packCheckWeightOff,
     packCheckWeightStale: row.packCheckWeightStale,
     packCheckNoFit: row.packCheckNoFit,

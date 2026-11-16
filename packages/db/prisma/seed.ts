@@ -18,13 +18,22 @@ const boxes = [
     lengthIn: 10,
     widthIn: 8,
     heightIn: 4,
+    minWeightOz: 12,
     maxWeightOz: 320,
     tareWeightOz: 5,
     outerLengthIn: 10.25,
     outerWidthIn: 8.25,
     outerHeightIn: 4.25,
   },
-  { name: "Large box", lengthIn: 14, widthIn: 12, heightIn: 8, maxWeightOz: 800, tareWeightOz: 9 },
+  {
+    name: "Large box",
+    lengthIn: 14,
+    widthIn: 12,
+    heightIn: 8,
+    minWeightOz: 32,
+    maxWeightOz: 800,
+    tareWeightOz: 9,
+  },
 ];
 
 async function main() {

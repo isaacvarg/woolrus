@@ -38,6 +38,7 @@ export function BoxDialog({
     outerWidthIn: nan(box?.outerWidthIn),
     outerHeightIn: nan(box?.outerHeightIn),
   });
+  const [minWeightOz, setMinWeightOz] = useState(box?.minWeightOz ?? null);
   const [maxWeightOz, setMaxWeightOz] = useState(box?.maxWeightOz ?? null);
   const [tareWeightOz, setTareWeightOz] = useState(box?.tareWeightOz ?? null);
   // One key per dialog: a retried submit can't create two boxes.
@@ -50,7 +51,7 @@ export function BoxDialog({
         outerWidthIn: orNull(form.outerWidthIn),
         outerHeightIn: orNull(form.outerHeightIn),
       };
-      const shared = { name: form.name, maxWeightOz, tareWeightOz, ...outer };
+      const shared = { name: form.name, minWeightOz, maxWeightOz, tareWeightOz, ...outer };
       if (box) {
         const dimensions = locked
           ? {}
@@ -129,6 +130,12 @@ export function BoxDialog({
             valueOz={tareWeightOz}
             weightDisplay={weightDisplay}
             onChange={setTareWeightOz}
+          />
+          <WeightInput
+            label={t("minWeightColumn")}
+            valueOz={minWeightOz}
+            weightDisplay={weightDisplay}
+            onChange={setMinWeightOz}
           />
           <WeightInput
             label={t("maxWeightColumn")}

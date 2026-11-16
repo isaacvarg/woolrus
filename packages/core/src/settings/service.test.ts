@@ -43,6 +43,7 @@ describe("settings service", () => {
       wooTrackingEnabled: false,
       rateLabMaxCombinations: 250,
       packCheckOverMax: "WARN",
+      packCheckUnderMin: "WARN",
       packCheckWeightOff: "WARN",
       packCheckWeightStale: "WARN",
       packCheckNoFit: "WARN",
@@ -163,6 +164,7 @@ describe("settings service", () => {
         pickBatchMaxOrders: 10,
         stageSlaMinutes: { QA: 30 },
         packCheckOverMax: "WARN",
+        packCheckUnderMin: "WARN",
         packCheckWeightOff: "WARN",
         packCheckWeightStale: "WARN",
         packCheckNoFit: "WARN",
@@ -215,6 +217,7 @@ describe("settings service", () => {
     }
     expect(await getSettings(db, admin)).toMatchObject({
       packCheckOverMax: "WARN",
+      packCheckUnderMin: "WARN",
       packCheckWeightOffPercent: 25,
     });
   });

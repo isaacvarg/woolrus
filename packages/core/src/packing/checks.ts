@@ -17,6 +17,7 @@ export type { Trip };
 /** The settings columns the checks read; a Prisma `Settings` row fits as it is. */
 export type CheckSettings = {
   packCheckOverMax: PackCheckMode;
+  packCheckUnderMin: PackCheckMode;
   packCheckWeightOff: PackCheckMode;
   packCheckWeightStale: PackCheckMode;
   packCheckNoFit: PackCheckMode;
@@ -28,7 +29,12 @@ export type CheckSettings = {
 /** A package as the checks see it: its box (or custom dimensions) and weight. */
 export type CheckPackage = {
   box:
-    | (InnerDims & { name: string; maxWeightOz: number | null; tareWeightOz: number | null })
+    | (InnerDims & {
+        name: string;
+        minWeightOz: number | null;
+        maxWeightOz: number | null;
+        tareWeightOz: number | null;
+      })
     | null;
   /** Custom dimensions; null when the package has a box. */
   dimensions: InnerDims | null;
@@ -57,7 +63,7 @@ export function evaluateChecks(
   const on = (mode: PackCheckMode): mode is "WARN" | "BLOCK" => mode !== "OFF";
   const { box, weightOz } = pkg;
 
-  // Custom sizes have no box to read a max from (assumption 2).
+  // Custom sizes have no box to read a min or max from (assumption 2).
   const max = box?.maxWeightOz ?? null;
   if (on(settings.packCheckOverMax) && weightOz !== null && max !== null && weightOz > max) {
     trips.push({
@@ -68,6 +74,15 @@ export function evaluateChecks(
         maxOz: max,
         ...(pkg.overrideReason ? { reason: pkg.overrideReason } : {}),
       },
+    });
+  }
+
+  const min = box?.minWeightOz ?? null;
+  if (on(settings.packCheckUnderMin) && weightOz !== null && min !== null && weightOz < min) {
+    trips.push({
+      check: "UNDER_MIN",
+      mode: settings.packCheckUnderMin,
+      details: { weightOz, minOz: min },
     });
   }
 

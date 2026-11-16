@@ -14,6 +14,7 @@ export function toBoxDto(box: Box, inUse = false): BoxDto {
     lengthIn: toNumber(box.lengthIn),
     widthIn: toNumber(box.widthIn),
     heightIn: toNumber(box.heightIn),
+    minWeightOz: toNumber(box.minWeightOz),
     maxWeightOz: toNumber(box.maxWeightOz),
     tareWeightOz: toNumber(box.tareWeightOz),
     outerLengthIn: toNumber(box.outerLengthIn),
@@ -50,6 +51,15 @@ function checkOuter(inner: Triple, outer: (number | null | undefined)[]) {
   }
 }
 
+/** A min weight must be below the max when both are set (the database CHECK agrees). */
+function checkMinBelowMax(min: number | null | undefined, max: number | null | undefined) {
+  if (min != null && max != null && min >= max) {
+    throw new AppError("BAD_REQUEST", "errors.box.minNotBelowMax", {
+      minWeightOz: "errors.box.minNotBelowMax",
+    });
+  }
+}
+
 function nameTaken(error: unknown): never {
   if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
     throw new AppError("CONFLICT", "errors.box.nameTaken", { name: "errors.box.nameTaken" });
@@ -78,6 +88,7 @@ export async function createBox(db: Db, actor: Actor, input: CreateBoxInput): Pr
     [data.lengthIn, data.widthIn, data.heightIn],
     [data.outerLengthIn, data.outerWidthIn, data.outerHeightIn],
   );
+  checkMinBelowMax(data.minWeightOz, data.maxWeightOz);
   try {
     return await db.$transaction((tx) =>
       withIdempotency(tx, idempotencyKey, "boxes.create", actor, async () => {
@@ -156,6 +167,7 @@ export async function updateBox(db: Db, actor: Actor, input: UpdateBoxInput): Pr
         [next.lengthIn, next.widthIn, next.heightIn],
         [next.outerLengthIn, next.outerWidthIn, next.outerHeightIn],
       );
+      checkMinBelowMax(next.minWeightOz, next.maxWeightOz);
 
       const box = toBoxDtoWithUse(
         await tx.box.update({ where: { id }, data: changes, include: withUse }),

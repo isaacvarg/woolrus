@@ -11,6 +11,7 @@ import type { SuggestUnit } from "./suggest";
 /** The columns' defaults, for a database whose settings row isn't created yet. */
 const defaultCheckSettings: CheckSettings = {
   packCheckOverMax: "WARN",
+  packCheckUnderMin: "WARN",
   packCheckWeightOff: "WARN",
   packCheckWeightStale: "WARN",
   packCheckNoFit: "WARN",
@@ -23,6 +24,7 @@ export async function loadCheckSettings(tx: DbTx): Promise<CheckSettings> {
   const row = await tx.settings.findFirst({
     select: {
       packCheckOverMax: true,
+      packCheckUnderMin: true,
       packCheckWeightOff: true,
       packCheckWeightStale: true,
       packCheckNoFit: true,
@@ -60,6 +62,7 @@ export function toCheckPackage(pkg: PackageWithBox): CheckPackage {
           lengthIn: box.lengthIn.toNumber(),
           widthIn: box.widthIn.toNumber(),
           heightIn: box.heightIn.toNumber(),
+          minWeightOz: toNumber(box.minWeightOz),
           maxWeightOz: toNumber(box.maxWeightOz),
           tareWeightOz: toNumber(box.tareWeightOz),
         }

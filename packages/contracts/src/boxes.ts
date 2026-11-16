@@ -8,6 +8,8 @@ export const Box = z.object({
   widthIn: z.number(),
   heightIn: z.number(),
   maxWeightOz: z.number().nullable(),
+  /** A package lighter than this trips UNDER_MIN; below the max when both are set. */
+  minWeightOz: z.number().nullable(),
   tareWeightOz: z.number().nullable(),
   /** What the carrier measures; all three or none. */
   outerLengthIn: z.number().nullable(),
@@ -26,6 +28,7 @@ export const CreateBoxInput = z.object({
   widthIn: Inches,
   heightIn: Inches,
   maxWeightOz: Ounces.nullable().default(null),
+  minWeightOz: Ounces.nullable().default(null),
   tareWeightOz: Ounces.nullable().default(null),
   outerLengthIn: Inches.nullable().default(null),
   outerWidthIn: Inches.nullable().default(null),
@@ -33,7 +36,7 @@ export const CreateBoxInput = z.object({
 });
 export type CreateBoxInput = z.infer<typeof CreateBoxInput>;
 
-/** Only the fields present change; `null` clears max, tare or the outer dimensions. */
+/** Only the fields present change; `null` clears min, max, tare or the outer dimensions. */
 export const UpdateBoxInput = z.object({
   id: Id,
   name: z.string().trim().min(1).max(80).optional(),
@@ -41,6 +44,7 @@ export const UpdateBoxInput = z.object({
   widthIn: Inches.optional(),
   heightIn: Inches.optional(),
   maxWeightOz: Ounces.nullable().optional(),
+  minWeightOz: Ounces.nullable().optional(),
   tareWeightOz: Ounces.nullable().optional(),
   outerLengthIn: Inches.nullable().optional(),
   outerWidthIn: Inches.nullable().optional(),

@@ -56,6 +56,7 @@ describe("UpdateSettingsInput", () => {
     expect(
       fieldErrors({
         packCheckOverMax: "WARN",
+        packCheckUnderMin: "WARN",
         packCheckWeightOff: "OFF",
         packCheckWeightStale: "WARN",
         packCheckNoFit: "OFF",

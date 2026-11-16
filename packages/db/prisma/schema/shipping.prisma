@@ -48,6 +48,8 @@ model Box {
   outerHeightIn Decimal?  @map("outer_height_in") @db.Decimal(8, 2)
   tareWeightOz  Decimal?  @map("tare_weight_oz") @db.Decimal(10, 2)
   maxWeightOz   Decimal?  @map("max_weight_oz") @db.Decimal(10, 2)
+  /// A package lighter than this trips UNDER_MIN (SPEC-packing A1). Below the max (hand-written CHECK).
+  minWeightOz   Decimal?  @map("min_weight_oz") @db.Decimal(10, 2)
   archivedAt    DateTime? @map("archived_at") @db.Timestamptz(3)
   createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)

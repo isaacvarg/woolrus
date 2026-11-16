@@ -59,6 +59,12 @@ function TripMessage({
           )}
         </span>
       );
+    case "UNDER_MIN":
+      return (
+        <span>
+          {t("pack.tripUnderMin", { min: formatWeight(trip.details.minOz, weightDisplay, locale) })}
+        </span>
+      );
     case "WEIGHT_OFF":
       return (
         <span>

@@ -66,6 +66,7 @@
     "dimensions": "Dimensions (in)",
     "maxWeight": "Max weight (lb)",
     "maxWeightColumn": "Max weight",
+    "minWeightColumn": "Min weight",
     "add": "Add box",
     "length": "Length",
     "width": "Width",
@@ -290,6 +291,8 @@
       "modeWARN": "Warn",
       "OVER_MAX": "Over the box's max weight",
       "OVER_MAXHint": "The weight is above the box's limit. The packer gives a reason. It can't be turned off.",
+      "UNDER_MIN": "Under the box's min weight",
+      "UNDER_MINHint": "The weight is below the box's minimum, so a smaller box would likely do.",
       "WEIGHT_OFF": "Off the estimate",
       "WEIGHT_OFFHint": "The weight is further from the estimate (items plus the box) than the threshold below.",
       "WEIGHT_STALE": "Re-weigh",
@@ -667,6 +670,7 @@
     "warnHeavier": "{percent}% heavier than the estimate. Check the weight.",
     "warnLighter": "{percent}% lighter than the estimate. Check the weight.",
     "tripOverMax": "Over the box's limit of {max}.",
+    "tripUnderMin": "Lighter than the box's minimum of {min}. Check for a smaller box.",
     "tripNoFit": "{count, plural, one {{items} doesn't fit} other {{items} don't fit}} in the {box}. Check the box.",
     "tripNoFitCustom": "{count, plural, one {{items} doesn't fit} other {{items} don't fit}} in {length} × {width} × {height} in. Check the size.",
     "tripCustom": "Custom size: check the box really is {length} × {width} × {height} in.",
@@ -1228,6 +1232,7 @@
       "nameTaken": "A box with this name already exists.",
       "inUse": "This box is used by a package and can only be archived.",
       "outerSmaller": "A box's outer size can't be smaller than its inner size.",
+      "minNotBelowMax": "A box's min weight must be below its max weight.",
       "dimensionsLocked": "Resizing a box in use would change packages that already use it. Archive it and add a new box instead."
     },
     "field": {

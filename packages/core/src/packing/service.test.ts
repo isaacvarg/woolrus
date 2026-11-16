@@ -1073,6 +1073,31 @@ describe("box suggestion, estimate and packing checks", () => {
       details: { weightOz: 320.01, maxOz: 320, reason: "Dense kit" },
     });
   });
+
+  it("trips UNDER_MIN on a package lighter than its box's min (SPEC-packing A1)", async () => {
+    const { packer, order } = await packing([{ quantity: 1, size }]);
+    const box = await tared("Medium", 4);
+    await db.box.update({ where: { id: box.id }, data: { minWeightOz: 12 } });
+    const { packages } = await addPackage(db, packer, {
+      orderId: order.id,
+      box: { boxId: box.id },
+      idempotencyKey: key(),
+    });
+    const pkg = id(packages[0]);
+    await packRemaining(db, packer, { packageId: pkg });
+    // 3.5 + 4 tare: the estimate puts it near 8 oz, so the weight check stays quiet at 7.
+    const light = await setWeight(db, packer, { packageId: pkg, weightOz: 7 });
+    expect(light.packages[0]?.trips).toEqual([
+      { check: "UNDER_MIN", mode: "WARN", details: { weightOz: 7, minOz: 12 } },
+    ]);
+    const atMin = await setWeight(db, packer, { packageId: pkg, weightOz: 12 });
+    expect(atMin.packages[0]?.trips.map((t) => t.check)).not.toContain("UNDER_MIN");
+
+    await setWeight(db, packer, { packageId: pkg, weightOz: 7 });
+    await db.settings.update({ where: { id: 1 }, data: { packCheckUnderMin: "OFF" } });
+    const view = await getPackView(db, packer, { orderId: order.id });
+    expect(view.packages[0]?.trips).toEqual([]);
+  });
 });
 
 describe("scanIntoPackage", () => {

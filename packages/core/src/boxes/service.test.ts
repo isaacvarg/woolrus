@@ -14,6 +14,7 @@ const input = {
   lengthIn: 10,
   widthIn: 8.5,
   heightIn: 4,
+  minWeightOz: null,
   maxWeightOz: 320,
   tareWeightOz: null,
   outerLengthIn: null,
@@ -154,6 +155,44 @@ describe("box service", () => {
     await expect(
       updateBox(db, admin, { id, lengthIn: 10, widthIn: 8, heightIn: 4 }),
     ).resolves.toBeDefined();
+  });
+
+  it("takes a min weight below the max, editable on a box in use (SPEC-packing A1)", async () => {
+    const admin = await createActor(db, ["ADMIN"]);
+    const refused = { kind: "BAD_REQUEST", messageKey: "errors.box.minNotBelowMax" };
+    await expect(createBox(db, admin, { ...input, minWeightOz: 320 })).rejects.toMatchObject(
+      refused,
+    );
+    const created = await createBox(db, admin, { ...input, minWeightOz: 16 });
+    expect(created.minWeightOz).toBe(16);
+
+    const { packages } = await createOrder(db, { status: "PACKING", packages: [{}] });
+    const id = packages[0]?.boxId as string;
+    await updateBox(db, admin, { id, maxWeightOz: 100 });
+    const used = await updateBox(db, admin, { id, minWeightOz: 12.5 });
+    expect(used).toMatchObject({ minWeightOz: 12.5, inUse: true });
+    // Against the stored max, and against a max sent in the same patch.
+    await expect(updateBox(db, admin, { id, minWeightOz: 100 })).rejects.toMatchObject(refused);
+    await expect(updateBox(db, admin, { id, maxWeightOz: 12 })).rejects.toMatchObject(refused);
+    // No max: any min goes; clearing the min is always fine.
+    await updateBox(db, admin, { id, maxWeightOz: null });
+    expect((await updateBox(db, admin, { id, minWeightOz: 5000 })).minWeightOz).toBe(5000);
+    expect((await updateBox(db, admin, { id, minWeightOz: null })).minWeightOz).toBeNull();
+  });
+
+  it("refuses a min not below the max in the database too", async () => {
+    await expect(
+      db.box.create({
+        data: {
+          name: "Bad",
+          lengthIn: 1,
+          widthIn: 1,
+          heightIn: 1,
+          minWeightOz: 10,
+          maxWeightOz: 10,
+        },
+      }),
+    ).rejects.toThrow(/boxes_min_weight_below_max/);
   });
 
   it("keeps names unique on update", async () => {

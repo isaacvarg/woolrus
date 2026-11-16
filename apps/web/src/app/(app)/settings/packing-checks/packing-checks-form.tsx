@@ -15,6 +15,7 @@ import { orpc } from "@/lib/orpc";
 
 const checks = [
   "packCheckOverMax",
+  "packCheckUnderMin",
   "packCheckWeightOff",
   "packCheckWeightStale",
   "packCheckNoFit",
@@ -25,6 +26,7 @@ type CheckField = (typeof checks)[number];
 /** The check each field sets, for its label and explanation. */
 const checkOf = {
   packCheckOverMax: "OVER_MAX",
+  packCheckUnderMin: "UNDER_MIN",
   packCheckWeightOff: "WEIGHT_OFF",
   packCheckWeightStale: "WEIGHT_STALE",
   packCheckNoFit: "NO_FIT",

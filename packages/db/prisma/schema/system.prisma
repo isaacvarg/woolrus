@@ -61,6 +61,7 @@ model Settings {
 
   /// Packing checks, one warehouse-wide mode each (SPEC-packing A1). Over max can't be OFF (hand-written CHECK).
   packCheckOverMax          PackCheckMode @default(WARN) @map("pack_check_over_max")
+  packCheckUnderMin         PackCheckMode @default(WARN) @map("pack_check_under_min")
   packCheckWeightOff        PackCheckMode @default(WARN) @map("pack_check_weight_off")
   packCheckWeightStale      PackCheckMode @default(WARN) @map("pack_check_weight_stale")
   packCheckNoFit            PackCheckMode @default(WARN) @map("pack_check_no_fit")

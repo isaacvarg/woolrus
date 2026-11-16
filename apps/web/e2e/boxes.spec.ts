@@ -92,9 +92,11 @@ test("a box a package uses shows In use, locks dimensions and offers archive onl
     edit.getByRole("group", { name: "Inner dimensions (in)" }).getByLabel("Length"),
   ).toBeDisabled();
   await edit.getByLabel("Name").fill(`${name} renamed`);
+  // The min weight stays editable on a box in use (SPEC-packing A1).
+  await edit.getByLabel("Min weight (oz)").fill("12");
   await edit.getByRole("button", { name: "Save" }).click();
   await expect(edit).toBeHidden();
-  await expect(page.getByRole("row", { name: new RegExp(`${name} renamed`) })).toContainText(
-    "In use",
-  );
+  const renamed = page.getByRole("row", { name: new RegExp(`${name} renamed`) });
+  await expect(renamed).toContainText("In use");
+  await expect(renamed).toContainText("12 oz");
 });

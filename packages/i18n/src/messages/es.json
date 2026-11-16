@@ -66,6 +66,7 @@
     "dimensions": "Dimensiones (pulg)",
     "maxWeight": "Peso máximo (lb)",
     "maxWeightColumn": "Peso máximo",
+    "minWeightColumn": "Peso mínimo",
     "add": "Agregar caja",
     "length": "Largo",
     "width": "Ancho",
@@ -290,6 +291,8 @@
       "modeWARN": "Avisar",
       "OVER_MAX": "Supera el peso máximo de la caja",
       "OVER_MAXHint": "El peso supera el límite de la caja. Quien empaqueta da un motivo. No se puede desactivar.",
+      "UNDER_MIN": "Bajo el peso mínimo de la caja",
+      "UNDER_MINHint": "El peso está por debajo del mínimo de la caja, así que probablemente sirva una caja más pequeña.",
       "WEIGHT_OFF": "Lejos de la estimación",
       "WEIGHT_OFFHint": "El peso se aleja de la estimación (artículos más la caja) más que el umbral de abajo.",
       "WEIGHT_STALE": "Volver a pesar",
@@ -667,6 +670,7 @@
     "warnHeavier": "{percent} % más pesado que la estimación. Revisa el peso.",
     "warnLighter": "{percent} % más ligero que la estimación. Revisa el peso.",
     "tripOverMax": "Supera el límite de la caja de {max}.",
+    "tripUnderMin": "Pesa menos que el mínimo de la caja de {min}. Revisa si cabe en una caja más pequeña.",
     "tripNoFit": "{count, plural, one {{items} no cabe} other {{items} no caben}} en {box}. Revisa la caja.",
     "tripNoFitCustom": "{count, plural, one {{items} no cabe} other {{items} no caben}} en {length} × {width} × {height} in. Revisa el tamaño.",
     "tripCustom": "Tamaño personalizado: comprueba que la caja mide de verdad {length} × {width} × {height} in.",
@@ -1228,6 +1232,7 @@
       "nameTaken": "Ya existe una caja con este nombre.",
       "inUse": "Esta caja está en uso por un paquete y solo se puede archivar.",
       "outerSmaller": "El tamaño exterior de una caja no puede ser menor que el interior.",
+      "minNotBelowMax": "El peso mínimo de una caja debe ser menor que su peso máximo.",
       "dimensionsLocked": "Cambiar el tamaño de una caja en uso afectaría los paquetes que ya la usan. Archívala y agrega una caja nueva."
     },
     "field": {
