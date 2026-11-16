@@ -65,10 +65,10 @@ States: `not started` → `spec draft` → `spec approved` → `planned` → `in
 | `settings` | M1 | [SPEC-settings](docs/specs/SPEC-settings.md) | [#18](https://github.com/isaacvarg/woolrus/issues/18) | done |
 | `store-sync` | M1 | [SPEC-store-sync](docs/specs/SPEC-store-sync.md) | [#19](https://github.com/isaacvarg/woolrus/issues/19) | done |
 | `workflow` | M1 | [SPEC-workflow](docs/specs/SPEC-workflow.md) | [#20](https://github.com/isaacvarg/woolrus/issues/20) | done |
-| `identity` | M2 | [SPEC-identity](docs/specs/SPEC-identity.md) | [#21](https://github.com/isaacvarg/woolrus/issues/21); A1 [#170](https://github.com/isaacvarg/woolrus/issues/170); A2 [#177](https://github.com/isaacvarg/woolrus/issues/177) | done; A1 (station-only users) done; A2 (approvals) planned (#179–#180) |
+| `identity` | M2 | [SPEC-identity](docs/specs/SPEC-identity.md) | [#21](https://github.com/isaacvarg/woolrus/issues/21); A1 [#170](https://github.com/isaacvarg/woolrus/issues/170); A2 [#177](https://github.com/isaacvarg/woolrus/issues/177) | done; A1 (station-only users) done; A2 (approvals) done |
 | `notes` | M2 | [SPEC-notes](docs/specs/SPEC-notes.md) | [#22](https://github.com/isaacvarg/woolrus/issues/22) | done |
 | `picking` | M2 | [SPEC-picking](docs/specs/SPEC-picking.md) | [#23](https://github.com/isaacvarg/woolrus/issues/23) | done |
-| `packing` | M2 | [SPEC-packing](docs/specs/SPEC-packing.md) | [#24](https://github.com/isaacvarg/woolrus/issues/24); A1 [#178](https://github.com/isaacvarg/woolrus/issues/178) | done; A1 (packing checks) planned (#181–#186, needs identity A2) |
+| `packing` | M2 | [SPEC-packing](docs/specs/SPEC-packing.md) | [#24](https://github.com/isaacvarg/woolrus/issues/24); A1 [#178](https://github.com/isaacvarg/woolrus/issues/178) | done; A1 (packing checks) planned (#181–#186) |
 | `exceptions` | M3 | [SPEC-exceptions](docs/specs/SPEC-exceptions.md) | [#25](https://github.com/isaacvarg/woolrus/issues/25) | done |
 | `carriers` | M4 | [SPEC-carriers](docs/specs/SPEC-carriers.md) | [#26](https://github.com/isaacvarg/woolrus/issues/26) | done |
 | `bridge-source` | M4 | [SPEC-bridge-source](docs/specs/SPEC-bridge-source.md) | [#83](https://github.com/isaacvarg/woolrus/issues/83) | in progress |
