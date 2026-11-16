@@ -1,4 +1,12 @@
-import type { QaLabel, QaPackage, QaPurchase, QaResult, QaView } from "@woolrus/contracts";
+import type {
+  QaLabel,
+  QaPackage,
+  QaPurchase,
+  QaResult,
+  QaTrip,
+  QaView,
+  Trip,
+} from "@woolrus/contracts";
 import type { DbTx, Prisma } from "@woolrus/db";
 import { cheapestPurchasable } from "../carriers/compare";
 import { quoteOnlyProviders } from "../carriers/rates";
@@ -20,7 +28,15 @@ import { purchaseConditions } from "./complete";
 export type QaOptions = { now?: Date };
 
 const packageInclude = {
-  box: { select: { name: true } },
+  box: { select: { name: true, lengthIn: true, widthIn: true, heightIn: true } },
+  boxConfirmedBy: { select: nameFields },
+  checkTrips: {
+    orderBy: { check: "asc" },
+    include: {
+      acknowledgedBy: { select: nameFields },
+      approval: { include: { approvedBy: { select: nameFields } } },
+    },
+  },
   items: {
     orderBy: { packedAt: "asc" },
     include: {
@@ -51,6 +67,57 @@ const toLabel = (label: LabelRow): QaLabel => ({
   purchasedAt: label.purchasedAt,
 });
 
+type TripRow = Prisma.PackageGetPayload<{
+  include: typeof packageInclude;
+}>["checkTrips"][number];
+
+type ForcedMove = { at: Date; reason: string; by: string | null };
+
+/** An Admin's force-status moves from Packing to QA: they save trips without an approval. */
+async function forcedIntoQa(tx: DbTx, orderId: string): Promise<ForcedMove[]> {
+  const events = await tx.orderStageEvent.findMany({
+    // Only force-status gives a reason for this move; completing packing never does.
+    where: { orderId, fromStatus: "PACKING", toStatus: "QA", reason: { not: null } },
+    include: { actor: { select: nameFields } },
+  });
+  return events.map((e) => ({
+    at: e.at,
+    reason: e.reason ?? "",
+    by: e.actor ? displayName(e.actor) : null,
+  }));
+}
+
+type Sized = {
+  lengthIn: Prisma.Decimal | null;
+  widthIn: Prisma.Decimal | null;
+  heightIn: Prisma.Decimal | null;
+};
+
+const sizeOf = ({ lengthIn, widthIn, heightIn }: Sized) =>
+  lengthIn && widthIn && heightIn
+    ? { lengthIn: lengthIn.toNumber(), widthIn: widthIn.toNumber(), heightIn: heightIn.toNumber() }
+    : null;
+
+function toQaTrip(row: TripRow, forced: readonly ForcedMove[]): QaTrip {
+  // The trip and the stage event were written by the same move, with the same timestamp.
+  const move = forced.find((m) => m.at.getTime() === row.createdAt.getTime());
+  return {
+    id: row.id,
+    // Written from `evaluateChecks`' own output, so the details fit the contract.
+    trip: { check: row.check, mode: row.mode, details: row.details } as Trip,
+    approval: row.approval
+      ? {
+          approver: displayName(row.approval.approvedBy),
+          reason: row.approval.reason,
+          at: row.approval.createdAt,
+        }
+      : null,
+    forced: move && !row.approval ? move : null,
+    acknowledgedBy: row.acknowledgedBy ? displayName(row.acknowledgedBy) : null,
+    acknowledgedAt: row.acknowledgedAt,
+  };
+}
+
 function purchaseState(packages: Prisma.PackageGetPayload<{ include: typeof packageInclude }>[]) {
   const labelsOf = (p: (typeof packages)[number]) => p.labels;
   const all = packages.flatMap(labelsOf);
@@ -74,7 +141,7 @@ export async function qaResult(
   orderId: string,
   { now = new Date() }: QaOptions = {},
 ): Promise<QaResult> {
-  const [packages, issues, notes, gate, quoteOnly] = await Promise.all([
+  const [packages, issues, notes, gate, quoteOnly, forcedMoves] = await Promise.all([
     tx.package.findMany({
       where: { orderId, discardedAt: null },
       include: packageInclude,
@@ -84,6 +151,7 @@ export async function qaResult(
     lineAndPackageNoteCounts(tx, orderId),
     loadGateSnapshot(tx, orderId),
     quoteOnlyProviders(tx),
+    forcedIntoQa(tx, orderId),
   ]);
 
   // The gate already read the lot rules for each line.
@@ -100,6 +168,15 @@ export async function qaResult(
       number: pkg.number,
       boxName: pkg.box?.name ?? null,
       weightOz: toNumber(pkg.weightOz),
+      dimensions: sizeOf(pkg.box ?? pkg),
+      trips: pkg.checkTrips.map((row) => toQaTrip(row, forcedMoves)),
+      boxConfirmRequired: gate.packages.find((p) => p.id === pkg.id)?.boxConfirmRequired ?? false,
+      boxConfirmed: pkg.boxConfirmedAt
+        ? {
+            by: pkg.boxConfirmedBy ? displayName(pkg.boxConfirmedBy) : null,
+            at: pkg.boxConfirmedAt,
+          }
+        : null,
       rows: pkg.items.map((it) => ({
         id: it.id,
         orderItemId: it.orderItemId,

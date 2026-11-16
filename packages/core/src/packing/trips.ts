@@ -65,9 +65,16 @@ export async function saveTrips(
   return evaluated.filter((p) => p.trips.length > 0);
 }
 
-/** Deletes the order's saved trips, as an order going back to Packing starts over. Approvals stay. */
+/**
+ * Deletes the order's saved trips and QA's box confirmations, as an order going back to Packing
+ * starts over. Approvals stay.
+ */
 export async function clearTrips(tx: DbTx, orderId: string): Promise<void> {
   await tx.packageCheckTrip.deleteMany({ where: packagesOf(orderId) });
+  await tx.package.updateMany({
+    where: { orderId, boxConfirmedAt: { not: null } },
+    data: { boxConfirmedAt: null, boxConfirmedById: null },
+  });
 }
 
 export const PACK_CHECK_STATS_DAYS = 30;

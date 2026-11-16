@@ -216,3 +216,51 @@ test("an order over the cost threshold asks before buying, then reaches Ready", 
     }
   });
 });
+
+// SPEC-packing A1 criterion 28, QA half: a saved trip turns the card yellow and holds the labels
+// until QA confirms the box, which also acknowledges the box trip.
+test("a tripped package is yellow; Confirm box clears the trip and the box, unblocking Complete QA", async ({
+  page,
+}) => {
+  const qa = await signInAs(page, ["QA"]);
+  await withSettingsLock(async () => {
+    const before = await db.settings.findFirst({ select: { qaBoxConfirm: true } });
+    await db.settings.updateMany({ data: { qaBoxConfirm: "WHEN_TRIPPED" } });
+    const o = await qaJourneyOrder({ qaUserId: qa.id, packages: 1 });
+    const [packageId] = o.packageIds;
+    if (!packageId) throw new Error("no package");
+    await db.packageCheckTrip.create({
+      data: { packageId, check: "NO_FIT", mode: "WARN", details: { items: ["Pail 5 gal"] } },
+    });
+    try {
+      await page.goto("/queue/qa");
+      await page.getByRole("searchbox", { name: "Search orders" }).fill(o.customerName);
+      await expect(
+        page
+          .getByRole("row", { name: new RegExp(o.order.number) })
+          .getByTestId("queue-pack-checks"),
+      ).toContainText("1 check");
+
+      await page.goto(`/qa/${o.order.id}`);
+      const card = page.getByTestId("qa-package").first();
+      await expect(card).toHaveClass(/border-warning/);
+      await expect(card.getByTestId("qa-checks-badge")).toHaveText("1 check");
+      await page.getByTestId("qa-row").first().click();
+      const unmet = page.getByTestId("qa-unmet");
+      await expect(unmet).toContainText("Package 1 has 1 packing check(s) to acknowledge.");
+      await expect(unmet).toContainText("Confirm package 1's box.");
+      await expect(page.getByTestId("qa-complete")).toHaveCount(0);
+
+      await card.getByTestId("qa-confirm-box-button").click();
+      await expect(card.getByTestId("qa-trip")).toHaveAttribute("data-acknowledged", "true");
+      await expect(card.getByTestId("qa-box-confirmed")).toBeVisible();
+      await expect(page.getByTestId("qa-unmet")).toHaveCount(0);
+      await expect(page.getByTestId("qa-complete")).toBeVisible();
+    } finally {
+      await o.cleanup();
+      await db.settings.updateMany({
+        data: { qaBoxConfirm: before?.qaBoxConfirm ?? "WHEN_TRIPPED" },
+      });
+    }
+  });
+});

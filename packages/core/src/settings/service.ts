@@ -91,6 +91,7 @@ function toAdminSettings(row: Settings): AdminSettings {
     packCheckNoFit: row.packCheckNoFit,
     packCheckCustomDimensions: row.packCheckCustomDimensions,
     packCheckWeightOffPercent: row.packCheckWeightOffPercent,
+    qaBoxConfirm: row.qaBoxConfirm,
     // Status comes from the column alone, so reads never decrypt and work without a key.
     secrets: Object.fromEntries(
       SecretName.options.map((name) => [name, { configured: row[secretColumns[name]] !== null }]),

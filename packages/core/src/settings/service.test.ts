@@ -48,6 +48,7 @@ describe("settings service", () => {
       packCheckNoFit: "WARN",
       packCheckCustomDimensions: "WARN",
       packCheckWeightOffPercent: 25,
+      qaBoxConfirm: "WHEN_TRIPPED",
       secrets: {
         wooConsumerKey: { configured: false },
         wooConsumerSecret: { configured: false },
@@ -168,6 +169,7 @@ describe("settings service", () => {
         packCheckNoFit: "WARN",
         packCheckCustomDimensions: "WARN",
         packCheckWeightOffPercent: 25,
+        qaBoxConfirm: "WHEN_TRIPPED",
       });
     }
   });
@@ -191,15 +193,29 @@ describe("settings service", () => {
     const updated = await updateSettings(db, admin, {
       packCheckNoFit: "OFF",
       packCheckWeightOffPercent: 10,
+      qaBoxConfirm: "ALWAYS",
     });
-    expect(updated).toMatchObject({ packCheckNoFit: "OFF", packCheckWeightOffPercent: 10 });
+    expect(updated).toMatchObject({
+      packCheckNoFit: "OFF",
+      packCheckWeightOffPercent: 10,
+      qaBoxConfirm: "ALWAYS",
+    });
     expect(await getPublicSettings(db, admin)).toMatchObject({
       packCheckNoFit: "OFF",
       packCheckWeightOffPercent: 10,
+      qaBoxConfirm: "ALWAYS",
     });
     const audit = await db.auditEvent.findFirstOrThrow({ where: { entityType: "Settings" } });
-    expect(audit.before).toEqual({ packCheckNoFit: "WARN", packCheckWeightOffPercent: 25 });
-    expect(audit.after).toEqual({ packCheckNoFit: "OFF", packCheckWeightOffPercent: 10 });
+    expect(audit.before).toEqual({
+      packCheckNoFit: "WARN",
+      packCheckWeightOffPercent: 25,
+      qaBoxConfirm: "WHEN_TRIPPED",
+    });
+    expect(audit.after).toEqual({
+      packCheckNoFit: "OFF",
+      packCheckWeightOffPercent: 10,
+      qaBoxConfirm: "ALWAYS",
+    });
   });
 
   it("refuses over max off and a threshold outside 5–100 in the database too", async () => {

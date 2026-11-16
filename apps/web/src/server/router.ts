@@ -1,4 +1,5 @@
 import {
+  acknowledgeCheck,
   addPackage,
   addUserEmail,
   archiveBox,
@@ -13,6 +14,7 @@ import {
   completePack,
   completePick,
   completeQaOrder,
+  confirmBox,
   createBatch,
   createBox,
   createInvitation,
@@ -419,6 +421,12 @@ export const router = implementer.router({
     ),
     removeLot: api.qa.removeLot.handler(({ input, context }) =>
       qaRemoveLot(db, context.actor, input),
+    ),
+    acknowledgeCheck: api.qa.acknowledgeCheck.handler(({ input, context }) =>
+      acknowledgeCheck(db, context.actor, input),
+    ),
+    confirmBox: api.qa.confirmBox.handler(({ input, context }) =>
+      confirmBox(db, context.actor, input),
     ),
   },
   packChecks: {

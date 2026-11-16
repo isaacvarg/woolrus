@@ -16,6 +16,15 @@ enum PackCheckMode {
   @@map("pack_check_mode")
 }
 
+/// Which packages QA confirms the physical box of before buying labels (SPEC-packing A1).
+enum QaBoxConfirm {
+  OFF
+  WHEN_TRIPPED
+  ALWAYS
+
+  @@map("qa_box_confirm")
+}
+
 /// Single-row table (id is always 1). Secrets are AES-GCM encrypted with SETTINGS_ENCRYPTION_KEY
 /// and never leave the server (FR-SET-05, NFR-SEC-03).
 model Settings {
@@ -67,6 +76,8 @@ model Settings {
   packCheckCustomDimensions PackCheckMode @default(WARN) @map("pack_check_custom_dimensions")
   /// A weight further than this whole percent from the estimate trips the off-the-estimate check, 5–100.
   packCheckWeightOffPercent Int           @default(25) @map("pack_check_weight_off_percent")
+  /// Read live by the verified gate, so a change applies to orders already in QA.
+  qaBoxConfirm              QaBoxConfirm  @default(WHEN_TRIPPED) @map("qa_box_confirm")
 
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 

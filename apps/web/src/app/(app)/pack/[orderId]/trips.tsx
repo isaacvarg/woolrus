@@ -36,12 +36,13 @@ export function TripList({
   );
 }
 
-function TripMessage({
+/** One trip's message; the QA screen shows saved trips with it too. */
+export function TripMessage({
   pkg,
   trip,
   weightDisplay,
 }: {
-  pkg: PackPackage;
+  pkg: Pick<PackPackage, "dimensions">;
   trip: Trip;
   weightDisplay: WeightDisplay;
 }) {

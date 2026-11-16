@@ -103,6 +103,7 @@ type QueueSqlRow = {
   openIssueCount: number;
   topOpenSeverity: QualityIssueSeverity | null;
   unresolvedVoidCount: number;
+  packCheckTrips: number;
   labelState: "none" | "purchasing" | "failed" | "unknown";
   packageCount: number;
   shippingSummary: string | null;
@@ -155,6 +156,7 @@ export async function listQueue(
       COALESCE(qi.open_count, 0)::int AS "openIssueCount",
       qi.top_severity AS "topOpenSeverity",
       COALESCE(uv.unresolved_count, 0)::int AS "unresolvedVoidCount",
+      COALESCE(pt.open_trips, 0)::int AS "packCheckTrips",
       CASE WHEN lb.has_unknown THEN 'unknown' WHEN lb.has_purchasing THEN 'purchasing'
         WHEN lb.has_failed THEN 'failed' ELSE 'none' END AS "labelState",
       COALESCE(pk.package_count, 0)::int AS "packageCount",
@@ -181,6 +183,14 @@ export async function listQueue(
         AND v.order_id IN (SELECT id FROM orders WHERE status = ${stage}::workflow_status)
       GROUP BY v.order_id
     ) uv ON uv.order_id = o.id
+    -- Unacknowledged packing check trips: the QA queue's badge only (SPEC-packing A1).
+    LEFT JOIN (
+      SELECT p.order_id, COUNT(*) AS open_trips
+      FROM package_check_trips t JOIN packages p ON p.id = t.package_id
+      WHERE t.acknowledged_at IS NULL AND p.discarded_at IS NULL AND ${stage}::text = 'QA'
+        AND p.order_id IN (SELECT id FROM orders WHERE status = ${stage}::workflow_status)
+      GROUP BY p.order_id
+    ) pt ON pt.order_id = o.id
     LEFT JOIN (
       SELECT p.order_id,
         BOOL_OR(l.status::text = 'PURCHASING' AND l.error = 'errors.qa.purchaseUnknown') AS has_unknown,
@@ -255,6 +265,7 @@ export async function listQueue(
       openIssueCount: r.openIssueCount,
       topOpenSeverity: r.topOpenSeverity,
       unresolvedVoidCount: r.unresolvedVoidCount,
+      packCheckTrips: r.packCheckTrips,
       labelState: r.labelState,
       packageCount: r.packageCount,
       shippingSummary: r.shippingSummary,

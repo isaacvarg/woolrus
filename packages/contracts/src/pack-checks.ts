@@ -18,6 +18,10 @@ export type PackCheck = z.infer<typeof PackCheck>;
 export const PackCheckMode = z.enum(["OFF", "WARN", "BLOCK"]);
 export type PackCheckMode = z.infer<typeof PackCheckMode>;
 
+/** Which packages QA confirms the box of: none, those with any trip, or every one. */
+export const QaBoxConfirm = z.enum(["OFF", "WHEN_TRIPPED", "ALWAYS"]);
+export type QaBoxConfirm = z.infer<typeof QaBoxConfirm>;
+
 const TripMode = z.enum(["WARN", "BLOCK"]);
 
 /** One failed check, with what the packer (and later QA) needs to read it. */

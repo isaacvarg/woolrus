@@ -143,6 +143,8 @@ export const QueueRow = z.object({
   topOpenSeverity: QualityIssueSeverity.nullable(),
   /** Voids that are neither undone nor resolved yet. */
   unresolvedVoidCount: z.number().int(),
+  /** Saved packing check trips on the order QA hasn't acknowledged yet (SPEC-packing A1). */
+  packCheckTrips: z.number().int(),
   /** Label purchase state for QA's badge; `none` outside QA and when nothing went wrong. */
   labelState: z.enum(["none", "purchasing", "failed", "unknown"]),
   /** Ready queue only (zero/none elsewhere): packages, carrier and service, and printing. */

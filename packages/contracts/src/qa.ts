@@ -3,6 +3,7 @@ import { base, Id, IdempotencyKey } from "./base";
 import { RateSelectionReason } from "./carriers";
 import { LotDto } from "./lumexia";
 import { LineAttribute, OrderDetail } from "./orders";
+import { Trip } from "./pack-checks";
 
 // QA (SPEC-qa "API"). Writes need the order in QA and the caller's live claim.
 
@@ -77,11 +78,34 @@ export const QaRate = z.object({
 });
 export type QaRate = z.infer<typeof QaRate>;
 
+const Size = z.object({ lengthIn: z.number(), widthIn: z.number(), heightIn: z.number() });
+
+/**
+ * A packing check trip saved when the order left Packing (SPEC-packing A1 "QA side"), with how it
+ * got through: an approval, or an Admin's force-status. A packer's overweight reason is in the
+ * `OVER_MAX` trip's details.
+ */
+export const QaTrip = z.object({
+  id: Id,
+  trip: Trip,
+  approval: z.object({ approver: z.string(), reason: z.string(), at: z.date() }).nullable(),
+  forced: z.object({ by: z.string().nullable(), reason: z.string(), at: z.date() }).nullable(),
+  acknowledgedBy: z.string().nullable(),
+  acknowledgedAt: z.date().nullable(),
+});
+export type QaTrip = z.infer<typeof QaTrip>;
+
 export const QaPackage = z.object({
   id: Id,
   number: z.number().int(),
   boxName: z.string().nullable(),
   weightOz: z.number().nullable(),
+  /** The box's inner dimensions, or the custom outer ones without a box, for the Confirm box row. */
+  dimensions: Size.nullable(),
+  trips: z.array(QaTrip),
+  /** By `Settings.qaBoxConfirm`, read live. */
+  boxConfirmRequired: z.boolean(),
+  boxConfirmed: z.object({ by: z.string().nullable(), at: z.date() }).nullable(),
   rows: z.array(QaRow),
   /** The package's live label, or its latest attempt when none is live. */
   label: QaLabel.nullable(),
@@ -203,6 +227,12 @@ export type QaReplaceLotInput = z.infer<typeof QaReplaceLotInput>;
 export const QaLotIdInput = z.object({ lotId: Id });
 export type QaLotIdInput = z.infer<typeof QaLotIdInput>;
 
+export const AcknowledgeCheckInput = z.object({ tripId: Id });
+export type AcknowledgeCheckInput = z.infer<typeof AcknowledgeCheckInput>;
+
+export const ConfirmBoxInput = z.object({ packageId: Id });
+export type ConfirmBoxInput = z.infer<typeof ConfirmBoxInput>;
+
 export const qa = {
   screen: base
     .route({
@@ -284,5 +314,23 @@ export const qa = {
       summary: "Remove a lot at QA; its units go to the box line's default lot",
     })
     .input(QaLotIdInput)
+    .output(QaResult),
+  acknowledgeCheck: base
+    .route({
+      method: "POST",
+      path: "/pack-check-trips/{tripId}/acknowledge",
+      tags,
+      summary: "Acknowledge a packing check trip saved on a package",
+    })
+    .input(AcknowledgeCheckInput)
+    .output(QaResult),
+  confirmBox: base
+    .route({
+      method: "POST",
+      path: "/packages/{packageId}/confirm-box",
+      tags,
+      summary: "Confirm the package's physical box, acknowledging its box-related trips",
+    })
+    .input(ConfirmBoxInput)
     .output(QaResult),
 };
