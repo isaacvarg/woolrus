@@ -84,6 +84,7 @@ model User {
   approvalsRequested Approval[]          @relation("ApprovalRequestedBy")
   approvalsGiven     Approval[]          @relation("ApprovalApprovedBy")
   checkTripsAcked    PackageCheckTrip[]  @relation("PackCheckTripAcknowledgedBy")
+  boxesConfirmed     Package[]           @relation("PackageBoxConfirmedBy")
 
   @@map("users")
 }

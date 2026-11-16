@@ -5,6 +5,7 @@ import type {
   AdminSettings,
   PackCheck,
   PackCheckMode,
+  QaBoxConfirm,
   UpdateSettingsInput,
 } from "@woolrus/contracts";
 import { useTranslations } from "next-intl";
@@ -16,7 +17,8 @@ import { useErrorMessage, useFieldErrors } from "@/lib/errors";
 import { orpc } from "@/lib/orpc";
 
 // Settings → Packing checks (SPEC-packing A1 "Settings"): one warehouse-wide mode per check, and
-// the off-the-estimate threshold. Block stops Complete packing until a QA or Admin user approves.
+// the off-the-estimate threshold, and which packages QA confirms the box of. Block stops Complete
+// packing until a QA or Admin user approves.
 
 const checks = [
   "packCheckOverMax",
@@ -39,6 +41,8 @@ const checkOf = {
   packCheckBoxNotScanned: "BOX_NOT_SCANNED",
   packCheckCustomDimensions: "CUSTOM_DIMENSIONS",
 } as const satisfies Record<CheckField, string>;
+
+const boxConfirmModes: readonly QaBoxConfirm[] = ["OFF", "WHEN_TRIPPED", "ALWAYS"];
 
 export function PackingChecksSection() {
   const errorMessage = useErrorMessage();
@@ -64,6 +68,7 @@ function PackingChecksForm({ settings }: { settings: AdminSettings }) {
     () => Object.fromEntries(checks.map((field) => [field, settings[field]])) as never,
   );
   const [percent, setPercent] = useState(settings.packCheckWeightOffPercent);
+  const [boxConfirm, setBoxConfirm] = useState<QaBoxConfirm>(settings.qaBoxConfirm);
   // The 30-day counts beside each mode; the form works without them while they load.
   const stats = useQuery(orpc.packChecks.stats.queryOptions());
   const statOf = (check: PackCheck) => stats.data?.find((s) => s.check === check);
@@ -86,7 +91,11 @@ function PackingChecksForm({ settings }: { settings: AdminSettings }) {
       validationErrors={save.error ? fieldErrors(save.error) : {}}
       onSubmit={(event) => {
         event.preventDefault();
-        save.mutate({ ...modes, packCheckWeightOffPercent: percent } as UpdateSettingsInput);
+        save.mutate({
+          ...modes,
+          packCheckWeightOffPercent: percent,
+          qaBoxConfirm: boxConfirm,
+        } as UpdateSettingsInput);
       }}
     >
       <div className="card-body gap-4">
@@ -136,6 +145,24 @@ function PackingChecksForm({ settings }: { settings: AdminSettings }) {
           value={percent}
           onChange={setPercent}
         />
+        <div>
+          <SelectField
+            label={t("settings.packingChecks.qaBoxConfirm")}
+            name="qaBoxConfirm"
+            options={boxConfirmModes.map((id) => ({
+              id,
+              label: t(`settings.packingChecks.qaBoxConfirm${id}`),
+            }))}
+            value={boxConfirm}
+            onChange={(key) => {
+              const mode = boxConfirmModes.find((m) => m === key);
+              if (mode) setBoxConfirm(mode);
+            }}
+          />
+          <p className="text-sm text-base-content/70">
+            {t("settings.packingChecks.qaBoxConfirmHint")}
+          </p>
+        </div>
         <div>
           <Button type="submit" className="btn-primary" isDisabled={save.isPending}>
             {t("settings.packingChecks.save")}

@@ -173,6 +173,11 @@ describe("going back to Packing deletes them", () => {
     const other = await tripping();
     await finish(packer, order.id);
     await finish(other.packer, other.order.id);
+    const confirmed = { boxConfirmedAt: new Date(), boxConfirmedById: admin.userId };
+    await db.package.updateMany({
+      where: { orderId: { in: [order.id, other.order.id] } },
+      data: confirmed,
+    });
 
     await forceStatus(db, admin, {
       orderId: order.id,
@@ -183,6 +188,11 @@ describe("going back to Packing deletes them", () => {
 
     expect(await tripsOf(order.id)).toEqual([]);
     expect(await tripsOf(other.order.id)).toHaveLength(3);
+    // ...and the box confirmations with them (criterion 21).
+    const boxes = (orderId: string) =>
+      db.package.findMany({ where: { orderId }, select: { boxConfirmedAt: true } });
+    expect((await boxes(order.id)).every((p) => p.boxConfirmedAt === null)).toBe(true);
+    expect((await boxes(other.order.id)).every((p) => p.boxConfirmedAt !== null)).toBe(true);
   });
 
   it("a repack from Ready deletes them", async () => {

@@ -45,13 +45,13 @@ export function TripList({
   );
 }
 
-/** What one trip says, for the card and for the approval dialog's list. */
+/** What one trip says: on the card, in the approval dialog's list, and for saved trips on QA. */
 export function TripMessage({
   pkg,
   trip,
   weightDisplay,
 }: {
-  pkg: PackPackage;
+  pkg: Pick<PackPackage, "dimensions">;
   trip: Trip;
   weightDisplay: WeightDisplay;
 }) {

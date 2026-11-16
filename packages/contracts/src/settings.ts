@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { base } from "./base";
-import { PackCheckMode } from "./pack-checks";
+import { PackCheckMode, QaBoxConfirm } from "./pack-checks";
 
 // Settings (FR-SET-05, FR-SHIP-09, FR-SET-06). Secret values never appear in any output schema here
 // (NFR-SEC-03).
@@ -177,6 +177,7 @@ export const AdminSettings = z.object({
   packCheckBoxNotScanned: PackCheckMode,
   packCheckCustomDimensions: PackCheckMode,
   packCheckWeightOffPercent: z.number(),
+  qaBoxConfirm: QaBoxConfirm,
   secrets: z.record(SecretName, SecretStatus),
 });
 export type AdminSettings = z.infer<typeof AdminSettings>;
@@ -196,6 +197,7 @@ export const PublicSettings = AdminSettings.pick({
   packCheckBoxNotScanned: true,
   packCheckCustomDimensions: true,
   packCheckWeightOffPercent: true,
+  qaBoxConfirm: true,
 });
 export type PublicSettings = z.infer<typeof PublicSettings>;
 
@@ -226,6 +228,7 @@ export const UpdateSettingsInput = z.object({
   packCheckBoxNotScanned: SettablePackCheckMode.optional(),
   packCheckCustomDimensions: SettablePackCheckMode.optional(),
   packCheckWeightOffPercent: PackCheckWeightOffPercent.optional(),
+  qaBoxConfirm: QaBoxConfirm.optional(),
 });
 export type UpdateSettingsInput = z.infer<typeof UpdateSettingsInput>;
 

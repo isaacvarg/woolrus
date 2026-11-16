@@ -87,11 +87,15 @@ model Package {
   rateErrors           Json        @default("[]") @map("rate_errors")
   /// Set when a repack throws the package away; numbers are not reused.
   discardedAt          DateTime?   @map("discarded_at") @db.Timestamptz(3)
-  createdAt            DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+  /// QA checked the physical box on the bench (SPEC-packing A1). Cleared when the order re-enters Packing.
+  boxConfirmedAt       DateTime?   @map("box_confirmed_at") @db.Timestamptz(3)
+  boxConfirmedById     String?     @map("box_confirmed_by_id") @db.Uuid
+  createdAt           DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt            DateTime    @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   order         Order              @relation(fields: [orderId], references: [id], onDelete: Cascade)
   box           Box?               @relation(fields: [boxId], references: [id], onDelete: Restrict)
+  boxConfirmedBy User?             @relation("PackageBoxConfirmedBy", fields: [boxConfirmedById], references: [id], onDelete: SetNull)
   items         PackageItem[]
   rates         ShippingRate[]
   labels        ShippingLabel[]
