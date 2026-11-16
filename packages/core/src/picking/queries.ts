@@ -50,9 +50,13 @@ export async function listSuggestionCandidates(
   return orders
     .map(({ items, ...order }) => ({
       ...order,
-      lines: items
-        .filter(isWorkLine)
-        .map((row) => ({ key: shelfKey(row), name: row.name, quantity: activeQuantity(row) })),
+      lines: items.filter(isWorkLine).map((row) => ({
+        key: shelfKey(row),
+        name: row.name,
+        quantity: activeQuantity(row),
+        variationWeightOz: row.variation?.weightOz?.toNumber() ?? null,
+        productWeightOz: row.product?.weightOz?.toNumber() ?? null,
+      })),
     }))
     .filter((order) => order.lines.length > 0);
 }
@@ -83,6 +87,7 @@ export async function getBatchSuggestions(
       suggestions: suggestBatches(candidates, {
         maxOrders: settings.pickBatchMaxOrders,
         count: settings.pickBatchSuggestionCount,
+        maxWeightOz: settings.pickBatchMaxWeightOz,
       }),
     };
   });

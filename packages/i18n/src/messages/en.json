@@ -120,6 +120,9 @@
     "pickBatchMaxOrdersHint": "How many orders a picker can take with Pick together: one cart. Batches already open keep their orders.",
     "pickBatchSuggestionCount": "Suggested batches shown",
     "pickBatchSuggestionCountHint": "How many suggested batches the Pending queue shows pickers, 1 to 10.",
+    "pickBatchMaxWeight": "Cart weight limit",
+    "pickBatchMaxWeightHint": "Suggested batches stay at or under this weight, 1 to 500 lb. An order over it by itself still gets its own card.",
+    "pickBatchMaxWeightOff": "No cart weight limit",
     "sla": {
       "title": "SLA per stage (minutes)",
       "hint": "Flag orders that stay longer than this in a stage. Leave empty for no limit.",
@@ -407,6 +410,8 @@
       "card": "Suggested batch {index}",
       "summary": "{orders, plural, one {# order} other {# orders}} · {units, plural, one {# item} other {# items}} · {stops, plural, one {# stop} other {# stops}}",
       "oldest": "Oldest #{number}, {age}",
+      "weightIncomplete": "weight incomplete",
+      "overWeight": "Over cart weight",
       "shared": "{name} ×{units} · {orders} orders",
       "pickThese": "Pick these",
       "finishFirst": "Finish Batch {number} first"

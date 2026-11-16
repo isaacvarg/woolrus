@@ -111,6 +111,34 @@ describe("getBatchSuggestions", () => {
     expect(suggestions.map((s) => s.orders.length)).toEqual([2, 2]);
   });
 
+  it("weighs lines from the variation, else the product, and applies the cart limit (A1 criterion 18)", async () => {
+    const admin = await createActor(db, ["ADMIN"]);
+    const picker = await createActor(db, ["PICKER"]);
+    // 50 lb. The top order (20 lb, from its variation) can take the 20 lb match but not the 60 lb
+    // order ahead of it, which is over the limit by itself.
+    await updateSettings(db, admin, { pickBatchMaxWeightOz: 800 });
+    const top = await pendingOrder({
+      lines: [{ name: "Gallon X", size: { weightOz: 80 }, variation: { weightOz: 320 } }],
+    });
+    const gallon = top.items[0] as never;
+    const heavy = await pendingOrder({ lines: [{ sameAs: gallon, quantity: 3 }] });
+    const light = await pendingOrder({ lines: [{ sameAs: gallon }, { name: "Bare", size: {} }] });
+
+    const [first, second] = (await getBatchSuggestions(db, picker)).suggestions;
+
+    expect(first).toMatchObject({
+      orders: [{ id: top.order.id }, { id: light.order.id }],
+      weightOz: 640,
+      missingWeightCount: 1,
+      overWeight: false,
+    });
+    expect(second).toMatchObject({
+      orders: [{ id: heavy.order.id }],
+      weightOz: 960,
+      overWeight: true,
+    });
+  });
+
   it("reports the picker's open batch", async () => {
     const picker = await createActor(db, ["PICKER"]);
     const [a, b, c, d] = await sharingOrders(4);

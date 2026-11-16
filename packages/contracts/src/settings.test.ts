@@ -28,6 +28,7 @@ describe("UpdateSettingsInput", () => {
       claimExpiryMinutes: 30,
       pickBatchMaxOrders: 10,
       pickBatchSuggestionCount: 3,
+      pickBatchMaxWeightOz: 3200,
       stageSlaMinutes: { PENDING: 240, QA: 60 },
       weightDisplay: "LB_DECIMAL",
       piiRetentionDays: 365,
@@ -41,6 +42,12 @@ describe("UpdateSettingsInput", () => {
     expect(
       fieldErrors({ wooStoreUrl: null, lumexiaBaseUrl: null, piiRetentionDays: null }),
     ).toEqual({});
+  });
+
+  it("takes a cart weight limit of 16–8000 oz, or null for off (SPEC-picking A1)", () => {
+    for (const limit of [16, 8000, null]) {
+      expect(fieldErrors({ pickBatchMaxWeightOz: limit })).toEqual({});
+    }
   });
 
   it("takes a Rate Lab combination cap of 1–2000", () => {
@@ -183,6 +190,9 @@ describe("UpdateSettingsInput", () => {
     ["pickBatchSuggestionCount", 0],
     ["pickBatchSuggestionCount", 11],
     ["pickBatchSuggestionCount", 1.5],
+    ["pickBatchMaxWeightOz", 15],
+    ["pickBatchMaxWeightOz", 8001],
+    ["pickBatchMaxWeightOz", 100.5],
     ["piiRetentionDays", 29],
     ["piiRetentionDays", 3651],
     ["weightDisplay", "KG"],
