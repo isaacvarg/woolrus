@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ApprovalInput } from "./approvals";
 import { base } from "./base";
 
 // Packing checks (SPEC-packing A1 "Packing checks"). A check that fails on a package is a trip.
@@ -87,3 +88,15 @@ export const packChecks = {
     })
     .output(z.array(PackCheckStat)),
 };
+
+/** One blocking trip the approver was shown: its package number and check. */
+export const ApprovedTrip = z.object({ package: z.number().int().positive(), check: PackCheck });
+export type ApprovedTrip = z.infer<typeof ApprovedTrip>;
+
+/**
+ * A packing approval: the credential and reason, plus the blocking trips the approval dialog
+ * showed. The server refuses it if a trip blocks at commit that isn't in the list, so an approval
+ * never covers a trip the approver didn't see (a stale view, or a package changed meanwhile).
+ */
+export const PackApprovalInput = ApprovalInput.extend({ trips: z.array(ApprovedTrip).max(100) });
+export type PackApprovalInput = z.infer<typeof PackApprovalInput>;

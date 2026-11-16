@@ -1,10 +1,9 @@
 import { z } from "zod";
-import { ApprovalInput } from "./approvals";
 import { base, Id, IdempotencyKey, Inches, Ounces } from "./base";
 import { Box } from "./boxes";
 import { LotDto } from "./lumexia";
 import { ExpectedVersion, LineAttribute, OrderDetail } from "./orders";
-import { Trip } from "./pack-checks";
+import { PackApprovalInput, Trip } from "./pack-checks";
 
 // Packing (SPEC-packing "API"). Package writes need the order in Packing and the caller's live
 // claim. Units move by adding or subtracting, so the client sends them one at a time per line.
@@ -79,7 +78,7 @@ export const PackPackage = z.object({
   weightOz: z.number().nullable(),
   /** Why a weight above the box's max was kept; null within the max. */
   overrideReason: z.string().nullable(),
-  /** The contents or box changed after weighing: re-weigh or confirm. Never blocks the gate. */
+  /** The contents or box changed after weighing: re-weigh or confirm. Trips WEIGHT_STALE (decision 13). */
   weightStale: z.boolean(),
   /** The box was chosen by scanning its barcode; a tapped box trips BOX_NOT_SCANNED. */
   boxScanned: z.boolean(),
@@ -216,7 +215,7 @@ export const CompletePackInput = z.object({
   /** Where the packer goes next: the Packing queue, or the next unclaimed Packing order. */
   after: z.enum(["queue", "next"]),
   /** A QA or Admin user's say-so for the blocking trips (SPEC-packing A1); ignored when none block. */
-  approval: ApprovalInput.optional(),
+  approval: PackApprovalInput.optional(),
 });
 export type CompletePackInput = z.infer<typeof CompletePackInput>;
 

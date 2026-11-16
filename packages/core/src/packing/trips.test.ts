@@ -1,11 +1,14 @@
-import type { ApprovalInput } from "@woolrus/contracts";
+import type { ApprovedTrip, PackApprovalInput } from "@woolrus/contracts";
 import type { Db, PackCheckMode } from "@woolrus/db";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { createActor, resetDb, testDb } from "../../test/db";
 import { createOrder, type PackageSpec } from "../../test/factories";
 import { hashPin } from "../identity/credentials";
 import type { UserActor } from "../permissions";
+import { acknowledgeCheck } from "../qa/pack-checks";
+import { getQaScreen } from "../qa/queries";
 import { repackOrders } from "../shipping/repack";
+import { claim } from "../workflow/claims";
 import { forceStatus } from "../workflow/service";
 import { completePack } from "./complete";
 import { packCheckStats } from "./trips";
@@ -81,14 +84,14 @@ async function tripping(status: "PACKING" | "QA" | "READY" = "PACKING") {
   return { packer, ...built };
 }
 
-const finish = (packer: UserActor, orderId: string, approval?: ApprovalInput) =>
+const finish = (packer: UserActor, orderId: string, approval?: PackApprovalInput) =>
   completePack(db, packer, { orderId, expectedVersion: 3, after: "queue", approval });
 
-/** A QA user's approval, as a blocking trip needs (SPEC-packing A1). */
-async function qaApproval(): Promise<ApprovalInput> {
+/** A QA user's approval of the blocking `trips` it was shown, as a blocking trip needs (SPEC-packing A1). */
+async function qaApproval(trips: ApprovedTrip[]): Promise<PackApprovalInput> {
   const qa = await createActor(db, ["QA"]);
   await db.user.update({ where: { id: qa.userId }, data: { pinHash: await hashPin("482916") } });
-  return { credential: { userId: qa.userId, pin: "482916" }, reason: "Checked it" };
+  return { credential: { userId: qa.userId, pin: "482916" }, reason: "Checked it", trips };
 }
 
 describe("completing packing saves the trips", () => {
@@ -96,7 +99,7 @@ describe("completing packing saves the trips", () => {
     await setModes({ packCheckCustomDimensions: "BLOCK" });
     const { packer, order } = await tripping();
 
-    await finish(packer, order.id, await qaApproval());
+    await finish(packer, order.id, await qaApproval([{ package: 2, check: "CUSTOM_DIMENSIONS" }]));
 
     expect(await summary(order.id)).toEqual([
       { number: 1, check: "OVER_MAX", mode: "WARN" },
@@ -149,6 +152,9 @@ describe("completing packing saves the trips", () => {
       "WEIGHT_STALE",
       "CUSTOM_DIMENSIONS",
     ]);
+    // QA sees them as moved by force-status, with its reason (the real path, not a seeded event).
+    const view = await getQaScreen(db, admin, { orderId: order.id });
+    expect(view.packages[0]?.trips[0]?.forced).toMatchObject({ reason: "Packer went home" });
   });
 
   it("force-status to QA from a hold placed in Packing writes them too (decision 16)", async () => {
@@ -171,6 +177,8 @@ describe("completing packing saves the trips", () => {
       "WEIGHT_STALE",
       "CUSTOM_DIMENSIONS",
     ]);
+    const view = await getQaScreen(db, admin, { orderId: order.id });
+    expect(view.packages[0]?.trips[0]?.forced).toMatchObject({ reason: "Released straight to QA" });
   });
 
   it("a mode changed while the order is in QA leaves its trips unchanged", async () => {
@@ -185,6 +193,28 @@ describe("completing packing saves the trips", () => {
     });
 
     expect(await tripsOf(order.id)).toEqual(before);
+  });
+});
+
+describe("QA works from the trips completing packing saved", () => {
+  it("shows the approval on the blocking trip, and a QA user acknowledges it", async () => {
+    await setModes({ packCheckCustomDimensions: "BLOCK" });
+    const { packer, order } = await tripping();
+    await finish(packer, order.id, await qaApproval([{ package: 2, check: "CUSTOM_DIMENSIONS" }]));
+
+    const qa = await createActor(db, ["QA"]);
+    const { version } = await db.order.findUniqueOrThrow({ where: { id: order.id } });
+    await claim(db, qa, { orderId: order.id, expectedVersion: version });
+    const before = await getQaScreen(db, qa, { orderId: order.id });
+    const custom = before.packages[1]?.trips.find((t) => t.trip.check === "CUSTOM_DIMENSIONS");
+    expect(custom).toMatchObject({ approval: { reason: "Checked it" }, forced: null });
+
+    await acknowledgeCheck(db, qa, { tripId: custom?.id as string });
+
+    const after = await getQaScreen(db, qa, { orderId: order.id });
+    expect(
+      after.packages[1]?.trips.find((t) => t.trip.check === "CUSTOM_DIMENSIONS")?.acknowledgedAt,
+    ).not.toBeNull();
   });
 });
 
@@ -277,7 +307,11 @@ describe("the re-weigh note and the WEIGHT_STALE trip", () => {
       await setModes({ packCheckWeightStale: mode });
       const { packer, order } = await tripping();
 
-      await finish(packer, order.id, mode === "BLOCK" ? await qaApproval() : undefined);
+      await finish(
+        packer,
+        order.id,
+        mode === "BLOCK" ? await qaApproval([{ package: 1, check: "WEIGHT_STALE" }]) : undefined,
+      );
 
       expect(await notesOf(order.id)).toEqual([]);
       expect(await summary(order.id)).toContainEqual({ number: 1, check: "WEIGHT_STALE", mode });

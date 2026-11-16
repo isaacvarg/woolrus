@@ -73,11 +73,20 @@ type TripRow = Prisma.PackageGetPayload<{
 
 type ForcedMove = { at: Date; reason: string; by: string | null };
 
-/** An Admin's force-status moves from Packing to QA: they save trips without an approval. */
+/**
+ * An Admin's force-status moves into QA from Packing, or from a hold placed in Packing: they save
+ * trips without an approval. Each is matched to its rows by time, as `transition` writes both at
+ * one `now`.
+ */
 async function forcedIntoQa(tx: DbTx, orderId: string): Promise<ForcedMove[]> {
   const events = await tx.orderStageEvent.findMany({
-    // Only force-status gives a reason for this move; completing packing never does.
-    where: { orderId, fromStatus: "PACKING", toStatus: "QA", reason: { not: null } },
+    // Only force-status gives a reason for these moves; completing packing and resume never do.
+    where: {
+      orderId,
+      fromStatus: { in: ["PACKING", "ON_HOLD"] },
+      toStatus: "QA",
+      reason: { not: null },
+    },
     include: { actor: { select: nameFields } },
   });
   return events.map((e) => ({

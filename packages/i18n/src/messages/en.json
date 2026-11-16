@@ -1312,7 +1312,8 @@
       "nothingToPack": "There's nothing more of that to move.",
       "overweight": "That weight is over the box's limit of {maxOz} oz. Give a reason to keep it.",
       "tooManyPackages": "An order can have at most {max} packages.",
-      "notInPackage": "That package doesn't hold that many."
+      "notInPackage": "That package doesn't hold that many.",
+      "tripsChanged": "The checks changed while this was being approved. Look at them again and approve again."
     },
     "voids": {
       "liveLabels": "This order has a shipping label. Repack it first, then void.",

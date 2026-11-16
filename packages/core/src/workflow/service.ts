@@ -1,9 +1,14 @@
-import type { ApprovalInput } from "@woolrus/contracts";
+import type { PackApprovalInput } from "@woolrus/contracts";
 import type { Db, DbTx, Order, WorkflowStatus } from "@woolrus/db";
 import { recordAudit } from "../audit";
 import { requestRateFetch } from "../carriers/rates";
 import { AppError } from "../errors";
-import { recordPackApproval, type VerifiedApproval, verifyPackApproval } from "../packing/approval";
+import {
+  assertApprovalCovers,
+  recordPackApproval,
+  type VerifiedApproval,
+  verifyPackApproval,
+} from "../packing/approval";
 import { clearTrips, saveTrips } from "../packing/trips";
 import { type Actor, assertCan } from "../permissions";
 import { claimExpiryMinutes, holdsClaim, isClaimLive } from "./claims";
@@ -84,6 +89,7 @@ export async function transition(
   let snapshot: GateSnapshot | undefined;
   if (move.gate) {
     snapshot = await loadGateSnapshot(tx, orderId);
+    if (approval) assertApprovalCovers(snapshot, approval);
     const unmet = evaluateGate(move.gate, snapshot, { approved: approval !== undefined });
     if (unmet.length > 0)
       throw new AppError("CONFLICT", "errors.workflow.gateFailed", undefined, { unmet });
@@ -169,7 +175,7 @@ export const completePicking = stageMove("completePicking", "PACKING");
 export async function completePacking(
   db: Db,
   actor: Actor,
-  { approval, ...input }: StageInput & { approval?: ApprovalInput },
+  { approval, ...input }: StageInput & { approval?: PackApprovalInput },
   options: TransitionOptions = {},
 ): Promise<Order> {
   // Permission before the credential: a caller who can't pack can't probe PINs through this.

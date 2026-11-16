@@ -1,5 +1,6 @@
-import type { ApprovalInput } from "@woolrus/contracts";
+import type { ApprovedTrip, PackApprovalInput } from "@woolrus/contracts";
 import type { Db, DbTx } from "@woolrus/db";
+import { AppError } from "../errors";
 import { recordApproval, verifyApprover } from "../identity/approvals";
 import type { Actor } from "../permissions";
 import type { GateSnapshot } from "../workflow/gates";
@@ -11,14 +12,17 @@ import type { GateSnapshot } from "../workflow/gates";
 /** Who may approve a blocking trip: QA and Admin. */
 export const PACK_CHECK_APPROVE = "packCheck.approve";
 
-/** An approval whose credential `verifyApprover` accepted, ready to record with the move. */
-export type VerifiedApproval = { approverId: string; reason: string };
+/**
+ * An approval whose credential `verifyApprover` accepted, ready to record with the move. `trips`:
+ * the blocking trips the approver was shown.
+ */
+export type VerifiedApproval = { approverId: string; reason: string; trips: ApprovedTrip[] };
 
 /** Checks the approver's PIN or badge before the move's transaction; nothing sent, nothing to check. */
 export async function verifyPackApproval(
   db: Db,
   actor: Actor,
-  approval: ApprovalInput | undefined,
+  approval: PackApprovalInput | undefined,
   now: Date,
 ): Promise<VerifiedApproval | undefined> {
   if (!approval) return undefined;
@@ -27,7 +31,19 @@ export async function verifyPackApproval(
     permission: PACK_CHECK_APPROVE,
     now,
   });
-  return { approverId, reason: approval.reason };
+  return { approverId, reason: approval.reason, trips: approval.trips };
+}
+
+/**
+ * Refuses an approval that doesn't cover every trip blocking now: one appeared after the approver
+ * was shown the list (a stale view, or a package changed meanwhile), so they haven't seen it.
+ * A trip that stopped blocking meanwhile is fine; the approval simply isn't recorded for it.
+ */
+export function assertApprovalCovers(snapshot: GateSnapshot, approval: VerifiedApproval): void {
+  const seen = new Set(approval.trips.map((t) => `${t.package}:${t.check}`));
+  if (blockingTrips(snapshot).some((t) => !seen.has(`${t.package}:${t.check}`))) {
+    throw new AppError("CONFLICT", "errors.packing.tripsChanged");
+  }
 }
 
 /** The gate snapshot's blocking trips, as the approval's details record them. */

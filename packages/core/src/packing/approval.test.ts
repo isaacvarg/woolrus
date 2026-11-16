@@ -1,4 +1,4 @@
-import type { ApprovalInput } from "@woolrus/contracts";
+import type { ApprovedTrip, PackApprovalInput } from "@woolrus/contracts";
 import type { Db, PackCheckMode, Role } from "@woolrus/db";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { createActor, resetDb, testDb } from "../../test/db";
@@ -22,9 +22,11 @@ const WRONG = "111112";
 type Modes = Partial<
   Record<
     | "packCheckOverMax"
+    | "packCheckUnderMin"
     | "packCheckWeightOff"
     | "packCheckWeightStale"
     | "packCheckNoFit"
+    | "packCheckBoxNotScanned"
     | "packCheckCustomDimensions",
     PackCheckMode
   >
@@ -43,10 +45,13 @@ async function person(roles: Role[]) {
   return { ...actor, badge };
 }
 
-const withPin = (approver: UserActor, pin = PIN, reason = "Pail rides on top"): ApprovalInput => ({
-  credential: { userId: approver.userId, pin },
-  reason,
-});
+/** The approval as the dialog sends it: by default for package 1's NO_FIT, the trip it showed. */
+const withPin = (
+  approver: UserActor,
+  pin = PIN,
+  reason = "Pail rides on top",
+  trips: ApprovedTrip[] = [{ package: 1, check: "NO_FIT" }],
+): PackApprovalInput => ({ credential: { userId: approver.userId, pin }, reason, trips });
 
 /**
  * A Packing order claimed by a packer (with a PIN), whose one package is a 10×8×4 box holding a
@@ -72,10 +77,10 @@ async function noFit() {
   return { packer, ...built };
 }
 
-const finish = (packer: UserActor, orderId: string, approval?: ApprovalInput) =>
+const finish = (packer: UserActor, orderId: string, approval?: PackApprovalInput) =>
   completePack(db, packer, { orderId, expectedVersion: 3, after: "queue", approval });
 
-const finishByApi = (packer: UserActor, id: string, approval?: ApprovalInput) =>
+const finishByApi = (packer: UserActor, id: string, approval?: PackApprovalInput) =>
   orderMutations.completePacking(db, packer, { id, expectedVersion: 3, approval });
 
 const statusOf = async (orderId: string) =>
@@ -165,6 +170,117 @@ describe.each([
     expect(await db.approval.count()).toBe(0);
     expect(await db.packageCheckTrip.count()).toBe(0);
   });
+
+  it("refuses an approval that doesn't list a trip blocking now, and moves nothing", async () => {
+    const { packer, order } = await noFit();
+    const qa = await person(["QA"]);
+
+    // The dialog showed nothing (a stale view); NO_FIT blocks at commit.
+    const error = await refusal(complete(packer, order.id, withPin(qa, PIN, "Fine", [])));
+
+    expect(error).toMatchObject({ kind: "CONFLICT", messageKey: "errors.packing.tripsChanged" });
+    expect(await statusOf(order.id)).toBe("PACKING");
+    expect(await db.approval.count()).toBe(0);
+    expect(await db.packageCheckTrip.count()).toBe(0);
+  });
+
+  it("a valid approval with a stale version moves nothing and writes no Approval", async () => {
+    const { packer, order } = await noFit();
+    const qa = await person(["QA"]);
+    await db.order.update({ where: { id: order.id }, data: { version: 4 } });
+
+    const error = await refusal(complete(packer, order.id, withPin(qa)));
+
+    expect(error).toMatchObject({ kind: "CONFLICT", messageKey: "errors.workflow.stale" });
+    expect(await statusOf(order.id)).toBe("PACKING");
+    expect(await db.approval.count()).toBe(0);
+    expect(await db.packageCheckTrip.count()).toBe(0);
+  });
+});
+
+describe("approvals listing what the approver saw", () => {
+  it("a trip that stopped blocking meanwhile is fine: only those still blocking are recorded", async () => {
+    await setModes({ packCheckNoFit: "BLOCK", packCheckWeightStale: "BLOCK" });
+    const { packer, order } = await noFit();
+    const qa = await person(["QA"]);
+
+    await finish(
+      packer,
+      order.id,
+      withPin(qa, PIN, "Fine", [
+        { package: 1, check: "NO_FIT" },
+        { package: 1, check: "WEIGHT_STALE" },
+      ]),
+    );
+
+    expect(await statusOf(order.id)).toBe("QA");
+    expect((await db.approval.findFirstOrThrow()).details).toMatchObject([
+      { package: 1, check: "NO_FIT" },
+    ]);
+  });
+});
+
+describe.each([
+  [
+    "UNDER_MIN",
+    { packCheckUnderMin: "BLOCK" },
+    async (packageId: string) => {
+      const box = await db.box.create({
+        data: {
+          name: `Roomy ${crypto.randomUUID()}`,
+          lengthIn: 10,
+          widthIn: 10,
+          heightIn: 10,
+          minWeightOz: 40,
+        },
+      });
+      await db.package.update({ where: { id: packageId }, data: { boxId: box.id } });
+    },
+  ],
+  [
+    "WEIGHT_OFF",
+    { packCheckWeightOff: "BLOCK" },
+    (packageId: string) => db.package.update({ where: { id: packageId }, data: { weightOz: 40 } }),
+  ],
+  [
+    "WEIGHT_STALE",
+    { packCheckWeightStale: "BLOCK" },
+    (packageId: string) =>
+      db.package.update({ where: { id: packageId }, data: { weightStale: true } }),
+  ],
+  ["BOX_NOT_SCANNED", { packCheckBoxNotScanned: "BLOCK" }, async () => {}],
+  [
+    "CUSTOM_DIMENSIONS",
+    { packCheckCustomDimensions: "BLOCK" },
+    (packageId: string) =>
+      db.package.update({
+        where: { id: packageId },
+        data: { boxId: null, lengthIn: 12, widthIn: 12, heightIn: 12 },
+      }),
+  ],
+] as const)("with %s on block", (check, modes, trip) => {
+  it("refuses with packCheckBlocked, then completes with an approval", async () => {
+    await setModes(modes);
+    const { packer, order, packages } = await noFit();
+    await trip(packages[0]?.id as string);
+
+    const error = await refusal(finish(packer, order.id));
+    expect(error).toMatchObject({
+      unmet: [
+        { messageKey: "errors.workflow.gate.packCheckBlocked", params: { package: 1, check } },
+      ],
+    });
+
+    const qa = await person(["QA"]);
+    await finish(packer, order.id, withPin(qa, PIN, "Checked", [{ package: 1, check }]));
+    expect(await statusOf(order.id)).toBe("QA");
+    expect(
+      await db.packageCheckTrip.findMany({
+        where: { check },
+        select: { mode: true, approvalId: true },
+      }),
+    ).toEqual([{ mode: "BLOCK", approvalId: expect.any(String) }]);
+  });
 });
 
 describe("approvals that aren't needed", () => {
@@ -195,7 +311,11 @@ describe("approvals that aren't needed", () => {
     const { packer, order } = await noFit();
     const admin = await person(["ADMIN"]);
 
-    await finish(packer, order.id, { credential: { badgeCode: admin.badge }, reason: "Fine" });
+    await finish(packer, order.id, {
+      credential: { badgeCode: admin.badge },
+      reason: "Fine",
+      trips: [{ package: 1, check: "NO_FIT" }],
+    });
 
     expect(await statusOf(order.id)).toBe("QA");
     expect(await db.approval.findFirst()).toMatchObject({ approvedById: admin.userId });
@@ -247,7 +367,7 @@ describe("over max on block (criterion 20)", () => {
       orderId: order.id,
       expectedVersion: version,
       after: "queue",
-      approval: withPin(qa),
+      approval: withPin(qa, PIN, "Dense kit", [{ package: 1, check: "OVER_MAX" }]),
     });
     expect(await statusOf(order.id)).toBe("QA");
     expect(await db.packageCheckTrip.findMany()).toMatchObject([

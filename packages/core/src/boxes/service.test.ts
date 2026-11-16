@@ -253,6 +253,18 @@ describe("box service", () => {
     );
   });
 
+  it("keeps a box editable when a product synced later takes its barcode", async () => {
+    const admin = await createActor(db, ["ADMIN"]);
+    const box = await createBox(db, admin, { ...input, barcode: "BOX-MED" });
+    // Store sync doesn't check box barcodes (SPEC-packing A1 open question 1).
+    await createOrder(db, { lines: [{ name: "Clash", sku: "BOX-MED" }] });
+
+    // The dialog sends the barcode it already has with every edit.
+    const updated = await updateBox(db, admin, { id: box.id, barcode: "box-med", minWeightOz: 4 });
+
+    expect(updated).toMatchObject({ barcode: "BOX-MED", minWeightOz: 4 });
+  });
+
   it("refuses a min not below the max in the database too", async () => {
     await expect(
       db.box.create({

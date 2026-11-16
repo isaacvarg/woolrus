@@ -1,7 +1,7 @@
 import { z } from "zod";
-import { ApprovalInput } from "./approvals";
 import { base, Id } from "./base";
 import { LotDto } from "./lumexia";
+import { PackApprovalInput } from "./pack-checks";
 import { PrintState } from "./shipping";
 
 // Order workflow (SPEC-workflow "API"). Status moves and claims are server-owned: every mutation
@@ -65,7 +65,7 @@ export type CompleteQaOrderInput = z.infer<typeof CompleteQaOrderInput>;
 
 /** `approval`: a QA or Admin user's say-so for blocking packing checks (SPEC-packing A1). */
 export const CompletePackingOrderInput = OrderVersionInput.extend({
-  approval: ApprovalInput.optional(),
+  approval: PackApprovalInput.optional(),
 });
 export type CompletePackingOrderInput = z.infer<typeof CompletePackingOrderInput>;
 

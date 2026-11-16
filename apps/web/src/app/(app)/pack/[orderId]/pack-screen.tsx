@@ -4,8 +4,8 @@ import { ORPCError } from "@orpc/client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   AppErrorData,
-  ApprovalInput,
   LotDto,
+  PackApprovalInput,
   PackageBoxInput,
   PackageItemView,
   PackLine,
@@ -154,7 +154,14 @@ type Weigh = { pkg: PackPackage; weightOz: number; overrideReason?: string };
 
 type After = "queue" | "next";
 /** Finishing, with a QA or Admin approval when a trip blocks (SPEC-packing A1). */
-type Complete = { after: After; approval?: ApprovalInput };
+type Complete = { after: After; approval?: PackApprovalInput };
+
+/** The blocking trips as the approval dialog lists them; sent with the approval (SPEC-packing A1). */
+function blockingOf(view: PackView) {
+  return view.packages.flatMap((pkg) =>
+    pkg.trips.filter((trip) => trip.mode === "BLOCK").map((trip) => ({ pkg, trip })),
+  );
+}
 
 function PackLayout({
   view,
@@ -652,18 +659,26 @@ function PackLayout({
           isOpen
           onOpenChange={(open) => !open && closeDialog()}
           title={t("pack.approvalTitle")}
-          items={view.packages.flatMap((pkg) =>
-            pkg.trips
-              .filter((trip) => trip.mode === "BLOCK")
-              .map((trip) => (
-                <span key={`${pkg.id}-${trip.check}`} data-testid="approval-trip">
-                  {t("pack.approvalItem", { number: pkg.number })}{" "}
-                  <TripMessage pkg={pkg} trip={trip} weightDisplay={weightDisplay} />
-                </span>
-              )),
-          )}
+          items={blockingOf(view).map(({ pkg, trip }) => (
+            <span key={`${pkg.id}-${trip.check}`} data-testid="approval-trip">
+              {t("pack.approvalItem", { number: pkg.number })}{" "}
+              <TripMessage pkg={pkg} trip={trip} weightDisplay={weightDisplay} />
+            </span>
+          ))}
           permission="packCheck.approve"
-          onApprove={(approval) => complete.mutateAsync({ after: dialog.after, approval })}
+          // Exactly what the dialog shows: the server refuses if a trip blocks that isn't listed.
+          onApprove={(approval) =>
+            complete.mutateAsync({
+              after: dialog.after,
+              approval: {
+                ...approval,
+                trips: blockingOf(view).map(({ pkg, trip }) => ({
+                  package: pkg.number,
+                  check: trip.check,
+                })),
+              },
+            })
+          }
         />
       )}
       {dialog?.kind === "overweight" && (

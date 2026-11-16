@@ -207,7 +207,9 @@ export async function updateBox(db: Db, actor: Actor, input: UpdateBoxInput): Pr
         [next.outerLengthIn, next.outerWidthIn, next.outerHeightIn],
       );
       checkMinBelowMax(next.minWeightOz, next.maxWeightOz);
-      await checkBarcode(tx, changes.barcode, id);
+      // Only a new barcode is checked: one already on the box stays editable around it even if a
+      // product synced later claims the same code (SPEC-packing A1 open question 1).
+      if (changes.barcode !== before.barcode) await checkBarcode(tx, changes.barcode, id);
 
       const box = toBoxDtoWithUse(
         await tx.box.update({ where: { id }, data: changes, include: withUse }),

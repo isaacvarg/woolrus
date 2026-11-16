@@ -1312,7 +1312,8 @@
       "nothingToPack": "No hay más de eso que mover.",
       "overweight": "Ese peso supera el límite de la caja de {maxOz} oz. Indica un motivo para conservarlo.",
       "tooManyPackages": "Un pedido puede tener como máximo {max} paquetes.",
-      "notInPackage": "Ese paquete no tiene tantas unidades."
+      "notInPackage": "Ese paquete no tiene tantas unidades.",
+      "tripsChanged": "Los controles cambiaron mientras se aprobaba. Revísalos y vuelve a aprobar."
     },
     "voids": {
       "liveLabels": "Este pedido tiene una etiqueta de envío. Reempaquétalo primero y luego anula.",
