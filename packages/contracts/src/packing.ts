@@ -3,6 +3,7 @@ import { base, Id, IdempotencyKey, Inches, Ounces } from "./base";
 import { Box } from "./boxes";
 import { LotDto } from "./lumexia";
 import { ExpectedVersion, LineAttribute, OrderDetail } from "./orders";
+import { Trip } from "./pack-checks";
 
 // Packing (SPEC-packing "API"). Package writes need the order in Packing and the caller's live
 // claim. Units move by adding or subtracting, so the client sends them one at a time per line.
@@ -81,8 +82,8 @@ export const PackPackage = z.object({
   weightStale: z.boolean(),
   /** Σ unit weight + the box's tare; null when any product has no weight. Never fills the field. */
   estimatedWeightOz: z.number().nullable(),
-  /** Set when the weight is more than 25% off the estimate (signed percent); computed, not stored. */
-  weightWarning: z.object({ percent: z.number() }).nullable(),
+  /** The packing checks this package fails right now (SPEC-packing A1); computed, not stored. */
+  trips: z.array(Trip),
   /** A box for this package's contents, for changing its box. */
   suggestion: BoxSuggestion,
   items: z.array(PackageItemView),

@@ -17,7 +17,9 @@ import { toNumber } from "../units";
 import { toOrderDetails } from "../workflow/detail";
 import { evaluateGate, loadGateSnapshot } from "../workflow/gates";
 import { toAttributes } from "../workflow/queries";
-import { estimateWeightOz, type SuggestUnit, suggestBox, weightOffPercent } from "./suggest";
+import { loadCheckSettings, toCheckPackage, unitOf } from "./check-inputs";
+import { type CheckSettings, evaluateChecks } from "./checks";
+import { estimateWeightOz, type SuggestUnit, suggestBox } from "./suggest";
 
 // What the pack screen reads (SPEC-packing "Reads"): lines with where their units are, packages
 // with their estimate and suggestion, and what the packed gate still needs.
@@ -33,20 +35,6 @@ export type PackageRow = Prisma.PackageGetPayload<{ include: typeof packageInclu
 
 export const isPhysical = (row: LineRow) => row.product?.physical ?? true;
 
-/** A line's size and weight for the suggestion: the variation's, else the product's. */
-function unitOf(row: LineRow, quantity: number): SuggestUnit {
-  const pick = (key: "weightOz" | "lengthIn" | "widthIn" | "heightIn") =>
-    toNumber(row.variation?.[key] ?? row.product?.[key] ?? null);
-  return {
-    name: row.name,
-    lengthIn: pick("lengthIn"),
-    widthIn: pick("widthIn"),
-    heightIn: pick("heightIn"),
-    weightOz: pick("weightOz"),
-    quantity,
-  };
-}
-
 function toPackPackage(
   pkg: PackageRow,
   names: Map<string, string>,
@@ -54,11 +42,11 @@ function toPackPackage(
   noteCount: number,
   units: SuggestUnit[],
   boxes: BoxDto[],
+  checkSettings: CheckSettings,
 ): PackPackage {
   // The package's own box is in use by definition: this package uses it.
   const box = pkg.box ? toBoxDto(pkg.box, true) : null;
   const estimatedWeightOz = estimateWeightOz(units, box);
-  const percent = weightOffPercent(toNumber(pkg.weightOz), estimatedWeightOz);
   const { lengthIn, widthIn, heightIn } = pkg;
   return {
     id: pkg.id,
@@ -75,7 +63,7 @@ function toPackPackage(
     weightOz: toNumber(pkg.weightOz),
     overrideReason: pkg.weightOverrideReason,
     estimatedWeightOz,
-    weightWarning: percent === null ? null : { percent },
+    trips: evaluateChecks(toCheckPackage(pkg), units, checkSettings),
     suggestion: suggestBox(units, boxes),
     weightStale: pkg.weightStale,
     items: pkg.items.map((it) => ({
@@ -96,7 +84,7 @@ async function readPack(
   orderId: string,
   { boxCounts }: { boxCounts: boolean },
 ): Promise<PackResult & { boxes: BoxDto[] }> {
-  const [rows, packages, notes, gate, boxRows] = await Promise.all([
+  const [rows, packages, notes, gate, boxRows, checkSettings] = await Promise.all([
     tx.orderItem.findMany({ where: { orderId }, include: lineInclude }),
     tx.package.findMany({
       where: { orderId, discardedAt: null },
@@ -111,6 +99,7 @@ async function readPack(
       orderBy: { name: "asc" },
       ...(boxCounts ? { include: withUse } : {}),
     }),
+    loadCheckSettings(tx),
   ]);
   const boxes = boxRows.map((box) =>
     "_count" in box ? toBoxDtoWithUse(box as BoxWithUse) : toBoxDto(box),
@@ -178,6 +167,7 @@ async function readPack(
           return row ? [unitOf(row, it.quantity)] : [];
         }),
         boxes,
+        checkSettings,
       ),
     ),
     unmet: evaluateGate("packed", gate),

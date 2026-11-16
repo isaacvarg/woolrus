@@ -36,6 +36,7 @@ import { ScanBanner, type ScanOutcome } from "../../pick/[orderId]/pick-screen";
 import { BoxDialog } from "./box-dialog";
 import { type LineCandidate, LotDialog, WhichLineDialog } from "./lot-dialogs";
 import { OrderDrawer, PackageNoteDialog } from "./order-drawer";
+import { TripList } from "./trips";
 import { OverweightDialog, overweightMax, WeightField } from "./weight-field";
 
 // The pack screen (SPEC-packing "UI", FR-PACK-01…03). Taps apply at once and the server confirms
@@ -1006,6 +1007,12 @@ function PackageCard({
           </Menu>
         </div>
       )}
+      <TripList
+        pkg={pkg}
+        // When selected, the re-weigh banner below says it, with its Weight still right button.
+        trips={isSelected ? pkg.trips.filter((trip) => trip.check !== "WEIGHT_STALE") : pkg.trips}
+        weightDisplay={weightDisplay}
+      />
       {isSelected && (
         <>
           <div className="space-y-2 border-t border-base-300 p-4">
@@ -1026,19 +1033,6 @@ function PackageCard({
                   </Button>
                 )}
               </div>
-            )}
-            {pkg.overrideReason && (
-              <p className="text-sm" data-testid="pack-override">
-                <span className="badge badge-warning me-2">{t("pack.overweightBadge")}</span>
-                {pkg.overrideReason}
-              </p>
-            )}
-            {pkg.weightWarning && (
-              <p role="status" className="alert alert-warning" data-testid="pack-weight-warning">
-                {t(pkg.weightWarning.percent > 0 ? "pack.warnHeavier" : "pack.warnLighter", {
-                  percent: Math.abs(pkg.weightWarning.percent),
-                })}
-              </p>
             )}
             <WeightEditor
               // Remount when the saved weight changes, so the fields show what the server kept.

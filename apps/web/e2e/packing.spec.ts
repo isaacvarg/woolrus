@@ -202,7 +202,7 @@ test("a weight over the box's max needs a reason; changing a weighed package ask
   await expect(page.getByTestId("pack-package").getByTestId("pack-weight")).toHaveText("3 lb");
 });
 
-test("the suggested box is listed first and adding it works; a weight far off the estimate warns", async ({
+test("the suggested box is listed first and adding it works; a weight far off the estimate trips WEIGHT_OFF", async ({
   page,
 }) => {
   // Smaller than any other box, so it is the smallest fit for a 1 in cube.
@@ -239,13 +239,13 @@ test("the suggested box is listed first and adding it works; a weight far off th
   await pkg.getByLabel("oz", { exact: true }).fill("11");
   await pkg.getByRole("button", { name: "Save weight" }).click();
   await expect(pkg.getByTestId("pack-weight")).toHaveText("11 oz");
-  await expect(pkg.getByTestId("pack-weight-warning")).toHaveCount(0);
+  await expect(pkg.getByTestId("pack-trip")).toHaveCount(0);
 
   await pkg.getByRole("button", { name: "Edit weight of package 1" }).click();
   await pkg.getByLabel("lb", { exact: true }).fill("1");
   await pkg.getByLabel("oz", { exact: true }).fill("0");
   await pkg.getByRole("button", { name: "Save weight" }).click();
-  await expect(pkg.getByTestId("pack-weight-warning")).toContainText(
+  await expect(pkg.locator("[data-check=WEIGHT_OFF]")).toContainText(
     "60% heavier than the estimate",
   );
 });

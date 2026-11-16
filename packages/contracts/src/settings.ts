@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { base } from "./base";
+import { PackCheckMode } from "./pack-checks";
 
 // Settings (FR-SET-05, FR-SHIP-09, FR-SET-06). Secret values never appear in any output schema here
 // (NFR-SEC-03).
@@ -128,6 +129,15 @@ const PiiRetentionDays = z.number().int().min(30).max(3650).nullable();
 export const RATE_LAB_MAX_COMBINATIONS_CEILING = 2000;
 const RateLabMaxCombinations = z.number().int().min(1).max(RATE_LAB_MAX_COMBINATIONS_CEILING);
 
+/** Packing checks (SPEC-packing A1 "Settings"). Block arrives with approvals at the gate. */
+const SettablePackCheckMode = z.enum(["OFF", "WARN"]);
+/** Over max is a physical limit: it can't be switched off (decision 11). */
+const OverMaxMode = z.enum(["WARN"], {
+  error: (issue) => (issue.input === "OFF" ? "errors.settings.checkCannotBeOff" : undefined),
+});
+/** How far off the estimate a weight may be, in whole percent. */
+const PackCheckWeightOffPercent = z.number().int().min(5).max(100);
+
 export const SecretName = z.enum([
   "wooConsumerKey",
   "wooConsumerSecret",
@@ -159,6 +169,12 @@ export const AdminSettings = z.object({
   labelCostConfirmFreeCents: z.number().nullable(),
   wooTrackingEnabled: z.boolean(),
   rateLabMaxCombinations: z.number(),
+  packCheckOverMax: PackCheckMode,
+  packCheckWeightOff: PackCheckMode,
+  packCheckWeightStale: PackCheckMode,
+  packCheckNoFit: PackCheckMode,
+  packCheckCustomDimensions: PackCheckMode,
+  packCheckWeightOffPercent: z.number(),
   secrets: z.record(SecretName, SecretStatus),
 });
 export type AdminSettings = z.infer<typeof AdminSettings>;
@@ -170,6 +186,12 @@ export const PublicSettings = AdminSettings.pick({
   claimExpiryMinutes: true,
   pickBatchMaxOrders: true,
   stageSlaMinutes: true,
+  packCheckOverMax: true,
+  packCheckWeightOff: true,
+  packCheckWeightStale: true,
+  packCheckNoFit: true,
+  packCheckCustomDimensions: true,
+  packCheckWeightOffPercent: true,
 });
 export type PublicSettings = z.infer<typeof PublicSettings>;
 
@@ -192,6 +214,12 @@ export const UpdateSettingsInput = z.object({
   /** On is refused while the store lacks the AST plugin's route (SPEC-shipping "Tracking switch"). */
   wooTrackingEnabled: z.boolean().optional(),
   rateLabMaxCombinations: RateLabMaxCombinations.optional(),
+  packCheckOverMax: OverMaxMode.optional(),
+  packCheckWeightOff: SettablePackCheckMode.optional(),
+  packCheckWeightStale: SettablePackCheckMode.optional(),
+  packCheckNoFit: SettablePackCheckMode.optional(),
+  packCheckCustomDimensions: SettablePackCheckMode.optional(),
+  packCheckWeightOffPercent: PackCheckWeightOffPercent.optional(),
 });
 export type UpdateSettingsInput = z.infer<typeof UpdateSettingsInput>;
 

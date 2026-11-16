@@ -29,6 +29,7 @@
     "myPicks": "Mis surtidos",
     "priorityRules": "Reglas de prioridad",
     "shippingSettings": "Envíos",
+    "packingChecks": "Controles de empaque",
     "sync": "Sincronización",
     "users": "Usuarios",
     "stations": "Estaciones",
@@ -281,6 +282,26 @@
         "save": "Guardar",
         "saved": "Límite de Rate Lab guardado."
       }
+    },
+    "packingChecks": {
+      "title": "Controles de empaque",
+      "intro": "Cada paquete se revisa mientras se empaqueta. Un control que falla aparece como aviso en la tarjeta del paquete. Desactivado significa que el control no se ejecuta.",
+      "modeOFF": "Desactivado",
+      "modeWARN": "Avisar",
+      "OVER_MAX": "Supera el peso máximo de la caja",
+      "OVER_MAXHint": "El peso supera el límite de la caja. Quien empaqueta da un motivo. No se puede desactivar.",
+      "WEIGHT_OFF": "Lejos de la estimación",
+      "WEIGHT_OFFHint": "El peso se aleja de la estimación (artículos más la caja) más que el umbral de abajo.",
+      "WEIGHT_STALE": "Volver a pesar",
+      "WEIGHT_STALEHint": "Los artículos o la caja cambiaron después de pesar el paquete.",
+      "NO_FIT": "Los artículos no caben",
+      "NO_FITHint": "Los artículos con medidas en la tienda no caben en la caja. Los artículos sin medidas no ocupan espacio.",
+      "CUSTOM_DIMENSIONS": "Tamaño personalizado",
+      "CUSTOM_DIMENSIONSHint": "El paquete usa medidas escritas en lugar de una caja.",
+      "percent": "Lejos de la estimación en más de (%)",
+      "percentHint": "De 5 a 100.",
+      "save": "Guardar",
+      "saved": "Controles de empaque guardados."
     }
   },
   "priorityRules": {
@@ -645,6 +666,10 @@
     "packagedItems": "{count} de {name}",
     "warnHeavier": "{percent} % más pesado que la estimación. Revisa el peso.",
     "warnLighter": "{percent} % más ligero que la estimación. Revisa el peso.",
+    "tripOverMax": "Supera el límite de la caja de {max}.",
+    "tripNoFit": "{count, plural, one {{items} no cabe} other {{items} no caben}} en {box}. Revisa la caja.",
+    "tripNoFitCustom": "{count, plural, one {{items} no cabe} other {{items} no caben}} en {length} × {width} × {height} in. Revisa el tamaño.",
+    "tripCustom": "Tamaño personalizado: comprueba que la caja mide de verdad {length} × {width} × {height} in.",
     "weightNone": "Sin peso todavía",
     "stale": "El contenido cambió después de pesar: vuelve a pesar o confirma.",
     "staleConfirm": "El peso sigue bien",
@@ -653,7 +678,6 @@
     "overReason": "Motivo",
     "overSave": "Guardar con motivo",
     "noWeight": "{count, plural, one {# paquete sin peso} other {# paquetes sin peso}}",
-    "overweightBadge": "Supera el límite",
     "drawerOpen": "Info del pedido",
     "drawerTitle": "Pedido #{number}",
     "drawerClose": "Cerrar info del pedido",
@@ -1224,7 +1248,8 @@
     },
     "settings": {
       "encryptionKeyMissing": "No se pueden guardar secretos: falta la clave de cifrado del servidor o no es válida. Pide a quien administra el servidor que configure SETTINGS_ENCRYPTION_KEY.",
-      "trackingPluginMissing": "No se puede activar el seguimiento: la tienda no tiene el plugin Advanced Shipment Tracking. Pide a quien administra la tienda que lo instale y lo active, y vuelve a intentarlo."
+      "trackingPluginMissing": "No se puede activar el seguimiento: la tienda no tiene el plugin Advanced Shipment Tracking. Pide a quien administra la tienda que lo instale y lo active, y vuelve a intentarlo.",
+      "checkCannotBeOff": "Este control no se puede desactivar."
     },
     "picking": {
       "notPicking": "Este pedido no está en surtido, así que sus líneas no pueden cambiar.",

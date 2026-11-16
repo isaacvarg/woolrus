@@ -29,6 +29,7 @@
     "myPicks": "My picks",
     "priorityRules": "Priority rules",
     "shippingSettings": "Shipping",
+    "packingChecks": "Packing checks",
     "sync": "Sync",
     "users": "Users",
     "stations": "Stations",
@@ -281,6 +282,26 @@
         "save": "Save",
         "saved": "Rate Lab cap saved."
       }
+    },
+    "packingChecks": {
+      "title": "Packing checks",
+      "intro": "Each package is checked while it is packed. A check that fails shows as a warning on the package card. Off means the check isn't run.",
+      "modeOFF": "Off",
+      "modeWARN": "Warn",
+      "OVER_MAX": "Over the box's max weight",
+      "OVER_MAXHint": "The weight is above the box's limit. The packer gives a reason. It can't be turned off.",
+      "WEIGHT_OFF": "Off the estimate",
+      "WEIGHT_OFFHint": "The weight is further from the estimate (items plus the box) than the threshold below.",
+      "WEIGHT_STALE": "Re-weigh",
+      "WEIGHT_STALEHint": "Items or the box changed after the package was weighed.",
+      "NO_FIT": "Items don't fit",
+      "NO_FITHint": "Items with dimensions in the store don't fit the box. Items without dimensions take no space.",
+      "CUSTOM_DIMENSIONS": "Custom size",
+      "CUSTOM_DIMENSIONSHint": "The package uses typed dimensions instead of a box.",
+      "percent": "Off the estimate by more than (%)",
+      "percentHint": "From 5 to 100.",
+      "save": "Save",
+      "saved": "Packing checks saved."
     }
   },
   "priorityRules": {
@@ -645,6 +666,10 @@
     "packagedItems": "{count} of {name}",
     "warnHeavier": "{percent}% heavier than the estimate. Check the weight.",
     "warnLighter": "{percent}% lighter than the estimate. Check the weight.",
+    "tripOverMax": "Over the box's limit of {max}.",
+    "tripNoFit": "{count, plural, one {{items} doesn't fit} other {{items} don't fit}} in the {box}. Check the box.",
+    "tripNoFitCustom": "{count, plural, one {{items} doesn't fit} other {{items} don't fit}} in {length} × {width} × {height} in. Check the size.",
+    "tripCustom": "Custom size: check the box really is {length} × {width} × {height} in.",
     "weightNone": "No weight yet",
     "stale": "Contents changed since weighed: re-weigh or confirm.",
     "staleConfirm": "Weight still right",
@@ -653,7 +678,6 @@
     "overReason": "Reason",
     "overSave": "Save with reason",
     "noWeight": "{count, plural, one {# package without a weight} other {# packages without a weight}}",
-    "overweightBadge": "Over the limit",
     "drawerOpen": "Order info",
     "drawerTitle": "Order #{number}",
     "drawerClose": "Close order info",
@@ -1224,7 +1248,8 @@
     },
     "settings": {
       "encryptionKeyMissing": "Secrets can't be saved: the server's encryption key is missing or invalid. Ask whoever runs the server to set SETTINGS_ENCRYPTION_KEY.",
-      "trackingPluginMissing": "Tracking can't be switched on: the store doesn't have the Advanced Shipment Tracking plugin. Ask whoever runs the store to install and activate it, then try again."
+      "trackingPluginMissing": "Tracking can't be switched on: the store doesn't have the Advanced Shipment Tracking plugin. Ask whoever runs the store to install and activate it, then try again.",
+      "checkCannotBeOff": "This check can't be turned off."
     },
     "picking": {
       "notPicking": "This order isn't being picked, so its lines can't change.",

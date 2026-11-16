@@ -1,7 +1,7 @@
 import {
   type AdminSettings,
   type ClearSecretInput,
-  type PublicSettings,
+  PublicSettings,
   SecretName,
   type SetSecretInput,
   ShipFromAddress,
@@ -85,6 +85,12 @@ function toAdminSettings(row: Settings): AdminSettings {
     labelCostConfirmFreeCents: row.labelCostConfirmFreeCents,
     wooTrackingEnabled: row.wooTrackingEnabled,
     rateLabMaxCombinations: row.rateLabMaxCombinations,
+    packCheckOverMax: row.packCheckOverMax,
+    packCheckWeightOff: row.packCheckWeightOff,
+    packCheckWeightStale: row.packCheckWeightStale,
+    packCheckNoFit: row.packCheckNoFit,
+    packCheckCustomDimensions: row.packCheckCustomDimensions,
+    packCheckWeightOffPercent: row.packCheckWeightOffPercent,
     // Status comes from the column alone, so reads never decrypt and work without a key.
     secrets: Object.fromEntries(
       SecretName.options.map((name) => [name, { configured: row[secretColumns[name]] !== null }]),
@@ -99,20 +105,8 @@ export async function getSettings(db: Db, actor: Actor): Promise<AdminSettings> 
 
 /** Any signed-in user: the API's `authed` middleware is what requires the session. */
 export async function getPublicSettings(db: Db, _actor: Actor): Promise<PublicSettings> {
-  const {
-    weightDisplay,
-    stationIdleLockMinutes,
-    claimExpiryMinutes,
-    pickBatchMaxOrders,
-    stageSlaMinutes,
-  } = toAdminSettings(await loadSettings(db));
-  return {
-    weightDisplay,
-    stationIdleLockMinutes,
-    claimExpiryMinutes,
-    pickBatchMaxOrders,
-    stageSlaMinutes,
-  };
+  // The contract's pick is the allow-list: nothing outside it (secrets, URLs) can leak.
+  return PublicSettings.parse(toAdminSettings(await loadSettings(db)));
 }
 
 /**
