@@ -159,10 +159,13 @@ test("a packer picks the line in Which line? and edits a lot's count from its ch
   await expect(page.getByTestId("pack-lot-needed")).toHaveCount(1);
 
   // A second lot on the 3-unit line, then its count changed from the chip.
+  // Wait for each Which line? to close: a scan while it is closing finds the old, disabled one.
   await scanCode(page, `${ref}.A12A0124`);
   await which.getByRole("button", { name: /E2E item \(3/ }).click();
+  await expect(which).toBeHidden();
   await scanCode(page, `${ref}.B07C1124`);
   await which.getByRole("button", { name: /E2E item \(3/ }).click();
+  await expect(which).toBeHidden();
   await expect(lots).toContainText("1 × B07C1124");
   await lots.getByRole("button", { name: "1 from lot B07C1124" }).click();
   const lotDialog = page.getByRole("dialog", { name: "Lot B07C1124" });
@@ -269,6 +272,18 @@ test("pack two lots into a box, then a wrong-item lot blocks Complete QA until Q
       await page.goto(`/qa/${order.id}`);
       await page.getByTestId("qa-row").click();
       await expect(page.getByTestId("qa-row")).toHaveAttribute("data-verified", "true");
+
+      // The custom size saved a packing check trip (SPEC-packing A1): confirming the box and
+      // acknowledging what is left clears it, so only the lots hold the label below.
+      await page.getByTestId("qa-confirm-box-button").click();
+      await expect(page.getByTestId("qa-box-confirmed")).toBeVisible();
+      const acknowledge = page.getByTestId("qa-trip-acknowledge");
+      while ((await acknowledge.count()) > 0) {
+        const left = await acknowledge.count();
+        await acknowledge.first().click();
+        await expect(acknowledge).toHaveCount(left - 1);
+      }
+      await expect(page.getByTestId("qa-unmet")).not.toContainText("packing check");
 
       // Lot A is only unverified, a warning; lot B blocks.
       await expect(page.getByTestId("qa-lot").filter({ hasText: "A12A0124" })).toContainText(
