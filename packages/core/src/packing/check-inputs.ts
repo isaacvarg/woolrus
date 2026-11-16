@@ -1,5 +1,5 @@
 import type { DbTx, Prisma } from "@woolrus/db";
-import type { LineRow } from "../picking/service";
+import type { LineRow } from "../picking/lines";
 import { toNumber } from "../units";
 import type { CheckPackage, CheckSettings } from "./checks";
 import type { SuggestUnit } from "./suggest";

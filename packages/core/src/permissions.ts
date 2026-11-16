@@ -69,6 +69,8 @@ export const permissions = [
   /** Send a Ready order back to packing; its labels are voided first. */
   "order.repack",
   "order.qa",
+  /** Approve a packing check set to block, in person at the packer's station (SPEC-packing A1). */
+  "packCheck.approve",
   "order.hold",
   "order.cancel",
   "order.forceStatus",
@@ -121,6 +123,7 @@ export const rolePermissions: Record<Role, readonly Permission[]> = {
   QA: [
     ...everyone,
     "order.qa",
+    "packCheck.approve",
     "order.repack",
     "label.purchase",
     "label.void",

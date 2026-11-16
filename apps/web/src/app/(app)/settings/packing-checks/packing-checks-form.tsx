@@ -1,7 +1,12 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { AdminSettings, PackCheckMode, UpdateSettingsInput } from "@woolrus/contracts";
+import type {
+  AdminSettings,
+  PackCheck,
+  PackCheckMode,
+  UpdateSettingsInput,
+} from "@woolrus/contracts";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { Form } from "react-aria-components";
@@ -11,7 +16,7 @@ import { useErrorMessage, useFieldErrors } from "@/lib/errors";
 import { orpc } from "@/lib/orpc";
 
 // Settings → Packing checks (SPEC-packing A1 "Settings"): one warehouse-wide mode per check, and
-// the off-the-estimate threshold. Block arrives with approvals at the gate.
+// the off-the-estimate threshold. Block stops Complete packing until a QA or Admin user approves.
 
 const checks = [
   "packCheckOverMax",
@@ -34,8 +39,6 @@ const checkOf = {
   packCheckBoxNotScanned: "BOX_NOT_SCANNED",
   packCheckCustomDimensions: "CUSTOM_DIMENSIONS",
 } as const satisfies Record<CheckField, string>;
-
-type SettableMode = Extract<PackCheckMode, "OFF" | "WARN">;
 
 export function PackingChecksSection() {
   const errorMessage = useErrorMessage();
@@ -61,6 +64,9 @@ function PackingChecksForm({ settings }: { settings: AdminSettings }) {
     () => Object.fromEntries(checks.map((field) => [field, settings[field]])) as never,
   );
   const [percent, setPercent] = useState(settings.packCheckWeightOffPercent);
+  // The 30-day counts beside each mode; the form works without them while they load.
+  const stats = useQuery(orpc.packChecks.stats.queryOptions());
+  const statOf = (check: PackCheck) => stats.data?.find((s) => s.check === check);
 
   const save = useMutation(
     orpc.settings.update.mutationOptions({
@@ -80,19 +86,16 @@ function PackingChecksForm({ settings }: { settings: AdminSettings }) {
       validationErrors={save.error ? fieldErrors(save.error) : {}}
       onSubmit={(event) => {
         event.preventDefault();
-        // Block isn't offered yet; a mode set to it elsewhere is left as it is.
-        const patch = Object.fromEntries(
-          checks.filter((field) => modes[field] !== "BLOCK").map((field) => [field, modes[field]]),
-        );
-        save.mutate({ ...patch, packCheckWeightOffPercent: percent } as UpdateSettingsInput);
+        save.mutate({ ...modes, packCheckWeightOffPercent: percent } as UpdateSettingsInput);
       }}
     >
       <div className="card-body gap-4">
         <ul className="divide-y divide-base-300">
           {checks.map((field) => {
             const check = checkOf[field];
-            const allowed: SettableMode[] =
-              field === "packCheckOverMax" ? ["WARN"] : ["OFF", "WARN"];
+            // Over max is a physical limit: warn or block, never off (decision 11).
+            const allowed: PackCheckMode[] =
+              field === "packCheckOverMax" ? ["WARN", "BLOCK"] : ["OFF", "WARN", "BLOCK"];
             return (
               <li
                 key={field}
@@ -105,17 +108,20 @@ function PackingChecksForm({ settings }: { settings: AdminSettings }) {
                     id,
                     label: t(`settings.packingChecks.mode${id}`),
                   }))}
-                  value={modes[field] === "BLOCK" ? null : modes[field]}
-                  isDisabled={allowed.length === 1}
+                  value={modes[field]}
                   onChange={(key) => {
-                    if (key === "OFF" || key === "WARN") {
-                      setModes((current) => ({ ...current, [field]: key }));
-                    }
+                    const mode = allowed.find((id) => id === key);
+                    if (mode) setModes((current) => ({ ...current, [field]: mode }));
                   }}
                 />
-                <p className="text-sm text-base-content/70">
-                  {t(`settings.packingChecks.${check}Hint`)}
-                </p>
+                <div className="text-sm">
+                  <p className="text-base-content/70">{t(`settings.packingChecks.${check}Hint`)}</p>
+                  {statOf(check) ? (
+                    <p className="mt-1 font-medium" data-stat={check}>
+                      {t("settings.packingChecks.stats", statOf(check))}
+                    </p>
+                  ) : null}
+                </div>
               </li>
             );
           })}

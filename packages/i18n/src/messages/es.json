@@ -288,11 +288,12 @@
     },
     "packingChecks": {
       "title": "Controles de empaque",
-      "intro": "Cada paquete se revisa mientras se empaqueta. Un control que falla aparece como aviso en la tarjeta del paquete. Desactivado significa que el control no se ejecuta.",
+      "intro": "Cada paquete se revisa mientras se empaqueta. Un control que falla aparece en la tarjeta del paquete: como aviso o, en bloquear, como una parada que un usuario de QA o administrador debe aprobar antes de terminar el empaque. Desactivado significa que el control no se ejecuta.",
       "modeOFF": "Desactivado",
       "modeWARN": "Avisar",
+      "modeBLOCK": "Bloquear",
       "OVER_MAX": "Supera el peso máximo de la caja",
-      "OVER_MAXHint": "El peso supera el límite de la caja. Quien empaqueta da un motivo. No se puede desactivar.",
+      "OVER_MAXHint": "El peso supera el límite de la caja. En avisar, quien empaqueta da un motivo; en bloquear, lo aprueba QA o un administrador. No se puede desactivar.",
       "UNDER_MIN": "Bajo el peso mínimo de la caja",
       "UNDER_MINHint": "El peso está por debajo del mínimo de la caja, así que probablemente sirva una caja más pequeña.",
       "WEIGHT_OFF": "Lejos de la estimación",
@@ -308,7 +309,8 @@
       "percent": "Lejos de la estimación en más de (%)",
       "percentHint": "De 5 a 100.",
       "save": "Guardar",
-      "saved": "Controles de empaque guardados."
+      "saved": "Controles de empaque guardados.",
+      "stats": "Últimos 30 días: {trips, plural, one {# aviso} other {# avisos}}, {approved, plural, one {# aprobado} other {# aprobados}}"
     }
   },
   "priorityRules": {
@@ -680,6 +682,11 @@
     "tripNoFitCustom": "{count, plural, one {{items} no cabe} other {{items} no caben}} en {length} × {width} × {height} in. Revisa el tamaño.",
     "tripCustom": "Tamaño personalizado: comprueba que la caja mide de verdad {length} × {width} × {height} in.",
     "tripBoxNotScanned": "{box} se tocó, no se escaneó. Comprueba que es la caja correcta.",
+    "tripNeedsApproval": "Necesita aprobación para terminar",
+    "doneApproval": "Listo (necesita aprobación)",
+    "doneNextApproval": "Listo, siguiente pedido (necesita aprobación)",
+    "approvalTitle": "Aprobar controles de empaque",
+    "approvalItem": "Paquete {number}:",
     "weightNone": "Sin peso todavía",
     "stale": "El contenido cambió después de pesar: vuelve a pesar o confirma.",
     "staleConfirm": "El peso sigue bien",
@@ -1331,6 +1338,7 @@
         "notReady": "El pedido no está Listo.",
         "noPackages": "El pedido no tiene paquetes.",
         "packageOverweight": "El paquete {package} supera el límite de su caja de {maxOz} oz y necesita un motivo.",
+        "packCheckBlocked": "Paquete {package}: el control {check, select, OVER_MAX {de peso máximo} UNDER_MIN {de peso mínimo} WEIGHT_OFF {de peso estimado} WEIGHT_STALE {de volver a pesar} NO_FIT {de tamaño} BOX_NOT_SCANNED {de caja escaneada} CUSTOM_DIMENSIONS {de tamaño personalizado} other {de empaque}} necesita la aprobación de QA o de un administrador.",
         "lotMissing": "{line} en el paquete {package} necesita un lote.",
         "lotWrongItem": "{line} en el paquete {package} tiene el lote {lotNumber}, que pertenece a otro artículo. Reemplázalo o quítalo."
       }

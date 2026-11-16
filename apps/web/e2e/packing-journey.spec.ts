@@ -184,14 +184,24 @@ test("pick, pack into two boxes, weigh, confirm a re-weigh and finish to the nex
   // Claimed for this packer: the screen is live, no banner.
   await expect(page.getByRole("button", { name: "Add package" })).toBeVisible();
 
-  // The first order is in QA with both packages, and QA can see the re-weigh note.
+  // The first order is in QA with both packages. QA learns of the unconfirmed weight from the
+  // re-weigh note while that check is off, else from its saved WEIGHT_STALE trip (SPEC-packing A1).
   await page.goto(`/orders/${order.id}`);
   await expect(page.getByTestId("order-status")).toHaveText("QA");
   await expect(page.getByTestId("order-package")).toHaveCount(2);
   await expect(page.getByTestId("order-package").first()).toContainText("E2E item ×2");
-  await expect(
-    page.getByText("Contents changed after weighing; weight 1 lb not re-checked"),
-  ).toBeVisible();
+  const settings = await db.settings.findFirst({ select: { packCheckWeightStale: true } });
+  const note = page.getByText("Contents changed after weighing; weight 1 lb not re-checked");
+  if (settings?.packCheckWeightStale === "OFF") {
+    await expect(note).toBeVisible();
+  } else {
+    await expect(note).toHaveCount(0);
+    expect(
+      await db.packageCheckTrip.count({
+        where: { package: { orderId: order.id, number: 2 }, check: "WEIGHT_STALE" },
+      }),
+    ).toBe(1);
+  }
 });
 
 test("Done goes back to the Packing queue", async ({ page }) => {

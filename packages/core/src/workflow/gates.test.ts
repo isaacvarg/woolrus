@@ -31,6 +31,7 @@ const pkg = (overrides: Partial<GatePackage> = {}): GatePackage => ({
   weightOz: 16,
   maxWeightOz: null,
   hasOverrideReason: false,
+  trips: [],
   items: [{ orderItemId: "line-1", quantity: 2, qaVerified: true, lotUnits: 0, wrongItemLots: [] }],
   selectedRates: 1,
   activeLabels: 1,
@@ -43,6 +44,7 @@ const snapshot = (overrides: Partial<GateSnapshot> = {}): GateSnapshot => ({
   lines: [line()],
   packages: [pkg()],
   openCriticalIssues: 0,
+  overMaxMode: "WARN",
   ...overrides,
 });
 
@@ -115,6 +117,44 @@ describe("packed gate: weight", () => {
     expect(evaluateGate("packed", over({ hasOverrideReason: true }))).toEqual([]);
     expect(evaluateGate("packed", over({ weightOz: 40 }))).toEqual([]);
     expect(evaluateGate("packed", over({ maxWeightOz: null }))).toEqual([]);
+  });
+
+  // SPEC-packing A1: on block the OVER_MAX trip stands in for it.
+  it("doesn't report it while over max is on block", () => {
+    expect(evaluateGate("packed", { ...over(), overMaxMode: "BLOCK" })).toEqual([]);
+  });
+});
+
+describe("packed gate: blocking trips (SPEC-packing A1)", () => {
+  const tripping = snapshot({
+    packages: [
+      pkg({
+        trips: [
+          { check: "NO_FIT", mode: "BLOCK", details: { boxName: "Small", items: ["Pail"] } },
+          { check: "WEIGHT_STALE", mode: "WARN", details: { weightOz: 16 } },
+        ],
+      }),
+    ],
+  });
+
+  it("reports each blocking trip, not the warnings", () => {
+    expect(evaluateGate("packed", tripping)).toEqual([
+      {
+        messageKey: "errors.workflow.gate.packCheckBlocked",
+        params: { package: 1, check: "NO_FIT" },
+      },
+    ]);
+  });
+
+  it("lets them through with an approval, but nothing else", () => {
+    expect(evaluateGate("packed", tripping, { approved: true })).toEqual([]);
+    const unweighed = {
+      ...tripping,
+      packages: tripping.packages.map((p) => ({ ...p, weightOz: null })),
+    };
+    expect(evaluateGate("packed", unweighed, { approved: true })).toEqual([
+      { messageKey: "errors.workflow.gate.packageNoWeight", params: { package: 1 } },
+    ]);
   });
 });
 
@@ -434,6 +474,8 @@ describe("loadGateSnapshot", () => {
         weightOz: 16,
         maxWeightOz: null,
         hasOverrideReason: false,
+        // Trips are read only in Packing.
+        trips: [],
         items: [
           {
             orderItemId: items[0]?.id,
@@ -454,6 +496,35 @@ describe("loadGateSnapshot", () => {
         weightOz: null,
         items: [],
       }),
+    ]);
+  });
+
+  it("reads the live packing check trips and the over max mode in Packing (SPEC-packing A1)", async () => {
+    await db.settings.upsert({
+      where: { id: 1 },
+      create: { id: 1, packCheckCustomDimensions: "BLOCK", packCheckOverMax: "BLOCK" },
+      update: { packCheckCustomDimensions: "BLOCK", packCheckOverMax: "BLOCK" },
+    });
+    const { order } = await createOrder(db, {
+      status: "PACKING",
+      lines: [{ quantity: 1, pickStatus: "PICKED" }],
+      packages: [
+        {
+          items: [{ line: 0, quantity: 1 }],
+          dimensions: { lengthIn: 5, widthIn: 5, heightIn: 5 },
+        },
+      ],
+    });
+
+    const snap = await db.$transaction((tx) => loadGateSnapshot(tx, order.id));
+
+    expect(snap.overMaxMode).toBe("BLOCK");
+    expect(snap.packages[0]?.trips).toEqual([
+      {
+        check: "CUSTOM_DIMENSIONS",
+        mode: "BLOCK",
+        details: { lengthIn: 5, widthIn: 5, heightIn: 5 },
+      },
     ]);
   });
 

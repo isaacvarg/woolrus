@@ -8,6 +8,7 @@ import { me } from "./me";
 import { notes } from "./notes";
 import { operations } from "./operations";
 import { orders } from "./orders";
+import { packChecks } from "./pack-checks";
 import { packing } from "./packing";
 import { pickBatches, picking } from "./picking";
 import { priorityRules } from "./priority-rules";
@@ -59,6 +60,7 @@ export const contract = {
   notes,
   picking,
   packing,
+  packChecks,
   qa,
   pickBatches,
   priorityRules,

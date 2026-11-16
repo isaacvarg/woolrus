@@ -5,8 +5,9 @@ import { formatWeight } from "@woolrus/core/format";
 import { TriangleAlert } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 
-// A package's live packing check trips (SPEC-packing A1 "Pack screen"). Amber with a ⚠ icon, so a
-// trip isn't told by colour alone. The server recalculates them on every package write.
+// A package's live packing check trips (SPEC-packing A1 "Pack screen"). A warning is amber with a ⚠
+// icon, so a trip isn't told by colour alone; a blocking one is red and says it needs approval. The
+// server recalculates them on every package write.
 
 export function TripList({
   pkg,
@@ -17,6 +18,7 @@ export function TripList({
   trips: Trip[];
   weightDisplay: WeightDisplay;
 }) {
+  const t = useTranslations();
   if (trips.length === 0) return null;
   return (
     <ul className="space-y-2 px-4 pb-4">
@@ -29,14 +31,22 @@ export function TripList({
           data-check={trip.check}
         >
           <TriangleAlert className="size-5 shrink-0" aria-hidden="true" />
-          <TripMessage pkg={pkg} trip={trip} weightDisplay={weightDisplay} />
+          <span>
+            <TripMessage pkg={pkg} trip={trip} weightDisplay={weightDisplay} />
+            {trip.mode === "BLOCK" && (
+              <span className="block font-semibold" data-testid="pack-trip-blocks">
+                {t("pack.tripNeedsApproval")}
+              </span>
+            )}
+          </span>
         </li>
       ))}
     </ul>
   );
 }
 
-function TripMessage({
+/** What one trip says, for the card and for the approval dialog's list. */
+export function TripMessage({
   pkg,
   trip,
   weightDisplay,

@@ -1,7 +1,8 @@
 import { z } from "zod";
+import { base } from "./base";
 
 // Packing checks (SPEC-packing A1 "Packing checks"). A check that fails on a package is a trip.
-// Evaluated live while the order is in Packing; nothing here is stored yet.
+// Evaluated live while the order is in Packing, and saved as `PackageCheckTrip` rows when it leaves.
 
 /** The checks, in the spec table's order. */
 export const PackCheck = z.enum([
@@ -63,3 +64,22 @@ export const Trip = z.discriminatedUnion("check", [
   }),
 ]);
 export type Trip = z.infer<typeof Trip>;
+
+/** One check's trips saved in the last 30 days, and how many of them an approval let through. */
+export const PackCheckStat = z.object({
+  check: PackCheck,
+  trips: z.number().int(),
+  approved: z.number().int(),
+});
+export type PackCheckStat = z.infer<typeof PackCheckStat>;
+
+export const packChecks = {
+  stats: base
+    .route({
+      method: "GET",
+      path: "/settings/packing-checks/stats",
+      tags: ["Settings"],
+      summary: "Trips saved per packing check in the last 30 days, with how many were approved",
+    })
+    .output(z.array(PackCheckStat)),
+};

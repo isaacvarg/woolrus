@@ -71,8 +71,8 @@ describe("UpdateSettingsInput", () => {
         "packCheckWeightOffPercent",
       ]);
     }
-    // Block needs approvals at the gate, which a later ticket brings.
-    expect(Object.keys(fieldErrors({ packCheckNoFit: "BLOCK" }))).toEqual(["packCheckNoFit"]);
+    // Block is selectable for every check (SPEC-packing A1, over max included).
+    expect(fieldErrors({ packCheckNoFit: "BLOCK", packCheckOverMax: "BLOCK" })).toEqual({});
   });
 
   it("refuses switching the over max check off", () => {

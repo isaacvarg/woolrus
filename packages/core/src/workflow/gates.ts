@@ -1,7 +1,10 @@
+import type { PackCheckMode, Trip } from "@woolrus/contracts";
 import type { DbTx, LabelStatus, PickStatus, WorkflowStatus } from "@woolrus/db";
 import type { ErrorCode } from "@woolrus/i18n";
 import { notFound, type UnmetCondition } from "../errors";
 import { type LotRuleSettings, needsLot } from "../lumexia/needs-lot";
+import { loadCheckSettings } from "../packing/check-inputs";
+import { evaluateOrderTrips } from "../packing/trips";
 import type { GateKind } from "./machine";
 
 // Stage-exit gates (SPEC-workflow "Gates"). They read only the database, never the client, and say
@@ -40,6 +43,11 @@ export type GatePackage = {
   /** The packer gave a reason for a weight above the max (FR-PACK-09). */
   hasOverrideReason: boolean;
   /**
+   * Its packing check trips, live with the current settings (SPEC-packing A1). Evaluated only while
+   * the order is in Packing, the one place the packed gate is asked; empty otherwise.
+   */
+  trips: Trip[];
+  /**
    * `lotUnits`: Σ the box line's lot quantities; once it has any lot, they cover every unit.
    * `wrongItemLots`: its lots Lumexia says are another item's (`WRONG_ITEM`), by number.
    */
@@ -61,6 +69,8 @@ export type GateSnapshot = {
   packages: GatePackage[];
   /** Open Critical issues on the order (FR-QA-05). */
   openCriticalIssues: number;
+  /** The over max check's mode: `packageOverweight` applies only while it's on warn. */
+  overMaxMode: PackCheckMode;
 };
 
 // Clamped: a store-sync quantity cut below the voided total mustn't read as a negative.
@@ -96,7 +106,7 @@ function picked(snap: GateSnapshot): UnmetCondition[] {
   return [...allVoidedCondition(snap), ...lines];
 }
 
-function packed(snap: GateSnapshot): UnmetCondition[] {
+function packed(snap: GateSnapshot, { approved }: GateOptions): UnmetCondition[] {
   const packedQty = new Map<string, number>();
   for (const p of snap.packages) {
     for (const it of p.items)
@@ -120,12 +130,19 @@ function packed(snap: GateSnapshot): UnmetCondition[] {
     ...(!p.hasBox && !p.hasDimensions ? [unmet("packageNoBox", { package: p.number })] : []),
     ...(p.weightOz === null ? [unmet("packageNoWeight", { package: p.number })] : []),
     // Only reachable if the box's max was lowered, or the box changed, under an existing weight.
-    ...(p.weightOz !== null &&
+    // On block the OVER_MAX trip stands in for it, and an approval, not a reason, lets it through.
+    ...(snap.overMaxMode === "WARN" &&
+    p.weightOz !== null &&
     p.maxWeightOz !== null &&
     p.weightOz > p.maxWeightOz &&
     !p.hasOverrideReason
       ? [unmet("packageOverweight", { package: p.number, maxOz: p.maxWeightOz })]
       : []),
+    ...(approved
+      ? []
+      : p.trips
+          .filter((trip) => trip.mode === "BLOCK")
+          .map((trip) => unmet("packCheckBlocked", { package: p.number, check: trip.check }))),
   ]);
 
   // Any lot satisfies it, whatever Lumexia later says: validation never blocks Packing (SPEC-lumexia
@@ -192,7 +209,15 @@ function noLiveLabels(snap: GateSnapshot): UnmetCondition[] {
     .map((p) => unmet("packageLiveLabel", { package: p.number }));
 }
 
-const gates: Record<GateKind, (snap: GateSnapshot) => UnmetCondition[]> = {
+export type GateOptions = {
+  /**
+   * The move carries a verified approval (SPEC-packing A1), which lets blocking packing check trips
+   * through. Every other condition still applies.
+   */
+  approved?: boolean;
+};
+
+const gates: Record<GateKind, (snap: GateSnapshot, options: GateOptions) => UnmetCondition[]> = {
   picked,
   packed,
   verified,
@@ -201,8 +226,12 @@ const gates: Record<GateKind, (snap: GateSnapshot) => UnmetCondition[]> = {
 };
 
 /** The conditions `kind` still needs; empty when the gate is met. */
-export function evaluateGate(kind: GateKind, snap: GateSnapshot): UnmetCondition[] {
-  return gates[kind](snap);
+export function evaluateGate(
+  kind: GateKind,
+  snap: GateSnapshot,
+  options: GateOptions = {},
+): UnmetCondition[] {
+  return gates[kind](snap, options);
 }
 
 const noLotRules: LotRuleSettings = {
@@ -285,14 +314,19 @@ export async function loadGateSnapshot(tx: DbTx, orderId: string): Promise<GateS
     },
   });
   if (!order) throw notFound();
-  const [openCriticalIssues, settings] = await Promise.all([
+  const [openCriticalIssues, settings, checkSettings, trips] = await Promise.all([
     tx.qualityIssue.count({ where: { orderId, status: "OPEN", severity: "CRITICAL" } }),
     lotRuleSettings(tx),
+    loadCheckSettings(tx),
+    // Only Packing asks the packed gate, so other stages skip the extra reads.
+    order.status === "PACKING" ? evaluateOrderTrips(tx, orderId) : [],
   ]);
+  const tripsOf = new Map(trips.map((p) => [p.packageId, p.trips]));
 
   return {
     status: order.status,
     openCriticalIssues,
+    overMaxMode: checkSettings.packCheckOverMax,
     lines: order.items.map((it) => ({
       id: it.id,
       name: it.name,
@@ -313,6 +347,7 @@ export async function loadGateSnapshot(tx: DbTx, orderId: string): Promise<GateS
       weightOz: p.weightOz === null ? null : p.weightOz.toNumber(),
       maxWeightOz: p.box?.maxWeightOz?.toNumber() ?? null,
       hasOverrideReason: p.weightOverrideReason !== null,
+      trips: tripsOf.get(p.id) ?? [],
       items: p.items.map((it) => ({
         orderItemId: it.orderItemId,
         quantity: it.quantity,

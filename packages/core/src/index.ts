@@ -64,6 +64,7 @@ export * from "./operations/jobs";
 export * from "./packing/complete";
 export * from "./packing/queries";
 export * from "./packing/service";
+export * from "./packing/trips";
 export * from "./permissions";
 export * from "./picking/batch-complete";
 export * from "./picking/batch-scan";

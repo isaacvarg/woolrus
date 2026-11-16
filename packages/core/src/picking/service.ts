@@ -18,8 +18,9 @@ import { toOrderDetails } from "../workflow/detail";
 import { evaluateGate, loadGateSnapshot } from "../workflow/gates";
 import { type LockedOrder, lockOrder } from "../workflow/lock";
 import { notifyOrderChanged } from "../workflow/notify";
-import { displayName, nameFields } from "../workflow/people";
+import { displayName } from "../workflow/people";
 import { toAttributes } from "../workflow/queries";
+import { type LineRow, lineInclude } from "./lines";
 import { pickOrder } from "./sort";
 
 // Line picks (SPEC-picking "Pick rules"). Only the claim holder writes an order's lines, and the
@@ -28,35 +29,7 @@ import { pickOrder } from "./sort";
 
 export type PickOptions = { now?: Date };
 
-export const lineInclude = {
-  product: {
-    select: {
-      physical: true,
-      binLocation: true,
-      barcode: true,
-      sku: true,
-      weightOz: true,
-      lengthIn: true,
-      widthIn: true,
-      heightIn: true,
-    },
-  },
-  variation: {
-    select: {
-      binLocation: true,
-      barcode: true,
-      sku: true,
-      weightOz: true,
-      lengthIn: true,
-      widthIn: true,
-      heightIn: true,
-    },
-  },
-  voids: { where: { undoneAt: null }, select: { quantity: true } },
-  pickedBy: { select: nameFields },
-} as const satisfies Prisma.OrderItemInclude;
-
-export type LineRow = Prisma.OrderItemGetPayload<{ include: typeof lineInclude }>;
+export { type LineRow, lineInclude };
 
 export const activeQuantity = (row: LineRow) =>
   Math.max(row.quantity - row.voids.reduce((sum, v) => sum + v.quantity, 0), 0);
