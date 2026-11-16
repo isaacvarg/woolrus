@@ -1,9 +1,12 @@
 import type { Box as BoxDto, CreateBoxInput, UpdateBoxInput } from "@woolrus/contracts";
-import { type Box, type Db, Prisma } from "@woolrus/db";
+import { type Box, type Db, type DbTx, Prisma } from "@woolrus/db";
 import { recordAudit } from "../audit";
 import { AppError, notFound } from "../errors";
 import { withIdempotency } from "../idempotency";
+import { isLotCode } from "../lumexia/codes";
 import { type Actor, assertCan } from "../permissions";
+import { normalizeCode } from "../picking/codes";
+import { findCodeOwner } from "../picking/link-barcode";
 import { toNumber } from "../units";
 
 /** `inUse` is only known by callers that counted packages; the pack view doesn't need it. */
@@ -20,6 +23,7 @@ export function toBoxDto(box: Box, inUse = false): BoxDto {
     outerLengthIn: toNumber(box.outerLengthIn),
     outerWidthIn: toNumber(box.outerWidthIn),
     outerHeightIn: toNumber(box.outerHeightIn),
+    barcode: box.barcode,
     inUse,
     archived: box.archivedAt !== null,
   };
@@ -60,8 +64,38 @@ function checkMinBelowMax(min: number | null | undefined, max: number | null | u
   }
 }
 
-function nameTaken(error: unknown): never {
+/** A typed barcode as stored: normalized like a scan, and blank as none. `undefined` leaves it. */
+function toBarcode(raw: string | null | undefined): string | null | undefined {
+  if (raw == null) return raw;
+  const code = normalizeCode(raw);
+  return code === "" ? null : code;
+}
+
+const barcodeTaken = () =>
+  new AppError("CONFLICT", "errors.box.barcodeTaken", { barcode: "errors.box.barcodeTaken" });
+
+/**
+ * A box barcode is unique among boxes, and can't be a code the pack screen would read as something
+ * else: a product's or variation's barcode or SKU, or a lot code (SPEC-packing A1 "Box barcodes").
+ */
+async function checkBarcode(tx: DbTx, barcode: string | null | undefined, boxId?: string) {
+  if (!barcode) return;
+  if (isLotCode(barcode) || (await findCodeOwner(tx, barcode))) {
+    throw new AppError("BAD_REQUEST", "errors.box.barcodeIsProduct", {
+      barcode: "errors.box.barcodeIsProduct",
+    });
+  }
+  const other = await tx.box.findFirst({
+    where: { barcode, ...(boxId ? { id: { not: boxId } } : {}) },
+    select: { id: true },
+  });
+  if (other) throw barcodeTaken();
+}
+
+/** A unique index the checks above lost a race on: the barcode's, else the name's. */
+function uniqueTaken(error: unknown): never {
   if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+    if (JSON.stringify(error.meta ?? {}).includes("barcode")) throw barcodeTaken();
     throw new AppError("CONFLICT", "errors.box.nameTaken", { name: "errors.box.nameTaken" });
   }
   throw error;
@@ -83,7 +117,8 @@ export async function listBoxes(
 
 export async function createBox(db: Db, actor: Actor, input: CreateBoxInput): Promise<BoxDto> {
   assertCan(actor, "box.manage");
-  const { idempotencyKey, ...data } = input;
+  const { idempotencyKey, ...fields } = input;
+  const data = { ...fields, barcode: toBarcode(fields.barcode) ?? null };
   checkOuter(
     [data.lengthIn, data.widthIn, data.heightIn],
     [data.outerLengthIn, data.outerWidthIn, data.outerHeightIn],
@@ -92,6 +127,7 @@ export async function createBox(db: Db, actor: Actor, input: CreateBoxInput): Pr
   try {
     return await db.$transaction((tx) =>
       withIdempotency(tx, idempotencyKey, "boxes.create", actor, async () => {
+        await checkBarcode(tx, data.barcode);
         const box = toBoxDto(await tx.box.create({ data }));
         await recordAudit(tx, actor, {
           entityType: "Box",
@@ -103,7 +139,7 @@ export async function createBox(db: Db, actor: Actor, input: CreateBoxInput): Pr
       }),
     );
   } catch (error) {
-    nameTaken(error);
+    uniqueTaken(error);
   }
 }
 
@@ -138,7 +174,8 @@ export async function restoreBox(db: Db, actor: Actor, { id }: { id: string }): 
 /** Inner/outer dimensions change only while no package uses the box (a resized box is a new box). */
 export async function updateBox(db: Db, actor: Actor, input: UpdateBoxInput): Promise<BoxDto> {
   assertCan(actor, "box.manage");
-  const { id, ...changes } = input;
+  const { id, barcode, ...rest } = input;
+  const changes = { ...rest, barcode: toBarcode(barcode) };
   try {
     return await db.$transaction(async (tx) => {
       // Held to commit: a package being added or re-boxed holds a key-share lock on the box
@@ -168,6 +205,7 @@ export async function updateBox(db: Db, actor: Actor, input: UpdateBoxInput): Pr
         [next.outerLengthIn, next.outerWidthIn, next.outerHeightIn],
       );
       checkMinBelowMax(next.minWeightOz, next.maxWeightOz);
+      await checkBarcode(tx, changes.barcode, id);
 
       const box = toBoxDtoWithUse(
         await tx.box.update({ where: { id }, data: changes, include: withUse }),
@@ -182,7 +220,7 @@ export async function updateBox(db: Db, actor: Actor, input: UpdateBoxInput): Pr
       return box;
     });
   } catch (error) {
-    nameTaken(error);
+    uniqueTaken(error);
   }
 }
 

@@ -94,9 +94,13 @@ test("a box a package uses shows In use, locks dimensions and offers archive onl
   await edit.getByLabel("Name").fill(`${name} renamed`);
   // The min weight stays editable on a box in use (SPEC-packing A1).
   await edit.getByLabel("Min weight (oz)").fill("12");
+  // So does the barcode, stored as a scan compares it.
+  const barcode = `e2e-${crypto.randomUUID().slice(0, 8)}`;
+  await edit.getByLabel("Barcode").fill(barcode);
   await edit.getByRole("button", { name: "Save" }).click();
   await expect(edit).toBeHidden();
   const renamed = page.getByRole("row", { name: new RegExp(`${name} renamed`) });
   await expect(renamed).toContainText("In use");
   await expect(renamed).toContainText("12 oz");
+  await expect(renamed).toContainText(barcode.toUpperCase());
 });

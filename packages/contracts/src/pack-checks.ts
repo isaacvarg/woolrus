@@ -3,13 +3,14 @@ import { z } from "zod";
 // Packing checks (SPEC-packing A1 "Packing checks"). A check that fails on a package is a trip.
 // Evaluated live while the order is in Packing; nothing here is stored yet.
 
-/** The checks evaluated so far; the box-scan check joins with its ticket. */
+/** The checks, in the spec table's order. */
 export const PackCheck = z.enum([
   "OVER_MAX",
   "UNDER_MIN",
   "WEIGHT_OFF",
   "WEIGHT_STALE",
   "NO_FIT",
+  "BOX_NOT_SCANNED",
   "CUSTOM_DIMENSIONS",
 ]);
 export type PackCheck = z.infer<typeof PackCheck>;
@@ -49,6 +50,11 @@ export const Trip = z.discriminatedUnion("check", [
     mode: TripMode,
     /** `boxName`: absent for a custom size. `items`: the measured units that don't fit. */
     details: z.object({ boxName: z.string().optional(), items: z.array(z.string()) }),
+  }),
+  z.object({
+    check: z.literal("BOX_NOT_SCANNED"),
+    mode: TripMode,
+    details: z.object({ boxName: z.string() }),
   }),
   z.object({
     check: z.literal("CUSTOM_DIMENSIONS"),

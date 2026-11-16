@@ -47,6 +47,7 @@ describe("settings service", () => {
       packCheckWeightOff: "WARN",
       packCheckWeightStale: "WARN",
       packCheckNoFit: "WARN",
+      packCheckBoxNotScanned: "OFF",
       packCheckCustomDimensions: "WARN",
       packCheckWeightOffPercent: 25,
       secrets: {
@@ -168,6 +169,7 @@ describe("settings service", () => {
         packCheckWeightOff: "WARN",
         packCheckWeightStale: "WARN",
         packCheckNoFit: "WARN",
+        packCheckBoxNotScanned: "OFF",
         packCheckCustomDimensions: "WARN",
         packCheckWeightOffPercent: 25,
       });

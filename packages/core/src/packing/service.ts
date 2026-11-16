@@ -1,8 +1,8 @@
 import {
+  type AddPackageBoxInput,
   type AddPackageInput,
   MAX_PACKAGE_WEIGHT_OZ,
   MAX_PACKAGES_PER_ORDER,
-  type PackageBoxInput,
   type PackageIdInput,
   type PackResult,
   type PackUnitsInput,
@@ -64,28 +64,46 @@ const snapshot = (pkg: PackageRow) => ({
   weightOz: toNumber(pkg.weightOz),
   overrideReason: pkg.weightOverrideReason,
   weightStale: pkg.weightStale,
+  boxScanned: pkg.boxScanned,
   items: pkg.items.map((it) => ({ orderItemId: it.orderItemId, quantity: it.quantity })),
 });
 
 const reload = (tx: DbTx, packageId: string) =>
   tx.package.findUniqueOrThrow({ where: { id: packageId }, include: packageInclude });
 
-/** The box a package is given: its columns, and the max weight that box allows. */
-async function boxColumns(tx: DbTx, box: PackageBoxInput) {
-  if ("boxId" in box) {
+/**
+ * The box a package is given: its columns, and the max weight that box allows. A barcode is
+ * resolved here, never by the client, so only a real scan sets `boxScanned` (SPEC-packing A1).
+ */
+async function boxColumns(tx: DbTx, box: AddPackageBoxInput) {
+  if ("boxId" in box || "barcode" in box) {
     // Held to commit, so an archive can't land between this read and the package write.
-    await tx.$queryRaw`SELECT id FROM boxes WHERE id = ${box.boxId}::uuid FOR SHARE`;
-    const found = await tx.box.findUnique({ where: { id: box.boxId } });
+    const [locked] =
+      "boxId" in box
+        ? await tx.$queryRaw<{ id: string }[]>`
+            SELECT id FROM boxes WHERE id = ${box.boxId}::uuid FOR SHARE`
+        : await tx.$queryRaw<{ id: string }[]>`
+            SELECT id FROM boxes WHERE barcode = ${normalizeCode(box.barcode)} FOR SHARE`;
+    const found = locked && (await tx.box.findUnique({ where: { id: locked.id } }));
     if (!found) throw notFound();
     if (found.archivedAt) throw new AppError("CONFLICT", "errors.packing.boxArchived");
     return {
-      columns: { boxId: found.id, lengthIn: null, widthIn: null, heightIn: null },
+      columns: {
+        boxId: found.id,
+        lengthIn: null,
+        widthIn: null,
+        heightIn: null,
+        boxScanned: "barcode" in box,
+      },
       maxWeightOz: toNumber(found.maxWeightOz),
     };
   }
   // Custom dimensions are outer dimensions and have no max weight.
   const { lengthIn, widthIn, heightIn } = box;
-  return { columns: { boxId: null, lengthIn, widthIn, heightIn }, maxWeightOz: null };
+  return {
+    columns: { boxId: null, lengthIn, widthIn, heightIn, boxScanned: false },
+    maxWeightOz: null,
+  };
 }
 
 /** Loads a package and locks its order for packing; the package must belong to that order. */

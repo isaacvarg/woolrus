@@ -15,6 +15,7 @@ const defaultCheckSettings: CheckSettings = {
   packCheckWeightOff: "WARN",
   packCheckWeightStale: "WARN",
   packCheckNoFit: "WARN",
+  packCheckBoxNotScanned: "OFF",
   packCheckCustomDimensions: "WARN",
   packCheckWeightOffPercent: 25,
 };
@@ -28,6 +29,7 @@ export async function loadCheckSettings(tx: DbTx): Promise<CheckSettings> {
       packCheckWeightOff: true,
       packCheckWeightStale: true,
       packCheckNoFit: true,
+      packCheckBoxNotScanned: true,
       packCheckCustomDimensions: true,
       packCheckWeightOffPercent: true,
     },
@@ -78,6 +80,7 @@ export function toCheckPackage(pkg: PackageWithBox): CheckPackage {
     weightOz: toNumber(pkg.weightOz),
     overrideReason: pkg.weightOverrideReason,
     weightStale: pkg.weightStale,
+    boxScanned: pkg.boxScanned,
     discarded: pkg.discardedAt !== null,
   };
 }

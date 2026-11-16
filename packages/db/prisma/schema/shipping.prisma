@@ -50,6 +50,9 @@ model Box {
   maxWeightOz   Decimal?  @map("max_weight_oz") @db.Decimal(10, 2)
   /// A package lighter than this trips UNDER_MIN (SPEC-packing A1). Below the max (hand-written CHECK).
   minWeightOz   Decimal?  @map("min_weight_oz") @db.Decimal(10, 2)
+  /// The barcode posted at the box's shelf area, stored normalized (trimmed, upper-cased). Scanning it on
+  /// the pack screen adds a package with this box (SPEC-packing A1).
+  barcode       String?   @unique
   archivedAt    DateTime? @map("archived_at") @db.Timestamptz(3)
   createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
@@ -72,6 +75,8 @@ model Package {
   weightOverrideReason String?     @map("weight_override_reason")
   /// The contents or box changed after the package was weighed: re-weigh or confirm. Never blocks a gate.
   weightStale          Boolean     @default(false) @map("weight_stale")
+  /// The box was chosen by scanning its barcode, not tapped: a tapped box trips BOX_NOT_SCANNED.
+  boxScanned           Boolean     @default(false) @map("box_scanned")
   // Override for non-standard boxes; falls back to the box's outer dimensions.
   lengthIn             Decimal?    @map("length_in") @db.Decimal(8, 2)
   widthIn              Decimal?    @map("width_in") @db.Decimal(8, 2)

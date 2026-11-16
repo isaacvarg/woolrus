@@ -94,6 +94,8 @@ function TripMessage({
         </span>
       );
     }
+    case "BOX_NOT_SCANNED":
+      return <span>{t("pack.tripBoxNotScanned", { box: trip.details.boxName })}</span>;
     case "CUSTOM_DIMENSIONS":
       return (
         <span>

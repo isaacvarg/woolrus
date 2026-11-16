@@ -446,6 +446,103 @@ describe("setPackageBox", () => {
   });
 });
 
+describe("box scans (SPEC-packing A1, criterion 25)", () => {
+  const scanned = (name: string, barcode: string, extra: { archivedAt?: Date } = {}) =>
+    db.box.create({
+      data: { name, lengthIn: 12, widthIn: 10, heightIn: 8, barcode, ...extra },
+    });
+
+  it("adds a package per box scan with boxScanned, a tap without it", async () => {
+    const { packer, order } = await packing();
+    const medium = await scanned("Medium", "BOX-MED");
+    const large = await scanned("Large", "BOX-LRG");
+    const scan = (barcode: string) =>
+      addPackage(db, packer, { orderId: order.id, box: { barcode }, idempotencyKey: key() });
+
+    await scan("box-med");
+    await scan(" BOX-MED ");
+    const third = await scan("BOX-LRG");
+    expect(third.packages.map((p) => [p.number, p.box?.name, p.boxScanned])).toEqual([
+      [1, "Medium", true],
+      [2, "Medium", true],
+      [3, "Large", true],
+    ]);
+
+    const tapped = await addPackage(db, packer, {
+      orderId: order.id,
+      box: { boxId: large.id },
+      idempotencyKey: key(),
+    });
+    expect(tapped.packages[3]?.boxScanned).toBe(false);
+
+    // Changing a scanned package's box is a tap.
+    const changed = await setPackageBox(db, packer, {
+      packageId: id(third.packages[0]),
+      box: { boxId: large.id },
+    });
+    expect(changed.packages[0]).toMatchObject({ boxScanned: false });
+    expect(changed.packages[0]?.box?.id).toBe(large.id);
+    expect(medium.id).not.toBe(large.id);
+  });
+
+  it("adds nothing on a replayed key", async () => {
+    const { packer, order } = await packing();
+    await scanned("Medium", "BOX-MED");
+    const input = { orderId: order.id, box: { barcode: "BOX-MED" }, idempotencyKey: key() };
+    await addPackage(db, packer, input);
+    const replay = await addPackage(db, packer, input);
+    expect(replay.packages).toHaveLength(1);
+    expect(await db.package.count({ where: { orderId: order.id } })).toBe(1);
+  });
+
+  it("refuses an archived box's barcode and an unknown one", async () => {
+    const { packer, order } = await packing();
+    await scanned("Old", "BOX-OLD", { archivedAt: new Date() });
+    const scan = (barcode: string) =>
+      addPackage(db, packer, { orderId: order.id, box: { barcode }, idempotencyKey: key() });
+    await expect(scan("BOX-OLD")).rejects.toMatchObject({
+      messageKey: "errors.packing.boxArchived",
+    });
+    await expect(scan("NOPE")).rejects.toMatchObject({ kind: "NOT_FOUND" });
+    expect(await db.package.count({ where: { orderId: order.id } })).toBe(0);
+  });
+
+  it("trips BOX_NOT_SCANNED only for a tapped box, and only while the check is on", async () => {
+    const { packer, order } = await packing();
+    const box = await scanned("Medium", "BOX-MED");
+    await addPackage(db, packer, {
+      orderId: order.id,
+      box: { barcode: "BOX-MED" },
+      idempotencyKey: key(),
+    });
+    await addPackage(db, packer, {
+      orderId: order.id,
+      box: { boxId: box.id },
+      idempotencyKey: key(),
+    });
+    const tripsOf = async () =>
+      (await getPackView(db, packer, { orderId: order.id })).packages.map((p) =>
+        p.trips.filter((t) => t.check === "BOX_NOT_SCANNED"),
+      );
+
+    // Off by default.
+    expect(await tripsOf()).toEqual([[], []]);
+    await db.settings.update({ where: { id: 1 }, data: { packCheckBoxNotScanned: "WARN" } });
+    expect(await tripsOf()).toEqual([
+      [],
+      [{ check: "BOX_NOT_SCANNED", mode: "WARN", details: { boxName: "Medium" } }],
+    ]);
+  });
+
+  it("offers the active boxes' barcodes in the pack view", async () => {
+    const { packer, order } = await packing();
+    await scanned("Medium", "BOX-MED");
+    await scanned("Old", "BOX-OLD", { archivedAt: new Date() });
+    const view = await getPackView(db, packer, { orderId: order.id });
+    expect(view.boxes.map((b) => b.barcode)).toEqual(["BOX-MED"]);
+  });
+});
+
 describe("deletePackage", () => {
   it("returns units to unassigned and renumbers later packages", async () => {
     const { packer, order, items } = await packing([{ quantity: 3 }]);

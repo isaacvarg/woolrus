@@ -41,6 +41,7 @@ export function BoxDialog({
   const [minWeightOz, setMinWeightOz] = useState(box?.minWeightOz ?? null);
   const [maxWeightOz, setMaxWeightOz] = useState(box?.maxWeightOz ?? null);
   const [tareWeightOz, setTareWeightOz] = useState(box?.tareWeightOz ?? null);
+  const [barcode, setBarcode] = useState(box?.barcode ?? "");
   // One key per dialog: a retried submit can't create two boxes.
   const [idempotencyKey] = useState(() => randomUUID());
 
@@ -51,7 +52,15 @@ export function BoxDialog({
         outerWidthIn: orNull(form.outerWidthIn),
         outerHeightIn: orNull(form.outerHeightIn),
       };
-      const shared = { name: form.name, minWeightOz, maxWeightOz, tareWeightOz, ...outer };
+      const shared = {
+        name: form.name,
+        minWeightOz,
+        maxWeightOz,
+        tareWeightOz,
+        // Blank clears it; the server stores it normalized.
+        barcode: barcode.trim() || null,
+        ...outer,
+      };
       if (box) {
         const dimensions = locked
           ? {}
@@ -142,6 +151,13 @@ export function BoxDialog({
             valueOz={maxWeightOz}
             weightDisplay={weightDisplay}
             onChange={setMaxWeightOz}
+          />
+          <TextField
+            label={t("barcode")}
+            name="barcode"
+            description={t("barcodeHint")}
+            value={barcode}
+            onChange={setBarcode}
           />
           {save.error && (
             <p role="alert" className="text-error">

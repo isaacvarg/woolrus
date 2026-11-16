@@ -90,6 +90,7 @@ function toAdminSettings(row: Settings): AdminSettings {
     packCheckWeightOff: row.packCheckWeightOff,
     packCheckWeightStale: row.packCheckWeightStale,
     packCheckNoFit: row.packCheckNoFit,
+    packCheckBoxNotScanned: row.packCheckBoxNotScanned,
     packCheckCustomDimensions: row.packCheckCustomDimensions,
     packCheckWeightOffPercent: row.packCheckWeightOffPercent,
     // Status comes from the column alone, so reads never decrypt and work without a key.

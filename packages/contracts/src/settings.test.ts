@@ -60,6 +60,7 @@ describe("UpdateSettingsInput", () => {
         packCheckWeightOff: "OFF",
         packCheckWeightStale: "WARN",
         packCheckNoFit: "OFF",
+        packCheckBoxNotScanned: "WARN",
         packCheckCustomDimensions: "WARN",
         packCheckWeightOffPercent: 5,
       }),

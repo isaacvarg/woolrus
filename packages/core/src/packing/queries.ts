@@ -66,6 +66,7 @@ function toPackPackage(
     trips: evaluateChecks(toCheckPackage(pkg), units, checkSettings),
     suggestion: suggestBox(units, boxes),
     weightStale: pkg.weightStale,
+    boxScanned: pkg.boxScanned,
     items: pkg.items.map((it) => ({
       orderItemId: it.orderItemId,
       name: names.get(it.orderItemId) ?? "",

@@ -288,15 +288,50 @@ function PackLayout({
       setScanned({ ok: false, at: Date.now(), message: errorMessage(error) });
     },
   });
+  // A box's shelf barcode adds a package with that box; core resolves it (SPEC-packing A1).
+  const scanBox = useMutation({
+    mutationKey: writeKey,
+    scope: { id: writeScope },
+    // One key per scan: a retried request replays it, a second scan adds a second package.
+    mutationFn: ({ barcode, scanId }: { barcode: string; scanId: string }) =>
+      client.packing.addPackage({ orderId: order.id, box: { barcode }, idempotencyKey: scanId }),
+    onSuccess: (result) => {
+      const known = new Set(view.packages.map((p) => p.id));
+      const created = result.packages.find((p) => !known.has(p.id));
+      accept(result);
+      playScanSound(true);
+      if (created) setSelectedId(created.id);
+      setScanned({
+        ok: true,
+        at: Date.now(),
+        message: t("pack.boxScanned", {
+          number: created?.number ?? 0,
+          box: created?.box?.name ?? "",
+        }),
+      });
+    },
+    onError: (error) => {
+      playScanSound(false);
+      setScanned({ ok: false, at: Date.now(), message: errorMessage(error) });
+    },
+  });
+  const boxCodes = new Set(view.boxes.flatMap((b) => (b.barcode ? [b.barcode] : [])));
   useScanner((code) => {
+    const scanId = randomUUID();
+    // One scan field: a lot label goes to the lot (SPEC-lumexia), then a box's barcode adds a
+    // package, needing no selection, and anything else packs a product.
+    const lot = isLotCode(code);
+    if (!lot && boxCodes.has(code.trim().toUpperCase())) {
+      scanBox.mutate({ barcode: code, scanId });
+      return;
+    }
     if (!selected) {
       playScanSound(false);
       setScanned({ ok: false, at: Date.now(), message: t("pack.noPackageSelected") });
       return;
     }
-    // One scan field: a lot label goes to the lot, anything else packs a product (SPEC-lumexia).
-    const write = isLotCode(code) ? scanLot : scan;
-    write.mutate({ pkg: selected, code, scanId: randomUUID() });
+    const write = lot ? scanLot : scan;
+    write.mutate({ pkg: selected, code, scanId });
   }, canPack);
 
   const move = useMutation({

@@ -332,3 +332,39 @@ test("the order drawer shows the address, who picked, and a package note; Escape
   await page.keyboard.press("Escape");
   await expect(drawer).toBeHidden();
 });
+
+test("scanning two box barcodes adds two packages with those boxes (SPEC-packing A1)", async ({
+  page,
+}) => {
+  const tag = crypto.randomUUID().slice(0, 8).toUpperCase();
+  const made = await Promise.all(
+    ["Medium", "Large"].map((size, i) =>
+      db.box.create({
+        data: {
+          name: `E2E ${size} ${tag}`,
+          lengthIn: 10 + i * 4,
+          widthIn: 8 + i * 4,
+          heightIn: 4 + i * 4,
+          barcode: `E2E-BOX-${size.toUpperCase()}-${tag}`,
+        },
+      }),
+    ),
+  );
+  boxIds.push(...made.map((b) => b.id));
+  await startPacking(page, 2);
+  const banner = page.getByTestId("scan-banner");
+  const cards = page.getByTestId("pack-package");
+
+  // No package is selected yet: a box scan needs none.
+  await scanCode(page, `e2e-box-medium-${tag.toLowerCase()}`);
+  await expect(banner).toHaveAttribute("data-ok", "true");
+  await expect(banner).toContainText(`Package 1 added: E2E Medium ${tag}`);
+  await scanCode(page, `E2E-BOX-LARGE-${tag}`);
+  await expect(banner).toContainText(`Package 2 added: E2E Large ${tag}`);
+  await expect(cards).toHaveCount(2);
+
+  await page.reload();
+  await expect(cards).toHaveCount(2);
+  await expect(cards.filter({ hasText: `E2E Medium ${tag}` })).toHaveCount(1);
+  await expect(cards.filter({ hasText: `E2E Large ${tag}` })).toHaveCount(1);
+});

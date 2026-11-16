@@ -174,6 +174,7 @@ export const AdminSettings = z.object({
   packCheckWeightOff: PackCheckMode,
   packCheckWeightStale: PackCheckMode,
   packCheckNoFit: PackCheckMode,
+  packCheckBoxNotScanned: PackCheckMode,
   packCheckCustomDimensions: PackCheckMode,
   packCheckWeightOffPercent: z.number(),
   secrets: z.record(SecretName, SecretStatus),
@@ -192,6 +193,7 @@ export const PublicSettings = AdminSettings.pick({
   packCheckWeightOff: true,
   packCheckWeightStale: true,
   packCheckNoFit: true,
+  packCheckBoxNotScanned: true,
   packCheckCustomDimensions: true,
   packCheckWeightOffPercent: true,
 });
@@ -221,6 +223,7 @@ export const UpdateSettingsInput = z.object({
   packCheckWeightOff: SettablePackCheckMode.optional(),
   packCheckWeightStale: SettablePackCheckMode.optional(),
   packCheckNoFit: SettablePackCheckMode.optional(),
+  packCheckBoxNotScanned: SettablePackCheckMode.optional(),
   packCheckCustomDimensions: SettablePackCheckMode.optional(),
   packCheckWeightOffPercent: PackCheckWeightOffPercent.optional(),
 });

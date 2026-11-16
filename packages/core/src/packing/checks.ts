@@ -21,6 +21,7 @@ export type CheckSettings = {
   packCheckWeightOff: PackCheckMode;
   packCheckWeightStale: PackCheckMode;
   packCheckNoFit: PackCheckMode;
+  packCheckBoxNotScanned: PackCheckMode;
   packCheckCustomDimensions: PackCheckMode;
   /** Whole percent, 5–100. */
   packCheckWeightOffPercent: number;
@@ -41,6 +42,8 @@ export type CheckPackage = {
   weightOz: number | null;
   overrideReason: string | null;
   weightStale: boolean;
+  /** The box was scanned, not tapped. */
+  boxScanned: boolean;
   discarded: boolean;
 };
 
@@ -119,6 +122,15 @@ export function evaluateChecks(
       check: "NO_FIT",
       mode: settings.packCheckNoFit,
       details: box ? { boxName: box.name, items } : { items },
+    });
+  }
+
+  // Only a scan proves the packer took the box from its shelf (SPEC-packing A1 "Box barcodes").
+  if (on(settings.packCheckBoxNotScanned) && box && !pkg.boxScanned) {
+    trips.push({
+      check: "BOX_NOT_SCANNED",
+      mode: settings.packCheckBoxNotScanned,
+      details: { boxName: box.name },
     });
   }
 

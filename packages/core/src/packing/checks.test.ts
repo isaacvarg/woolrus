@@ -10,6 +10,7 @@ const settings: CheckSettings = {
   packCheckWeightOff: "WARN",
   packCheckWeightStale: "WARN",
   packCheckNoFit: "WARN",
+  packCheckBoxNotScanned: "WARN",
   packCheckCustomDimensions: "WARN",
   packCheckWeightOffPercent: 25,
 };
@@ -19,6 +20,7 @@ const allOff: CheckSettings = {
   packCheckWeightOff: "OFF",
   packCheckWeightStale: "OFF",
   packCheckNoFit: "OFF",
+  packCheckBoxNotScanned: "OFF",
   packCheckCustomDimensions: "OFF",
 };
 
@@ -47,6 +49,7 @@ const pkg = (over: Partial<CheckPackage> = {}): CheckPackage => ({
   weightOz: null,
   overrideReason: null,
   weightStale: false,
+  boxScanned: true,
   discarded: false,
   ...over,
 });
@@ -109,6 +112,24 @@ describe("UNDER_MIN", () => {
   it("needs a weight, and doesn't run when off", () => {
     expect(checks(pkg({ box: withMin }), units, underMinOnly)).toEqual([]);
     expect(checks(pkg({ box: withMin, weightOz: 1 }), units, allOff)).toEqual([]);
+  });
+});
+
+describe("BOX_NOT_SCANNED", () => {
+  const units = [unit()];
+  const scanOnly: CheckSettings = { ...allOff, packCheckBoxNotScanned: "WARN" };
+
+  it("trips on a tapped box, not a scanned one", () => {
+    expect(checks(pkg({ boxScanned: true }), units, scanOnly)).toEqual([]);
+    expect(evaluateChecks(pkg({ boxScanned: false }), units, scanOnly)).toEqual([
+      { check: "BOX_NOT_SCANNED", mode: "WARN", details: { boxName: "Large" } },
+    ]);
+  });
+
+  it("needs no weight, skips a custom size, and doesn't run when off", () => {
+    const custom = pkg({ box: null, dimensions: { lengthIn: 14, widthIn: 12, heightIn: 8 } });
+    expect(checks({ ...custom, boxScanned: false }, units, scanOnly)).toEqual([]);
+    expect(checks(pkg({ boxScanned: false }), units, allOff)).toEqual([]);
   });
 });
 

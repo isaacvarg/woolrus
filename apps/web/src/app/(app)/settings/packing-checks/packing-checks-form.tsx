@@ -19,6 +19,7 @@ const checks = [
   "packCheckWeightOff",
   "packCheckWeightStale",
   "packCheckNoFit",
+  "packCheckBoxNotScanned",
   "packCheckCustomDimensions",
 ] as const;
 type CheckField = (typeof checks)[number];
@@ -30,6 +31,7 @@ const checkOf = {
   packCheckWeightOff: "WEIGHT_OFF",
   packCheckWeightStale: "WEIGHT_STALE",
   packCheckNoFit: "NO_FIT",
+  packCheckBoxNotScanned: "BOX_NOT_SCANNED",
   packCheckCustomDimensions: "CUSTOM_DIMENSIONS",
 } as const satisfies Record<CheckField, string>;
 

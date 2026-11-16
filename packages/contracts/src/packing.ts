@@ -80,6 +80,8 @@ export const PackPackage = z.object({
   overrideReason: z.string().nullable(),
   /** The contents or box changed after weighing: re-weigh or confirm. Never blocks the gate. */
   weightStale: z.boolean(),
+  /** The box was chosen by scanning its barcode; a tapped box trips BOX_NOT_SCANNED. */
+  boxScanned: z.boolean(),
   /** Σ unit weight + the box's tare; null when any product has no weight. Never fills the field. */
   estimatedWeightOz: z.number().nullable(),
   /** The packing checks this package fails right now (SPEC-packing A1); computed, not stored. */
@@ -122,9 +124,19 @@ export const PackResult = z.object({
 });
 export type PackResult = z.infer<typeof PackResult>;
 
+/**
+ * A new package's box: tapped, typed, or scanned by the barcode at its shelf. Core resolves the
+ * barcode, so only a scan sets `boxScanned` (SPEC-packing A1 "Box barcodes").
+ */
+export const AddPackageBoxInput = z.union([
+  PackageBoxInput,
+  z.object({ barcode: z.string().trim().min(1).max(64) }),
+]);
+export type AddPackageBoxInput = z.infer<typeof AddPackageBoxInput>;
+
 export const AddPackageInput = z.object({
   orderId: Id,
-  box: PackageBoxInput,
+  box: AddPackageBoxInput,
   /** A retried request must not add a second package. */
   idempotencyKey: IdempotencyKey,
 });
