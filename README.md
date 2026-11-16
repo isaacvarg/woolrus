@@ -22,6 +22,9 @@ docker/             Dockerfile (web, worker, migrate images), dev and prod compo
 
 Requires Node 24 and pnpm 12 (`mise install` sets both up) and Docker.
 
+On NixOS, run `nix develop` first: `flake.nix` provides the Prisma engines, openssl and pkg-config (x86_64-linux
+only). When you bump `prisma`, update the engine `commit` and `hash` in `flake.nix` to match.
+
 ```bash
 pnpm install
 ```

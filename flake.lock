@@ -1,0 +1,43 @@
+{
+  "nodes": {
+    "nixpkgs": {
+      "locked": {
+        "lastModified": 1794042290,
+        "narHash": "sha256-ziZn2PvCJE5JEEpqTdxXwJpPB+L3YqoCpTAMCzyaP3U=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "f4a03c008967841f2a0b3cb7c436fc6fc31671f6",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "nixos-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "prisma-utils": {
+      "locked": {
+        "lastModified": 1791203157,
+        "narHash": "sha256-bWFagxDB1lbogU1yk3ASku/vyu9eXWVjzA/r1LKaTuc=",
+        "owner": "VanCoding",
+        "repo": "nix-prisma-utils",
+        "rev": "1d00be5f084666b00c1215b8aef28e689df7b441",
+        "type": "github"
+      },
+      "original": {
+        "owner": "VanCoding",
+        "repo": "nix-prisma-utils",
+        "type": "github"
+      }
+    },
+    "root": {
+      "inputs": {
+        "nixpkgs": "nixpkgs",
+        "prisma-utils": "prisma-utils"
+      }
+    }
+  },
+  "root": "root",
+  "version": 7
+}
