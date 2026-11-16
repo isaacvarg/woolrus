@@ -129,10 +129,10 @@ const PiiRetentionDays = z.number().int().min(30).max(3650).nullable();
 export const RATE_LAB_MAX_COMBINATIONS_CEILING = 2000;
 const RateLabMaxCombinations = z.number().int().min(1).max(RATE_LAB_MAX_COMBINATIONS_CEILING);
 
-/** Packing checks (SPEC-packing A1 "Settings"). Block arrives with approvals at the gate. */
-const SettablePackCheckMode = z.enum(["OFF", "WARN"]);
+/** Packing checks (SPEC-packing A1 "Settings"). Block needs a QA or Admin approval at the gate. */
+const SettablePackCheckMode = z.enum(["OFF", "WARN", "BLOCK"]);
 /** Over max is a physical limit: it can't be switched off (decision 11). */
-const OverMaxMode = z.enum(["WARN"], {
+const OverMaxMode = z.enum(["WARN", "BLOCK"], {
   error: (issue) => (issue.input === "OFF" ? "errors.settings.checkCannotBeOff" : undefined),
 });
 /** How far off the estimate a weight may be, in whole percent. */

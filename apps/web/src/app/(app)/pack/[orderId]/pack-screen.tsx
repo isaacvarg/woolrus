@@ -4,6 +4,7 @@ import { ORPCError } from "@orpc/client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   AppErrorData,
+  ApprovalInput,
   LotDto,
   PackageBoxInput,
   PackageItemView,
@@ -20,6 +21,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { useState } from "react";
+import { ApprovalDialog } from "@/components/approval-dialog";
 import { ReportIssueFlow } from "@/components/exceptions/report-issue-flow";
 import { VoidDialog } from "@/components/exceptions/void-dialog";
 import { LotStatus, useLotText } from "@/components/lots/lot-status";
@@ -36,7 +38,7 @@ import { ScanBanner, type ScanOutcome } from "../../pick/[orderId]/pick-screen";
 import { BoxDialog } from "./box-dialog";
 import { type LineCandidate, LotDialog, WhichLineDialog } from "./lot-dialogs";
 import { OrderDrawer, PackageNoteDialog } from "./order-drawer";
-import { TripList } from "./trips";
+import { TripList, TripMessage } from "./trips";
 import { OverweightDialog, overweightMax, WeightField } from "./weight-field";
 
 // The pack screen (SPEC-packing "UI", FR-PACK-01…03). Taps apply at once and the server confirms
@@ -129,6 +131,7 @@ type Dialogs =
   | { kind: "note"; pkg: PackPackage }
   | { kind: "items"; pkgId: string }
   | { kind: "overweight"; pkg: PackPackage; weightOz: number; maxOz: number }
+  | { kind: "approve"; after: After }
   | { kind: "lot"; pkgId: string; orderItemId: string; lotId: string }
   | {
       kind: "whichLine";
@@ -148,6 +151,10 @@ const chooseLineOf = (error: unknown) => {
 type ScanLotVars = { pkg: PackPackage; code: string; scanId: string; packageItemId?: string };
 
 type Weigh = { pkg: PackPackage; weightOz: number; overrideReason?: string };
+
+type After = "queue" | "next";
+/** Finishing, with a QA or Admin approval when a trip blocks (SPEC-packing A1). */
+type Complete = { after: After; approval?: ApprovalInput };
 
 function PackLayout({
   view,
@@ -385,9 +392,14 @@ function PackLayout({
   // Finishing waits for the writes before it, so the server sees the packages as they were left.
   const complete = useMutation({
     scope: { id: writeScope },
-    mutationFn: (after: "queue" | "next") =>
-      client.packing.complete({ orderId: order.id, expectedVersion: order.version, after }),
-    onSuccess: ({ nextOrderId }, after) => {
+    mutationFn: ({ after, approval }: Complete) =>
+      client.packing.complete({
+        orderId: order.id,
+        expectedVersion: order.version,
+        after,
+        approval,
+      }),
+    onSuccess: ({ nextOrderId }, { after }) => {
       toast.success(t("order.moved", { number: order.number, status: t("status.QA") }));
       if (nextOrderId) router.push(`/pack/${nextOrderId}`);
       else {
@@ -395,9 +407,14 @@ function PackLayout({
         router.push("/queue/packing");
       }
     },
-    onError: refuse,
+    // With an approval, the dialog shows the refusal in place (wrong PIN, not permitted).
+    onError: (error, { approval }) =>
+      approval ? void queryClient.invalidateQueries({ queryKey: viewKey }) : refuse(error),
     onSettled: () => queryClient.invalidateQueries({ queryKey: orpc.orders.key() }),
   });
+  // A blocking trip needs a QA or Admin approval first; the dialog sends it with the move.
+  const finish = (after: After) =>
+    view.blocking ? setDialog({ kind: "approve", after }) : complete.mutate({ after });
 
   const weigh = useMutation({
     mutationKey: writeKey,
@@ -555,16 +572,16 @@ function PackLayout({
             <Button
               className="btn-outline btn-lg"
               isDisabled={complete.isPending}
-              onPress={() => complete.mutate("queue")}
+              onPress={() => finish("queue")}
             >
-              {t("pack.done")}
+              {t(view.blocking ? "pack.doneApproval" : "pack.done")}
             </Button>
             <Button
               className="btn-primary btn-lg"
               isDisabled={complete.isPending}
-              onPress={() => complete.mutate("next")}
+              onPress={() => finish("next")}
             >
-              {t("pack.doneNext")}
+              {t(view.blocking ? "pack.doneNextApproval" : "pack.doneNext")}
             </Button>
           </div>
         </footer>
@@ -593,6 +610,25 @@ function PackLayout({
           isPending={change.isPending}
           onChoose={(box) => change.mutate({ pkg: dialog.pkg, box })}
           onClose={closeDialog}
+        />
+      )}
+      {dialog?.kind === "approve" && (
+        <ApprovalDialog
+          isOpen
+          onOpenChange={(open) => !open && closeDialog()}
+          title={t("pack.approvalTitle")}
+          items={view.packages.flatMap((pkg) =>
+            pkg.trips
+              .filter((trip) => trip.mode === "BLOCK")
+              .map((trip) => (
+                <span key={`${pkg.id}-${trip.check}`} data-testid="approval-trip">
+                  {t("pack.approvalItem", { number: pkg.number })}{" "}
+                  <TripMessage pkg={pkg} trip={trip} weightDisplay={weightDisplay} />
+                </span>
+              )),
+          )}
+          permission="packCheck.approve"
+          onApprove={(approval) => complete.mutateAsync({ after: dialog.after, approval })}
         />
       )}
       {dialog?.kind === "overweight" && (

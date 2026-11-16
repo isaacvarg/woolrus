@@ -24,6 +24,7 @@ import { claimExpiryMinutes, holdsClaim, isClaimLive, touchClaim } from "../work
 import { liveLabelStatuses } from "../workflow/gates";
 import { type LockedOrder, lockOrder } from "../workflow/lock";
 import { notifyOrderChanged } from "../workflow/notify";
+import { loadCheckSettings } from "./check-inputs";
 import {
   isPhysical,
   type PackageRow,
@@ -419,7 +420,9 @@ export async function packRemaining(
 /**
  * Sets the package's gross weight and clears its re-weigh flag, so saving the same value confirms
  * it. Above the box's max it needs a reason and keeps it (FR-PACK-09); within it any reason is
- * dropped. Only the rates go: the contents are the same, so QA's verification stands.
+ * dropped. With over max on block (SPEC-packing A1) it saves without one and keeps none: the
+ * approval that lets the trip through carries the reason on record. Only the rates go: the
+ * contents are the same, so QA's verification stands.
  */
 export async function setWeight(
   db: Db,
@@ -436,14 +439,15 @@ export async function setWeight(
     const { order, pkg } = await lockPackage(tx, actor, packageId, now);
     const max = toNumber(pkg.box?.maxWeightOz ?? null);
     const over = max !== null && weightOz > max;
-    if (over && !reason) {
+    const blocks = over && (await loadCheckSettings(tx)).packCheckOverMax === "BLOCK";
+    if (over && !blocks && !reason) {
       throw new AppError("CONFLICT", "errors.packing.overweight", undefined, {
         params: { maxOz: max },
       });
     }
     await tx.package.update({
       where: { id: packageId },
-      data: { weightOz, weightOverrideReason: over ? reason : null, weightStale: false },
+      data: { weightOz, weightOverrideReason: over && !blocks ? reason : null, weightStale: false },
     });
     await dropRates(tx, packageId);
     return finish(tx, actor, order, "setWeight", { packageId, before: pkg }, now);

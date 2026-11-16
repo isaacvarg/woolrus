@@ -1,7 +1,7 @@
 import { PackCheck, type PackCheckStat, type Trip } from "@woolrus/contracts";
 import type { Db, DbTx } from "@woolrus/db";
 import { type Actor, assertCan } from "../permissions";
-import { lineInclude } from "../picking/service";
+import { lineInclude } from "../picking/lines";
 import { loadCheckSettings, toCheckPackage, unitOf } from "./check-inputs";
 import { evaluateChecks } from "./checks";
 
@@ -43,12 +43,13 @@ const packagesOf = (orderId: string) => ({ package: { orderId } });
 
 /**
  * Writes one row per WARN or BLOCK trip of the order's packages, replacing any left over (an
- * order put into Packing by hand never had its old rows cleared). Returns the trips it saved.
+ * order put into Packing by hand never had its old rows cleared). `approvalId` goes on the BLOCK
+ * rows: the approval that let them through, or null (force-status). Returns the trips it saved.
  */
 export async function saveTrips(
   tx: DbTx,
   orderId: string,
-  { now = new Date() }: { now?: Date } = {},
+  { now = new Date(), approvalId = null }: { now?: Date; approvalId?: string | null } = {},
 ): Promise<PackageTrips[]> {
   await clearTrips(tx, orderId);
   const evaluated = await evaluateOrderTrips(tx, orderId);
@@ -58,6 +59,7 @@ export async function saveTrips(
       check: trip.check,
       mode: trip.mode,
       details: trip.details,
+      approvalId: trip.mode === "BLOCK" ? approvalId : null,
       createdAt: now,
     })),
   );

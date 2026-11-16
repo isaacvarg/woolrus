@@ -1,7 +1,9 @@
+import type { ApprovalInput } from "@woolrus/contracts";
 import type { Db, PackCheckMode } from "@woolrus/db";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { createActor, resetDb, testDb } from "../../test/db";
 import { createOrder, type PackageSpec } from "../../test/factories";
+import { hashPin } from "../identity/credentials";
 import type { UserActor } from "../permissions";
 import { repackOrders } from "../shipping/repack";
 import { forceStatus } from "../workflow/service";
@@ -79,15 +81,22 @@ async function tripping(status: "PACKING" | "QA" | "READY" = "PACKING") {
   return { packer, ...built };
 }
 
-const finish = (packer: UserActor, orderId: string) =>
-  completePack(db, packer, { orderId, expectedVersion: 3, after: "queue" });
+const finish = (packer: UserActor, orderId: string, approval?: ApprovalInput) =>
+  completePack(db, packer, { orderId, expectedVersion: 3, after: "queue", approval });
+
+/** A QA user's approval, as a blocking trip needs (SPEC-packing A1). */
+async function qaApproval(): Promise<ApprovalInput> {
+  const qa = await createActor(db, ["QA"]);
+  await db.user.update({ where: { id: qa.userId }, data: { pinHash: await hashPin("482916") } });
+  return { credential: { userId: qa.userId, pin: "482916" }, reason: "Checked it" };
+}
 
 describe("completing packing saves the trips", () => {
   it("writes exactly one row per WARN or BLOCK trip, with its details", async () => {
     await setModes({ packCheckCustomDimensions: "BLOCK" });
     const { packer, order } = await tripping();
 
-    await finish(packer, order.id);
+    await finish(packer, order.id, await qaApproval());
 
     expect(await summary(order.id)).toEqual([
       { number: 1, check: "OVER_MAX", mode: "WARN" },
@@ -101,6 +110,9 @@ describe("completing packing saves the trips", () => {
       acknowledgedAt: null,
       acknowledgedById: null,
     });
+    // The blocking row points at the approval that let it through; the warnings don't.
+    const approval = await db.approval.findFirstOrThrow();
+    expect((await tripsOf(order.id)).map((t) => t.approvalId)).toEqual([null, null, approval.id]);
   });
 
   it("writes none for checks set to off", async () => {
@@ -233,7 +245,7 @@ describe("the re-weigh note and the WEIGHT_STALE trip", () => {
       await setModes({ packCheckWeightStale: mode });
       const { packer, order } = await tripping();
 
-      await finish(packer, order.id);
+      await finish(packer, order.id, mode === "BLOCK" ? await qaApproval() : undefined);
 
       expect(await notesOf(order.id)).toEqual([]);
       expect(await summary(order.id)).toContainEqual({ number: 1, check: "WEIGHT_STALE", mode });

@@ -170,7 +170,9 @@ async function readPack(
         checkSettings,
       ),
     ),
-    unmet: evaluateGate("packed", gate),
+    // Blocking trips are told apart, so the footer can offer approval instead of listing them.
+    unmet: evaluateGate("packed", gate, { approved: true }),
+    blocking: gate.packages.some((p) => p.trips.some((trip) => trip.mode === "BLOCK")),
     boxes,
   };
 }

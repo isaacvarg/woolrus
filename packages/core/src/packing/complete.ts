@@ -8,6 +8,7 @@ import { toNumber } from "../units";
 import { claimExpiryMinutes, writeClaim } from "../workflow/claims";
 import { lockOrder } from "../workflow/lock";
 import { transition } from "../workflow/service";
+import { verifyPackApproval } from "./approval";
 import { loadCheckSettings } from "./check-inputs";
 
 // Finishing an order (SPEC-packing "Finishing"): workflow's completePacking, the re-weigh notes,
@@ -62,16 +63,18 @@ async function noteStaleWeights(tx: DbTx, actor: Actor, orderId: string): Promis
 export async function completePack(
   db: Db,
   actor: Actor,
-  { orderId, expectedVersion, after }: CompletePackInput,
+  { orderId, expectedVersion, after, approval }: CompletePackInput,
   { now = new Date() }: CompletePackOptions = {},
 ): Promise<CompletePackResult> {
   assertCan(actor, "order.pack");
+  // Before the transaction, so a refused PIN counts even though nothing moves (SPEC-packing A1).
+  const verified = await verifyPackApproval(db, actor, approval, now);
 
   return db.$transaction(async (tx) => {
     await transition(
       tx,
       actor,
-      { orderId, expectedVersion, to: "QA", kind: "completePacking" },
+      { orderId, expectedVersion, to: "QA", kind: "completePacking", approval: verified },
       { now },
     );
     await noteStaleWeights(tx, actor, orderId);

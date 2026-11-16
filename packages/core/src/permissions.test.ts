@@ -94,6 +94,14 @@ describe("permissions", () => {
     expect(can(actor(["RATE_LAB"]), "report.read")).toBe(false);
   });
 
+  it("gives packCheck.approve to QA and Admin only (SPEC-packing A1 criterion 27)", () => {
+    expect(can(actor(["ADMIN"]), "packCheck.approve")).toBe(true);
+    expect(can(actor(["QA"]), "packCheck.approve")).toBe(true);
+    for (const role of ["PICKER", "PACKER", "SHIPPER", "RATE_LAB"] as const) {
+      expect(can(actor([role]), "packCheck.approve")).toBe(false);
+    }
+  });
+
   it("gives lumexia.manage to Admin only", () => {
     expect(can(actor(["ADMIN"]), "lumexia.manage")).toBe(true);
     for (const role of ["PICKER", "PACKER", "QA", "SHIPPER", "RATE_LAB"] as const) {

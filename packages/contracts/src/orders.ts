@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ApprovalInput } from "./approvals";
 import { base, Id } from "./base";
 import { LotDto } from "./lumexia";
 import { PrintState } from "./shipping";
@@ -61,6 +62,12 @@ export const CompleteQaOrderInput = OrderVersionInput.extend({
   confirmCost: z.boolean().optional(),
 });
 export type CompleteQaOrderInput = z.infer<typeof CompleteQaOrderInput>;
+
+/** `approval`: a QA or Admin user's say-so for blocking packing checks (SPEC-packing A1). */
+export const CompletePackingOrderInput = OrderVersionInput.extend({
+  approval: ApprovalInput.optional(),
+});
+export type CompletePackingOrderInput = z.infer<typeof CompletePackingOrderInput>;
 
 export const OrderReasonInput = OrderVersionInput.extend({ reason: Reason });
 export type OrderReasonInput = z.infer<typeof OrderReasonInput>;
@@ -518,7 +525,16 @@ export const orders = {
 
   beginPicking: move("begin-picking", "Begin picking a Pending order and claim it"),
   completePicking: move("complete-picking", "Finish picking; refused while lines are unpicked"),
-  completePacking: move("complete-packing", "Finish packing; refused until every unit is packed"),
+  completePacking: base
+    .route({
+      method: "POST",
+      path: "/orders/{id}/complete-packing",
+      tags,
+      summary:
+        "Finish packing; refused until every unit is packed, and blocking checks need an approval",
+    })
+    .input(CompletePackingOrderInput)
+    .output(OrderDetail),
   completeQa: base
     .route({
       method: "POST",

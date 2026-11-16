@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ApprovalInput } from "./approvals";
 import { base, Id, IdempotencyKey, Inches, Ounces } from "./base";
 import { Box } from "./boxes";
 import { LotDto } from "./lumexia";
@@ -107,8 +108,13 @@ export const PackView = z.object({
   suggestion: BoxSuggestion,
   /** The active boxes a packer can choose from. */
   boxes: z.array(Box),
-  /** What the packed gate still needs; empty when the order can complete. */
+  /**
+   * What the packed gate still needs besides approval; empty when the order can complete, or can
+   * with an approval when `blocking`.
+   */
   unmet: z.array(Unmet),
+  /** Some package has a trip set to block: completing needs a QA or Admin approval (SPEC-packing A1). */
+  blocking: z.boolean(),
 });
 export type PackView = z.infer<typeof PackView>;
 
@@ -118,7 +124,9 @@ export const PackResult = z.object({
   packages: z.array(PackPackage),
   /** A box for the units not in any package, for adding one. */
   suggestion: BoxSuggestion,
+  /** As in `PackView`. */
   unmet: z.array(Unmet),
+  blocking: z.boolean(),
 });
 export type PackResult = z.infer<typeof PackResult>;
 
@@ -195,6 +203,8 @@ export const CompletePackInput = z.object({
   expectedVersion: ExpectedVersion,
   /** Where the packer goes next: the Packing queue, or the next unclaimed Packing order. */
   after: z.enum(["queue", "next"]),
+  /** A QA or Admin user's say-so for the blocking trips (SPEC-packing A1); ignored when none block. */
+  approval: ApprovalInput.optional(),
 });
 export type CompletePackInput = z.infer<typeof CompletePackInput>;
 
