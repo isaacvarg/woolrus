@@ -11,12 +11,8 @@ import {
   type SetWeightInput,
 } from "@woolrus/contracts";
 import type { Db, DbTx } from "@woolrus/db";
-<<<<<<< HEAD
 import { scanMisses } from "../activity/record-scan-miss";
-import { recordAudit } from "../audit";
-=======
 import { type ActionVerb, recordAudit } from "../audit";
->>>>>>> refs/heads/claude/oa-204-orderid-required-9736ed
 import { AppError, notFound } from "../errors";
 import { storedResult, withIdempotency } from "../idempotency";
 import { lotsAfterPacking, lotsAfterUnpacking } from "../lumexia/lot-store";
