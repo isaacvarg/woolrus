@@ -38,6 +38,12 @@ export function SuggestedBatches({
   const suggestions = query.data?.suggestions ?? [];
   if (hidden || (suggestions.length === 0 && !refused)) return null;
   const openBatch = query.data?.openBatch ?? null;
+  // One tap at a time: a create or Begin picking in flight disables every card. The pending card is
+  // matched by its first order, since a live refetch replaces the arrays while the create runs.
+  const busy = create.isPending || beginningId !== null;
+  const locked = openBatch !== null || busy;
+  const creating = (orders: BatchOrder[]) =>
+    create.isPending && create.variables?.[0]?.id === orders[0]?.id;
   const now = Date.now();
 
   return (
@@ -57,7 +63,7 @@ export function SuggestedBatches({
               action={
                 suggestion.orders.length === 1 ? (
                   <Button
-                    isDisabled={openBatch !== null}
+                    isDisabled={locked}
                     isPending={beginningId === suggestion.orders[0]?.id}
                     onPress={() => suggestion.orders[0] && onBeginPicking(suggestion.orders[0])}
                   >
@@ -67,14 +73,14 @@ export function SuggestedBatches({
                   <>
                     <Button
                       className="btn-outline"
-                      isDisabled={openBatch !== null}
+                      isDisabled={locked}
                       onPress={() => onSelect(suggestion.orders)}
                     >
                       {t("queue.suggestions.selectThese")}
                     </Button>
                     <Button
-                      isDisabled={openBatch !== null}
-                      isPending={create.isPending && create.variables === suggestion.orders}
+                      isDisabled={locked}
+                      isPending={creating(suggestion.orders)}
                       onPress={() => create.mutate(suggestion.orders)}
                     >
                       {t("queue.suggestions.pickThese")}

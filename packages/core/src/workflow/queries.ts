@@ -65,6 +65,16 @@ function decodeCursor(cursor: string): Cursor {
   throw new AppError("BAD_REQUEST", "errors.validation", { cursor: "errors.field.invalid" });
 }
 
+/**
+ * Queue order: highest priority first, then oldest, then id. `listQueue` writes the same
+ * order in SQL; keep the two in step.
+ */
+export const queueOrderBy = [
+  { priority: "desc" },
+  { orderedAt: "asc" },
+  { id: "asc" },
+] as const satisfies Prisma.OrderOrderByWithRelationInput[];
+
 /** LIKE treats `%`, `_` and `\` as syntax; search text is literal. */
 const escapeLike = (text: string) => text.replace(/[\\%_]/g, (c) => `\\${c}`);
 

@@ -235,10 +235,10 @@ and returns up to `pickBatchSuggestionCount` suggestions (default **3**). Each o
 Pure and deterministic: the same input gives the same suggestions, so two pickers looking at the same queue see
 the same cards. Tested as a pure function.
 
-**Candidates** (`listSuggestionCandidates`, in `queries.ts`): orders with status `PENDING` and no live claim by
-someone other than the actor, that have at least one physical line with active quantity > 0, in queue order,
-capped at the first **200**. Lines are read the way `getBatch` reads them, plus weights. Orders with no pickable
-lines are left out: there's nothing to walk for.
+**Candidates** (`listSuggestionCandidates`, in `queries.ts`): the first **200** orders in queue order with status `PENDING`
+and no live claim by someone other than the actor. Lines are read the way `getBatch` reads them, plus weights.
+Of those, orders with no physical line of active quantity > 0 are then left out: there's nothing to walk for. So the
+cap can leave fewer than 200 candidates, which a day's queue (A1 assumption 7) doesn't reach.
 
 ### Reads
 

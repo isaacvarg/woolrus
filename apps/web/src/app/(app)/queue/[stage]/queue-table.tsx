@@ -100,6 +100,13 @@ export function QueueTable({
   // suggestion's orders at the versions the card was built from, so entries are `BatchOrder`s.
   const [selected, setSelected] = useState<Map<string, BatchOrder>>(() => new Map());
   const printLabels = useLabelPrint({ onPrinted: () => setSelected(new Map()) });
+  // **Select these** can tick orders past the loaded pages (suggestions read 200 orders, a page is
+  // 50): load pages until every ticked order has a row, so the picker can see and untick it.
+  const { hasNextPage, isFetchingNextPage, fetchNextPage } = queue;
+  const unloaded = [...selected.keys()].some((id) => !rows.some((row) => row.id === id));
+  useEffect(() => {
+    if (unloaded && hasNextPage && !isFetchingNextPage) fetchNextPage();
+  }, [unloaded, hasNextPage, isFetchingNextPage, fetchNextPage]);
   const toggle = (row: BatchOrder, on: boolean) =>
     setSelected((current) => {
       const next = new Map(current);
@@ -115,8 +122,13 @@ export function QueueTable({
         router.push(`/pick/${order.id}`);
       },
       onError: (error) => toast.error(errorMessage(error)),
-      // A stale version means another station moved it: refetch either way so the row is current.
-      onSettled: () => queryClient.invalidateQueries({ queryKey: orpc.orders.key() }),
+      // A stale version means another station moved it: refetch either way so the row is current,
+      // and the suggested batches, since a one-order card begins picking here too.
+      onSettled: () =>
+        Promise.all([
+          queryClient.invalidateQueries({ queryKey: orpc.orders.key() }),
+          queryClient.invalidateQueries({ queryKey: orpc.pickBatches.key() }),
+        ]),
     }),
   );
 

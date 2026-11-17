@@ -51,6 +51,18 @@ describe("getBatchSuggestions", () => {
     });
   });
 
+  it("starts from the most urgent order, ahead of an older one (A1 criterion 17)", async () => {
+    const picker = await createActor(db, ["PICKER"]);
+    const [older] = await sharingOrders(1);
+    const item = (await db.orderItem.findFirstOrThrow({ where: { orderId: older?.id } })) as never;
+    const urgent = await pendingOrder({ priority: 2, lines: [{ sameAs: item }] });
+
+    const [suggestion] = (await getBatchSuggestions(db, picker)).suggestions;
+
+    expect(suggestion?.orders.map((o) => o.id)).toEqual([urgent.order.id, older?.id]);
+    expect(suggestion?.oldest.number).toBe(older?.number);
+  });
+
   it("counts stops as the batch screen groups them", async () => {
     const picker = await createActor(db, ["PICKER"]);
     const first = await pendingOrder({ lines: [{ variation: {} }, { sku: "loose-1" }, {}] });

@@ -2,6 +2,7 @@ import type { BatchSuggestions } from "@woolrus/contracts";
 import type { Db, DbTx } from "@woolrus/db";
 import type { Actor, UserActor } from "../permissions";
 import { loadSettings } from "../settings/service";
+import { queueOrderBy } from "../workflow/queries";
 import { assertMayPick, batchInclude, closeIfSpent } from "./batches";
 import { activeQuantity, isWorkLine, lineInclude } from "./service";
 import { shelfKey } from "./shelf";
@@ -37,7 +38,7 @@ export async function listSuggestionCandidates(
         { claimedAt: { lte: cutoff } },
       ],
     },
-    orderBy: [{ priority: "desc" }, { orderedAt: "asc" }, { id: "asc" }],
+    orderBy: [...queueOrderBy],
     take: SUGGESTION_CANDIDATES,
     select: {
       id: true,
