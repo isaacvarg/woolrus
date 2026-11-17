@@ -438,6 +438,17 @@
   },
   "order": {
     "title": "Pedido #{number}",
+    "tabs": {
+      "label": "Secciones del pedido",
+      "overview": "Resumen",
+      "shipping": "Envío",
+      "issues": "Incidencias",
+      "history": "Historial",
+      "noPackages": "Las tarifas y etiquetas aparecen aquí cuando el pedido tiene paquetes.",
+      "labelCount": "{count, plural, one {# etiqueta} other {# etiquetas}}",
+      "openIssues": "{count, plural, one {# incidencia abierta} other {# incidencias abiertas}}",
+      "openIssuesCritical": "{count, plural, one {# incidencia abierta, crítica} other {# incidencias abiertas, al menos una crítica}}"
+    },
     "status": "Estado",
     "priority": "Prioridad",
     "customer": "Cliente",

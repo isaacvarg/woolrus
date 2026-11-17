@@ -104,7 +104,7 @@ test.describe("the go-live journey against the dev store", () => {
             expect(notes.filter((n) => n.customerNote && n.note.includes(number))).toHaveLength(1);
           }
 
-          await page.goto(`/orders/${order.id}`);
+          await page.goto(`/orders/${order.id}?tab=shipping`);
           await expect(page.getByText("Sent to Woo")).toBeVisible();
           await expect(page.getByTestId("order-labels")).toContainText(number);
         });

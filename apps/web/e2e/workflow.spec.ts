@@ -248,7 +248,7 @@ test("the detail page shows the header, read-only lines and the history", async 
   await expect(toasts(page).getByText(`Order ${order.number} is now in Picking.`)).toBeVisible();
   // Begin Picking lands on the pick screen (SPEC-picking); this test is about the detail page.
   await expect(page).toHaveURL(`/pick/${order.id}`);
-  await page.goto(`/orders/${order.id}`);
+  await page.goto(`/orders/${order.id}?tab=history`);
   await expect(page.getByText("Claimed by E2E PICKER")).toBeVisible();
   await expect(historyPanel(page).getByRole("listitem").first()).toContainText("Pending → Picking");
   await expect(historyPanel(page).getByRole("listitem").first()).toContainText("E2E PICKER");
@@ -266,6 +266,31 @@ test("a line shows its size and the options chosen at checkout", async ({ page }
   const line = page.getByRole("table", { name: "Items" }).getByRole("row", { name: /E2E item/ });
   await expect(line.getByRole("term")).toHaveText(["Size:", "Specific Delivery Window?:"]);
   await expect(line.getByRole("definition")).toHaveText(["16oz", "No"]);
+});
+
+test("the detail page's open tab is in the URL, so Back and a shared link reopen it", async ({
+  page,
+}) => {
+  const order = await createOrder();
+  await signInAs(page, ["PICKER"]);
+  await page.goto(`/orders/${order.id}`);
+  const overview = page.getByRole("tab", { name: /^Overview/ });
+  await expect(overview).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("table", { name: "Items" })).toBeVisible();
+
+  await page.getByRole("tab", { name: /^Notes/ }).click();
+  await expect(page).toHaveURL(`/orders/${order.id}?tab=notes`);
+  await expect(page.getByRole("region", { name: "Notes" })).toBeVisible();
+  await expect(page.getByRole("table", { name: "Items" })).toHaveCount(0);
+
+  await page.goBack();
+  await expect(page).toHaveURL(`/orders/${order.id}`);
+  await expect(overview).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("table", { name: "Items" })).toBeVisible();
+
+  await page.goto(`/orders/${order.id}?tab=issues`);
+  await expect(page.getByRole("tab", { name: /^Issues/ })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("region", { name: "Exceptions" })).toBeVisible();
 });
 
 test("a completion refused by its gate shows what's missing", async ({ page }) => {
@@ -297,7 +322,7 @@ test("a second picker sees the claim and takes the order over after confirming",
   const other = await (await browser.newContext()).newPage();
   try {
     await signInAs(other, ["PICKER", "PACKER"]);
-    await other.goto(`/orders/${order.id}`);
+    await other.goto(`/orders/${order.id}?tab=history`);
     await expect(other.getByText("Claimed by E2E PICKER")).toBeVisible();
     await expect(other.getByRole("button", { name: "Complete Picking" })).toHaveCount(0);
 
@@ -364,7 +389,7 @@ test("an admin cancels an order with a reason; a picker can't", async ({ page, b
   }
 
   await signInAs(page, ["ADMIN"]);
-  await page.goto(`/orders/${order.id}`);
+  await page.goto(`/orders/${order.id}?tab=history`);
   await page.getByRole("button", { name: "Cancel order" }).click();
   const dialog = page.getByRole("dialog", { name: "Cancel this order" });
   await dialog.getByRole("textbox", { name: "Reason" }).fill("Customer asked");
@@ -378,7 +403,7 @@ test("an admin cancels an order with a reason; a picker can't", async ({ page, b
 test("an admin forces an order to another status with a reason", async ({ page }) => {
   const order = await createOrder();
   await signInAs(page, ["ADMIN"]);
-  await page.goto(`/orders/${order.id}`);
+  await page.goto(`/orders/${order.id}?tab=history`);
   await page.getByRole("button", { name: "Force status" }).click();
   const dialog = page.getByRole("dialog", { name: "Force status" });
   // React Aria keeps the input visually hidden; people tap the label.

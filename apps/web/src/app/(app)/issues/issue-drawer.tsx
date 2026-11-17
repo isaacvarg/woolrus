@@ -110,7 +110,7 @@ export function IssueDrawer({
                   {t("issues.page.resolution", { notes: data.resolutionNotes })}
                 </p>
               )}
-              <Link href={`/orders/${data.orderId}`} className="link">
+              <Link href={`/orders/${data.orderId}?tab=issues`} className="link">
                 {t("issues.page.openOrder")} #{data.orderNumber}
               </Link>
 

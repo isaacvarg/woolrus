@@ -80,7 +80,7 @@ test("QA picks the pricier rate with a reason; the label and the drawer carry it
       await page.getByRole("button", { name: "Quick view" }).click();
       await expect(page.getByTestId("qa-drawer-reason")).toHaveText("Why: Faster delivery");
 
-      await page.goto(`/orders/${o.order.id}`);
+      await page.goto(`/orders/${o.order.id}?tab=shipping`);
       await expect(page.getByTestId("order-rate-reason")).toHaveText(
         "Why not the cheapest: Faster delivery",
       );
