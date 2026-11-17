@@ -27,8 +27,8 @@ import { toast } from "@/components/ui/toast";
 import { formatAddress } from "@/lib/address";
 import { useErrorMessage } from "@/lib/errors";
 import { client, orpc } from "@/lib/orpc";
+import { ActivityPanel } from "./activity-panel";
 import { ExternalChangeBanner } from "./external-change-banner";
-import { HistoryPanel } from "./history-panel";
 import { OrderActions } from "./order-actions";
 import { openIssueSummary, orderTabSearch, parseOrderTab } from "./order-tab";
 
@@ -194,7 +194,7 @@ function OrderLayout({
           />
         </TabPanel>
         <TabPanel id="history" className="outline-none">
-          <HistoryPanel id={order.id} />
+          <ActivityPanel id={order.id} />
         </TabPanel>
       </Tabs>
     </section>

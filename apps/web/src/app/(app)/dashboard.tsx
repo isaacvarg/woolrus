@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import type { OrderActivity } from "@woolrus/contracts";
+import type { DailyActivity } from "@woolrus/contracts";
 import {
   Ban,
   CirclePause,
@@ -131,8 +131,10 @@ function ActivityChart() {
   const animate = useChartAnimation();
   const [days, setDays] = useState<Range>(14);
   const [zone] = useState(timeZone);
-  const activity = useQuery(orpc.orders.activity.queryOptions({ input: { days, timeZone: zone } }));
-  const data: OrderActivity = activity.data ?? [];
+  const activity = useQuery(
+    orpc.orders.dailyActivity.queryOptions({ input: { days, timeZone: zone } }),
+  );
+  const data: DailyActivity = activity.data ?? [];
 
   // Days come as YYYY-MM-DD in the viewer's zone: read them back at UTC midnight so no zone moves
   // them a day.

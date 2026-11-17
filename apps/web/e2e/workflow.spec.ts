@@ -250,7 +250,9 @@ test("the detail page shows the header, read-only lines and the history", async 
   await expect(page).toHaveURL(`/pick/${order.id}`);
   await page.goto(`/orders/${order.id}?tab=history`);
   await expect(page.getByText("Claimed by E2E PICKER")).toBeVisible();
-  await expect(historyPanel(page).getByRole("listitem").first()).toContainText("Pending → Picking");
+  await expect(historyPanel(page).getByRole("listitem").first()).toContainText(
+    "Moved from Pending to Picking",
+  );
   await expect(historyPanel(page).getByRole("listitem").first()).toContainText("E2E PICKER");
 });
 
@@ -335,7 +337,7 @@ test("a second picker sees the claim and takes the order over after confirming",
     await expect(other.getByText("Claimed by E2E PICKER+PACKER")).toBeVisible();
     await expect(other.getByRole("button", { name: "Complete Picking" })).toBeVisible();
     await expect(historyPanel(other).getByRole("listitem").first()).toContainText(
-      "Took over from E2E PICKER",
+      "Took the order over from E2E PICKER",
     );
   } finally {
     await other.context().close();
@@ -413,7 +415,9 @@ test("an admin forces an order to another status with a reason", async ({ page }
   await dialog.getByRole("button", { name: "Force status" }).click();
 
   await expect(page.getByTestId("order-status")).toHaveText("QA");
-  await expect(historyPanel(page).getByRole("listitem").first()).toContainText("Pending → QA");
+  await expect(historyPanel(page).getByRole("listitem").first()).toContainText(
+    "Moved from Pending to QA",
+  );
   await expect(historyPanel(page).getByRole("listitem").first()).toContainText("Packed by hand");
 });
 
@@ -608,8 +612,8 @@ for (const { stage, roles, path } of [
     });
     expect(claimed.ok()).toBe(true);
     const before = await (await page.request.get(`/api/v1/orders/${order.id}`)).json();
-    const historyBefore = await (
-      await page.request.get(`/api/v1/orders/${order.id}/history`)
+    const activityBefore = await (
+      await page.request.get(`/api/v1/orders/${order.id}/activity`)
     ).json();
 
     const refused = await page.request.post(`/api/v1/orders/${order.id}/${path}`, {
@@ -622,8 +626,8 @@ for (const { stage, roles, path } of [
     expect(data.unmet.length).toBeGreaterThan(0);
     const after = await (await page.request.get(`/api/v1/orders/${order.id}`)).json();
     expect(after).toMatchObject({ status: stage, version: before.version });
-    expect(await (await page.request.get(`/api/v1/orders/${order.id}/history`)).json()).toEqual(
-      historyBefore,
+    expect(await (await page.request.get(`/api/v1/orders/${order.id}/activity`)).json()).toEqual(
+      activityBefore,
     );
   });
 }

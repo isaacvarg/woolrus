@@ -510,18 +510,6 @@
     "newStatus": "New status",
     "takeOverTitle": "Take over this order?",
     "takeOverBody": "{name} is working on this order. Taking it over moves the claim to you.",
-    "history": {
-      "title": "History",
-      "empty": "Nothing has happened to this order yet.",
-      "stage": "{from} → {to}",
-      "imported": "Imported as {to}",
-      "claim": "Claimed",
-      "takeOver": "Took over from {name}",
-      "release": "Released",
-      "by": "by {name}",
-      "system": "Store sync",
-      "at": "at {station}"
-    },
     "externalChange": {
       "title": "Changed in the store",
       "detected": "WooCommerce changed this order {time}. Nothing has been changed here yet.",
@@ -2331,6 +2319,58 @@
       "received": "Received",
       "completed": "Completed",
       "day": "Day"
+    }
+  },
+  "activity": {
+    "title": "History",
+    "empty": "Nothing has happened to this order yet.",
+    "truncated": "Showing the latest {count} entries. Older activity is left out.",
+    "filters": "Filter by category",
+    "all": "All",
+    "category": {
+      "status": "Status",
+      "picking": "Picking",
+      "packing": "Packing",
+      "qa": "QA",
+      "shipping": "Shipping",
+      "problems": "Problems",
+      "notes": "Notes",
+      "store": "Store"
+    },
+    "system": {
+      "store-sync": "Store sync",
+      "operations": "Operations",
+      "shipping": "Shipping",
+      "lumexia": "Lumexia",
+      "unknown": "System"
+    },
+    "at": "at {station}",
+    "grouped": "{count, plural, one {# time} other {# times}}, {from}–{to}",
+    "showMembers": "Show each",
+    "hideMembers": "Hide each",
+    "showDetails": "What changed",
+    "hideDetails": "Hide changes",
+    "noValue": "—",
+    "target": {
+      "box": "Box {number}",
+      "label": "{carrier} label",
+      "labelTracking": "{carrier} label …{end}"
+    },
+    "generic": "Changed {entity}",
+    "entity": {
+      "Order": "the order",
+      "OrderItem": "a line",
+      "Package": "a box",
+      "PackageItem": "an item in a box",
+      "PackageCheckTrip": "a packing check",
+      "ShippingLabel": "a label",
+      "Note": "a note",
+      "QualityIssue": "an issue",
+      "ItemVoid": "a void",
+      "Approval": "an approval",
+      "PickBatch": "a pick batch",
+      "Product": "a product",
+      "other": "something"
     }
   }
 }

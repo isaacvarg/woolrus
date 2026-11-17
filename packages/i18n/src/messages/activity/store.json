@@ -1,0 +1,18 @@
+{
+  "en": {
+    "order_import": "Imported from the store",
+    "order_externalChange_flagged": "The order changed in the store and needs a review",
+    "order_externalChange_applied": "Applied the store's changes",
+    "order_externalChange_cleared": "The store's changes were undone in the store",
+    "order_externalChange_dismissed": "Kept the order as it was, ignoring the store's changes",
+    "pii_anonymize": "Removed the customer's details"
+  },
+  "es": {
+    "order_import": "Importado desde la tienda",
+    "order_externalChange_flagged": "El pedido cambió en la tienda y necesita revisión",
+    "order_externalChange_applied": "Aplicó los cambios de la tienda",
+    "order_externalChange_cleared": "Los cambios se deshicieron en la tienda",
+    "order_externalChange_dismissed": "Dejó el pedido como estaba, sin los cambios de la tienda",
+    "pii_anonymize": "Eliminó los datos del cliente"
+  }
+}

@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import type { OrderPackageSummary, PackPackage } from "@woolrus/contracts";
 import { useFormatter, useTranslations } from "next-intl";
 import { Dialog as AriaDialog, Heading, Modal, ModalOverlay } from "react-aria-components";
-import { HistoryPanel } from "@/app/(app)/orders/[id]/history-panel";
+import { ActivityPanel } from "@/app/(app)/orders/[id]/activity-panel";
 import { LotList } from "@/components/lots/lot-list";
 import { NoteComposer } from "@/components/notes/note-composer";
 import { NoteList } from "@/components/notes/note-list";
@@ -15,7 +15,7 @@ import { useErrorMessage } from "@/lib/errors";
 import { orpc } from "@/lib/orpc";
 
 // The order drawer (FR-PACK-08): what a packer wants to know about the order without leaving the
-// screen. It reuses `orders.get`, `orders.history` and `notes.list`.
+// screen. It reuses `orders.get`, `orders.activity` and `notes.list`.
 
 /** The header button and the slide-in modal it opens. */
 export function OrderDrawer({ orderId }: { orderId: string }) {
@@ -113,7 +113,7 @@ function DrawerBody({ orderId, close }: { orderId: string; close: () => void }) 
 
           <DrawerLots packages={order.data.packages} />
 
-          <HistoryPanel id={orderId} />
+          <ActivityPanel id={orderId} />
 
           <section aria-labelledby="drawer-notes" className="space-y-2">
             <h3 id="drawer-notes" className="text-xl font-bold">

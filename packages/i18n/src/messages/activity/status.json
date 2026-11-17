@@ -1,0 +1,36 @@
+{
+  "en": {
+    "stage_move": "Moved from {from} to {to}",
+    "stage_import": "Imported into {to}",
+    "order_claim": "Claimed the order",
+    "order_takeOver": "Took the order over from {name}",
+    "order_release": "Released the order",
+    "order_beginPicking": "Began picking",
+    "order_completePicking": "Finished picking",
+    "order_completePacking": "Finished packing",
+    "order_completeQa": "Finished QA",
+    "order_ship": "Shipped the order",
+    "order_repack": "Sent the order back to packing",
+    "order_hold": "Put the order on hold",
+    "order_resume": "Resumed the order",
+    "order_cancel": "Cancelled the order",
+    "order_forceStatus": "Forced the order's status"
+  },
+  "es": {
+    "stage_move": "Pasó de {from} a {to}",
+    "stage_import": "Importado en {to}",
+    "order_claim": "Reclamó el pedido",
+    "order_takeOver": "Le tomó el pedido a {name}",
+    "order_release": "Liberó el pedido",
+    "order_beginPicking": "Empezó a surtir",
+    "order_completePicking": "Terminó de surtir",
+    "order_completePacking": "Terminó de empacar",
+    "order_completeQa": "Terminó el control de calidad",
+    "order_ship": "Envió el pedido",
+    "order_repack": "Devolvió el pedido a empaque",
+    "order_hold": "Puso el pedido en espera",
+    "order_resume": "Reanudó el pedido",
+    "order_cancel": "Canceló el pedido",
+    "order_forceStatus": "Forzó el estado del pedido"
+  }
+}

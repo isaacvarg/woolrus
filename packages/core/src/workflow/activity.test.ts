@@ -3,7 +3,7 @@ import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { createActor, resetDb, testDb } from "../../test/db";
 import { createOrder } from "../../test/factories";
 import type { UserActor } from "../permissions";
-import { orderActivity } from "./activity";
+import { dailyOrderActivity } from "./activity";
 
 const db: Db = testDb();
 afterAll(() => db.$disconnect());
@@ -16,10 +16,10 @@ beforeEach(async () => {
 
 const now = new Date("2026-03-10T15:00:00Z");
 
-describe("orderActivity", () => {
+describe("dailyOrderActivity", () => {
   it("needs order.read", async () => {
     const nobody = await createActor(db, []);
-    await expect(orderActivity(db, nobody, {}, { now })).rejects.toMatchObject({
+    await expect(dailyOrderActivity(db, nobody, {}, { now })).rejects.toMatchObject({
       kind: "FORBIDDEN",
     });
   });
@@ -39,7 +39,7 @@ describe("orderActivity", () => {
       data: { completedAt: new Date("2026-03-09T12:00:00Z") },
     });
 
-    const days = await orderActivity(db, picker, { days: 7 }, { now });
+    const days = await dailyOrderActivity(db, picker, { days: 7 }, { now });
     expect(days.map((d) => d.day)).toEqual([
       "2026-03-04",
       "2026-03-05",
@@ -58,7 +58,12 @@ describe("orderActivity", () => {
     // 01:00 UTC on the 10th is 20:00 on the 9th in Chicago (UTC−5 after the March 8 DST change).
     await createOrder(db, { orderedAt: new Date("2026-03-10T01:00:00Z") });
 
-    const days = await orderActivity(db, picker, { days: 7, timeZone: "America/Chicago" }, { now });
+    const days = await dailyOrderActivity(
+      db,
+      picker,
+      { days: 7, timeZone: "America/Chicago" },
+      { now },
+    );
     expect(days.at(-1)).toEqual({ day: "2026-03-10", received: 0, completed: 0 });
     expect(days.at(-2)).toEqual({ day: "2026-03-09", received: 1, completed: 0 });
   });

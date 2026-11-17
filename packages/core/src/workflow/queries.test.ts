@@ -4,10 +4,8 @@ import { createActor, resetDb, testDb } from "../../test/db";
 import { createOrder } from "../../test/factories";
 import { reportIssue } from "../exceptions/issues";
 import { undoVoid, voidItem } from "../exceptions/voids";
-import { systemActor, type UserActor } from "../permissions";
-import { claim, takeOver } from "./claims";
-import { getOrder, getOrderHistory, listOrders, listQueue, queueCounts } from "./queries";
-import { beginPicking, hold, transition } from "./service";
+import type { UserActor } from "../permissions";
+import { getOrder, listOrders, listQueue, queueCounts } from "./queries";
 
 const db: Db = testDb();
 afterAll(() => db.$disconnect());
@@ -439,100 +437,6 @@ describe("getOrder", () => {
     const view = await getOrder(db, packer, { id: order.id });
     expect(view.claim).toBeNull();
     expect(view.allowedActions.sort()).toEqual(["claim", "hold"]);
-  });
-});
-
-describe("getOrderHistory", () => {
-  it("lists stage changes and claim moves newest first, with actor and station names", async () => {
-    const station = await db.station.create({ data: { name: "Tablet 3", tokenHash: "h-3" } });
-    await db.user.update({ where: { id: picker.userId }, data: { name: "Ana" } });
-    const atStation = { ...picker, stationId: station.id };
-    const bruno = await createActor(db, ["PICKER"]);
-    await db.user.update({ where: { id: bruno.userId }, data: { name: "Bruno" } });
-    const { order } = await createOrder(db);
-
-    const t = (min: number) => ({ now: new Date(Date.now() - (10 - min) * 60_000) });
-    await claim(db, atStation, { orderId: order.id, expectedVersion: 1 }, t(1));
-    await takeOver(db, bruno, { orderId: order.id, expectedVersion: 2, confirm: true }, t(2));
-    await beginPicking(db, bruno, { orderId: order.id, expectedVersion: 3 }, t(3));
-    await hold(db, atStation, { orderId: order.id, expectedVersion: 4, reason: "Address" }, t(4));
-
-    const history = await getOrderHistory(db, picker, { id: order.id });
-
-    expect(history.map((h) => [h.type, h.actorName])).toEqual([
-      ["stage", "Ana"],
-      ["stage", "Bruno"],
-      ["takeOver", "Bruno"],
-      ["claim", "Ana"],
-    ]);
-    expect(history[0]).toMatchObject({
-      fromStatus: "PICKING",
-      toStatus: "ON_HOLD",
-      reason: "Address",
-      stationName: "Tablet 3",
-    });
-    expect(history[2]).toMatchObject({
-      fromStatus: null,
-      toStatus: null,
-      previousHolderName: "Ana",
-      stationName: null,
-    });
-    expect(history[3]?.stationName).toBe("Tablet 3");
-  });
-
-  it("names people who have no name yet by their email", async () => {
-    const ana = await db.user.update({ where: { id: picker.userId }, data: { name: "" } });
-    const bruno = await createActor(db, ["PICKER"]);
-    const { order } = await createOrder(db);
-    const t = (min: number) => ({ now: new Date(Date.now() - (10 - min) * 60_000) });
-    await claim(db, picker, { orderId: order.id, expectedVersion: 1 }, t(1));
-    await takeOver(db, bruno, { orderId: order.id, expectedVersion: 2, confirm: true }, t(2));
-
-    const history = await getOrderHistory(db, picker, { id: order.id });
-    expect(history.map((h) => h.actorName)).toEqual(["Test User", ana.email]);
-    expect(history[0]?.previousHolderName).toBe(ana.email);
-  });
-
-  it("leaves out audit rows that aren't about claims, and other orders", async () => {
-    const { order } = await createOrder(db);
-    const { order: other } = await createOrder(db);
-    await db.auditEvent.create({
-      data: { entityType: "Order", entityId: order.id, action: "order.somethingElse" },
-    });
-    await claim(db, picker, { orderId: other.id, expectedVersion: 1 });
-
-    expect(await getOrderHistory(db, picker, { id: order.id })).toEqual([]);
-  });
-
-  it("needs order.read and an existing order", async () => {
-    const nobody = await createActor(db, []);
-    const { order } = await createOrder(db);
-    await expect(getOrderHistory(db, nobody, { id: order.id })).rejects.toMatchObject({
-      kind: "FORBIDDEN",
-    });
-    await expect(
-      getOrderHistory(db, picker, { id: "0199e6a0-0000-7000-8000-000000000000" }),
-    ).rejects.toMatchObject({ kind: "NOT_FOUND" });
-  });
-
-  it("marks store-sync moves as the system's, and people's as not", async () => {
-    const { order } = await createOrder(db);
-    await beginPicking(db, picker, { orderId: order.id, expectedVersion: 1 });
-    await db.$transaction((tx) =>
-      transition(tx, systemActor, {
-        orderId: order.id,
-        expectedVersion: 2,
-        to: "ON_HOLD",
-        kind: "hold",
-        reason: "Cancelled in store",
-      }),
-    );
-
-    const history = await getOrderHistory(db, picker, { id: order.id });
-    expect(history.map((h) => [h.bySystem, h.actorName])).toEqual([
-      [true, null],
-      [false, "Test User"],
-    ]);
   });
 });
 

@@ -510,18 +510,6 @@
     "newStatus": "Nuevo estado",
     "takeOverTitle": "¿Tomar este pedido?",
     "takeOverBody": "{name} está trabajando en este pedido. Si lo tomas, el pedido pasa a tu nombre.",
-    "history": {
-      "title": "Historial",
-      "empty": "Todavía no ha pasado nada con este pedido.",
-      "stage": "{from} → {to}",
-      "imported": "Importado como {to}",
-      "claim": "Reclamado",
-      "takeOver": "Lo tomó de {name}",
-      "release": "Liberado",
-      "by": "por {name}",
-      "system": "Sincronización con la tienda",
-      "at": "en {station}"
-    },
     "externalChange": {
       "title": "Cambiado en la tienda",
       "detected": "WooCommerce cambió este pedido {time}. Aquí todavía no se ha cambiado nada.",
@@ -2331,6 +2319,58 @@
       "received": "Recibidos",
       "completed": "Completados",
       "day": "Día"
+    }
+  },
+  "activity": {
+    "title": "Historial",
+    "empty": "Todavía no ha pasado nada con este pedido.",
+    "truncated": "Se muestran las últimas {count} entradas. La actividad anterior no aparece.",
+    "filters": "Filtrar por categoría",
+    "all": "Todo",
+    "category": {
+      "status": "Estado",
+      "picking": "Surtido",
+      "packing": "Empaque",
+      "qa": "Control de calidad",
+      "shipping": "Envío",
+      "problems": "Problemas",
+      "notes": "Notas",
+      "store": "Tienda"
+    },
+    "system": {
+      "store-sync": "Sincronización con la tienda",
+      "operations": "Operaciones",
+      "shipping": "Envíos",
+      "lumexia": "Lumexia",
+      "unknown": "Sistema"
+    },
+    "at": "en {station}",
+    "grouped": "{count, plural, one {# vez} other {# veces}}, {from}–{to}",
+    "showMembers": "Ver cada una",
+    "hideMembers": "Ocultar",
+    "showDetails": "Qué cambió",
+    "hideDetails": "Ocultar cambios",
+    "noValue": "—",
+    "target": {
+      "box": "Caja {number}",
+      "label": "Etiqueta de {carrier}",
+      "labelTracking": "Etiqueta de {carrier} …{end}"
+    },
+    "generic": "Cambió {entity}",
+    "entity": {
+      "Order": "el pedido",
+      "OrderItem": "una línea",
+      "Package": "una caja",
+      "PackageItem": "un artículo de una caja",
+      "PackageCheckTrip": "un control de empaque",
+      "ShippingLabel": "una etiqueta",
+      "Note": "una nota",
+      "QualityIssue": "una incidencia",
+      "ItemVoid": "una anulación",
+      "Approval": "una aprobación",
+      "PickBatch": "un lote de surtido",
+      "Product": "un producto",
+      "other": "algo"
     }
   }
 }

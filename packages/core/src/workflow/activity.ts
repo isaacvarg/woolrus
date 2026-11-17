@@ -1,4 +1,4 @@
-import { type OrderActivity, OrderActivityInput } from "@woolrus/contracts";
+import { type DailyActivity, DailyActivityInput } from "@woolrus/contracts";
 import type { DbTx } from "@woolrus/db";
 import { type Actor, assertCan } from "../permissions";
 
@@ -29,14 +29,14 @@ type DayCount = { day: string; n: number };
  * Orders received (by WooCommerce order date) and completed per calendar day in the viewer's time
  * zone, for the dashboard chart. Read-only; every day in the range is present.
  */
-export async function orderActivity(
+export async function dailyOrderActivity(
   db: DbTx,
   actor: Actor,
-  input: OrderActivityInput,
+  input: DailyActivityInput,
   { now = new Date() }: { now?: Date } = {},
-): Promise<OrderActivity> {
+): Promise<DailyActivity> {
   assertCan(actor, "order.read");
-  const { days, timeZone } = OrderActivityInput.parse(input);
+  const { days, timeZone } = DailyActivityInput.parse(input);
   const range = daysEnding(dayIn(now, timeZone), days);
   const first = range[0] as string;
   // A day ahead of the first day's UTC midnight covers every zone offset and lets the index help;

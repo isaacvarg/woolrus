@@ -1,9 +1,14 @@
-import en from "./messages/en.json" with { type: "json" };
-import es from "./messages/es.json" with { type: "json" };
+import { activityActions } from "./messages/activity";
+import enBase from "./messages/en.json" with { type: "json" };
+import esBase from "./messages/es.json" with { type: "json" };
 
 export const locales = ["en", "es"] as const;
 export type Locale = (typeof locales)[number];
 export const defaultLocale: Locale = "en";
+
+/** The base catalog plus the timeline's action wording, kept in one file per category. */
+const en = { ...enBase, activity: { ...enBase.activity, action: activityActions.en } };
+const es = { ...esBase, activity: { ...esBase.activity, action: activityActions.es } };
 
 export type Messages = typeof en;
 

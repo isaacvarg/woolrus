@@ -2,11 +2,12 @@ import type { Db } from "@woolrus/db";
 import { seedDemoOrders } from "@woolrus/db/demo";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { createActor, resetDb, testDb } from "../../test/db";
+import { getOrderActivity } from "../activity/timeline";
 import type { Actor } from "../permissions";
 import { getBatchSuggestions } from "../picking/queries";
 import { evaluateGate, loadGateSnapshot } from "./gates";
 import { recomputePriorities } from "./priority-rules";
-import { getOrder, getOrderHistory, listQueue, queueCounts } from "./queries";
+import { getOrder, listQueue, queueCounts } from "./queries";
 
 // The dev seed (T12) has to describe orders the workflow accepts, or the demo stack lies.
 
@@ -138,8 +139,9 @@ describe("seedDemoOrders", () => {
     await seedDemoOrders(db);
 
     for (const order of await db.order.findMany()) {
-      const [latest] = await getOrderHistory(db, admin, { id: order.id });
-      expect(latest?.toStatus, order.number).toBe(order.status);
+      const { entries } = await getOrderActivity(db, admin, { id: order.id });
+      const latest = entries.find((e) => e.action.startsWith("stage."));
+      expect(latest?.params.to, order.number).toBe(order.status);
       expect(latest?.at.getTime(), order.number).toBe(order.statusChangedAt.getTime());
     }
   });

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { base, Id } from "./base";
 import { LotDto } from "./lumexia";
+import { orderActivityRoute } from "./order-activity";
 import { PackApprovalInput } from "./pack-checks";
 import { PrintState } from "./shipping";
 
@@ -182,13 +183,13 @@ const TimeZone = z.string().refine(
 );
 
 /** The dashboard's chart: the last `days` calendar days in the viewer's time zone, today included. */
-export const OrderActivityInput = z.object({
+export const DailyActivityInput = z.object({
   days: z.coerce.number().int().min(7).max(90).default(14),
   timeZone: TimeZone.default("UTC"),
 });
-export type OrderActivityInput = z.input<typeof OrderActivityInput>;
+export type DailyActivityInput = z.input<typeof DailyActivityInput>;
 
-export const OrderActivityDay = z.object({
+export const DailyActivityDay = z.object({
   /** YYYY-MM-DD in the requested time zone. */
   day: z.iso.date(),
   /** Orders placed in WooCommerce that day. */
@@ -196,11 +197,11 @@ export const OrderActivityDay = z.object({
   /** Orders completed (shipped) that day. */
   completed: z.number().int(),
 });
-export type OrderActivityDay = z.infer<typeof OrderActivityDay>;
+export type DailyActivityDay = z.infer<typeof DailyActivityDay>;
 
 /** Oldest day first, every day present (zeros included). */
-export const OrderActivity = z.array(OrderActivityDay);
-export type OrderActivity = z.infer<typeof OrderActivity>;
+export const DailyActivity = z.array(DailyActivityDay);
+export type DailyActivity = z.infer<typeof DailyActivity>;
 
 /** What the caller may do to an order right now; the UI shows only these buttons. */
 export const OrderAction = z.enum([
@@ -443,24 +444,6 @@ export const OrderView = OrderDetail.extend({
 });
 export type OrderView = z.infer<typeof OrderView>;
 
-/** One entry of an order's history: a status change, or a claim moving between people. */
-export const OrderHistoryEntry = z.object({
-  id: Id,
-  at: z.date(),
-  type: z.enum(["stage", "claim", "takeOver", "release"]),
-  fromStatus: WorkflowStatus.nullable(),
-  toStatus: WorkflowStatus.nullable(),
-  reason: z.string().nullable(),
-  /** Null for store-sync moves (`bySystem`). */
-  actorName: z.string().nullable(),
-  /** Made by store sync, not a person: shown as "Store sync". */
-  bySystem: z.boolean(),
-  stationName: z.string().nullable(),
-  /** Takeovers: whose claim was taken. */
-  previousHolderName: z.string().nullable(),
-});
-export type OrderHistoryEntry = z.infer<typeof OrderHistoryEntry>;
-
 export const ORDER_LIST_PAGE_MAX = 100;
 
 export const OrderListSort = z.enum(["number", "orderedAt", "customer", "status", "priority"]);
@@ -531,15 +514,15 @@ export const orders = {
   counts: base
     .route({ method: "GET", path: "/orders/counts", tags, summary: "Orders in each queue" })
     .output(QueueCounts),
-  activity: base
+  dailyActivity: base
     .route({
       method: "GET",
-      path: "/orders/activity",
+      path: "/orders/daily-activity",
       tags,
       summary: "Orders received and completed per day, for the dashboard",
     })
-    .input(OrderActivityInput)
-    .output(OrderActivity),
+    .input(DailyActivityInput)
+    .output(DailyActivity),
   list: base
     .route({
       method: "GET",
@@ -558,15 +541,7 @@ export const orders = {
     })
     .input(z.object({ id: Id }))
     .output(OrderView),
-  history: base
-    .route({
-      method: "GET",
-      path: "/orders/{id}/history",
-      tags,
-      summary: "Stage changes and claim moves, newest first",
-    })
-    .input(z.object({ id: Id }))
-    .output(z.array(OrderHistoryEntry)),
+  activity: orderActivityRoute,
 
   beginPicking: move("begin-picking", "Begin picking a Pending order and claim it"),
   completePicking: move("complete-picking", "Finish picking; refused while lines are unpicked"),

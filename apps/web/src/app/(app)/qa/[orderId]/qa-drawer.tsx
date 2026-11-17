@@ -5,7 +5,7 @@ import type { QaView } from "@woolrus/contracts";
 import { PanelRightOpen } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
 import { Dialog as AriaDialog, Heading, Modal, ModalOverlay } from "react-aria-components";
-import { HistoryPanel } from "@/app/(app)/orders/[id]/history-panel";
+import { ActivityPanel } from "@/app/(app)/orders/[id]/activity-panel";
 import { NoteList } from "@/components/notes/note-list";
 import { DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/fields";
@@ -135,7 +135,7 @@ function DrawerBody({ view, close }: { view: QaView; close: () => void }) {
         ))}
       </section>
 
-      <HistoryPanel id={orderId} />
+      <ActivityPanel id={orderId} />
 
       <section aria-labelledby="qa-drawer-notes" className="space-y-2">
         <h3 id="qa-drawer-notes" className="text-xl font-bold">
