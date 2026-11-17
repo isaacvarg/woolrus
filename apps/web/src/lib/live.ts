@@ -25,6 +25,8 @@ function invalidateLists(queryClient: QueryClient) {
   const keys = [
     orpc.orders.queue.key(),
     orpc.orders.counts.key(),
+    // The dashboard chart counts orders received and completed per day.
+    orpc.orders.activity.key(),
     orpc.orders.list.key(),
     // Resolving a void notifies its order; the Voids page and its nav count follow.
     orpc.voids.key(),

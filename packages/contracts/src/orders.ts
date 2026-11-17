@@ -168,6 +168,40 @@ export type QueuePage = z.infer<typeof QueuePage>;
 export const QueueCounts = z.record(QueueStage, z.number().int());
 export type QueueCounts = z.infer<typeof QueueCounts>;
 
+/** An IANA time zone (`America/Chicago`), checked against the runtime's zone database. */
+const TimeZone = z.string().refine(
+  (zone) => {
+    try {
+      new Intl.DateTimeFormat("en", { timeZone: zone });
+      return true;
+    } catch {
+      return false;
+    }
+  },
+  { message: "errors.field.invalid" },
+);
+
+/** The dashboard's chart: the last `days` calendar days in the viewer's time zone, today included. */
+export const OrderActivityInput = z.object({
+  days: z.coerce.number().int().min(7).max(90).default(14),
+  timeZone: TimeZone.default("UTC"),
+});
+export type OrderActivityInput = z.input<typeof OrderActivityInput>;
+
+export const OrderActivityDay = z.object({
+  /** YYYY-MM-DD in the requested time zone. */
+  day: z.iso.date(),
+  /** Orders placed in WooCommerce that day. */
+  received: z.number().int(),
+  /** Orders completed (shipped) that day. */
+  completed: z.number().int(),
+});
+export type OrderActivityDay = z.infer<typeof OrderActivityDay>;
+
+/** Oldest day first, every day present (zeros included). */
+export const OrderActivity = z.array(OrderActivityDay);
+export type OrderActivity = z.infer<typeof OrderActivity>;
+
 /** What the caller may do to an order right now; the UI shows only these buttons. */
 export const OrderAction = z.enum([
   "beginPicking",
@@ -497,6 +531,15 @@ export const orders = {
   counts: base
     .route({ method: "GET", path: "/orders/counts", tags, summary: "Orders in each queue" })
     .output(QueueCounts),
+  activity: base
+    .route({
+      method: "GET",
+      path: "/orders/activity",
+      tags,
+      summary: "Orders received and completed per day, for the dashboard",
+    })
+    .input(OrderActivityInput)
+    .output(OrderActivity),
   list: base
     .route({
       method: "GET",

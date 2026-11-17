@@ -120,6 +120,7 @@ export * from "./sync/status";
 export * from "./sync/webhooks";
 export * from "./units";
 export * from "./workflow/actions";
+export * from "./workflow/activity";
 export * from "./workflow/claims";
 export * from "./workflow/detail";
 export * from "./workflow/gates";
