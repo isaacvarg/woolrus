@@ -77,6 +77,7 @@ model User {
   voidsResolved      ItemVoid[]          @relation("VoidResolvedBy")
   returnsCreated     ReturnRequest[]
   auditEvents        AuditEvent[]
+  scanMisses         ScanMiss[]
   idempotentRequests IdempotentRequest[]
   labAddresses       RateLabAddress[]
   labParcels         RateLabParcel[]
@@ -172,6 +173,7 @@ model Station {
   stageEvents  OrderStageEvent[]
   auditEvents  AuditEvent[]
   approvals    Approval[]
+  scanMisses   ScanMiss[]
 
   @@map("stations")
 }

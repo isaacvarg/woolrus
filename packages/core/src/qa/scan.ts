@@ -1,5 +1,6 @@
 import type { QaResult, ScanVerifyInput } from "@woolrus/contracts";
 import type { Db } from "@woolrus/db";
+import { scanMisses } from "../activity/record-scan-miss";
 import { recordAudit } from "../audit";
 import { AppError, notFound } from "../errors";
 import { storedResult, withIdempotency } from "../idempotency";
@@ -24,7 +25,8 @@ export async function scanVerify(
 ): Promise<QaResult> {
   assertCan(actor, "order.qa");
   const wanted = normalizeCode(code);
-  return db.$transaction(async (tx) => {
+  const misses = scanMisses(db, actor, { stage: "QA", code: wanted, scanId });
+  const scanning = db.$transaction(async (tx) => {
     const pkg = await tx.package.findUnique({
       where: { id: packageId },
       select: { orderId: true, discardedAt: true },
@@ -45,7 +47,11 @@ export async function scanVerify(
       const items = await tx.orderItem.findMany({ where: { orderId }, include: lineInclude });
       const matching = matchingLines(items, wanted);
       const first = matching[0];
-      if (!first) throw await notOnOrder(tx, wanted, can(actor, "product.manage"), SCAN_NOT_ON);
+      if (!first) {
+        const refusal = await notOnOrder(tx, wanted, can(actor, "product.manage"), SCAN_NOT_ON);
+        throw misses.notOnOrder(refusal, { orderId, packageId });
+      }
+      const miss = { orderId, orderItemId: first.id, productName: first.name };
 
       const rows = await tx.packageItem.findMany({
         where: { package: { orderId }, orderItemId: { in: matching.map((m) => m.id) } },
@@ -63,18 +69,25 @@ export async function scanVerify(
       if (here.length === 0) {
         const other = rows[0];
         if (other) {
-          throw new AppError("CONFLICT", "errors.qa.scanOtherPackage", undefined, {
+          const refusal = new AppError("CONFLICT", "errors.qa.scanOtherPackage", undefined, {
             params: { package: other.package.number },
           });
+          // The box the refusal names.
+          const there = { orderItemId: other.orderItemId, packageId: other.packageId };
+          throw misses.refuse(refusal, { ...miss, ...there, kind: "OTHER_PACKAGE" });
         }
         // On the order but in no package (voided to nothing, or never packed).
-        throw new AppError("CONFLICT", SCAN_NOT_ON, undefined, { params: { name: first.name } });
+        const refusal = new AppError("CONFLICT", SCAN_NOT_ON, undefined, {
+          params: { name: first.name },
+        });
+        throw misses.refuse(refusal, { ...miss, packageId, kind: "NOT_ON_ORDER" });
       }
       const target = here.find((r) => r.qaVerifiedQuantity < r.quantity);
       if (!target) {
-        throw new AppError("CONFLICT", "errors.qa.scanAlreadyVerified", undefined, {
+        const refusal = new AppError("CONFLICT", "errors.qa.scanAlreadyVerified", undefined, {
           params: { line: first.name },
         });
+        throw misses.refuse(refusal, { ...miss, packageId, kind: "ALREADY_DONE" });
       }
 
       const verified = target.qaVerifiedQuantity + 1;
@@ -102,6 +115,7 @@ export async function scanVerify(
     });
     return qaResult(tx, orderId);
   });
+  return misses.settle(scanning);
 }
 
 const SCAN_NOT_ON = "errors.qa.scanNotOnOrder" as const;

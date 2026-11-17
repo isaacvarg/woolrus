@@ -11,6 +11,7 @@ import {
   type SetWeightInput,
 } from "@woolrus/contracts";
 import type { Db, DbTx } from "@woolrus/db";
+import { scanMisses } from "../activity/record-scan-miss";
 import { recordAudit } from "../audit";
 import { AppError, notFound } from "../errors";
 import { storedResult, withIdempotency } from "../idempotency";
@@ -488,7 +489,8 @@ export async function scanIntoPackage(
 ): Promise<PackResult> {
   assertCan(actor, "order.pack");
   const wanted = normalizeCode(code);
-  return db.$transaction(async (tx) => {
+  const misses = scanMisses(db, actor, { stage: "PACKING", code: wanted, scanId });
+  const scanning = db.$transaction(async (tx) => {
     const ref = await tx.package.findUnique({
       where: { id: packageId },
       select: { orderId: true },
@@ -504,13 +506,17 @@ export async function scanIntoPackage(
       const unassigned = new Map(lines.map((l) => [l.row.id, l.unassigned]));
       const matching = matchingLines(lines.map((l) => l.row).filter(isPhysical), wanted);
       if (matching.length === 0) {
-        throw await notOnOrder(tx, wanted, can(actor, "product.manage"));
+        const refusal = await notOnOrder(tx, wanted, can(actor, "product.manage"));
+        throw misses.notOnOrder(refusal, { orderId: order.id, packageId });
       }
       const target = matching.find((row) => (unassigned.get(row.id) ?? 0) > 0);
       if (!target) {
-        throw new AppError("CONFLICT", "errors.packing.scanAlreadyPacked", undefined, {
-          params: { line: (matching[0] as LineRow).name },
+        const line = matching[0] as LineRow;
+        const refusal = new AppError("CONFLICT", "errors.packing.scanAlreadyPacked", undefined, {
+          params: { line: line.name },
         });
+        const miss = { orderId: order.id, orderItemId: line.id, packageId, productName: line.name };
+        throw misses.refuse(refusal, { ...miss, kind: "ALREADY_DONE" });
       }
       await addUnits(tx, actor, packageId, target.id, 1, now);
       packed = true;
@@ -521,4 +527,5 @@ export async function scanIntoPackage(
     await invalidate(tx, packageId, true);
     return finish(tx, actor, order, "scan", { packageId, before: pkg }, now);
   });
+  return misses.settle(scanning);
 }

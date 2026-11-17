@@ -1,6 +1,7 @@
 import type { PickLineResult, ScanInput } from "@woolrus/contracts";
 import type { Db, DbTx } from "@woolrus/db";
 import type { ErrorCode } from "@woolrus/i18n";
+import { scanMisses } from "../activity/record-scan-miss";
 import { AppError } from "../errors";
 import { storedResult, withIdempotency } from "../idempotency";
 import { type Actor, assertCan, can } from "../permissions";
@@ -33,7 +34,8 @@ export async function scan(
 ): Promise<PickLineResult> {
   assertCan(actor, "order.pick");
   const wanted = normalizeCode(code);
-  return db.$transaction(async (tx) => {
+  const misses = scanMisses(db, actor, { stage: "PICKING", code: wanted, scanId });
+  const scanning = db.$transaction(async (tx) => {
     // Only the line id is stored: a replay answers with the line as it is now, even when the order
     // has left Picking since (the retried request already counted).
     const replay = await storedResult<{ itemId: string }>(tx, scanId, "picking.scan", actor);
@@ -49,15 +51,18 @@ export async function scan(
       const rows = await tx.orderItem.findMany({ where: { orderId }, include: lineInclude });
       const matching = matchingLines(rows, wanted);
       if (matching.length === 0) {
-        throw await notOnOrder(tx, wanted, can(actor, "product.manage"));
+        const refusal = await notOnOrder(tx, wanted, can(actor, "product.manage"));
+        throw misses.notOnOrder(refusal, { orderId });
       }
       const target = matching.find(needsUnit);
-      if (!target) throw alreadyPicked(matching);
+      if (!target)
+        throw misses.refuse(alreadyPicked(matching), alreadyPickedMiss(orderId, matching));
       await writeLineIn(tx, actor, target.id, "scan", addUnit(actor), now);
       return { itemId: target.id };
     });
     return lineResult(tx, orderId, await lineRow(tx, itemId));
   });
+  return misses.settle(scanning);
 }
 
 const lineRow = (tx: DbTx, id: string) =>
@@ -88,6 +93,12 @@ export const addUnit =
       pickedAt: at,
     };
   };
+
+/** The miss for an `alreadyPicked` refusal: the line it names. */
+export function alreadyPickedMiss(orderId: string, matching: LineRow[]) {
+  const line = matching[0] as LineRow;
+  return { kind: "ALREADY_DONE", orderId, orderItemId: line.id, productName: line.name } as const;
+}
 
 /** The refusal when every line the code matches is done, naming the first. */
 export const alreadyPicked = (matching: LineRow[]) =>
