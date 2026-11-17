@@ -204,18 +204,33 @@ export async function closeBatch(
     where: { id: batchId, closedAt: null },
     data: { closedAt: now },
   });
+  // The orders still in it, read before they're marked removed: each gets its own audit row.
+  const members = await tx.pickBatchOrder.findMany({
+    where: { batchId, removedAt: null },
+    select: { orderId: true },
+    orderBy: { slot: "asc" },
+  });
   await tx.pickBatchOrder.updateMany({
     where: { batchId, removedAt: null },
     data: { removedAt: now },
   });
   if (count > 0) {
-    await recordAudit(tx, actor, {
-      entityType: "PickBatch",
-      entityId: batchId,
-      action,
-      after: reason ? { reason } : undefined,
-      at: now,
+    const { number } = await tx.pickBatch.findUniqueOrThrow({
+      where: { id: batchId },
+      select: { number: true },
     });
+    // No order left in it: one row for the batch alone.
+    const orderIds = members.length > 0 ? members.map((m) => m.orderId) : [undefined];
+    for (const orderId of orderIds) {
+      await recordAudit(tx, actor, {
+        entityType: "PickBatch",
+        entityId: batchId,
+        action,
+        orderId,
+        after: reason ? { number, reason } : { number },
+        at: now,
+      });
+    }
   }
 }
 
@@ -370,13 +385,17 @@ export async function createBatch(
             orders: { create: queued.map((o, index) => ({ orderId: o.id, slot: index + 1 })) },
           },
         });
-        await recordAudit(tx, actor, {
-          entityType: "PickBatch",
-          entityId: batch.id,
-          action: "pickBatch.create",
-          after: { number: batch.number, orders: queued.map((o) => o.id) },
-          at: now,
-        });
+        // One row per order, so each order's timeline shows it joining (SPEC-order-activity).
+        for (const [index, o] of queued.entries()) {
+          await recordAudit(tx, actor, {
+            entityType: "PickBatch",
+            entityId: batch.id,
+            action: "pickBatch.create",
+            orderId: o.id,
+            after: { number: batch.number, slot: index + 1, orders: queued.map((q) => q.id) },
+            at: now,
+          });
+        }
         return { id: batch.id };
       },
     );

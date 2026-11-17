@@ -66,7 +66,8 @@ describe("createBatch", () => {
     // Each move goes through workflow's transition: a stage event and an audit per order.
     expect(await db.orderStageEvent.count({ where: { toStatus: "PICKING" } })).toBe(6);
     expect(await db.auditEvent.count({ where: { action: "order.beginPicking" } })).toBe(6);
-    expect(await db.auditEvent.count({ where: { action: "pickBatch.create" } })).toBe(1);
+    // One batch row per order, for each order's timeline.
+    expect(await db.auditEvent.count({ where: { action: "pickBatch.create" } })).toBe(6);
   });
 
   it("takes orders the actor is already picking, without moving them again", async () => {
@@ -381,7 +382,7 @@ describe("getBatch", () => {
         where: { entityId: batch.id, action: "pickBatch.close" },
         select: { actorId: true },
       }),
-    ).toEqual([{ actorId: picker.userId }]);
+    ).toEqual([{ actorId: picker.userId }, { actorId: picker.userId }]);
   });
 
   it("is forbidden without order.read", async () => {

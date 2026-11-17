@@ -171,6 +171,7 @@ export async function writeLineIn(
     entityType: "OrderItem",
     entityId: itemId,
     action: `pick.${op}`,
+    orderId: order.id,
     before: { pickStatus: row.pickStatus, pickedQuantity: row.pickedQuantity },
     after: { pickStatus: updated.pickStatus, pickedQuantity: updated.pickedQuantity },
     at: now,
