@@ -91,6 +91,7 @@ export async function scanVerify(
         entityType: "PackageItem",
         entityId: target.id,
         action: "packageItem.scan",
+        orderId,
         before: { verifiedQuantity: target.qaVerifiedQuantity, quantity: target.quantity },
         after: { verifiedQuantity: verified, quantity: target.quantity },
         at: now,

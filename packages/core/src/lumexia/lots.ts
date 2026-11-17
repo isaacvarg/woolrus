@@ -383,6 +383,7 @@ async function editLot<R>(
         entityType: "PackageItem",
         entityId: packageItemId,
         action,
+        orderId: order.id,
         before: { lots: lotSnapshot(before) },
         after: { lotId, lots: lotSnapshot(after) },
         at: now,
@@ -462,6 +463,7 @@ export async function qaReplaceLot(
           entityType: "PackageItem",
           entityId: line.id,
           action: "lot.qaReplace",
+          orderId: order.id,
           before: { lots: lotSnapshot(before) },
           after: {
             lotId,
