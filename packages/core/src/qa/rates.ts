@@ -117,11 +117,12 @@ export async function selectRate(
         entityType: "Package",
         entityId: packageId,
         action: "rate.select",
+        orderId: order.id,
         before: previous ? snapshot(previous) : undefined,
         after: { ...snapshot(rate), reason: reason ?? null },
         at: now,
       });
-    } else if (!reason || !(await saveReason(tx, actor, rate, reason, note, now))) {
+    } else if (!reason || !(await saveReason(tx, actor, order.id, rate, reason, note, now))) {
       return qaResult(tx, order.id);
     }
     await touchClaim(tx, actor, order.id, { now });
@@ -134,6 +135,7 @@ export async function selectRate(
 async function saveReason(
   tx: DbTx,
   actor: Actor,
+  orderId: string,
   rate: ShippingRate,
   reason: RateSelectionReason | null,
   note: string | undefined,
@@ -151,6 +153,7 @@ async function saveReason(
     entityType: "Package",
     entityId: rate.packageId,
     action: "rate.reason",
+    orderId,
     before: { rateId: rate.id, reason: rate.selectionReason },
     after: { rateId: rate.id, reason: fields.selectionReason },
     at: now,
@@ -177,7 +180,8 @@ export async function setRateSelectionReason(
     // A reason picked for one rate never lands on another selected since.
     if (rate.id !== rateId) throw new AppError("CONFLICT", "errors.qa.rateNoLongerSelected");
     if (reason) assertReasonNeeded(rate, rates, quoteOnly);
-    if (!(await saveReason(tx, actor, rate, reason, note, now))) return qaResult(tx, order.id);
+    if (!(await saveReason(tx, actor, order.id, rate, reason, note, now)))
+      return qaResult(tx, order.id);
     await touchClaim(tx, actor, order.id, { now });
     await notifyOrderChanged(tx, { id: order.id, status: order.status });
     return qaResult(tx, order.id);

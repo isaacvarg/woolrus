@@ -1,4 +1,38 @@
 {
-  "en": {},
-  "es": {}
+  "en": {
+    "rates_refresh": "Refreshed the shipping rates",
+    "rate_select": "Chose the {service} rate{rateReason, select, none {} FASTER_DELIVERY {, not the cheapest: faster delivery} CUSTOMER_REQUESTED {, not the cheapest: the customer asked} CARRIER_RELIABILITY {, not the cheapest: carrier reliability} CHEAPEST_UNAVAILABLE {, not the cheapest: the cheapest was unavailable or failed} other {, not the cheapest: another reason}}",
+    "rate_reason": "{rateReason, select, none {Cleared why the rate isn't the cheapest} FASTER_DELIVERY {Rate not the cheapest: faster delivery} CUSTOMER_REQUESTED {Rate not the cheapest: the customer asked} CARRIER_RELIABILITY {Rate not the cheapest: carrier reliability} CHEAPEST_UNAVAILABLE {Rate not the cheapest: the cheapest was unavailable or failed} other {Rate not the cheapest: another reason}}",
+    "shipTo_useOriginal": "Used the original address",
+    "shipTo_recheck": "Checked the address again",
+    "labels_purchaseRequested": "Asked to buy {count, plural, one {# label} other {# labels}}",
+    "label_purchase": "Bought the label",
+    "label_void": "Asked to void the label",
+    "label_voided": "Voided the label",
+    "label_voidRejected": "The carrier refused to void the label",
+    "label_markNotBought": "Marked the label as not bought",
+    "label_writeOff": "Wrote the label off",
+    "label_print": "Printed {count, plural, one {the label} other {# labels}}",
+    "woo_push": "Sent tracking to WooCommerce",
+    "woo_push_failed": "Couldn't send tracking to WooCommerce",
+    "woo_push_retry": "Retried sending tracking to WooCommerce"
+  },
+  "es": {
+    "rates_refresh": "Actualizó las tarifas de envío",
+    "rate_select": "Eligió la tarifa {service}{rateReason, select, none {} FASTER_DELIVERY {, no la más barata: entrega más rápida} CUSTOMER_REQUESTED {, no la más barata: lo pidió el cliente} CARRIER_RELIABILITY {, no la más barata: fiabilidad del transportista} CHEAPEST_UNAVAILABLE {, no la más barata: la más barata no estaba disponible o falló} other {, no la más barata: otro motivo}}",
+    "rate_reason": "{rateReason, select, none {Quitó el motivo de no elegir la tarifa más barata} FASTER_DELIVERY {Tarifa no la más barata: entrega más rápida} CUSTOMER_REQUESTED {Tarifa no la más barata: lo pidió el cliente} CARRIER_RELIABILITY {Tarifa no la más barata: fiabilidad del transportista} CHEAPEST_UNAVAILABLE {Tarifa no la más barata: la más barata no estaba disponible o falló} other {Tarifa no la más barata: otro motivo}}",
+    "shipTo_useOriginal": "Usó la dirección original",
+    "shipTo_recheck": "Volvió a revisar la dirección",
+    "labels_purchaseRequested": "Pidió comprar {count, plural, one {# etiqueta} other {# etiquetas}}",
+    "label_purchase": "Compró la etiqueta",
+    "label_void": "Pidió anular la etiqueta",
+    "label_voided": "Anuló la etiqueta",
+    "label_voidRejected": "El transportista no aceptó anular la etiqueta",
+    "label_markNotBought": "Marcó la etiqueta como no comprada",
+    "label_writeOff": "Dio de baja la etiqueta",
+    "label_print": "Imprimió {count, plural, one {la etiqueta} other {# etiquetas}}",
+    "woo_push": "Envió el rastreo a WooCommerce",
+    "woo_push_failed": "No se pudo enviar el rastreo a WooCommerce",
+    "woo_push_retry": "Reintentó enviar el rastreo a WooCommerce"
+  }
 }

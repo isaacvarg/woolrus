@@ -77,6 +77,7 @@ export async function retryWooPush(
         entityType: "Order",
         entityId: orderId,
         action: "woo.push.retry",
+        orderId,
       });
       await enqueue(tx, queues.wooPush, { orderId }, { singletonKey: orderId });
       return true;
