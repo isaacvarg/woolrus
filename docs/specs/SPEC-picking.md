@@ -3,7 +3,7 @@
 **Milestone:** M2 · **Depends on:** `workflow` (transitions, claims, gates, live updates), `notes` (line notes) ·
 **Used by:** `exceptions` (calls `reconcilePick` after a void or unvoid), `packing` (reads what was picked and
 substituted), `reporting` (pick events) · **State:** done; amendment 1 (suggested batches, approved 2026-11-16)
-is **planned** (tickets #191–#193) · **Issue:** [#23](https://github.com/isaacvarg/woolrus/issues/23); amendment 1:
+is **done** (tickets #191–#193) · **Issue:** [#23](https://github.com/isaacvarg/woolrus/issues/23); amendment 1:
 [#190](https://github.com/isaacvarg/woolrus/issues/190)
 
 > **Amendment 1 (approved 2026-11-16): suggested batches.** **Pick together** already collapses a batch into one
