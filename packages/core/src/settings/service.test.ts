@@ -34,6 +34,8 @@ describe("settings service", () => {
       stationIdleLockMinutes: 10,
       claimExpiryMinutes: 30,
       pickBatchMaxOrders: 10,
+      pickBatchSuggestionCount: 3,
+      pickBatchMaxWeightOz: 3200,
       stageSlaMinutes: {},
       weightDisplay: "LB_OZ",
       piiRetentionDays: null,
@@ -111,6 +113,8 @@ describe("settings service", () => {
       stationIdleLockMinutes: 20,
       claimExpiryMinutes: 45,
       pickBatchMaxOrders: 6,
+      pickBatchSuggestionCount: 5,
+      pickBatchMaxWeightOz: 960,
       stageSlaMinutes: { QA: 30 },
       weightDisplay: "LB_DECIMAL",
       piiRetentionDays: 90,
@@ -238,6 +242,51 @@ describe("settings service", () => {
       packCheckUnderMin: "WARN",
       packCheckWeightOffPercent: 25,
     });
+  });
+
+  it("lets only an admin change how many batches are suggested, 1–10 in the database too (SPEC-picking A1)", async () => {
+    const admin = await createActor(db, ["ADMIN"]);
+    const picker = await createActor(db, ["PICKER"]);
+    await expect(updateSettings(db, picker, { pickBatchSuggestionCount: 5 })).rejects.toMatchObject(
+      { kind: "FORBIDDEN" },
+    );
+
+    const updated = await updateSettings(db, admin, { pickBatchSuggestionCount: 5 });
+    expect(updated.pickBatchSuggestionCount).toBe(5);
+    const audit = await db.auditEvent.findFirstOrThrow({ where: { entityType: "Settings" } });
+    expect(audit.before).toEqual({ pickBatchSuggestionCount: 3 });
+    expect(audit.after).toEqual({ pickBatchSuggestionCount: 5 });
+
+    for (const count of [0, 11]) {
+      await expect(
+        db.$executeRaw`UPDATE settings SET pick_batch_suggestion_count = ${count}`,
+      ).rejects.toThrow(/settings_pick_batch_suggestion_count_range/);
+    }
+    // Only the server reads it.
+    expect(await getPublicSettings(db, picker)).not.toHaveProperty("pickBatchSuggestionCount");
+  });
+
+  it("keeps a cart weight limit of 200 lb by default, admin only, 16–8000 oz or off in the database too (SPEC-picking A1)", async () => {
+    const admin = await createActor(db, ["ADMIN"]);
+    const picker = await createActor(db, ["PICKER"]);
+    expect((await getSettings(db, admin)).pickBatchMaxWeightOz).toBe(3200);
+    await expect(updateSettings(db, picker, { pickBatchMaxWeightOz: 800 })).rejects.toMatchObject({
+      kind: "FORBIDDEN",
+    });
+
+    expect(
+      (await updateSettings(db, admin, { pickBatchMaxWeightOz: 800 })).pickBatchMaxWeightOz,
+    ).toBe(800);
+    expect(
+      (await updateSettings(db, admin, { pickBatchMaxWeightOz: null })).pickBatchMaxWeightOz,
+    ).toBe(null);
+
+    for (const limit of [15, 8001]) {
+      await expect(
+        db.$executeRaw`UPDATE settings SET pick_batch_max_weight_oz = ${limit}`,
+      ).rejects.toThrow(/settings_pick_batch_max_weight_oz_range/);
+    }
+    expect(await getPublicSettings(db, picker)).not.toHaveProperty("pickBatchMaxWeightOz");
   });
 
   it.each(nonAdmins)("forbids %s from changing the packing checks", async (role) => {

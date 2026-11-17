@@ -2,7 +2,25 @@
 
 **Milestone:** M2 · **Depends on:** `workflow` (transitions, claims, gates, live updates), `notes` (line notes) ·
 **Used by:** `exceptions` (calls `reconcilePick` after a void or unvoid), `packing` (reads what was picked and
-substituted), `reporting` (pick events) · **State:** done
+substituted), `reporting` (pick events) · **State:** done; amendment 1 (suggested batches, approved 2026-11-16)
+is **done** (tickets #191–#193) · **Issue:** [#23](https://github.com/isaacvarg/woolrus/issues/23); amendment 1:
+[#190](https://github.com/isaacvarg/woolrus/issues/190)
+
+> **Amendment 1 (approved 2026-11-16): suggested batches.** **Pick together** already collapses a batch into one
+> stop per product, but the picker chooses the orders by eye, so a batch only saves walking when they happen to
+> tick orders that share products. The warehouse has no bin locations, so shared products are the only way to
+> save trips today.
+>
+> - **Suggestions.** A few cards (three by default, an admin setting) sit above the Pending queue. Each one is built from the oldest or most
+>   urgent order that's left, filled with the Pending orders that share the most products with it.
+> - **Limits.** A suggestion stays within the cart's order count (`pickBatchMaxOrders`) and a new cart weight
+>   limit (`pickBatchMaxWeightOz`, default 200 lb).
+> - **The picker decides.** **Pick these** creates the batch through the existing `createBatch`. **Select these**
+>   ticks the orders in the queue so the picker can adjust them first. Nothing is created automatically.
+>
+> **Dependencies.** Only what `picking` already uses: `workflow`'s queue order and claims, `settings`, and product
+> weights from `store-sync`. Two settings and no new tables. Everything marked *(A1)* below belongs to this
+> amendment.
 
 Project-wide commands, structure, code style, testing levels and boundaries are in [`../../SPEC.md`](../../SPEC.md);
 this spec only adds what is specific to `picking`.
@@ -41,6 +59,13 @@ taken.
    which slots it goes to; when I scan it, the screen tells me "Slot 3 · #26237".
 8. As an admin, I scan a product whose barcode Woolrus doesn't know. The screen offers **Link this code to
    Lavender soap 8 oz**; from then on that barcode matches everywhere.
+9. *(A1)* As a picker, I open the Pending queue and the top card reads "6 orders · 14 items · 5 stops · 38 lb ·
+   oldest #26201, 2 days · Gallon X ×5, Lavender soap ×3". I tap **Pick these**, and all six become mine in
+   Batch 43. If someone else took one first, I'm told who, and the cards are rebuilt without it.
+10. *(A1)* The second card has an order I know is waiting on a customer call. I tap **Select these**, untick that
+    order in the queue and tap **Pick together** for the rest.
+11. *(A1)* As an admin, I set the cart weight limit to 60 lb in **Settings → General**. Suggestions stop adding
+    orders once the next one would go over 60 lb.
 
 ## Scope
 
@@ -55,6 +80,9 @@ taken.
 - UI: the single-order pick screen, multi-select and **Pick together** on the Pending queue, the batch screen, a
   **My picks** list (my open batch and my orders in Picking), and pick status on the order detail page.
 - Schema: `PickBatch`, `PickBatchOrder`, one setting, one permission. Listed under *Schema additions*.
+- *(A1)* Suggested batches: a pure grouping function, a read that runs it on the current Pending orders, the
+  cards on the Pending queue with **Pick these** and **Select these**, and two settings, `pickBatchMaxWeightOz`
+  and `pickBatchSuggestionCount`.
 
 **Out (owned elsewhere or later):**
 - Voiding a line (the way out of Out of Stock): `exceptions`, M3. Until then a picker substitutes, or puts the
@@ -65,6 +93,13 @@ taken.
 - A product admin page (barcodes, bins, customs). Only the scan-to-link action is built here.
 - The packing screen: `packing`. Until it exists, **Done, open in Packing** opens the order detail page.
 - Requiring a scan before a line counts as picked. Tapping stays allowed (decision 1).
+- *(A1)* Creating or claiming batches automatically, including a "Done, next batch" finish option. Suggestions
+  are only offered (A1 decision 4).
+- *(A1)* Checking weight on a hand-picked **Pick together**. The picker can see their own cart.
+- *(A1)* Zones, aisles or learned walk order. Grouping uses shared products only until products have locations.
+- *(A1)* Volume or dimension limits on the cart. Weight is the only limit besides order count.
+- *(A1)* Storing suggestions or counting how often they're used. Batches made from a suggestion are ordinary
+  batches, which `reporting` can already count.
 
 ## Design
 
@@ -169,6 +204,42 @@ change of tablet and so `reporting` can count batch picks later.
   gate list). One order failing its gate doesn't hold the others back. The screen offers **Complete ready
   orders** and a per-slot **Complete**.
 
+### Suggested batches *(A1)* (`packages/core/src/picking/suggest.ts`, pure)
+
+`suggestBatches(orders, limits)` takes the candidate orders (below) in queue order, with each one's pickable lines,
+and returns up to `pickBatchSuggestionCount` suggestions (default **3**). Each order is in at most one suggestion.
+
+- **Product key:** the same "what's on the shelf" key the batch list groups by (variation, else product, else
+  normalized SKU, else name). It's shared with `getBatch`, not copied, so a suggestion's stop count matches the
+  batch screen.
+- **Line weight:** the variation's `weightOz`, else the product's, times the active quantity. A line with no
+  weight counts as 0, and the suggestion counts it as missing a weight.
+- **Building one suggestion:**
+  1. **Start** from the first order still unused, in queue order (priority desc, ordered at asc, id). This is
+     what keeps the oldest and most urgent orders first (A1 decision 1).
+  2. **Grow:** from the orders still unused, take the one that shares the most product keys with the suggestion
+     so far. Ties go by queue order. Skip any order that would go over `pickBatchMaxWeightOz` (when it's set).
+     Only orders that share at least one product key can join.
+  3. **Stop** at `pickBatchMaxOrders` orders, or when no order can join.
+- **Single-order results:** if the first suggestion ends with one order, it's kept as a one-order card (its
+  action is **Begin picking**), so the oldest order is always on top. Any later suggestion that ends with one
+  order is dropped (unless it's `overWeight`, below), and that order isn't used as a starting order again.
+  Building continues from the next order until there are `pickBatchSuggestionCount` suggestions or no orders are
+  left.
+- **An order over the limit by itself** starts a one-order suggestion flagged `overWeight`. It's never skipped.
+- **Each suggestion returns:** the order ids with the `version` each was read at, in queue order; `units` (total
+  active quantity); `stops` (distinct product keys); `weightOz` and `missingWeightCount`; the oldest member's
+  number and `orderedAt`; and its top three shared products (key, name, total units, how many orders), most
+  shared first. Shared products are the ones on two or more of its orders.
+
+Pure and deterministic: the same input gives the same suggestions, so two pickers looking at the same queue see
+the same cards. Tested as a pure function.
+
+**Candidates** (`listSuggestionCandidates`, in `queries.ts`): the first **200** orders in queue order with status `PENDING`
+and no live claim by someone other than the actor. Lines are read the way `getBatch` reads them, plus weights.
+Of those, orders with no physical line of active quantity > 0 are then left out: there's nothing to walk for. So the
+cap can leave fewer than 200 candidates, which a day's queue (A1 assumption 7) doesn't reach.
+
 ### Reads
 
 - `getPickView({ orderId })`: the order header (number, customer, priority, claim, `version`), the customer note,
@@ -185,6 +256,9 @@ change of tablet and so `reporting` can count batch picks later.
     client opens it for packing.
   A gate failure moves nothing, whichever `then` was asked.
 - `myPicks()`: the actor's open batch and their live-claimed orders in Picking, for **My picks**. `order.read`.
+- *(A1)* `getBatchSuggestions()`: loads the candidates and settings, then runs `suggestBatches`. It also returns
+  `openBatch { id, number }` when the actor already has an open batch, because `createBatch` would refuse them.
+  `order.pick`. Nothing is stored.
 - `workflow`'s `getOrder` already returns pick status and quantity per line; the detail page shows them with the
   picker's name and time (FR-WF-04), and this module adds `pickedBy { name }` and `pickedAt` to `OrderLine`.
 
@@ -200,6 +274,7 @@ change of tablet and so `reporting` can count batch picks later.
 | `picking.complete` | `POST /orders/{orderId}/complete-pick` |
 | `picking.myPicks` | `GET /me/picks` |
 | `pickBatches.create` | `POST /pick-batches` |
+| `pickBatches.suggestions` *(A1)* | `GET /pick-batches/suggestions` |
 | `pickBatches.get` | `GET /pick-batches/{id}` |
 | `pickBatches.scan` | `POST /pick-batches/{id}/scan` |
 | `pickBatches.removeOrder` | `POST /pick-batches/{id}/remove-order` |
@@ -250,6 +325,18 @@ Permission `product.manage` (Admin only) for `linkBarcode`.
 `AdminSettings`, `PublicSettings` (the queue's **Pick together** limit), the update contract and the General
 section of `/settings`. Lowering it doesn't touch batches already open.
 
+*(A1)* `Settings.pickBatchMaxWeightOz Int? @default(3200) @map("pick_batch_max_weight_oz")`: the cart weight limit
+for suggestions, in ounces (default 200 lb). `null` turns the limit off. When set, it must be between 16 and 8000
+(1–500 lb), enforced in the contract and by a hand-written `CHECK` in its migration. It sits next to
+`pickBatchMaxOrders` in `AdminSettings`, the update contract and **Settings → General**. The field is entered and
+shown in the `weightDisplay` unit, like box weights. It isn't public, because only the server reads it. Changing
+it only affects suggestions built after the change.
+
+*(A1)* `Settings.pickBatchSuggestionCount Int @default(3) @map("pick_batch_suggestion_count")`: how many suggested
+batches the Pending queue shows, an integer from 1 to 10 (contract and a hand-written `CHECK` in the same
+migration). It sits next to the weight limit in `AdminSettings`, the update contract and **Settings → General**.
+Like the weight limit, it isn't public.
+
 ### UI (`apps/web/src/app/(app)/`)
 
 - **`pick/[orderId]`:** the pick screen. Header with order number, customer, priority, customer note, and
@@ -261,6 +348,20 @@ section of `/settings`. Lowering it doesn't touch batches already open.
   order**, **Done, open in Packing** (only with `order.pack`), Hold. A refused completion shows the unmet gate list.
 - **Pending queue:** row checkboxes (pickers only), **Pick together (n)** up to `pickBatchMaxOrders`, and a result panel listing
   orders that couldn't be taken.
+- *(A1)* **Suggested batches** on the Pending queue, for `order.pick` users only, above the table:
+  - **Cards:** up to `pickBatchSuggestionCount`, in a row that wraps (stacked on narrow screens). Each card shows the order count, items, stops,
+    weight (in `weightDisplay`; "weight incomplete" when `missingWeightCount > 0`; an "over cart weight" badge for
+    `overWeight`), the oldest order's number and age, and its shared products ("Gallon X ×5 · 3 orders").
+  - **Pick these:** calls `pickBatches.create` with the card's ids and versions and opens the batch screen. On a
+    refusal it shows the result panel **Pick together** already uses, then refetches the suggestions.
+  - **Select these:** replaces the queue's ticks with the card's orders, so the picker can adjust them and use
+    **Pick together**.
+  - **One-order cards:** they show **Begin picking** instead of the two buttons above.
+  - **Open batch:** if the picker already has one, the cards stay visible but their actions are disabled, with a
+    link to "Finish Batch 42 first".
+  - **Hidden:** with no suggestions, and while the queue is searched (search is for finding one order, not for
+    planning a walk).
+  - **Refreshing:** suggestions are refetched whenever the queue refreshes on order events.
 - **`pick/batch/[id]`:** grouped lines with per-slot chips, the large slot callout on scan, a slot legend
   (slot → order, state, left/removed), **Complete ready orders**, per-slot Complete and Remove, **Finish batch**.
 - **`pick` (My picks):** my open batch and my orders in Picking, each a link back to its screen. A **My picks**
@@ -275,6 +376,10 @@ section of `/settings`. Lowering it doesn't touch batches already open.
 `seedDemoOrders` gains a few products with barcodes, two lines sharing a variation across orders (to exercise
 batch grouping), a line with quantity 6, and bins on some demo products so the sort is visible.
 
+*(A1)* The demo Pending orders also include an overlapping set: orders with a heavy "5 gal pail" product (about 45 lb
+each), three of them sharing a second product. Most demo products get weights, and one is left without. The queue
+then shows a multi-order card, a card the weight limit cuts short at the default 200 lb, and "weight incomplete".
+
 ### Files expected to change
 
 `packages/core/src/picking/{service,codes,sort,batches,queries}.ts` (+ tests), `packages/core/src/notes/service.ts`
@@ -283,6 +388,13 @@ batch grouping), a line with quantity 6, and bins on some demo products so the s
 `packages/contracts/src/{picking,orders,settings,index}.ts`, `apps/web/src/server/router.ts`,
 `apps/web/src/lib/scanner.ts`, `apps/web/src/app/(app)/{pick/**,queue/**,orders/[id]/**,settings/**,drawer-nav.tsx}`,
 `packages/db/prisma/schema/{orders,auth,system}.prisma` + one migration, `packages/db/prisma/seed.ts` (demo data),
+`packages/i18n/src/messages/{en,es}.json`, `apps/web/e2e/picking.spec.ts`.
+
+*(A1)* `packages/core/src/picking/{suggest,queries,batches}.ts` (+ tests; the product key moves to a shared helper
+`getBatch` and `suggestBatches` both use), `packages/core/src/settings/service.ts`,
+`packages/contracts/src/{picking,settings}.ts`, `apps/web/src/server/router.ts`,
+`apps/web/src/app/(app)/queue/[stage]/{suggested-batches,queue-table}.tsx`, `apps/web/src/app/(app)/settings/**`,
+`packages/db/prisma/schema/system.prisma` + one migration, `packages/db/prisma/seed.ts`,
 `packages/i18n/src/messages/{en,es}.json`, `apps/web/e2e/picking.spec.ts`.
 
 ## Success criteria
@@ -327,6 +439,41 @@ batch grouping), a line with quantity 6, and bins on some demo products so the s
     assigns slots → complete ready orders. A second browser taking over a batch order removes it from the
     batch screen without a reload.
 16. Green: `pnpm lint && pnpm typecheck && pnpm test && pnpm build` plus Playwright.
+17. *(A1)* **Grouping (pure):**
+    - The first suggestion starts from the top order in queue order. A higher-priority order starts it ahead of
+      an older one.
+    - Orders that share more products join first, and ties go by queue order.
+    - An order that shares nothing never joins.
+    - Each suggestion has at most `pickBatchMaxOrders` orders. No order appears in two suggestions, and there are
+      at most `pickBatchSuggestionCount`.
+    - The same input always gives the same output.
+18. *(A1)* **Weight:**
+    - With a lowered limit (50 lb in the test), an order that would go over is skipped and a lighter matching order joins instead.
+    - An order over the limit by itself is a one-order `overWeight` suggestion.
+    - A product without a weight counts as 0 and is reported in `missingWeightCount`. A variation's weight is used
+      before its product's.
+    - With the limit off (`null`), weight never stops an order joining.
+19. *(A1)* **One-order results:** a top order with no match is a one-order first card. A later suggestion that
+    ends with one order is dropped and doesn't stop the next one being built. Stops, units, shared products and
+    the oldest order are computed as specified, and stops match the group count `getBatch` shows for the same
+    orders.
+20. *(A1)* **Candidates and read:**
+    - The candidates leave out orders that aren't Pending, orders with someone else's live claim, and orders with
+      no pickable lines. Orders the actor has claimed are kept.
+    - `getBatchSuggestions` reports the actor's open batch.
+    - A Packer is forbidden.
+    - The read takes under 300 ms p95 with 200 Pending orders × 5 lines.
+21. *(A1)* **Settings:** `pickBatchMaxWeightOz` defaults to 3200 oz (200 lb). It accepts `null` and 16–8000,
+    and refuses other values in the contract and the database. `pickBatchSuggestionCount` defaults to 3, accepts
+    1–10 and refuses other values the same way. Only an admin can update either one. **Settings → General** shows
+    the weight limit in the `weightDisplay` unit, and the queue shows as many cards as the count allows.
+22. *(A1)* **E2E (tablet):**
+    - With the A1 demo data, the Pending queue shows a multi-order card. **Pick these** opens a batch with exactly
+      those orders in slots by queue order.
+    - **Select these** ticks the card's orders. Unticking one and tapping **Pick together** creates a batch
+      without it.
+    - When a second browser claims one of a card's orders first, **Pick these** shows the refusal naming the
+      holder, and the cards refresh without that order.
 
 ## Assumptions
 
@@ -337,6 +484,10 @@ batch grouping), a line with quantity 6, and bins on some demo products so the s
 5. Two lines can share a SKU (same variation, different checkout options); a scan fills them in pick order.
 6. `exceptions` depends on `picking` for `reconcilePick`. The capability map lists `exceptions → workflow, notes`;
    it gains `picking` (already its order on the roadmap, and #23 already blocks #25).
+7. *(A1)* There are 50–200 orders a day, and a few products show up in many of them. That's enough overlap for
+   grouping to save walking, and few enough orders that the suggestions can be rebuilt on every read.
+8. *(A1)* Product weights from `store-sync` are mostly filled in. Where they aren't, the card says so instead of
+   guessing.
 
 ## Decisions (2026-10-21)
 
@@ -350,6 +501,22 @@ batch grouping), a line with quantity 6, and bins on some demo products so the s
 6. **Finishing an order** offers three ways on: **Done** (back to the Pending queue), **Done, next order**
    (begins and opens the next unclaimed Pending order) and **Done, open in Packing** (claims it for the picker as
    packer, with `order.pack`).
+
+### Amendment 1 (approved 2026-11-16, from the batch-grouping brainstorm)
+
+1. **Oldest or urgent first.** Each suggestion starts from the top order still unused in queue order, and only
+   orders that share products with it can join. Overlap decides who rides along, never who goes first. A
+   suggestion that saves more walking but leaves the oldest order waiting is never offered.
+2. **Weight is a cart limit for suggestions,** next to order count. Product weights already sync, and gallons fill
+   a cart by weight before they fill its slots. Volume isn't checked.
+3. **No locations needed.** Grouping uses shared products only. Zones or bins can be added to the ordering later
+   without changing how a picker uses the cards.
+4. **Offered, not automatic.** The picker taps a card, or adjusts it first. Woolrus never claims orders by itself.
+   Suggestions are computed on read and never stored, so a batch made from one is just a batch.
+5. **An amendment to picking,** not a module of its own. It's one read over picking's own batch grouping, plus
+   two settings.
+6. **Defaults** (answered at approval): the cart weight limit starts at **200 lb**, and the queue shows **three**
+   cards. Both are admin settings, because carts and pickers differ.
 
 ## Open questions
 

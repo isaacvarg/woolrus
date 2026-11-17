@@ -25,7 +25,12 @@
     in
     {
       devShells.${system}.default = pkgs.mkShell {
-        env = prisma.env;
+        env = prisma.env // {
+          # Playwright's downloaded browsers don't run on NixOS; use nixpkgs' build instead. Its
+          # version must match @playwright/test in apps/web/package.json (both 1.64.1).
+          PLAYWRIGHT_BROWSERS_PATH = "${pkgs.playwright-driver.browsers}";
+          PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS = "true";
+        };
 
         packages = with pkgs; [
           openssl

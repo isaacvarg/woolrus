@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { PICK_BATCH_MIN_ORDERS, type QueueRow } from "@woolrus/contracts";
+import { PICK_BATCH_MIN_ORDERS } from "@woolrus/contracts";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
@@ -12,52 +12,90 @@ import { client, orpc } from "@/lib/orpc";
 import { randomUUID } from "@/lib/uuid";
 
 // **Pick together** on the Pending queue (SPEC-picking "UI"): the ticked orders all become the
-// picker's batch, or none do and the panel says which order failed and why.
+// picker's batch, or none do and the panel says which order failed and why. Suggested batches
+// (A1) create theirs the same way, through `useCreateBatch` and `BatchRefusals`.
 
-type Refused = { number: string; failure: OrderFailure };
+/** An order as a batch is created from it: a queue row or a suggestion's order. */
+export type BatchOrder = { id: string; number: string; version: number };
+
+export type Refused = { number: string; failure: OrderFailure };
+
+/** Creates a batch from orders at the versions they were read at, then opens it. */
+export function useCreateBatch({ onStarted }: { onStarted?: () => void } = {}) {
+  const t = useTranslations();
+  const errorMessage = useErrorMessage();
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const [refused, setRefused] = useState<Refused[] | null>(null);
+
+  const create = useMutation({
+    mutationFn: (orders: BatchOrder[]) =>
+      client.pickBatches.create({
+        idempotencyKey: randomUUID(),
+        orders: orders.map((order) => ({ id: order.id, expectedVersion: order.version })),
+      }),
+    onMutate: () => setRefused(null),
+    onSuccess: (batch) => {
+      toast.success(t("queue.batchStarted", { number: batch.number, count: batch.members.length }));
+      onStarted?.();
+      router.push(`/pick/batch/${batch.id}`);
+    },
+    onError: (error, orders) => {
+      const failures = failuresOf(error);
+      if (!failures) {
+        toast.error(errorMessage(error));
+        return;
+      }
+      const numbers = new Map(orders.map((order) => [order.id, order.number]));
+      setRefused(
+        failures.map((failure) => ({ number: numbers.get(failure.orderId) ?? "", failure })),
+      );
+    },
+    // Refused or not, the orders may have moved: show them, and the suggestions, as they are now.
+    onSettled: () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: orpc.orders.key() }),
+        queryClient.invalidateQueries({ queryKey: orpc.pickBatches.key() }),
+      ]),
+  });
+  return { create, refused };
+}
+
+/** Which orders a refused batch couldn't take, and why. */
+export function BatchRefusals({ refused }: { refused: Refused[] | null }) {
+  const t = useTranslations();
+  if (!refused) return null;
+  return (
+    <div role="alert" className="alert alert-error flex-col items-start">
+      <p className="font-semibold">{t("errors.picking.batchFailed")}</p>
+      <ul className="list-disc ps-6">
+        {refused.map(({ number, failure }) => (
+          <li key={failure.orderId}>
+            {t("queue.batchRefusedOrder", {
+              number,
+              reason: t.has(failure.messageKey)
+                ? t(failure.messageKey, failure.params as never)
+                : t("errors.internal"),
+            })}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
 
 export function PickTogether({
   selected,
   onStarted,
 }: {
   /** The ticked rows, in the order they were ticked. */
-  selected: QueueRow[];
+  selected: BatchOrder[];
   onStarted: () => void;
 }) {
   const t = useTranslations();
-  const errorMessage = useErrorMessage();
-  const router = useRouter();
-  const queryClient = useQueryClient();
-  const [refused, setRefused] = useState<Refused[] | null>(null);
   const settings = useQuery(orpc.settings.public.queryOptions());
   const max = settings.data?.pickBatchMaxOrders;
-
-  const create = useMutation({
-    mutationFn: (rows: QueueRow[]) =>
-      client.pickBatches.create({
-        idempotencyKey: randomUUID(),
-        orders: rows.map((row) => ({ id: row.id, expectedVersion: row.version })),
-      }),
-    onMutate: () => setRefused(null),
-    onSuccess: (batch) => {
-      toast.success(t("queue.batchStarted", { number: batch.number, count: batch.members.length }));
-      onStarted();
-      router.push(`/pick/batch/${batch.id}`);
-    },
-    onError: (error, rows) => {
-      const failures = failuresOf(error);
-      if (!failures) {
-        toast.error(errorMessage(error));
-        return;
-      }
-      const numbers = new Map(rows.map((row) => [row.id, row.number]));
-      setRefused(
-        failures.map((failure) => ({ number: numbers.get(failure.orderId) ?? "", failure })),
-      );
-    },
-    // Refused or not, the rows may have moved: show them as they are now.
-    onSettled: () => queryClient.invalidateQueries({ queryKey: orpc.orders.key() }),
-  });
+  const { create, refused } = useCreateBatch({ onStarted });
 
   const count = selected.length;
   const tooMany = max !== undefined && count > max;
@@ -79,23 +117,7 @@ export function PickTogether({
               : t("queue.pickTogetherHint", { max }))}
         </p>
       </div>
-      {refused && (
-        <div role="alert" className="alert alert-error flex-col items-start">
-          <p className="font-semibold">{t("errors.picking.batchFailed")}</p>
-          <ul className="list-disc ps-6">
-            {refused.map(({ number, failure }) => (
-              <li key={failure.orderId}>
-                {t("queue.batchRefusedOrder", {
-                  number,
-                  reason: t.has(failure.messageKey)
-                    ? t(failure.messageKey, failure.params as never)
-                    : t("errors.internal"),
-                })}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+      <BatchRefusals refused={refused} />
     </div>
   );
 }

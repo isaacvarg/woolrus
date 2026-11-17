@@ -19,9 +19,10 @@ import { loadSettings } from "../settings/service";
 import { claimExpiryMinutes, holdsClaim, isClaimLive, touchClaim } from "../workflow/claims";
 import { lockOrders } from "../workflow/lock";
 import { displayName, holderName, nameFields } from "../workflow/people";
+import { queueOrderBy } from "../workflow/queries";
 import { transition } from "../workflow/service";
-import { normalizeCode } from "./codes";
-import { isDone, isWorkLine, type LineRow, lineInclude, toPickLine } from "./service";
+import { isDone, isWorkLine, lineInclude, toPickLine } from "./service";
+import { shelfKey } from "./shelf";
 import { pickOrder } from "./sort";
 
 // Pick batches (SPEC-picking "Pick batches"). A batch is stored so it survives a reload or a change of
@@ -105,14 +106,6 @@ function toPickBatch(
     }),
     groups,
   };
-}
-
-/** What's on the shelf: the variation, else the product, else the SKU as a scanner reads it, else the name. */
-function shelfKey(row: LineRow): string {
-  if (row.variationId) return `variation:${row.variationId}`;
-  if (row.productId) return `product:${row.productId}`;
-  const sku = normalizeCode(row.sku ?? "");
-  return sku ? `sku:${sku}` : `name:${row.name.trim().toLowerCase()}`;
 }
 
 const sameAttributes = (a: LineAttribute[], b: LineAttribute[]) =>
@@ -362,7 +355,7 @@ export async function createBatch(
         const queued = await tx.order.findMany({
           where: { id: { in: ids } },
           select: { id: true },
-          orderBy: [{ priority: "desc" }, { orderedAt: "asc" }, { id: "asc" }],
+          orderBy: [...queueOrderBy],
         });
         // An order is in at most one open batch: joining this one takes it out of any other.
         await tx.pickBatchOrder.updateMany({
@@ -433,7 +426,7 @@ export async function myPicks(
         claimedAt: { gt: new Date(now.getTime() - expiry * 60_000) },
       },
       select: { id: true, number: true, customerName: true, priority: true, claimedAt: true },
-      orderBy: [{ priority: "desc" }, { orderedAt: "asc" }, { id: "asc" }],
+      orderBy: [...queueOrderBy],
     });
     return {
       batch: batch?.closedAt === null ? batch : null,

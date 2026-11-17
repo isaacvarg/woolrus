@@ -120,6 +120,16 @@ const ClaimExpiryMinutes = z.number().int().min(5).max(480);
 /** Most orders one picker takes in a pick batch (SPEC-picking decision 5); 50 is claimMany's ceiling. */
 export const PICK_BATCH_MAX_ORDERS_CEILING = 50;
 const PickBatchMaxOrders = z.number().int().min(2).max(PICK_BATCH_MAX_ORDERS_CEILING);
+/** Suggested batches on the Pending queue (SPEC-picking A1). */
+const PickBatchSuggestionCount = z.number().int().min(1).max(10);
+/** The cart weight limit for suggestions, in whole ounces (1–500 lb; SPEC-picking A1). Null is off. */
+export const PICK_BATCH_MAX_WEIGHT_OZ = { min: 16, max: 8000 } as const;
+const PickBatchMaxWeightOz = z
+  .number()
+  .int()
+  .min(PICK_BATCH_MAX_WEIGHT_OZ.min)
+  .max(PICK_BATCH_MAX_WEIGHT_OZ.max)
+  .nullable();
 /** Null keeps customer PII forever (NFR-SEC-06). */
 /** The cost guard's ratio (×) and free-shipping amount; null turns that check off (SPEC-qa). */
 const LabelCostConfirmRatio = z.number().min(0.1).max(9999.99).nullable();
@@ -161,6 +171,8 @@ export const AdminSettings = z.object({
   stationIdleLockMinutes: z.number(),
   claimExpiryMinutes: z.number(),
   pickBatchMaxOrders: z.number(),
+  pickBatchSuggestionCount: z.number(),
+  pickBatchMaxWeightOz: z.number().nullable(),
   stageSlaMinutes: StageSlaMinutes,
   weightDisplay: WeightDisplay,
   piiRetentionDays: z.number().nullable(),
@@ -211,6 +223,8 @@ export const UpdateSettingsInput = z.object({
   stationIdleLockMinutes: StationIdleLockMinutes.optional(),
   claimExpiryMinutes: ClaimExpiryMinutes.optional(),
   pickBatchMaxOrders: PickBatchMaxOrders.optional(),
+  pickBatchSuggestionCount: PickBatchSuggestionCount.optional(),
+  pickBatchMaxWeightOz: PickBatchMaxWeightOz.optional(),
   stageSlaMinutes: StageSlaMinutes.optional(),
   weightDisplay: WeightDisplay.optional(),
   piiRetentionDays: PiiRetentionDays.optional(),

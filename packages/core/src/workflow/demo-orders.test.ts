@@ -3,6 +3,7 @@ import { seedDemoOrders } from "@woolrus/db/demo";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { createActor, resetDb, testDb } from "../../test/db";
 import type { Actor } from "../permissions";
+import { getBatchSuggestions } from "../picking/queries";
 import { evaluateGate, loadGateSnapshot } from "./gates";
 import { recomputePriorities } from "./priority-rules";
 import { getOrder, getOrderHistory, listQueue, queueCounts } from "./queries";
@@ -49,7 +50,8 @@ describe("seedDemoOrders", () => {
 
     const physical = await db.product.findMany({ where: { physical: true } });
     expect(physical.filter((p) => p.lengthIn === null)).toHaveLength(1);
-    expect(physical.every((p) => p.weightOz !== null)).toBe(true);
+    // One unweighed product, so a suggested batch can read "weight incomplete" (SPEC-picking A1).
+    expect(physical.filter((p) => p.weightOz === null)).toHaveLength(1);
     const packing = await db.order.findMany({
       where: { status: "PACKING", packages: { none: {} } },
       include: { items: true },
@@ -61,6 +63,35 @@ describe("seedDemoOrders", () => {
     await seedDemoOrders(db);
 
     expect(await db.product.count({ where: { barcode: { not: null } } })).toBeGreaterThan(2);
+  });
+
+  it("seeds Pending orders that share products, so the queue suggests a batch (SPEC-picking A1)", async () => {
+    await seedDemoOrders(db);
+    const picker = await createActor(db, ["PICKER"]);
+
+    const { suggestions } = await getBatchSuggestions(db, picker);
+
+    const shared = suggestions.flatMap((s) => s.shared);
+    expect(shared).toContainEqual(expect.objectContaining({ name: "Merino yarn, Red", orders: 5 }));
+    expect(suggestions.some((s) => s.orders.length >= 3)).toBe(true);
+    expect(suggestions.some((s) => s.missingWeightCount > 0)).toBe(true);
+  });
+
+  it("seeds enough pails that the default 200 lb limit cuts a card short (SPEC-picking A1)", async () => {
+    await seedDemoOrders(db);
+    const picker = await createActor(db, ["PICKER"]);
+    const pails = await db.order.count({
+      where: { status: "PENDING", items: { some: { sku: "WAX-PAIL-5" } } },
+    });
+
+    const { suggestions } = await getBatchSuggestions(db, picker);
+
+    const card = suggestions.find((s) => s.shared.some((p) => p.name === "Beeswax pail 5 gal"));
+    // The cart has slots left, but one more 720 oz pail would go over 3200 oz.
+    expect(card?.orders.length).toBeLessThan(pails);
+    expect(card?.weightOz).toBeLessThanOrEqual(3200);
+    expect((card?.weightOz ?? 0) + 720).toBeGreaterThan(3200);
+    expect(card?.shared).toContainEqual(expect.objectContaining({ name: "Pail lid", orders: 3 }));
   });
 
   it("puts a non-physical Rush Order line on an Urgent order, at the top of Pending", async () => {

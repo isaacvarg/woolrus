@@ -16,19 +16,13 @@ import { toast } from "@/components/ui/toast";
 import { useErrorMessage } from "@/lib/errors";
 import { orpc } from "@/lib/orpc";
 import { useReasonText } from "@/lib/reasons";
-import { PickTogether } from "./pick-together";
+import { ageParts } from "./age";
+import { type BatchOrder, PickTogether } from "./pick-together";
+import { SuggestedBatches } from "./suggested-batches";
 
 const SEARCH_DEBOUNCE_MS = 250;
 /** The most orders one print covers (`CreateLabelPrintInput`); past it the button is off rather than printing a prefix. */
 const MAX_PRINT_ORDERS = 50;
-
-/** Time in stage, coarsened for a glance: minutes, then hours, then days. */
-function ageParts(since: Date, now: number): { unit: "Minutes" | "Hours" | "Days"; count: number } {
-  const minutes = Math.max(0, Math.floor((now - since.getTime()) / 60_000));
-  if (minutes < 60) return { unit: "Minutes", count: minutes };
-  if (minutes < 24 * 60) return { unit: "Hours", count: Math.floor(minutes / 60) };
-  return { unit: "Days", count: Math.floor(minutes / (24 * 60)) };
-}
 
 /** Shape and colour together, so severity isn't colour alone. */
 const severityIcon = { MINOR: "●", MAJOR: "▲", CRITICAL: "⬣" } as const;
@@ -102,10 +96,18 @@ export function QueueTable({
     (showPrint ? 1 : 0) +
     (showReady ? 2 : 0);
   // Ticked for Pick together, by id. Rows keep the version they were ticked at: if one changes
-  // meanwhile the batch is refused as stale and the panel says so.
-  const [selected, setSelected] = useState<Map<string, QueueRow>>(() => new Map());
+  // meanwhile the batch is refused as stale and the panel says so. **Select these** (A1) ticks a
+  // suggestion's orders at the versions the card was built from, so entries are `BatchOrder`s.
+  const [selected, setSelected] = useState<Map<string, BatchOrder>>(() => new Map());
   const printLabels = useLabelPrint({ onPrinted: () => setSelected(new Map()) });
-  const toggle = (row: QueueRow, on: boolean) =>
+  // **Select these** can tick orders past the loaded pages (suggestions read 200 orders, a page is
+  // 50): load pages until every ticked order has a row, so the picker can see and untick it.
+  const { hasNextPage, isFetchingNextPage, fetchNextPage } = queue;
+  const unloaded = [...selected.keys()].some((id) => !rows.some((row) => row.id === id));
+  useEffect(() => {
+    if (unloaded && hasNextPage && !isFetchingNextPage) fetchNextPage();
+  }, [unloaded, hasNextPage, isFetchingNextPage, fetchNextPage]);
+  const toggle = (row: BatchOrder, on: boolean) =>
     setSelected((current) => {
       const next = new Map(current);
       if (on) next.set(row.id, row);
@@ -120,8 +122,13 @@ export function QueueTable({
         router.push(`/pick/${order.id}`);
       },
       onError: (error) => toast.error(errorMessage(error)),
-      // A stale version means another station moved it: refetch either way so the row is current.
-      onSettled: () => queryClient.invalidateQueries({ queryKey: orpc.orders.key() }),
+      // A stale version means another station moved it: refetch either way so the row is current,
+      // and the suggested batches, since a one-order card begins picking here too.
+      onSettled: () =>
+        Promise.all([
+          queryClient.invalidateQueries({ queryKey: orpc.orders.key() }),
+          queryClient.invalidateQueries({ queryKey: orpc.pickBatches.key() }),
+        ]),
     }),
   );
 
@@ -162,6 +169,17 @@ export function QueueTable({
         <Label className="sr-only">{t("queue.search")}</Label>
         <Input className="input input-lg w-full" placeholder={t("queue.searchPlaceholder")} />
       </SearchField>
+
+      {showBeginPicking && (
+        <SuggestedBatches
+          hidden={search !== ""}
+          onBeginPicking={({ id, version }) =>
+            beginPicking.mutate({ id, expectedVersion: version })
+          }
+          beginningId={beginPicking.isPending ? (beginPicking.variables?.id ?? null) : null}
+          onSelect={(orders) => setSelected(new Map(orders.map((order) => [order.id, order])))}
+        />
+      )}
 
       {showBeginPicking && (
         <PickTogether selected={[...selected.values()]} onStarted={() => setSelected(new Map())} />

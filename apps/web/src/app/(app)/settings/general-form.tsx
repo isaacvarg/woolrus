@@ -11,6 +11,7 @@ import { formatWeight } from "@woolrus/core/format";
 import { useLocale, useTranslations } from "next-intl";
 import { useId, useState } from "react";
 import { Form } from "react-aria-components";
+import { WeightInput } from "@/app/(app)/boxes/weight-input";
 import {
   Button,
   Checkbox,
@@ -46,6 +47,10 @@ type FormState = {
   stationIdleLockMinutes: number;
   claimExpiryMinutes: number;
   pickBatchMaxOrders: number;
+  pickBatchSuggestionCount: number;
+  /** The cart weight limit as typed (null: empty), kept while it's off so turning it back on restores it. */
+  pickBatchMaxWeightOz: number | null;
+  cartWeightOff: boolean;
   sla: Record<Stage, number>;
   weightDisplay: WeightDisplay;
   piiRetentionDays: number;
@@ -63,6 +68,9 @@ function toForm(settings: AdminSettings): FormState {
     stationIdleLockMinutes: settings.stationIdleLockMinutes,
     claimExpiryMinutes: settings.claimExpiryMinutes,
     pickBatchMaxOrders: settings.pickBatchMaxOrders,
+    pickBatchSuggestionCount: settings.pickBatchSuggestionCount,
+    pickBatchMaxWeightOz: settings.pickBatchMaxWeightOz,
+    cartWeightOff: settings.pickBatchMaxWeightOz === null,
     sla: Object.fromEntries(
       stages.map((s) => [s, settings.stageSlaMinutes[s] ?? Number.NaN]),
     ) as Record<Stage, number>,
@@ -88,6 +96,9 @@ function toInput(form: FormState): UpdateSettingsInput {
     stationIdleLockMinutes: form.stationIdleLockMinutes,
     claimExpiryMinutes: form.claimExpiryMinutes,
     pickBatchMaxOrders: form.pickBatchMaxOrders,
+    pickBatchSuggestionCount: form.pickBatchSuggestionCount,
+    // Whole ounces, as stored. Left empty while on, 0 is sent so the contract's range error shows.
+    pickBatchMaxWeightOz: form.cartWeightOff ? null : Math.round(form.pickBatchMaxWeightOz ?? 0),
     stageSlaMinutes: Object.fromEntries(
       stages.filter((s) => !Number.isNaN(form.sla[s])).map((s) => [s, form.sla[s]]),
     ),
@@ -249,6 +260,44 @@ function GeneralForm({ settings }: { settings: AdminSettings }) {
             value={form.pickBatchMaxOrders}
             onChange={(pickBatchMaxOrders) => edit("pickBatchMaxOrders", { pickBatchMaxOrders })}
           />
+          <NumberField
+            label={t("settings.pickBatchSuggestionCount")}
+            description={t("settings.pickBatchSuggestionCountHint")}
+            name="pickBatchSuggestionCount"
+            isRequired
+            minValue={1}
+            maxValue={10}
+            formatOptions={{ maximumFractionDigits: 0 }}
+            value={form.pickBatchSuggestionCount}
+            onChange={(pickBatchSuggestionCount) =>
+              edit("pickBatchSuggestionCount", { pickBatchSuggestionCount })
+            }
+          />
+          <fieldset className="sm:col-span-2">
+            <legend className="fieldset-legend">{t("settings.pickBatchMaxWeight")}</legend>
+            {!form.cartWeightOff && (
+              // Keyed by unit: the input reads its starting pounds and ounces once.
+              <WeightInput
+                key={form.weightDisplay}
+                label={t("settings.pickBatchMaxWeight")}
+                name="pickBatchMaxWeightOz"
+                isRequired
+                valueOz={form.pickBatchMaxWeightOz}
+                weightDisplay={form.weightDisplay}
+                onChange={(pickBatchMaxWeightOz) =>
+                  edit("pickBatchMaxWeightOz", { pickBatchMaxWeightOz })
+                }
+              />
+            )}
+            <Checkbox
+              name="cartWeightOff"
+              isSelected={form.cartWeightOff}
+              onChange={(cartWeightOff) => edit("pickBatchMaxWeightOz", { cartWeightOff })}
+            >
+              {t("settings.pickBatchMaxWeightOff")}
+            </Checkbox>
+            <p className="text-sm text-base-content/70">{t("settings.pickBatchMaxWeightHint")}</p>
+          </fieldset>
         </div>
 
         <fieldset className="grid grid-cols-2 gap-x-4 sm:grid-cols-5">

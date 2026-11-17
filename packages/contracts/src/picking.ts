@@ -291,6 +291,45 @@ export const MyPicks = z.object({
 });
 export type MyPicks = z.infer<typeof MyPicks>;
 
+/** A product on two or more of a suggestion's orders: one stop that saves walking (SPEC-picking A1). */
+export const BatchSuggestionShared = z.object({
+  /** What's on the shelf, as the batch list groups it. */
+  key: z.string(),
+  name: z.string(),
+  /** Units across the suggestion's orders. */
+  units: z.number().int(),
+  /** How many of its orders have it. */
+  orders: z.number().int(),
+});
+export type BatchSuggestionShared = z.infer<typeof BatchSuggestionShared>;
+
+/** One suggested batch: orders that share products, built from the oldest or most urgent one left. */
+export const BatchSuggestion = z.object({
+  /** In queue order, each at the version it was read at (for **Pick these**). */
+  orders: z.array(z.object({ id: Id, number: z.string(), version: z.number().int() })),
+  /** Units to pick across all its orders. */
+  units: z.number().int(),
+  /** Distinct products: one stop each. */
+  stops: z.number().int(),
+  /** Total weight in ounces; lines without a weight count as 0. */
+  weightOz: z.number(),
+  /** Lines with no variation or product weight, so `weightOz` is low by their share. */
+  missingWeightCount: z.number().int(),
+  /** One order over the cart weight limit by itself. */
+  overWeight: z.boolean(),
+  oldest: z.object({ number: z.string(), orderedAt: z.date() }),
+  /** At most three, most shared first. */
+  shared: z.array(BatchSuggestionShared),
+});
+export type BatchSuggestion = z.infer<typeof BatchSuggestion>;
+
+export const BatchSuggestions = z.object({
+  suggestions: z.array(BatchSuggestion),
+  /** The actor's open batch: `createBatch` refuses a second one, so the cards can't act until it's done. */
+  openBatch: z.object({ id: Id, number: z.number().int() }).nullable(),
+});
+export type BatchSuggestions = z.infer<typeof BatchSuggestions>;
+
 const tags = ["Picking"];
 
 export const picking = {
@@ -387,6 +426,14 @@ export const pickBatches = {
     })
     .input(CreatePickBatchInput)
     .output(PickBatch),
+  suggestions: base
+    .route({
+      method: "GET",
+      path: "/pick-batches/suggestions",
+      tags,
+      summary: "Suggested batches: Pending orders grouped by the products they share",
+    })
+    .output(BatchSuggestions),
   get: base
     .route({ method: "GET", path: "/pick-batches/{id}", tags, summary: "A pick batch" })
     .input(z.object({ id: Id }))

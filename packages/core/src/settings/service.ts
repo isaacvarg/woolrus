@@ -77,6 +77,8 @@ function toAdminSettings(row: Settings): AdminSettings {
     stationIdleLockMinutes: row.stationIdleLockMinutes,
     claimExpiryMinutes: row.claimExpiryMinutes,
     pickBatchMaxOrders: row.pickBatchMaxOrders,
+    pickBatchSuggestionCount: row.pickBatchSuggestionCount,
+    pickBatchMaxWeightOz: row.pickBatchMaxWeightOz,
     stageSlaMinutes: sla.success ? sla.data : {},
     weightDisplay: row.weightDisplay,
     piiRetentionDays: row.piiRetentionDays,
