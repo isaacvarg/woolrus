@@ -141,9 +141,10 @@ describe("approvals: happy path (criterion 23)", () => {
         after: {
           approvalId,
           kind: "PACKING_CHECKS",
-          approverId: maria.userId,
+          approvedById: maria.userId,
           entityType: "Order",
           entityId: order.id,
+          reason: expect.any(String),
         },
       }),
     ]);

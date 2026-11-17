@@ -78,6 +78,8 @@ export type RecordApprovalInput = {
   kind: ApprovalKind;
   entityType: string;
   entityId: string;
+  /** The order the guarded entity belongs to, for its activity feed. */
+  orderId?: string;
   reason: string;
   /** What was approved, as the caller describes it (e.g. the tripped checks). */
   details: Prisma.InputJsonValue;
@@ -99,6 +101,7 @@ export async function recordApproval(
     kind,
     entityType,
     entityId,
+    orderId,
     reason,
     details,
     now = new Date(),
@@ -136,7 +139,16 @@ export async function recordApproval(
     entityType: "Approval",
     entityId: id,
     action: "approval.grant",
-    after: { approvalId: id, kind, approverId, entityType, entityId },
+    orderId,
+    // `approvedById` like the Approval column, so the timeline can name the approver.
+    after: {
+      approvalId: id,
+      kind,
+      approvedById: approverId,
+      entityType,
+      entityId,
+      reason: trimmed,
+    },
     at: now,
   });
   return id;

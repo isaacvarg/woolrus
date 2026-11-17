@@ -1,4 +1,26 @@
 {
-  "en": {},
-  "es": {}
+  "en": {
+    "packageItem_scan": "Scanned an item in Box {box}: {verified} of {quantity} verified",
+    "packageItem_verify": "Verified the line in Box {box}",
+    "packageItem_unverify": "Cleared the line's verification in Box {box}",
+    "package_confirmBox": "Confirmed the box",
+    "packCheckTrip_acknowledge": "Acknowledged the {check, select, OVER_MAX {over max} UNDER_MIN {under min} WEIGHT_OFF {off the estimate} WEIGHT_STALE {re-weigh} NO_FIT {doesn't fit} BOX_NOT_SCANNED {box not scanned} CUSTOM_DIMENSIONS {custom size} other {packing}} warning",
+    "PackageCheckTrip_archive": "Archived a packing check",
+    "PackageCheckTrip_unarchive": "Restored a packing check",
+    "approval_grant": "{name} approved {kind, select, PACKING_CHECKS {finishing packing past blocked checks} other {an action}}",
+    "lot_qaReplace": "Replaced a lot in Box {box} with {lot}",
+    "lot_qaRemove": "Removed a lot in Box {box}"
+  },
+  "es": {
+    "packageItem_scan": "Escaneó un artículo en la caja {box}: {verified} de {quantity} verificados",
+    "packageItem_verify": "Verificó la línea en la caja {box}",
+    "packageItem_unverify": "Quitó la verificación de la línea en la caja {box}",
+    "package_confirmBox": "Confirmó la caja",
+    "packCheckTrip_acknowledge": "Revisó la advertencia {check, select, OVER_MAX {de peso máximo} UNDER_MIN {de peso mínimo} WEIGHT_OFF {de peso estimado} WEIGHT_STALE {de volver a pesar} NO_FIT {de tamaño} BOX_NOT_SCANNED {de caja escaneada} CUSTOM_DIMENSIONS {de tamaño personalizado} other {de empaque}}",
+    "PackageCheckTrip_archive": "Archivó un control de empaque",
+    "PackageCheckTrip_unarchive": "Restauró un control de empaque",
+    "approval_grant": "{name} aprobó {kind, select, PACKING_CHECKS {terminar el empaque con controles bloqueados} other {una acción}}",
+    "lot_qaReplace": "Reemplazó un lote en la caja {box} por {lot}",
+    "lot_qaRemove": "Quitó un lote en la caja {box}"
+  }
 }

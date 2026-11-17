@@ -89,6 +89,7 @@ export async function setVerified(
           entityType: "PackageItem",
           entityId: row.id,
           action: verified ? "packageItem.verify" : "packageItem.unverify",
+          orderId,
           before: snapshot(row),
           after: snapshot({ ...row, qaVerifiedQuantity: target }),
           at: now,

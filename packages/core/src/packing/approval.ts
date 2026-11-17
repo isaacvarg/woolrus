@@ -83,6 +83,7 @@ export async function recordPackApproval(
     kind: "PACKING_CHECKS",
     entityType: "Order",
     entityId: orderId,
+    orderId,
     reason: approval.reason,
     details: blocking,
     now,
