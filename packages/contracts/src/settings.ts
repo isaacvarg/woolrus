@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { base } from "./base";
+import { ActivityVisibility } from "./order-activity";
 import { PackCheckMode, QaBoxConfirm } from "./pack-checks";
 
 // Settings (FR-SET-05, FR-SHIP-09, FR-SET-06). Secret values never appear in any output schema here
@@ -190,6 +191,8 @@ export const AdminSettings = z.object({
   packCheckCustomDimensions: PackCheckMode,
   packCheckWeightOffPercent: z.number(),
   qaBoxConfirm: QaBoxConfirm,
+  /** Which activity parts each role sees (SPEC-order-activity "Visibility"). */
+  activityVisibility: ActivityVisibility,
   secrets: z.record(SecretName, SecretStatus),
 });
 export type AdminSettings = z.infer<typeof AdminSettings>;
@@ -243,6 +246,7 @@ export const UpdateSettingsInput = z.object({
   packCheckCustomDimensions: SettablePackCheckMode.optional(),
   packCheckWeightOffPercent: PackCheckWeightOffPercent.optional(),
   qaBoxConfirm: QaBoxConfirm.optional(),
+  activityVisibility: ActivityVisibility.optional(),
 });
 export type UpdateSettingsInput = z.infer<typeof UpdateSettingsInput>;
 

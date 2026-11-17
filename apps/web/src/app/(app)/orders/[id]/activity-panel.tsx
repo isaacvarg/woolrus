@@ -33,9 +33,13 @@ export function ActivityPanel({ id }: { id: string }) {
   const activity = useQuery(orpc.orders.activity.queryOptions({ input: { id } }));
 
   const entries = activity.data?.entries ?? [];
+  const visible = activity.data?.visible;
   const counts = new Map<ActivityCategory, number>();
   for (const entry of entries) counts.set(entry.category, (counts.get(entry.category) ?? 0) + 1);
   const shown = filter === "all" ? entries : entries.filter((e) => e.category === filter);
+
+  // A viewer whose roles may see no part gets no panel at all (SPEC-order-activity "Visibility").
+  if (visible && !Object.values(visible).some(Boolean)) return null;
 
   return (
     <section aria-labelledby={headingId} className="space-y-3" data-testid="activity-panel">
@@ -47,7 +51,7 @@ export function ActivityPanel({ id }: { id: string }) {
       {activity.data && (
         <ActivitySummary summary={activity.data.summary} people={activity.data.people} />
       )}
-      {activity.isSuccess && entries.length === 0 && <p>{t("activity.empty")}</p>}
+      {visible?.timeline && entries.length === 0 && <p>{t("activity.empty")}</p>}
       {entries.length > 0 && (
         <ToggleButtonGroup
           aria-label={t("activity.filters")}

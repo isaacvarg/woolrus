@@ -30,6 +30,7 @@
     "priorityRules": "Reglas de prioridad",
     "shippingSettings": "Envíos",
     "packingChecks": "Controles de empaque",
+    "activityVisibility": "Visibilidad de la actividad",
     "sync": "Sincronización",
     "users": "Usuarios",
     "stations": "Estaciones",
@@ -323,6 +324,26 @@
       "save": "Guardar",
       "saved": "Controles de empaque guardados.",
       "stats": "Últimos 30 días: {trips, plural, one {# aviso} other {# avisos}}, {approved, plural, one {# aprobado} other {# aprobados}}"
+    },
+    "activity": {
+      "title": "Visibilidad de la actividad",
+      "intro": "Elige qué partes del Historial de un pedido ve cada rol: en la página del pedido y en los paneles de empaque y QA. Todo empieza activado. Quien tiene varios roles ve una parte si alguno de sus roles la ve. Los administradores siempre lo ven todo. Un rol con todas las partes desactivadas no tiene pestaña Historial.",
+      "caption": "Partes de la actividad que ve cada rol",
+      "role": "Rol",
+      "part": {
+        "timeline": "Cronología",
+        "details": "Detalles del cambio",
+        "summary": "Tiempos por etapa",
+        "people": "Personas"
+      },
+      "hint": {
+        "timeline": "cada entrada, con quién la hizo, dónde y cuándo.",
+        "details": "los valores de antes y después al expandir una entrada.",
+        "summary": "tiempo en estado, de espera y de trabajo por etapa.",
+        "people": "quién trabajó en cada etapa, y de cuándo a cuándo."
+      },
+      "switch": "{part} para {role}",
+      "saved": "Visibilidad de la actividad guardada."
     }
   },
   "priorityRules": {
@@ -2354,6 +2375,7 @@
     "openNotes": "Ver las notas",
     "summary": {
       "title": "Tiempo en cada etapa",
+      "peopleTitle": "Quién trabajó en cada etapa",
       "now": "Ahora",
       "onHold": "En espera {time}, sin contar en ninguna etapa.",
       "workingNote": "El tiempo de trabajo va de la primera a la última acción, con pausas incluidas.",

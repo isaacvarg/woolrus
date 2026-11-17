@@ -145,6 +145,14 @@ type DemoOrder = {
   splitPackages?: boolean;
   /** The ship-to country (an ISO code), when not the US. */
   country?: string;
+  /** Activity dev data (SPEC-order-activity "Dev data"): picked in this demo batch with the others. */
+  batch?: number;
+  /** Its first box was weighed twice. */
+  reweigh?: boolean;
+  /** QA refused two scans on it. */
+  qaMisses?: boolean;
+  /** Sent back from Ready to Packing once, then through QA again. */
+  repacked?: boolean;
 };
 
 type DemoIssue = {
@@ -177,8 +185,8 @@ const orders: DemoOrder[] = [
   { customer: "Luis Herrera", status: "PICKING", lines: [["WOOL-ALP-CRM", 3], ["NDL-DPN-4", 1]], progress: "none", ageHours: 7, inStageMinutes: 95 },
   { customer: "María Castro", status: "PICKING", lines: [["NDL-CIRC-5", 2]], progress: "none", ageHours: 10, inStageMinutes: 10 },
   // Packing: two packed and ready for QA, three picked but not boxed (one with a voided unit, one needing two boxes).
-  { customer: "Nora Jiménez", status: "PACKING", lines: [["WOOL-MER-NAVY", 3]], progress: "packed", ageHours: 12, inStageMinutes: 20 },
-  { customer: "Óscar Ramos", status: "PACKING", lines: [["KIT-BEANIE", 1], ["NDL-CIRC-5", 1]], progress: "packed", ageHours: 11, inStageMinutes: 35, method: "UPS 2nd Day Air Express" },
+  { customer: "Nora Jiménez", status: "PACKING", lines: [["WOOL-MER-NAVY", 3]], progress: "packed", ageHours: 12, inStageMinutes: 20, batch: 1, reweigh: true },
+  { customer: "Óscar Ramos", status: "PACKING", lines: [["KIT-BEANIE", 1], ["NDL-CIRC-5", 1]], progress: "packed", ageHours: 11, inStageMinutes: 35, method: "UPS 2nd Day Air Express", batch: 1 },
   { customer: "Paula Gil", status: "PACKING", lines: [["WOOL-MER-RED", 3], ["BOOK-WINTER", 1]], progress: "picked", ageHours: 14, inStageMinutes: 50, voidFirst: 1 },
   { customer: "Quentin Moore", status: "PACKING", lines: [["WOOL-ALP-CRM", 2]], progress: "picked", ageHours: 15, inStageMinutes: 70 },
   // Picked, not boxed: a line of 6 that needs two boxes.
@@ -186,7 +194,7 @@ const orders: DemoOrder[] = [
   // QA: two verified and labeled, two waiting for verification.
   { customer: "Rosa Delgado", status: "QA", lines: [["NDL-DPN-4", 2]], progress: "labeled", ageHours: 18, inStageMinutes: 15 },
   { customer: "Samuel Torres", status: "QA", lines: [["WOOL-MER-NAVY", 1], ["WOOL-MER-RED", 1]], progress: "labeled", ageHours: 19, inStageMinutes: 30 },
-  { customer: "Teresa Flores", status: "QA", lines: [["KIT-BEANIE", 3]], progress: "packed", ageHours: 22, inStageMinutes: 45, street: "15 Elm Street" },
+  { customer: "Teresa Flores", status: "QA", lines: [["KIT-BEANIE", 3]], progress: "packed", ageHours: 22, inStageMinutes: 45, street: "15 Elm Street", qaMisses: true },
   // QA to complete: a one-package order, and a two-package one whose second label the fake carrier refuses.
   { customer: "Vicente Arias", status: "QA", lines: [["WOOL-MER-RED", 2]], progress: "packed", ageHours: 8, inStageMinutes: 10 },
   { customer: "Wendy Bravo", status: "QA", lines: [["KIT-BEANIE", 1], ["NDL-CIRC-5", 1]], progress: "packed", ageHours: 9, inStageMinutes: 12, splitPackages: true, address2: "FAIL-BUY-2" },
@@ -194,7 +202,7 @@ const orders: DemoOrder[] = [
   // Ready
   { customer: "Valeria Soto", status: "READY", lines: [["WOOL-ALP-CRM", 4]], progress: "labeled", ageHours: 26, inStageMinutes: 60 },
   { customer: "William Brooks", status: "READY", lines: [["NDL-CIRC-5", 1], ["RUSH-ORDER", 1]], progress: "labeled", ageHours: 5, inStageMinutes: 20 },
-  { customer: "Ximena Cruz", status: "READY", lines: [["WOOL-MER-RED", 2]], progress: "labeled", ageHours: 30, inStageMinutes: 120 },
+  { customer: "Ximena Cruz", status: "READY", lines: [["WOOL-MER-RED", 2]], progress: "labeled", ageHours: 30, inStageMinutes: 120, repacked: true },
   // Completed
   { customer: "Yolanda Peña", status: "COMPLETED", lines: [["KIT-BEANIE", 1]], progress: "labeled", ageHours: 50, inStageMinutes: 24 * 60 },
   { customer: "Zoe Alvarez", status: "COMPLETED", lines: [["WOOL-MER-NAVY", 5]], progress: "labeled", ageHours: 60, inStageMinutes: 30 * 60 },
@@ -237,7 +245,9 @@ function pathOf(order: DemoOrder): WorkflowStatus[] {
     const from = order.from ?? "PENDING";
     return [...flow.slice(0, flow.indexOf(from) + 1), order.status];
   }
-  return flow.slice(0, flow.indexOf(order.status) + 1);
+  const path = flow.slice(0, flow.indexOf(order.status) + 1);
+  // A repack sends a Ready order back to Packing; it goes through QA again.
+  return order.repacked ? [...path, "PACKING", "QA", "READY"] : path;
 }
 
 /**
@@ -554,6 +564,7 @@ async function createDemoOrder(
   catalog: Map<string, { id: string; physical: boolean }>,
   boxId: string | null,
   shipping: DemoShipping,
+  people: DemoPeople,
   now: Date,
 ): Promise<void> {
   const hoursAgo = (h: number) => new Date(now.getTime() - h * 3_600_000);
@@ -593,6 +604,14 @@ async function createDemoOrder(
   });
 
   const physicalLines: { id: string; active: number }[] = [];
+  // What the activity dev data acts on (SPEC-order-activity "Dev data").
+  const issueRows: {
+    id: string;
+    type: QualityIssueType;
+    severity: QualityIssueSeverity;
+    stage: string;
+  }[] = [];
+  const boxes: { id: string; number: number; items: { id: string; quantity: number }[] }[] = [];
   for (const [lineIndex, [sku, quantity]] of spec.lines.entries()) {
     const product = catalog.get(sku);
     if (!product) throw new Error(`Demo order uses unknown SKU ${sku}`);
@@ -665,6 +684,7 @@ async function createDemoOrder(
         createdAt: enteredAt,
       },
     });
+    issueRows.push({ id: row.id, type: issue.type, severity: issue.severity, stage: issue.stage });
     if (issue.note) {
       await tx.note.create({
         data: { orderId: order.id, qualityIssueId: row.id, content: issue.note },
@@ -687,8 +707,10 @@ async function createDemoOrder(
           ...(boxId ? {} : { lengthIn: 10, widthIn: 8, heightIn: 4 }),
         },
       });
+      const box = { id: pkg.id, number, items: [] as { id: string; quantity: number }[] };
+      boxes.push(box);
       for (const line of group) {
-        await tx.packageItem.create({
+        const packed = await tx.packageItem.create({
           data: {
             packageId: pkg.id,
             orderItemId: line.id,
@@ -697,6 +719,7 @@ async function createDemoOrder(
             qaVerifiedAt: verified ? enteredAt : null,
           },
         });
+        box.items.push({ id: packed.id, quantity: line.active });
       }
       // Packing → QA fetched rates for every package that got that far.
       const rated = "fake" in shipping && ["QA", "READY", "COMPLETED"].includes(spec.status);
@@ -755,20 +778,248 @@ async function createDemoOrder(
     }
   }
 
-  // History: the import into Pending, then each move, spread evenly up to the current status.
+  // History: the import into Pending, then each move, spread evenly up to the current status. The
+  // floor's moves carry who made them, so the activity summary has people to show.
   const steps = path.length;
   const span = enteredAt.getTime() - orderedAt.getTime();
-  for (const [step, to] of path.entries()) {
-    const at = step === 0 ? orderedAt : new Date(orderedAt.getTime() + (span * step) / (steps - 1));
+  const moves = path.map((to, step) => ({
+    from: step === 0 ? null : (path[step - 1] ?? null),
+    to,
+    at:
+      step === steps - 1
+        ? enteredAt
+        : step === 0
+          ? orderedAt
+          : new Date(orderedAt.getTime() + (span * step) / (steps - 1)),
+  }));
+  const mover = (from: WorkflowStatus | null, to: WorkflowStatus) =>
+    to === "PICKING" || (to === "PACKING" && from === "PICKING")
+      ? people.picker
+      : to === "PACKING" || to === "QA"
+        ? people.packer
+        : to === "READY"
+          ? people.qa
+          : null;
+  for (const [step, move] of moves.entries()) {
     await tx.orderStageEvent.create({
       data: {
         orderId: order.id,
-        fromStatus: step === 0 ? null : (path[step - 1] ?? null),
-        toStatus: to,
+        fromStatus: move.from,
+        toStatus: move.to,
+        actorId: mover(move.from, move.to),
         reason: step === steps - 1 && spec.reason ? spec.reason : null,
-        at: step === steps - 1 ? enteredAt : at,
+        at: move.at,
       },
     });
+  }
+
+  await seedDemoActivity(tx, {
+    order: order.id,
+    spec,
+    moves,
+    physicalLines,
+    boxes,
+    issueRows,
+    people,
+    now,
+    enteredAt,
+  });
+}
+
+type DemoMove = { from: WorkflowStatus | null; to: WorkflowStatus; at: Date };
+
+/** The floor's demo users, who did the seeded work. */
+type DemoPeople = { picker: string; packer: string; qa: string };
+
+const demoPeople = [
+  { key: "picker", name: "Rita Picker", email: "demo-picker@example.test", roles: ["PICKER"] },
+  { key: "packer", name: "Pablo Packer", email: "demo-packer@example.test", roles: ["PACKER"] },
+  { key: "qa", name: "Quinn Checker", email: "demo-qa@example.test", roles: ["QA"] },
+] as const;
+
+async function upsertDemoPeople(db: Db): Promise<DemoPeople> {
+  const ids: Partial<DemoPeople> = {};
+  for (const { key, name, email, roles } of demoPeople) {
+    const user = await db.user.upsert({
+      where: { email },
+      create: { name, email, roles: [...roles] },
+      update: {},
+    });
+    ids[key] = user.id;
+  }
+  return ids as DemoPeople;
+}
+
+/**
+ * Audit rows and scan misses in each stay, from the stage people (SPEC-order-activity "Dev data"):
+ * picks (one batch), boxes added and weighed (one reweigh), QA verifications (two refused scans on
+ * one order), a repack's second packing round, and each issue's report.
+ */
+async function seedDemoActivity(
+  tx: DbTx,
+  {
+    order,
+    spec,
+    moves,
+    physicalLines,
+    boxes,
+    issueRows,
+    people,
+    now,
+    enteredAt,
+  }: {
+    order: string;
+    spec: DemoOrder;
+    moves: DemoMove[];
+    physicalLines: { id: string; active: number }[];
+    boxes: { id: string; number: number; items: { id: string; quantity: number }[] }[];
+    issueRows: {
+      id: string;
+      type: QualityIssueType;
+      severity: QualityIssueSeverity;
+      stage: string;
+    }[];
+    people: DemoPeople;
+    now: Date;
+    enteredAt: Date;
+  },
+): Promise<void> {
+  const audit = (
+    actorId: string | null,
+    entityType: string,
+    entityId: string,
+    action: string,
+    at: Date,
+    change: { before?: Prisma.InputJsonObject; after?: Prisma.InputJsonObject } = {},
+  ) =>
+    tx.auditEvent.create({
+      data: { actorId, entityType, entityId, orderId: order, action, at, ...change },
+    });
+  let packingRound = 0;
+  for (const [step, move] of moves.entries()) {
+    const start = move.at.getTime();
+    const end = (moves[step + 1]?.at ?? now).getTime();
+    /** A moment `f` of the way through this stay. */
+    const at = (f: number) => new Date(start + Math.max(1, (end - start) * f));
+    if (move.to === "PICKING" && spec.progress !== "none") {
+      if (spec.batch) {
+        const together = orders.filter((o) => o.batch === spec.batch).length;
+        await audit(
+          people.picker,
+          "PickBatch",
+          `demo-batch-${spec.batch}`,
+          "pickBatch.create",
+          at(0),
+          {
+            after: {
+              number: spec.batch,
+              orders: Array.from({ length: together }, (_, i) => `demo-${i}`),
+            },
+          },
+        );
+      }
+      for (const [k, line] of physicalLines.entries()) {
+        if (line.active === 0) continue;
+        await audit(
+          people.picker,
+          "OrderItem",
+          line.id,
+          "pick.pickLine",
+          at((k + 1) / (physicalLines.length + 1)),
+          {
+            before: { pickedQuantity: 0 },
+            after: { pickedQuantity: line.active },
+          },
+        );
+      }
+    }
+    if (move.to === "PACKING" && boxes.length > 0) {
+      packingRound += 1;
+      for (const box of boxes) {
+        if (packingRound === 1) {
+          await audit(people.packer, "Package", box.id, "package.add", at(0.2), {
+            after: { number: box.number },
+          });
+          if (spec.reweigh && box.number === 1) {
+            await audit(people.packer, "Package", box.id, "package.setWeight", at(0.5), {
+              before: { weightOz: null },
+              after: { weightOz: 26 },
+            });
+          }
+          await audit(people.packer, "Package", box.id, "package.setWeight", at(0.7), {
+            before: { weightOz: spec.reweigh && box.number === 1 ? 26 : null },
+            after: { weightOz: 24 },
+          });
+        } else {
+          // The repack: the box reopened and weighed again.
+          await audit(people.packer, "Package", box.id, "package.setWeight", at(0.5), {
+            before: { weightOz: 24 },
+            after: { weightOz: 25 },
+          });
+        }
+      }
+    }
+    if (move.to === "QA") {
+      if (spec.qaMisses) {
+        await tx.scanMiss.createMany({
+          data: [
+            {
+              orderId: order,
+              stage: "QA",
+              kind: "NOT_ON_ORDER",
+              code: "0700000000028",
+              productName: "Merino yarn, Navy",
+              actorId: people.qa,
+              at: at(0.3),
+            },
+            {
+              orderId: order,
+              stage: "QA",
+              kind: "UNKNOWN_CODE",
+              code: "4006381333931",
+              actorId: people.qa,
+              at: at(0.5),
+            },
+          ],
+        });
+      }
+      const verified = spec.progress === "verified" || spec.progress === "labeled";
+      const done = moves[step + 1] !== undefined;
+      if (verified || done) {
+        for (const box of boxes) {
+          for (const [k, item] of box.items.entries()) {
+            await audit(
+              people.qa,
+              "PackageItem",
+              item.id,
+              "packageItem.verify",
+              at(0.6 + k * 0.05),
+              {
+                before: { verifiedQuantity: 0, quantity: item.quantity },
+                after: { verifiedQuantity: item.quantity, quantity: item.quantity },
+              },
+            );
+          }
+        }
+      }
+    }
+  }
+  const reporter: Record<string, string | null> = {
+    PICKING: people.picker,
+    PACKING: people.packer,
+    QA: people.qa,
+  };
+  for (const issue of issueRows) {
+    await audit(
+      reporter[issue.stage] ?? null,
+      "QualityIssue",
+      issue.id,
+      "issue.report",
+      enteredAt,
+      {
+        after: { type: issue.type, severity: issue.severity },
+      },
+    );
   }
 }
 
@@ -806,12 +1057,13 @@ export async function seedDemoOrders(
     shipping = { placeholder: await upsertDemoService(db) };
   }
 
+  const people = await upsertDemoPeople(db);
   let created = 0;
   for (const [index, spec] of orders.entries()) {
     const exists = await db.order.findUnique({ where: { wooOrderId: ID_BASE + index + 1 } });
     if (exists) continue;
     await db.$transaction((tx) =>
-      createDemoOrder(tx, index, spec, catalog, box?.id ?? null, shipping, now),
+      createDemoOrder(tx, index, spec, catalog, box?.id ?? null, shipping, people, now),
     );
     created += 1;
   }

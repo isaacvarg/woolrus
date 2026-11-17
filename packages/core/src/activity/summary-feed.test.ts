@@ -1,11 +1,11 @@
 import type { Db } from "@woolrus/db";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { fullActivity } from "../../test/activity";
 import { createActor, resetDb, testDb } from "../../test/db";
 import { createOrder } from "../../test/factories";
 import type { UserActor } from "../permissions";
 import { claim } from "../workflow/claims";
 import { beginPicking, hold, resume } from "../workflow/service";
-import { getOrderActivity } from "./timeline";
 
 const db: Db = testDb();
 afterAll(() => db.$disconnect());
@@ -36,7 +36,7 @@ describe("orders.activity summary", () => {
     await hold(db, lead, { orderId: order.id, expectedVersion: 3, reason: "Stock" }, at(20));
     await resume(db, lead, { orderId: order.id, expectedVersion: 4 }, at(50));
 
-    const feed = await getOrderActivity(db, picker, { id: order.id }, at(60));
+    const feed = await fullActivity(db, picker, { id: order.id }, at(60));
 
     expect(feed.summary.stages.map((s) => [s.stage, s.statusMs / MIN])).toEqual([
       ["PENDING", 10],

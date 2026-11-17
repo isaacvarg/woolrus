@@ -1,6 +1,7 @@
 import type { Db } from "@woolrus/db";
 import { messages } from "@woolrus/i18n";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { fullActivity } from "../../test/activity";
 import { createActor, resetDb, testDb } from "../../test/db";
 import { demoRate, fakeProvider, verifiedQaOrder } from "../../test/qa-fixtures";
 import { createMemoryStorage } from "../adapters/storage/memory";
@@ -15,7 +16,6 @@ import { createLabelPrint } from "../shipping/print";
 import { pushToWoo } from "../shipping/woo-push";
 import { retryWooPush } from "../shipping/woo-push-errors";
 import { actionMessageKey, actionRegistry } from "./actions";
-import { getOrderActivity } from "./timeline";
 
 // SPEC-order-activity: Shipping in the timeline (#202).
 
@@ -94,7 +94,7 @@ describe("shipping in the order's activity", () => {
     await retryWooPush(db, admin, { orderIds: [order.id] });
     await pushToWoo(db, store, { orderId: order.id });
 
-    const feed = await getOrderActivity(db, admin, { id: order.id });
+    const feed = await fullActivity(db, admin, { id: order.id });
     const items = feed.entries.flatMap((e) => (e.count > 1 ? e.members : [e]));
     const find = (action: string) => {
       const item = items.find((i) => i.action === action);
@@ -138,7 +138,7 @@ describe("shipping in the order's activity", () => {
     await keepOriginalAddress(db, qa, { orderId: order.id });
     await recheckAddress(db, qa, { orderId: order.id });
 
-    const feed = await getOrderActivity(db, qa, { id: order.id });
+    const feed = await fullActivity(db, qa, { id: order.id });
     const actions = feed.entries.map((e) => [e.action, e.category]);
     expect(actions).toEqual(
       expect.arrayContaining([
@@ -165,7 +165,7 @@ describe("shipping in the order's activity", () => {
       reason: null,
     });
 
-    const feed = await getOrderActivity(db, built.qa, { id: built.order.id });
+    const feed = await fullActivity(db, built.qa, { id: built.order.id });
     const cleared = feed.entries.find((e) => e.action === "rate.reason");
     expect(cleared?.params).toMatchObject({ rateReason: "none" });
   });

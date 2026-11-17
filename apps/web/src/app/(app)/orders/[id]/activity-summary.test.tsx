@@ -115,3 +115,27 @@ describe("ActivitySummary", () => {
     expect(screen.queryByTestId("activity-summary")).toBeNull();
   });
 });
+
+describe("ActivitySummary with parts hidden", () => {
+  it("shows who worked each stage without the times when only people are visible", () => {
+    render(
+      <NextIntlClientProvider locale="en" messages={messages.en} timeZone="UTC">
+        <ActivitySummary people={people} />
+      </NextIntlClientProvider>,
+    );
+    const packing = screen.getByTestId("activity-summary").querySelector('[data-stage="PACKING"]');
+    expect(packing?.textContent).toContain("Bruno");
+    expect(screen.queryByRole("img")).toBeNull();
+    expect(screen.queryByText(/Working time runs/)).toBeNull();
+  });
+
+  it("shows the times without anyone's name when people are hidden", () => {
+    render(
+      <NextIntlClientProvider locale="en" messages={messages.en} timeZone="UTC">
+        <ActivitySummary summary={summary} />
+      </NextIntlClientProvider>,
+    );
+    expect(screen.getAllByRole("img").length).toBeGreaterThan(0);
+    expect(screen.queryByText(/Bruno/)).toBeNull();
+  });
+});

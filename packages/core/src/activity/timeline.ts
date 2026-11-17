@@ -9,6 +9,7 @@ import { cleanDetails } from "./details";
 import { groupItems } from "./group";
 import { activitySources, type SourceRecord } from "./sources";
 import { summarizeActivity } from "./summary";
+import { activityPartsFor, seesActivity } from "./visibility";
 
 /** SPEC-order-activity: a safety net; an order is expected to have well under 1,000 rows. */
 export const TIMELINE_ROW_CAP = 2000;
@@ -29,6 +30,9 @@ export async function getOrderActivity(
   assertCan(actor, "order.read");
   const order = await db.order.findUnique({ where: { id }, select: { id: true } });
   if (!order) throw notFound();
+  // SPEC-order-activity "Visibility": hidden parts are never built into the response.
+  const visible = await activityPartsFor(db, actor);
+  if (!seesActivity(visible)) return { visible, truncated: false };
 
   const take = TIMELINE_ROW_CAP + 1;
   const all = (await Promise.all(activitySources.map((load) => load(db, { orderId: id, take }))))
@@ -37,17 +41,23 @@ export async function getOrderActivity(
   const records = all.slice(0, TIMELINE_ROW_CAP);
 
   const ctx = await loadContext(db, id, records);
-  const items = records.map((record) => toItem(record, ctx));
+  const items = records.map((record) => toItem(record, ctx, visible.details));
   const entries = groupItems(
     items,
     (item) => actionSpec(item.entityType, item.action)?.groups ?? false,
   );
   // From the items, before grouping: a grouped run still counts each member.
   const { summary, people } = summarizeActivity(items, now);
-  return { summary, people, entries, truncated: all.length > TIMELINE_ROW_CAP };
+  return {
+    visible,
+    ...(visible.summary && { summary }),
+    ...(visible.people && { people }),
+    ...(visible.timeline && { entries }),
+    truncated: all.length > TIMELINE_ROW_CAP,
+  };
 }
 
-function toItem(record: SourceRecord, ctx: DescribeContext): ActivityItem {
+function toItem(record: SourceRecord, ctx: DescribeContext, withDetails: boolean): ActivityItem {
   const spec = actionSpec(record.entityType, record.action);
   const described = spec?.describe?.(record, ctx) ?? {};
   const target =
@@ -71,7 +81,7 @@ function toItem(record: SourceRecord, ctx: DescribeContext): ActivityItem {
     target,
     params: { ...record.params, ...described.params },
     details:
-      record.details === false || spec?.details === false
+      !withDetails || record.details === false || spec?.details === false
         ? null
         : cleanDetails(record.before, record.after),
   };
