@@ -36,10 +36,11 @@ paid orders in, pick, pack, QA, buy labels and ship from one app, with every rul
 | `shipping` | Ready queue, print separate from ship, merged PDF, repack/void, Woo push with retries, customs, manifests | FR-SHIP-04…14 | qa, store-sync |
 | `lumexia` | Lot capture and validation, SKU↔item link | decisions.md | packing, settings |
 | `returns` | RMA flow, return labels, restock | SRS §7.2 #9 | shipping, exceptions |
-| `reporting` | Home dashboard, throughput, cycle time, spend, quality dashboard, CSV export | FR-REP-\*, FR-QI-07 | shipping, exceptions |
+| `reporting` | Home dashboard, throughput, cycle time, spend, quality dashboard, CSV export | FR-REP-\*, FR-QI-07 | shipping, exceptions, order-activity |
 | `rate-history` | Append-only log of every rate fetch and quote (orders and Rate Lab), the quote a label was bought from, the reason for a pricier pick | FR-REP-03 (groundwork) | carriers, qa |
 | `rate-lab` | Test addresses and parcels with groups, suite runs and one-off quotes across enabled providers, run insights, trends, the Real orders dashboard, CSV and print reports | FR-REP-03/04 (its reports) | rate-history, carriers, packing, shipping, settings |
 | `operations` | GlitchTip SDK, per-adapter health checks, PII purge, structured log coverage | NFR-OPS-\*, NFR-SEC-06 | — (runs alongside) |
+| `order-activity` | Order id on audit rows, records of blocked scans, the order's activity timeline with a stage time and people summary in the History tab, per-role visibility | FR-WF-04/05/08 | workflow, identity, settings, picking, packing, lumexia, exceptions, notes, carriers, qa, shipping, store-sync |
 
 Module ids are permanent. If two modules turn out to need each other, merge them rather than adding a cycle.
 The contract between two modules belongs in the **provider's** spec.
@@ -52,7 +53,7 @@ The contract between two modules belongs in the **provider's** spec.
 | **M2 People & floor** | `identity` ∥ `notes` → `picking` ∥ `packing` | Invited staff sign in on stations and pick and pack orders |
 | **M3 Problems** | `exceptions` | Voids and quality issues are recorded and resolved |
 | **M4 Ship — go-live** | `carriers` → `qa` ∥ `bridge-source` → `shipping`; `operations` done | Labels bought safely from every enabled provider, orders shipped and pushed to Woo. **First real labels bought in Woolrus** (v1 was never live; shipping is manual today). |
-| **M5 Beyond v1** | `lumexia` ∥ `returns` ∥ `reporting` ∥ (`rate-history` → `rate-lab`) | Traceability, returns, insight; measured shipping prices |
+| **M5 Beyond v1** | `lumexia` ∥ `returns` ∥ (`order-activity` → `reporting`) ∥ (`rate-history` → `rate-lab`) | Traceability, returns, insight; measured shipping prices |
 
 ### Status
 
@@ -76,6 +77,7 @@ States: `not started` → `spec draft` → `spec approved` → `planned` → `in
 | `shipping` | M4 | [SPEC-shipping](docs/specs/SPEC-shipping.md) | [#28](https://github.com/isaacvarg/woolrus/issues/28) | done |
 | `operations` | M4 | [SPEC-operations](docs/specs/SPEC-operations.md) | [#29](https://github.com/isaacvarg/woolrus/issues/29) | done |
 | `lumexia` | M5 | [SPEC-lumexia](docs/specs/SPEC-lumexia.md) | [#30](https://github.com/isaacvarg/woolrus/issues/30) | done |
+| `order-activity` | M5 | [SPEC-order-activity](docs/specs/SPEC-order-activity.md) | [#196](https://github.com/isaacvarg/woolrus/issues/196) | spec approved |
 | `returns` | M5 | — | [#31](https://github.com/isaacvarg/woolrus/issues/31) | not started |
 | `reporting` | M5 | — | [#32](https://github.com/isaacvarg/woolrus/issues/32) | not started |
 | `rate-history` | M5 | [SPEC-rate-history](docs/specs/SPEC-rate-history.md) | [#139](https://github.com/isaacvarg/woolrus/issues/139) | done |
