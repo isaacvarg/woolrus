@@ -41,7 +41,9 @@
     "customs": "Aduanas",
     "manifests": "Manifiestos",
     "rateLab": "Rate Lab",
-    "lumexiaItems": "Artículos de Lumexia"
+    "lumexiaItems": "Artículos de Lumexia",
+    "tools": "Herramientas",
+    "configs": "Configuración"
   },
   "navFooter": {
     "preferences": "Preferencias",
@@ -2293,5 +2295,26 @@
   "charts": {
     "showData": "Ver los datos",
     "hideData": "Ocultar los datos"
+  },
+  "dashboard": {
+    "title": "Panel",
+    "tiles": {
+      "open": "Pedidos abiertos",
+      "openHint": "Todo lo que aún no está completado ni cancelado",
+      "picking": "Por recoger",
+      "pickingHint": "{pending} en espera · {picking} en curso",
+      "packing": "Por empacar",
+      "qa": "Por revisar (QA)",
+      "issues": "Incidencias abiertas",
+      "issuesCritical": "{count, plural, one {# crítica} other {# críticas}}"
+    },
+    "chart": {
+      "title": "Pedidos por día, últimos {days} días",
+      "range": "Rango de fechas",
+      "lastDays": "{days} días",
+      "received": "Recibidos",
+      "completed": "Completados",
+      "day": "Día"
+    }
   }
 }

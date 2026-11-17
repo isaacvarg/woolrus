@@ -41,7 +41,9 @@
     "customs": "Customs",
     "manifests": "Manifests",
     "rateLab": "Rate Lab",
-    "lumexiaItems": "Lumexia items"
+    "lumexiaItems": "Lumexia items",
+    "tools": "Tools",
+    "configs": "Configs"
   },
   "navFooter": {
     "preferences": "Preferences",
@@ -2293,5 +2295,26 @@
   "charts": {
     "showData": "Show the data",
     "hideData": "Hide the data"
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "tiles": {
+      "open": "Open orders",
+      "openHint": "Everything not yet completed or cancelled",
+      "picking": "Needs picking",
+      "pickingHint": "{pending} waiting · {picking} in progress",
+      "packing": "Needs packing",
+      "qa": "Needs QA",
+      "issues": "Open issues",
+      "issuesCritical": "{count} critical"
+    },
+    "chart": {
+      "title": "Orders per day, last {days} days",
+      "range": "Date range",
+      "lastDays": "{days} days",
+      "received": "Received",
+      "completed": "Completed",
+      "day": "Day"
+    }
   }
 }
