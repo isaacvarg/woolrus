@@ -69,7 +69,7 @@ export function NavFooter({
   );
 
   return (
-    <div className="mt-auto flex flex-col gap-2 border-t border-base-300 pt-4">
+    <div className="flex flex-col gap-2 border-t border-base-300 pt-4">
       <div className="px-2">
         <p className="truncate font-semibold">{name}</p>
         <p className="truncate text-sm opacity-70">

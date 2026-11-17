@@ -1,4 +1,6 @@
 import { can, publicEmail } from "@woolrus/core";
+import type { MessageKey } from "@woolrus/i18n";
+import type { Route } from "next";
 import { headers } from "next/headers";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -35,6 +37,31 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   // A collapsed sidebar on desktop behaves like the tablet drawer: hidden behind the menu button.
   const collapsed = user?.sidebarCollapsed ?? false;
 
+  // Each group's links, already narrowed to what this actor may open: a heading shows only over
+  // at least one link.
+  const visible = (
+    links: { href: Route; label: Extract<MessageKey, `nav.${string}`>; show: boolean }[],
+  ) => links.filter((link) => link.show);
+  const tools = visible([
+    { href: "/lots", label: "nav.lotLookup", show: can(actor, "order.read") },
+    { href: "/manifests", label: "nav.manifests", show: can(actor, "order.ship") },
+    { href: "/rate-lab", label: "nav.rateLab", show: can(actor, "ratelab.use") },
+  ]);
+  const showFailedJobs = can(actor, "ops.jobs");
+  const settings = can(actor, "settings.manage");
+  const configs = visible([
+    { href: "/boxes", label: "nav.boxes", show: true },
+    { href: "/users", label: "nav.users", show: can(actor, "user.manage") },
+    { href: "/stations", label: "nav.stations", show: can(actor, "station.manage") },
+    { href: "/settings", label: "nav.settings", show: settings },
+    { href: "/settings/priority-rules", label: "nav.priorityRules", show: settings },
+    { href: "/settings/shipping", label: "nav.shippingSettings", show: settings },
+    { href: "/settings/packing-checks", label: "nav.packingChecks", show: settings },
+    { href: "/settings/customs", label: "nav.customs", show: can(actor, "product.manage") },
+    { href: "/lumexia", label: "nav.lumexiaItems", show: can(actor, "lumexia.manage") },
+    { href: "/sync", label: "nav.sync", show: settings },
+  ]);
+
   return (
     <div className={`drawer ${collapsed ? "" : "lg:drawer-open"}`}>
       <OrderEvents />
@@ -45,93 +72,61 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <label htmlFor="nav" className="btn btn-ghost" aria-label={t("nav.openMenu")}>
             ☰
           </label>
-          <span className="font-semibold">{t("common.appName")}</span>
+          <Link href="/" className="btn btn-ghost px-2 text-lg font-semibold">
+            {t("common.appName")}
+          </Link>
         </header>
         <main className="p-4 lg:p-8">{children}</main>
       </div>
       <div className="drawer-side">
         <label htmlFor="nav" aria-label={t("nav.closeMenu")} className="drawer-overlay" />
         <DrawerNav toggleId="nav">
-          <span className="mb-4 px-2 text-xl font-bold">{t("common.appName")}</span>
+          <Link href="/" className="mb-4 px-2 text-xl font-bold">
+            {t("common.appName")}
+          </Link>
           {can(actor, "order.pick") && (
             <li className="mb-2">
               <Link href="/pick">{t("nav.myPicks")}</Link>
             </li>
           )}
           <QueueNav />
-          <div className="mt-2">
-            <SyncIndicator />
-          </div>
-          <li className="mt-4">
-            <Link href="/boxes">{t("nav.boxes")}</Link>
-          </li>
-          {can(actor, "order.read") && (
-            <li>
-              <Link href="/lots">{t("nav.lotLookup")}</Link>
-            </li>
-          )}
-          {can(actor, "user.manage") && (
-            <li>
-              <Link href="/users">{t("nav.users")}</Link>
-            </li>
-          )}
-          {can(actor, "station.manage") && (
-            <li>
-              <Link href="/stations">{t("nav.stations")}</Link>
-            </li>
-          )}
-          {can(actor, "settings.manage") && (
+          {(tools.length > 0 || showFailedJobs) && (
             <>
-              <li>
-                <Link href="/settings">{t("nav.settings")}</Link>
-              </li>
-              <li>
-                <Link href="/settings/priority-rules">{t("nav.priorityRules")}</Link>
-              </li>
-              <li>
-                <Link href="/settings/shipping">{t("nav.shippingSettings")}</Link>
-              </li>
-              <li>
-                <Link href="/settings/packing-checks">{t("nav.packingChecks")}</Link>
-              </li>
-              <li>
-                <Link href="/sync">{t("nav.sync")}</Link>
-              </li>
+              <li className="menu-title mt-4">{t("nav.tools")}</li>
+              {tools.map((link) => (
+                <li key={link.href}>
+                  <Link href={link.href}>{t(link.label)}</Link>
+                </li>
+              ))}
+              {showFailedJobs && <FailedJobsNav />}
             </>
           )}
-          {can(actor, "order.ship") && (
-            <li>
-              <Link href="/manifests">{t("nav.manifests")}</Link>
-            </li>
+          {configs.length > 0 && (
+            <>
+              <li className="menu-title mt-4">{t("nav.configs")}</li>
+              {configs.map((link) => (
+                <li key={link.href}>
+                  <Link href={link.href}>{t(link.label)}</Link>
+                </li>
+              ))}
+            </>
           )}
-          {can(actor, "ratelab.use") && (
-            <li>
-              <Link href="/rate-lab">{t("nav.rateLab")}</Link>
-            </li>
-          )}
-          {can(actor, "product.manage") && (
-            <li>
-              <Link href="/settings/customs">{t("nav.customs")}</Link>
-            </li>
-          )}
-          {can(actor, "lumexia.manage") && (
-            <li>
-              <Link href="/lumexia">{t("nav.lumexiaItems")}</Link>
-            </li>
-          )}
-          {can(actor, "ops.jobs") && <FailedJobsNav />}
-          {user && (
-            <NavFooter
-              name={user.name}
-              email={publicEmail(user.email)}
-              stationName={station?.name ?? null}
-              preferences={{
-                locale: user.locale,
-                theme: user.theme,
-                sidebarCollapsed: user.sidebarCollapsed,
-              }}
-            />
-          )}
+          {/* Sync status sits at the bottom, just above who is signed in. */}
+          <div className="mt-auto flex flex-col gap-2 pt-4">
+            <SyncIndicator />
+            {user && (
+              <NavFooter
+                name={user.name}
+                email={publicEmail(user.email)}
+                stationName={station?.name ?? null}
+                preferences={{
+                  locale: user.locale,
+                  theme: user.theme,
+                  sidebarCollapsed: user.sidebarCollapsed,
+                }}
+              />
+            )}
+          </div>
         </DrawerNav>
       </div>
     </div>
