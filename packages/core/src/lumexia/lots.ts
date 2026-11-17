@@ -385,7 +385,6 @@ async function editLot<R>(
         entityId: packageItemId,
         orderId: order.id,
         action,
-        orderId: order.id,
         before: { lots: lotSnapshot(before) },
         // The edited lot's number too: the snapshots carry no ids, and the default lot moves with it.
         after: {
