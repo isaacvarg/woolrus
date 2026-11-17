@@ -66,7 +66,10 @@ function toItem(record: SourceRecord, ctx: DescribeContext): ActivityItem {
     station: record.station,
     target,
     params: { ...record.params, ...described.params },
-    details: record.details === false ? null : cleanDetails(record.before, record.after),
+    details:
+      record.details === false || spec?.details === false
+        ? null
+        : cleanDetails(record.before, record.after),
   };
 }
 
@@ -97,12 +100,12 @@ function entityTarget(record: SourceRecord, ctx: DescribeContext): ActivityTarge
   }
 }
 
-/** Every user id under a `…ById` key, at any depth. */
+/** Every user id under a `…ById` or `…UserId` key, at any depth. */
 function userIds(json: Prisma.JsonValue, into: Set<string>): void {
   if (Array.isArray(json)) for (const v of json) userIds(v, into);
   else if (json && typeof json === "object") {
     for (const [key, value] of Object.entries(json)) {
-      if (key.endsWith("ById") && typeof value === "string") into.add(value);
+      if (/(By|User)Id$/.test(key) && typeof value === "string") into.add(value);
       else userIds(value as Prisma.JsonValue, into);
     }
   }

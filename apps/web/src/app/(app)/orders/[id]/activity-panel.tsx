@@ -7,6 +7,7 @@ import {
   type ActivityItem,
   ActivityCategory as Categories,
 } from "@woolrus/contracts";
+import Link from "next/link";
 import { useFormatter, useTranslations } from "next-intl";
 import { useId, useState } from "react";
 import { ToggleButton, ToggleButtonGroup } from "react-aria-components";
@@ -67,7 +68,7 @@ export function ActivityPanel({ id }: { id: string }) {
       )}
       <ol className="space-y-2">
         {shown.map((entry) => (
-          <Entry key={entry.id} entry={entry} />
+          <Entry key={entry.id} entry={entry} orderId={id} />
         ))}
       </ol>
       {activity.data?.truncated && (
@@ -91,7 +92,7 @@ function Chip({ id, label, count }: { id: Filter; label: string; count: number }
   );
 }
 
-function Entry({ entry }: { entry: ActivityEntry }) {
+function Entry({ entry, orderId }: { entry: ActivityEntry; orderId: string }) {
   const t = useTranslations();
   const format = useFormatter();
   const [open, setOpen] = useState(false);
@@ -104,7 +105,7 @@ function Entry({ entry }: { entry: ActivityEntry }) {
       className={`rounded-box bg-base-100 p-3 shadow-sm ${problem ? "border-error border-l-4" : ""}`}
       data-category={entry.category}
     >
-      <ItemBody item={entry} problem={problem} />
+      <ItemBody item={entry} problem={problem} orderId={orderId} />
       {entry.count > 1 && (
         <>
           <div className="mt-1 flex flex-wrap items-center gap-2 text-sm">
@@ -128,7 +129,7 @@ function Entry({ entry }: { entry: ActivityEntry }) {
             <ol id={membersId} className="border-base-300 mt-2 space-y-2 border-l-2 ps-3">
               {entry.members.map((member) => (
                 <li key={member.id}>
-                  <ItemBody item={member} problem={problem} />
+                  <ItemBody item={member} problem={problem} orderId={orderId} />
                 </li>
               ))}
             </ol>
@@ -139,7 +140,15 @@ function Entry({ entry }: { entry: ActivityEntry }) {
   );
 }
 
-function ItemBody({ item, problem }: { item: ActivityItem; problem: boolean }) {
+function ItemBody({
+  item,
+  problem,
+  orderId,
+}: {
+  item: ActivityItem;
+  problem: boolean;
+  orderId: string;
+}) {
   const t = useTranslations();
   const format = useFormatter();
   const reasonText = useReasonText();
@@ -167,6 +176,15 @@ function ItemBody({ item, problem }: { item: ActivityItem; problem: boolean }) {
           .join(" · ")}
       </div>
       {reason && <p className="mt-1 whitespace-pre-line">{reasonText(reason)}</p>}
+      {item.category === "notes" && (
+        // The feed never carries a note's text; the Notes tab shows it under the note rules.
+        <Link
+          href={`/orders/${orderId}?tab=notes`}
+          className="link inline-flex min-h-11 items-center"
+        >
+          {t("activity.openNotes")}
+        </Link>
+      )}
       {item.details && (
         <>
           <Button

@@ -21,7 +21,7 @@ export type DescribeContext = {
   packageItem(id: string): { packageId: string; orderItemId: string } | undefined;
   /** Labels by id. */
   label(id: string): { carrier: string; trackingEnd: string | null } | undefined;
-  /** Display names of every user id found under a `…ById` key in the rows' before/after. */
+  /** Display names of every user id under a `…ById` or `…UserId` key in the rows' before/after. */
   userName(id: string): string | undefined;
 };
 
@@ -37,6 +37,8 @@ export type ActionSpec = {
   groups: boolean;
   /** Shown by another entry instead (a move's audit row, by its stage event). */
   hidden?: boolean;
+  /** False: its before/after are never shown (a note's text stays in the Notes tab). */
+  details?: false;
   /** The background actor that writes it, named when the row has no person. */
   system?: SystemActor["system"];
   /** Message parameters, and a target when the entity's own isn't right. */

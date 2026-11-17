@@ -316,6 +316,7 @@ export async function createNote(
             await recordAudit(tx, actor, {
               entityType: "Note",
               entityId: note.id,
+              orderId: note.orderId,
               action: "create",
               after: {
                 orderId: note.orderId,
@@ -366,6 +367,7 @@ export async function createTextNote(
   await recordAudit(tx, actor, {
     entityType: "Note",
     entityId: note.id,
+    orderId: note.orderId,
     action: "create",
     after: { orderId: note.orderId, ...columns, ...snapshot(note), attachmentIds: [] },
   });
@@ -458,6 +460,7 @@ export async function updateNote(
         await recordAudit(tx, actor, {
           entityType: "Note",
           entityId: existing.id,
+          orderId: existing.orderId,
           action: "update",
           before: snapshot(existing),
           after: {
@@ -508,6 +511,7 @@ export async function deleteNote(
     await recordAudit(tx, actor, {
       entityType: "Note",
       entityId: id,
+      orderId: existing.orderId,
       action: "delete",
       before: { orderId: existing.orderId, authorId: existing.authorId, ...snapshot(existing) },
     });

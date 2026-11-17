@@ -62,20 +62,26 @@ const feed: OrderActivityFeed = {
   ],
 };
 
+/** What the mocked query answers; a test can swap it and `afterEach` puts `feed` back. */
+let shownFeed: OrderActivityFeed = feed;
+
 vi.mock("@/lib/orpc", () => ({
   orpc: {
     orders: {
       activity: {
         queryOptions: ({ input }: { input: { id: string } }) => ({
           queryKey: ["activity", input.id],
-          queryFn: async () => feed,
+          queryFn: async () => shownFeed,
         }),
       },
     },
   },
 }));
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  shownFeed = feed;
+});
 
 function show() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -125,5 +131,22 @@ describe("ActivityPanel", () => {
 
     await user.click(screen.getByRole("button", { name: "What changed" }));
     screen.getByText("36 → 41");
+  });
+});
+
+describe("ActivityPanel notes", () => {
+  it("links a note entry to the order's Notes tab, without its text", async () => {
+    shownFeed = {
+      truncated: false,
+      entries: [single(item(5, { category: "notes", action: "create", entityType: "Note" }))],
+    };
+    show();
+    const [note] = await screen.findAllByRole("listitem");
+    expect(note?.textContent).toContain("Wrote a note");
+    const link = within(note as HTMLElement).getByRole("link", { name: "Open the notes" });
+    expect(link.getAttribute("href")).toBe(
+      "/orders/0199e6a0-0000-7000-8000-000000000001?tab=notes",
+    );
+    expect(within(note as HTMLElement).queryByRole("button", { name: "What changed" })).toBeNull();
   });
 });

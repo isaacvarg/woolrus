@@ -1,4 +1,12 @@
 {
-  "en": {},
-  "es": {}
+  "en": {
+    "Note_create": "Wrote a note",
+    "Note_update": "Edited a note",
+    "Note_delete": "Deleted a note"
+  },
+  "es": {
+    "Note_create": "Escribió una nota",
+    "Note_update": "Editó una nota",
+    "Note_delete": "Eliminó una nota"
+  }
 }
