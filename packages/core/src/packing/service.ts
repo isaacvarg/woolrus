@@ -55,8 +55,9 @@ export async function lockForPacking(
   return order;
 }
 
-/** What an audit event records about a package: its box, weight and units per line. */
+/** What an audit event records about a package: its order, box, weight and units per line. */
 const snapshot = (pkg: PackageRow) => ({
+  orderId: pkg.orderId,
   number: pkg.number,
   boxId: pkg.boxId,
   lengthIn: toNumber(pkg.lengthIn),
@@ -172,6 +173,7 @@ async function finish(
   await recordAudit(tx, actor, {
     entityType: "Package",
     entityId: packageId,
+    orderId: order.id,
     action: `package.${op}`,
     before: before && snapshot(before),
     after: after && snapshot(after),

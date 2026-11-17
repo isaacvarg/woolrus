@@ -117,6 +117,7 @@ export async function validateLots(
       await recordAudit(tx, lumexiaActor, {
         entityType: "PackageItem",
         entityId: lot.packageItem.id,
+        orderId: order.id,
         action: "lot.validate",
         before: {
           lotId: id,

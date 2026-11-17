@@ -1,4 +1,30 @@
 {
-  "en": {},
-  "es": {}
+  "en": {
+    "package_add": "Added Box {box}",
+    "package_delete": "Removed Box {box}",
+    "package_setBox": "Changed the box for Box {box}",
+    "package_setWeight": "Weighed Box {box}: {weightOz} oz",
+    "package_scan": "Scanned {line} into Box {box}",
+    "package_packUnits": "Packed {count} × {line} into Box {box}",
+    "package_unpackUnits": "Took {count} × {line} out of Box {box}",
+    "package_packRemaining": "Packed the rest into Box {box} ({count, plural, one {# unit} other {# units}})",
+    "lot_scan": "Scanned lot {lot} for {line} in Box {box}",
+    "lot_remove": "Removed lot {lot} from {line} in Box {box}",
+    "lot_setQuantity": "Set lot {lot} to {quantity} × {line} in Box {box}",
+    "lot_validate": "Checked lot {lot} for {line} in Box {box} with Lumexia: {status, select, VALID {valid} WRONG_ITEM {wrong item} NOT_FOUND {not found} other {checked}}"
+  },
+  "es": {
+    "package_add": "Agregó la Caja {box}",
+    "package_delete": "Quitó la Caja {box}",
+    "package_setBox": "Cambió la caja de la Caja {box}",
+    "package_setWeight": "Pesó la Caja {box}: {weightOz} oz",
+    "package_scan": "Escaneó {line} en la Caja {box}",
+    "package_packUnits": "Empacó {count} × {line} en la Caja {box}",
+    "package_unpackUnits": "Sacó {count} × {line} de la Caja {box}",
+    "package_packRemaining": "Empacó el resto en la Caja {box} ({count, plural, one {# unidad} other {# unidades}})",
+    "lot_scan": "Escaneó el lote {lot} de {line} en la Caja {box}",
+    "lot_remove": "Quitó el lote {lot} de {line} en la Caja {box}",
+    "lot_setQuantity": "Puso el lote {lot} en {quantity} × {line} en la Caja {box}",
+    "lot_validate": "Verificó con Lumexia el lote {lot} de {line} en la Caja {box}: {status, select, VALID {válido} WRONG_ITEM {otro artículo} NOT_FOUND {no encontrado} other {verificado}}"
+  }
 }
