@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import { createDb } from "@woolrus/db";
 import { signInAs } from "./support/auth";
 import { deleteCreatedOrders } from "./support/orders";
-import { qaJourneyOrder } from "./support/qa";
+import { chooseRate, qaJourneyOrder } from "./support/qa";
 import { withSettingsLock } from "./support/settings-lock";
 
 // SPEC-rate-history criterion 12: QA picks the pricier fake rate, says why, buys the label, and the
@@ -33,11 +33,11 @@ test("QA picks the pricier rate with a reason; the label and the drawer carry it
     try {
       await page.goto(`/qa/${o.order.id}`);
       // The cheapest rate is selected, so nobody is asked why.
-      await expect(page.getByTestId("qa-rate").first()).toHaveAttribute("data-selected", "true");
+      await expect(page.getByTestId("qa-rate-chosen")).toContainText("$4.50");
       await expect(page.getByTestId("qa-rate-reason")).toHaveCount(0);
 
-      await page.getByTestId("qa-rate").nth(1).click();
-      await expect(page.getByTestId("qa-rate").nth(1)).toHaveAttribute("data-selected", "true");
+      await chooseRate(page, 1);
+      await expect(page.getByTestId("qa-rate-chosen")).toContainText("$6.00");
       const reason = page.getByRole("button", { name: /Why this rate\?/ });
       const note = page.getByRole("textbox", { name: "Note" });
       // A note written for Other doesn't come back after another reason replaced it.
@@ -80,7 +80,7 @@ test("QA picks the pricier rate with a reason; the label and the drawer carry it
       await page.getByRole("button", { name: "Quick view" }).click();
       await expect(page.getByTestId("qa-drawer-reason")).toHaveText("Why: Faster delivery");
 
-      await page.goto(`/orders/${o.order.id}`);
+      await page.goto(`/orders/${o.order.id}?tab=shipping`);
       await expect(page.getByTestId("order-rate-reason")).toHaveText(
         "Why not the cheapest: Faster delivery",
       );

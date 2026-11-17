@@ -3,7 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { QaPackage, QaResult, QaRow, QaView } from "@woolrus/contracts";
 import { formatWeight } from "@woolrus/core/format";
-import { ArrowUpRight, Flag, Weight } from "lucide-react";
+import { ArrowUpRight, Check, Flag, Package, Weight } from "lucide-react";
 import Link from "next/link";
 import { useFormatter, useLocale, useTranslations } from "next-intl";
 import { useState } from "react";
@@ -168,7 +168,8 @@ function QaLayout({
   const mayVerify =
     canVerify && order.status === "QA" && order.claim?.userId === userId && !purchasing;
 
-  // The package a scan goes to: the card touched last, else the first with something unverified.
+  // The package a scan goes to, and the one whose card shows: the tile or card touched last, else
+  // the first with something unverified. A scan that verifies a package's last item moves on.
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const focused =
     view.packages.find((p) => p.id === focusedId) ??
@@ -328,38 +329,34 @@ function QaLayout({
       </div>
       {mayVerify && <ScanBanner outcome={scanned} linkTo={[]} linking={false} onLink={() => {}} />}
 
-      {view.packages.length === 0 ? (
-        <p className="alert">{t("qa.nothingToVerify")}</p>
-      ) : (
-        <ul
-          className="grid items-start gap-4 landscape:grid-cols-2 xl:grid-cols-2"
-          aria-label={t("qa.packages")}
-        >
-          {view.packages.map((pkg) => (
-            <PackageCard
-              key={pkg.id}
-              pkg={pkg}
-              orderId={order.id}
-              orderNumber={order.number}
-              canSettle={canSettle}
-              disabled={!mayVerify}
-              canVoid={canVoid && order.status === "QA"}
-              isFocused={pkg.id === focused?.id}
-              onFocus={() => setFocusedId(pkg.id)}
-              onReport={
-                mayReport ? (row) => setReporting({ orderItemId: row.orderItemId }) : undefined
-              }
-              onTap={(row) => {
-                setFocusedId(pkg.id);
-                tap.mutate({ row, verified: row.verifiedQuantity < row.quantity });
-              }}
-            />
-          ))}
-        </ul>
-      )}
-
       {canPurchase && order.status === "QA" && order.claim?.userId === userId && !purchasing && (
         <QaUnmet unmet={view.unmet} />
+      )}
+
+      {view.packages.length === 0 || !focused ? (
+        <p className="alert">{t("qa.nothingToVerify")}</p>
+      ) : (
+        <>
+          <PackageTiles packages={view.packages} selectedId={focused.id} onSelect={setFocusedId} />
+          <PackageCard
+            key={focused.id}
+            pkg={focused}
+            orderId={order.id}
+            orderNumber={order.number}
+            canSettle={canSettle}
+            disabled={!mayVerify}
+            canVoid={canVoid && order.status === "QA"}
+            scanning={mayVerify}
+            onFocus={() => setFocusedId(focused.id)}
+            onReport={
+              mayReport ? (row) => setReporting({ orderItemId: row.orderItemId }) : undefined
+            }
+            onTap={(row) => {
+              setFocusedId(focused.id);
+              tap.mutate({ row, verified: row.verifiedQuantity < row.quantity });
+            }}
+          />
+        </>
       )}
 
       {(purchasing || mayComplete) && (
@@ -469,7 +466,7 @@ function PackageCard({
   canSettle,
   disabled,
   canVoid,
-  isFocused,
+  scanning,
   onFocus,
   onTap,
   onReport,
@@ -480,7 +477,8 @@ function PackageCard({
   canSettle: boolean;
   disabled: boolean;
   canVoid: boolean;
-  isFocused: boolean;
+  /** Scans go to the card on screen; says so while the viewer can scan. */
+  scanning: boolean;
   onFocus: () => void;
   onTap: (row: QaRow) => void;
   onReport?: (row: QaRow) => void;
@@ -490,17 +488,18 @@ function PackageCard({
   const verified = pkg.rows.filter((r) => r.verifiedQuantity === r.quantity).length;
   const { label } = pkg;
   return (
-    <li
+    <section
       onPointerDown={onFocus}
-      className={`space-y-3 rounded-box p-4 shadow-sm ${pkg.trips.length > 0 ? trippedCard : "bg-base-100"} ${isFocused ? "ring-2 ring-primary" : ""}`}
+      aria-label={t("qa.package", { number: pkg.number })}
+      className={`space-y-3 rounded-box p-4 shadow-sm ${pkg.trips.length > 0 ? trippedCard : "bg-base-100"}`}
       data-testid="qa-package"
       data-package={pkg.number}
-      data-focused={isFocused || undefined}
+      data-focused={scanning || undefined}
     >
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h2 className="text-xl font-bold">
           {t("qa.package", { number: pkg.number })}
-          {isFocused && <span className="badge badge-primary ms-2">{t("qa.scanningHere")}</span>}
+          {scanning && <span className="badge badge-primary ms-2">{t("qa.scanningHere")}</span>}
           <ChecksBadge pkg={pkg} />
         </h2>
         <span className="text-sm" data-testid="qa-package-count">
@@ -546,7 +545,63 @@ function PackageCard({
           )}
         </div>
       )}
-    </li>
+    </section>
+  );
+}
+
+/**
+ * One tile per package: picks the package whose card shows and where scans go. Green once every
+ * row is verified; the selected one carries a ring, so both states read at once.
+ */
+function PackageTiles({
+  packages,
+  selectedId,
+  onSelect,
+}: {
+  packages: QaPackage[];
+  selectedId: string;
+  onSelect: (id: string) => void;
+}) {
+  const t = useTranslations();
+  return (
+    <ul className="flex flex-wrap gap-3" aria-label={t("qa.packages")}>
+      {packages.map((pkg) => {
+        const verified = pkg.rows.filter((r) => r.verifiedQuantity === r.quantity).length;
+        const done = pkg.rows.length > 0 && verified === pkg.rows.length;
+        const selected = pkg.id === selectedId;
+        return (
+          <li key={pkg.id}>
+            <Button
+              onPress={() => onSelect(pkg.id)}
+              aria-pressed={selected}
+              aria-label={t("qa.packageTile", {
+                number: pkg.number,
+                verified,
+                total: pkg.rows.length,
+              })}
+              data-testid="qa-package-tile"
+              data-package={pkg.number}
+              data-selected={selected}
+              data-verified={done}
+              className={`relative h-20 min-w-20 flex-col gap-1 rounded-box border-2 px-3 ${
+                done
+                  ? "border-success bg-success/15 text-success hover:bg-success/25"
+                  : "border-base-300 bg-base-100"
+              } ${selected ? "ring-4 ring-primary ring-offset-2 ring-offset-base-200" : ""}`}
+            >
+              <Package className="size-7" aria-hidden="true" />
+              <span className="text-xl font-bold tabular-nums">{pkg.number}</span>
+              {done && (
+                <Check
+                  className="absolute end-1 top-1 size-4 rounded-full bg-success p-0.5 text-success-content"
+                  aria-hidden="true"
+                />
+              )}
+            </Button>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 
@@ -567,6 +622,11 @@ function PackageWeight({ weightOz }: { weightOz: number | null }) {
       {weightOz === null ? t("qa.noWeight") : formatWeight(weightOz, weightDisplay, locale)}
     </span>
   );
+}
+
+/** An option's name as a label: "Color" reads "Color:", a question keeps its own "?". */
+function noteLabel(name: string) {
+  return /[?:]$/.test(name.trim()) ? name : `${name}:`;
 }
 
 function RowButton({
@@ -597,7 +657,7 @@ function RowButton({
         }
         data-testid="qa-row"
         data-verified={done}
-        className={`flex min-h-16 w-full items-center gap-3 rounded-box border-2 p-3 text-start ${
+        className={`flex h-auto min-h-16 w-full flex-nowrap items-center justify-start gap-3 whitespace-normal rounded-box border-2 p-3 text-start font-normal ${
           done ? "border-success bg-success/10" : "border-base-300 bg-base-100"
         } ${row.criticalIssueId ? "ring-2 ring-error" : ""}`}
       >
@@ -605,14 +665,18 @@ function RowButton({
           // biome-ignore lint/performance/noImgElement: store-hosted thumbnail, sized by the card
           <img src={row.imageUrl} alt="" className="size-12 shrink-0 rounded object-cover" />
         ) : null}
-        <span className="grow">
+        <span className="min-w-0 grow wrap-anywhere">
           <span className="block font-semibold">{row.name}</span>
           {row.sku && (
             <span className="block text-sm opacity-70">{t("qa.sku", { sku: row.sku })}</span>
           )}
           {row.attributes.length > 0 && (
-            <span className="block text-sm opacity-70">
-              {row.attributes.map((a) => `${a.name}: ${a.option}`).join(" · ")}
+            <span className="mt-1 block space-y-0.5 text-sm" data-testid="qa-row-notes">
+              {row.attributes.map((a) => (
+                <span key={`${a.name}:${a.option}`} className="block">
+                  <span className="opacity-70">{noteLabel(a.name)}</span> {a.option}
+                </span>
+              ))}
             </span>
           )}
           {row.criticalIssueId && (

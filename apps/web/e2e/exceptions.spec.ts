@@ -112,7 +112,7 @@ const PHOTO = {
 test("QA reports a Major packaging issue with a photo from the order detail", async ({ page }) => {
   const order = await createOrder({ status: "QA" });
   await signInAs(page, ["QA"]);
-  await page.goto(`/orders/${order.id}`);
+  await page.goto(`/orders/${order.id}?tab=issues`);
 
   await page.getByRole("button", { name: "Report issue" }).click();
   const dialog = page.getByRole("dialog", { name: "Report an issue" });
@@ -141,7 +141,7 @@ test("QA reports a Major packaging issue with a photo from the order detail", as
 test("an issue can be reported without evidence", async ({ page }) => {
   const order = await createOrder({ status: "READY" });
   await signInAs(page, ["SHIPPER"]);
-  await page.goto(`/orders/${order.id}`);
+  await page.goto(`/orders/${order.id}?tab=issues`);
 
   await page.getByRole("button", { name: "Report issue" }).click();
   const dialog = page.getByRole("dialog", { name: "Report an issue" });

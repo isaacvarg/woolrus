@@ -37,7 +37,7 @@ test("desktop: an invited user signs in with their role's nav, and deactivation 
   const invitee = await (await browser.newContext()).newPage();
   await invitee.clock.install();
   await followMagicLink(invitee, email);
-  await expect(invitee).toHaveURL(/\/boxes$/);
+  await expect(invitee).toHaveURL("/");
   const nav = invitee.getByRole("navigation");
   await expect(nav.getByRole("link", { name: "Boxes" })).toBeVisible();
   for (const adminOnly of ["Users", "Stations", "Settings", "Sync"]) {
@@ -105,7 +105,7 @@ test("tablet: badge, station, PIN unlock, badge switch, and idle lock", async ({
   // The packer unlocks with their PIN.
   await chooseTile(page, packer.name);
   await page.getByLabel(`PIN for ${packer.name}`).fill(pin);
-  await expect(page).toHaveURL(/\/boxes$/);
+  await expect(page).toHaveURL("/");
   await openNav(page);
   await expect(page.getByText(`Station: ${stationName}`)).toBeVisible();
   await expect(page.getByText(packer.name)).toBeVisible();
@@ -114,7 +114,7 @@ test("tablet: badge, station, PIN unlock, badge switch, and idle lock", async ({
   await page.getByRole("link", { name: "Switch user" }).click();
   await expect(page.getByLabel("Badge")).toBeFocused();
   await page.keyboard.type(`${code}\n`);
-  await expect(page).toHaveURL(/\/boxes$/);
+  await expect(page).toHaveURL("/");
   await openNav(page);
   await expect(page.getByText(picker.name)).toBeVisible();
 

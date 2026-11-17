@@ -12,8 +12,10 @@ import {
   type QaView,
   RateSelectionReason,
 } from "@woolrus/contracts";
+import { ChevronDown, Truck } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
 import { useState } from "react";
+import { Dialog } from "@/components/ui/dialog";
 import { Button, SelectField, TextField } from "@/components/ui/fields";
 import { toast } from "@/components/ui/toast";
 import { useErrorMessage } from "@/lib/errors";
@@ -21,7 +23,7 @@ import { money } from "@/lib/money";
 import { client, orpc } from "@/lib/orpc";
 import { hasLiveLabel } from "./live-label";
 
-// The carriers' rates table of one package (SPEC-qa "Rate selection"): QA picks another service.
+// The shipping method of one package (SPEC-qa "Rate selection"): QA picks another service.
 
 /** Reason saves of one order, so the rates and Complete QA can wait for them. */
 const reasonKey = (orderId: string) => ["qa", "rateReason", orderId];
@@ -53,6 +55,10 @@ export function useQaRefetch(orderId: string) {
   };
 }
 
+/**
+ * The package's shipping method: the chosen rate as a chip (or a call to choose one) that opens
+ * every rate in a dialog. The reason for a dearer rate stays on the card under the chip.
+ */
 export function RatesTable({
   orderId,
   pkg,
@@ -65,6 +71,7 @@ export function RatesTable({
   const t = useTranslations();
   const format = useFormatter();
   const settle = useQaRefetch(orderId);
+  const [open, setOpen] = useState(false);
   const select = useMutation({
     mutationFn: (rateId: string) => client.qa.selectRate({ packageId: pkg.id, rateId }),
     ...settle,
@@ -76,41 +83,93 @@ export function RatesTable({
   if (pkg.rates.length === 0) return <p className="text-sm opacity-70">{t("qa.noRates")}</p>;
   const selected = pkg.rates.find((r) => r.selected);
   return (
-    <>
-      <ul className="grid gap-1" aria-label={t("qa.rates")} data-testid="qa-rates">
-        {pkg.rates.map((rate) => (
-          <li key={rate.id}>
-            <Button
-              isDisabled={
-                locked || rate.expired || rate.quoteOnly || select.isPending || savingReason
-              }
-              onPress={() => !rate.selected && select.mutate(rate.id)}
-              aria-pressed={rate.selected}
-              data-testid="qa-rate"
-              data-selected={rate.selected}
-              className={`flex min-h-12 w-full items-center gap-3 rounded-box border-2 px-3 text-start ${
-                rate.selected ? "border-primary bg-primary/10" : "border-base-300"
-              }`}
-            >
-              <span className="grow">
-                {rate.serviceName} <span className="opacity-70">({rate.carrierCode})</span>
-                {rate.deliveryDays !== null && (
-                  <span className="block text-sm opacity-70">
-                    {t("qa.rateDays", { days: rate.deliveryDays })}
-                  </span>
-                )}
-                {rate.quoteOnly && (
-                  <span className="badge badge-outline ms-2">{t("qa.rateQuoteOnly")}</span>
-                )}
-                {rate.expired && (
-                  <span className="badge badge-warning ms-2">{t("qa.rateExpired")}</span>
-                )}
-              </span>
-              <span className="font-bold">{money(format, rate.amountCents)}</span>
-            </Button>
-          </li>
-        ))}
-      </ul>
+    <div className="space-y-2">
+      {selected ? (
+        <Button
+          onPress={() => setOpen(true)}
+          aria-label={t("qa.shippingChosen", {
+            service: selected.serviceName,
+            price: money(format, selected.amountCents),
+          })}
+          data-testid="qa-rate-chosen"
+          data-expired={selected.expired || undefined}
+          className={`btn-outline h-auto min-h-12 w-full flex-wrap justify-start gap-x-3 gap-y-1 whitespace-normal py-2 text-start ${
+            selected.expired ? "btn-warning" : ""
+          }`}
+        >
+          <Truck className="size-5 shrink-0" aria-hidden="true" />
+          <span className="min-w-0 grow wrap-anywhere font-semibold">{selected.serviceName}</span>
+          {selected.expired && <span className="badge badge-warning">{t("qa.rateExpired")}</span>}
+          <span className="font-bold tabular-nums">{money(format, selected.amountCents)}</span>
+          <ChevronDown className="size-4 shrink-0 opacity-70" aria-hidden="true" />
+        </Button>
+      ) : (
+        <Button
+          onPress={() => setOpen(true)}
+          data-testid="qa-rate-chosen"
+          className={`h-auto min-h-12 w-full gap-2 whitespace-normal ${locked ? "btn-outline" : "btn-primary"}`}
+        >
+          <Truck className="size-5 shrink-0" aria-hidden="true" />
+          {t("qa.chooseShipping")}
+        </Button>
+      )}
+      <Dialog title={t("qa.ratesFor", { number: pkg.number })} isOpen={open} onOpenChange={setOpen}>
+        {(close) => (
+          <>
+            <ul className="grid gap-2" aria-label={t("qa.rates")} data-testid="qa-rates">
+              {pkg.rates.map((rate) => (
+                <li key={rate.id}>
+                  <Button
+                    isDisabled={
+                      locked || rate.expired || rate.quoteOnly || select.isPending || savingReason
+                    }
+                    onPress={() => {
+                      if (rate.selected) return close();
+                      select.mutate(rate.id, { onSuccess: () => close() });
+                    }}
+                    aria-pressed={rate.selected}
+                    data-testid="qa-rate"
+                    data-selected={rate.selected}
+                    className={`h-auto min-h-14 w-full flex-nowrap items-center justify-between gap-3 whitespace-normal rounded-box border-2 px-3 py-2 text-start font-normal ${
+                      rate.selected ? "border-primary bg-primary/10" : "border-base-300 bg-base-100"
+                    }`}
+                  >
+                    <span className="min-w-0 grow wrap-anywhere">
+                      <span className="block font-semibold">
+                        {rate.serviceName}{" "}
+                        <span className="font-normal opacity-70">({rate.carrierCode})</span>
+                      </span>
+                      {rate.deliveryDays !== null && (
+                        <span className="block text-sm opacity-70">
+                          {t("qa.rateDays", { days: rate.deliveryDays })}
+                        </span>
+                      )}
+                      {(rate.quoteOnly || rate.expired) && (
+                        <span className="mt-1 flex flex-wrap gap-1">
+                          {rate.quoteOnly && (
+                            <span className="badge badge-outline">{t("qa.rateQuoteOnly")}</span>
+                          )}
+                          {rate.expired && (
+                            <span className="badge badge-warning">{t("qa.rateExpired")}</span>
+                          )}
+                        </span>
+                      )}
+                    </span>
+                    <span className="shrink-0 font-bold tabular-nums">
+                      {money(format, rate.amountCents)}
+                    </span>
+                  </Button>
+                </li>
+              ))}
+            </ul>
+            <div className="flex justify-end">
+              <Button className="btn-ghost" onPress={close}>
+                {t("qa.ratesClose")}
+              </Button>
+            </div>
+          </>
+        )}
+      </Dialog>
       {selected && !selected.cheapest && !locked && pkg.selectedRate && (
         // Keyed by the rate, so picking another one starts from its (cleared) reason.
         <RateReason
@@ -122,7 +181,7 @@ export function RatesTable({
           note={pkg.selectedRate.note}
         />
       )}
-    </>
+    </div>
   );
 }
 

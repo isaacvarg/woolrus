@@ -1,3 +1,4 @@
+import { expect, type Page } from "@playwright/test";
 import { createFakeShippingProvider, createMemoryStorage, purchaseLabels } from "@woolrus/core";
 import { createDb } from "@woolrus/db";
 import { createOrder } from "./orders";
@@ -145,4 +146,19 @@ export async function qaJourneyOrder({
       });
     },
   };
+}
+
+/** The QA screen shows one package card at a time: picks package `number` by its tile. */
+export async function showPackage(page: Page, number: number) {
+  const tile = page.locator(`[data-testid="qa-package-tile"][data-package="${number}"]`);
+  await tile.click();
+  await expect(tile).toHaveAttribute("data-selected", "true");
+}
+
+/** Opens the shown package's shipping methods and picks the `index`th (cheapest first). */
+export async function chooseRate(page: Page, index: number) {
+  await page.getByTestId("qa-rate-chosen").click();
+  await page.getByTestId("qa-rate").nth(index).click();
+  // The dialog closes once the server has the choice.
+  await expect(page.getByTestId("qa-rates")).toHaveCount(0);
 }

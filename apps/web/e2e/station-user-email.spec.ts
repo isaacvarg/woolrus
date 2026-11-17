@@ -55,7 +55,7 @@ test("desktop: an admin adds an email to a station user, who then signs in as th
   // Luis follows a magic link to the new address and is signed in as the same user.
   const luisPage = await (await browser.newContext()).newPage();
   await followMagicLink(luisPage, email);
-  await expect(luisPage).toHaveURL(/\/boxes$/);
+  await expect(luisPage).toHaveURL("/");
   const session = await db.session.findFirstOrThrow({
     where: { user: { email } },
     orderBy: { createdAt: "desc" },

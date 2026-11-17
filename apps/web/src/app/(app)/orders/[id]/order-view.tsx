@@ -3,8 +3,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ItemVoidView, OrderView as Order } from "@woolrus/contracts";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useFormatter, useTranslations } from "next-intl";
 import { useState } from "react";
+import { type Key, Tab, TabList, TabPanel, Tabs } from "react-aria-components";
 import { IssueCard } from "@/components/exceptions/issue-card";
 import {
   ReportIssueDialog,
@@ -28,6 +30,7 @@ import { client, orpc } from "@/lib/orpc";
 import { ExternalChangeBanner } from "./external-change-banner";
 import { HistoryPanel } from "./history-panel";
 import { OrderActions } from "./order-actions";
+import { openIssueSummary, orderTabSearch, parseOrderTab } from "./order-tab";
 
 const priorityBadge: Record<number, string> = { 1: "badge-warning", 2: "badge-error" };
 
@@ -128,6 +131,16 @@ function OrderLayout({
   const t = useTranslations();
   const targets = useNoteTargets(order);
   const notes = { orderId: order.id, canWriteCustomer, targets };
+  const tab = parseOrderTab(useSearchParams().get("tab"));
+  // Next keeps useSearchParams in step with the History API, so Back and Forward switch tabs.
+  const selectTab = (key: Key) => {
+    const next = parseOrderTab(String(key));
+    if (next === tab) return;
+    const url = `${window.location.pathname}${orderTabSearch(window.location.search, next)}`;
+    window.history.pushState(null, "", url);
+  };
+  // A failed push needs someone; a pending or done one is shipping detail.
+  const pushFailed = order.wooPush.status === "FAILED";
   return (
     <section className="mx-auto max-w-6xl space-y-6">
       <OrderHeader order={order} />
@@ -143,32 +156,127 @@ function OrderLayout({
         </Link>
       )}
       <OrderActions order={order} userId={userId} />
-      <WooPushStatus orderId={order.id} push={order.wooPush} canRetry={canRetryPush} />
-      {canPrint && (order.status === "READY" || order.status === "COMPLETED") && (
-        <OrderLabels orderId={order.id} />
+      {pushFailed && (
+        <WooPushStatus orderId={order.id} push={order.wooPush} canRetry={canRetryPush} />
       )}
       {order.status === "READY" && <StuckLabels orderId={order.id} />}
-      <div className="grid gap-6 lg:grid-cols-3">
-        <div className="space-y-6 lg:col-span-2">
+      <Tabs selectedKey={tab} onSelectionChange={selectTab} className="space-y-4">
+        <OrderTabList order={order} />
+        <TabPanel id="overview" className="space-y-6 outline-none">
           <OrderLines order={order} notes={notes} canVoid={canVoid} />
           <OrderPackages order={order} notes={notes} />
-          {order.packages.length > 0 && (
-            <OrderShippingPanel orderId={order.id} canRefresh={canRefreshRates} />
+        </TabPanel>
+        <TabPanel id="shipping" className="space-y-6 outline-none">
+          {!pushFailed && (
+            <WooPushStatus orderId={order.id} push={order.wooPush} canRetry={canRetryPush} />
           )}
+          {canPrint && (order.status === "READY" || order.status === "COMPLETED") && (
+            <OrderLabels orderId={order.id} />
+          )}
+          {order.packages.length > 0 ? (
+            <OrderShippingPanel orderId={order.id} canRefresh={canRefreshRates} />
+          ) : (
+            <p className="opacity-70">{t("order.tabs.noPackages")}</p>
+          )}
+        </TabPanel>
+        <TabPanel id="issues" className="outline-none">
           <ExceptionsPanel
             order={order}
             canReport={canReport}
             canWriteCustomer={canWriteCustomer}
           />
+        </TabPanel>
+        <TabPanel id="notes" className="outline-none">
           <NotesPanel
             orderId={order.id}
             canWriteCustomer={canWriteCustomer}
             targets={targets.all}
           />
-        </div>
-        <HistoryPanel id={order.id} />
-      </div>
+        </TabPanel>
+        <TabPanel id="history" className="outline-none">
+          <HistoryPanel id={order.id} />
+        </TabPanel>
+      </Tabs>
     </section>
+  );
+}
+
+const tabClass = ({ isSelected }: { isSelected: boolean }) =>
+  `tab min-h-12 shrink-0 gap-2 whitespace-nowrap px-5 text-base outline-none data-[focus-visible]:ring-2 data-[focus-visible]:ring-primary ${isSelected ? "tab-active font-semibold" : ""}`;
+
+/**
+ * The tabs, each with a count where one says something at a glance. On a narrow screen the list
+ * scrolls sideways instead of wrapping.
+ */
+function OrderTabList({ order }: { order: Order }) {
+  const t = useTranslations();
+  // The same queries the Notes panel uses, so opening the tab shows them without a second fetch.
+  const notes = useQuery(orpc.notes.list.queryOptions({ input: { orderId: order.id } }));
+  const issues = openIssueSummary(order.issues);
+  const labels = order.packages.filter((p) => p.liveLabel && !p.discarded).length;
+  return (
+    <TabList
+      aria-label={t("order.tabs.label")}
+      className="tabs tabs-border flex-nowrap overflow-x-auto overflow-y-hidden"
+    >
+      <Tab id="overview" className={tabClass}>
+        {t("order.tabs.overview")}
+      </Tab>
+      <Tab id="shipping" className={tabClass}>
+        {t("order.tabs.shipping")}
+        <TabCount
+          count={labels}
+          label={t("order.tabs.labelCount", { count: labels })}
+          className="badge-info"
+        />
+      </Tab>
+      <Tab id="issues" className={tabClass}>
+        {t("order.tabs.issues")}
+        <TabCount
+          count={issues.open}
+          label={t(issues.critical ? "order.tabs.openIssuesCritical" : "order.tabs.openIssues", {
+            count: issues.open,
+          })}
+          className={issues.critical ? "badge-error" : "badge-warning"}
+        />
+      </Tab>
+      <Tab id="notes" className={tabClass}>
+        {t("notes.title")}
+        <TabCount
+          count={notes.data?.length ?? 0}
+          label={t("notes.count", { count: notes.data?.length ?? 0 })}
+          className="badge-info"
+        />
+      </Tab>
+      <Tab id="history" className={tabClass}>
+        {t("order.tabs.history")}
+      </Tab>
+    </TabList>
+  );
+}
+
+/** A tab's count: the number on screen, a sentence for screen readers, nothing when zero. */
+function TabCount({
+  count,
+  label,
+  className,
+}: {
+  count: number;
+  label: string;
+  className: string;
+}) {
+  if (count === 0) return null;
+  return (
+    <>
+      <span
+        aria-hidden="true"
+        className={`badge badge-sm tabular-nums ${className}`}
+        data-testid="tab-count"
+      >
+        {count}
+      </span>
+      <span className="sr-only">({label})</span>
+    </>
   );
 }
 

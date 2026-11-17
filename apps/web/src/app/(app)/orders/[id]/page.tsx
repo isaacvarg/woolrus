@@ -1,6 +1,8 @@
 import { Id } from "@woolrus/contracts";
 import { can } from "@woolrus/core";
 import { notFound } from "next/navigation";
+import { getTranslations } from "next-intl/server";
+import { Suspense } from "react";
 import { currentActor } from "@/server/actor";
 import { OrderView } from "./order-view";
 
@@ -8,18 +10,22 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
   const id = Id.safeParse((await params).id);
   if (!id.success) notFound();
   const actor = await currentActor();
+  const t = await getTranslations();
 
+  // The open tab is read from the URL on the client (useSearchParams).
   return (
-    <OrderView
-      id={id.data}
-      userId={actor?.userId ?? null}
-      // Only for showing the visibility switch; the API checks it again.
-      canWriteCustomer={actor ? can(actor, "note.customer") : false}
-      canVoid={actor ? can(actor, "void.create") : false}
-      canReport={actor ? can(actor, "issue.report") : false}
-      canRefreshRates={actor ? can(actor, "order.qa") : false}
-      canPrint={actor ? can(actor, "label.print") : false}
-      canRetryPush={actor ? can(actor, "settings.manage") : false}
-    />
+    <Suspense fallback={<p>{t("common.loading")}</p>}>
+      <OrderView
+        id={id.data}
+        userId={actor?.userId ?? null}
+        // Only for showing the visibility switch; the API checks it again.
+        canWriteCustomer={actor ? can(actor, "note.customer") : false}
+        canVoid={actor ? can(actor, "void.create") : false}
+        canReport={actor ? can(actor, "issue.report") : false}
+        canRefreshRates={actor ? can(actor, "order.qa") : false}
+        canPrint={actor ? can(actor, "label.print") : false}
+        canRetryPush={actor ? can(actor, "settings.manage") : false}
+      />
+    </Suspense>
   );
 }

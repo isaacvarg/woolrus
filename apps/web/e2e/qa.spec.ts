@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 import { createDb } from "@woolrus/db";
 import { signInAs } from "./support/auth";
 import { createOrder, deleteCreatedOrders } from "./support/orders";
+import { showPackage } from "./support/qa";
 import { withSettingsLock } from "./support/settings-lock";
 
 const db = createDb();
@@ -132,6 +133,8 @@ test("a quote-only rate shows a Quote only badge and can't be selected", async (
       },
     });
     await page.goto(`/qa/${order.id}`);
+    await expect(page.getByTestId("qa-rate-chosen")).toContainText("Buyable Ground");
+    await page.getByTestId("qa-rate-chosen").click();
     const rows = page.getByTestId("qa-rate");
     await expect(rows).toHaveCount(2);
     await expect(rows.nth(0)).toContainText("Quote Ground");
@@ -312,6 +315,7 @@ test("an unconfirmed purchase can be marked not bought, with a reason", async ({
   await signInAs(page, ["QA"]);
   await page.goto(`/qa/${order.id}`);
 
+  await showPackage(page, 2);
   await page.getByTestId("qa-mark-not-bought").click();
   await page.getByRole("dialog").getByLabel("What did you check?").fill("Not in ShipStation");
   await page.getByRole("dialog").getByRole("button", { name: "Mark not bought" }).click();
@@ -330,7 +334,8 @@ test("a Shipper doesn't get Mark not bought", async ({ page }) => {
   ]);
   await signInAs(page, ["SHIPPER"]);
   await page.goto(`/qa/${order.id}`);
-  await expect(page.getByTestId("qa-label").last()).toBeVisible();
+  await showPackage(page, 2);
+  await expect(page.getByTestId("qa-label")).toBeVisible();
   await expect(page.getByTestId("qa-mark-not-bought")).toHaveCount(0);
 });
 

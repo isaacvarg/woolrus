@@ -41,7 +41,9 @@
     "customs": "Aduanas",
     "manifests": "Manifiestos",
     "rateLab": "Rate Lab",
-    "lumexiaItems": "Artículos de Lumexia"
+    "lumexiaItems": "Artículos de Lumexia",
+    "tools": "Herramientas",
+    "configs": "Configuración"
   },
   "navFooter": {
     "preferences": "Preferencias",
@@ -438,6 +440,17 @@
   },
   "order": {
     "title": "Pedido #{number}",
+    "tabs": {
+      "label": "Secciones del pedido",
+      "overview": "Resumen",
+      "shipping": "Envío",
+      "issues": "Incidencias",
+      "history": "Historial",
+      "noPackages": "Las tarifas y etiquetas aparecen aquí cuando el pedido tiene paquetes.",
+      "labelCount": "{count, plural, one {# etiqueta} other {# etiquetas}}",
+      "openIssues": "{count, plural, one {# incidencia abierta} other {# incidencias abiertas}}",
+      "openIssuesCritical": "{count, plural, one {# incidencia abierta, crítica} other {# incidencias abiertas, al menos una crítica}}"
+    },
     "status": "Estado",
     "priority": "Prioridad",
     "customer": "Cliente",
@@ -750,6 +763,7 @@
     "title": "Control de calidad #{number}",
     "packages": "Paquetes",
     "package": "Paquete {number}",
+    "packageTile": "Paquete {number}, {verified} de {total} verificados",
     "box": "Caja: {name}",
     "customBox": "Tamaño personalizado",
     "checks": "{count, plural, one {# control} other {# controles}}",
@@ -795,6 +809,10 @@
     "cost": "{cost} (cotizado {quoted})",
     "rates": "Tarifas de envío",
     "noRates": "Aún no hay tarifas.",
+    "chooseShipping": "Elegir envío",
+    "shippingChosen": "Envío: {service}, {price}. Cambiar envío",
+    "ratesFor": "Envío del paquete {number}",
+    "ratesClose": "Listo",
     "refreshRates": "Actualizar tarifas",
     "rateExpired": "Vencida",
     "rateQuoteOnly": "Solo cotización",
@@ -2293,5 +2311,26 @@
   "charts": {
     "showData": "Ver los datos",
     "hideData": "Ocultar los datos"
+  },
+  "dashboard": {
+    "title": "Panel",
+    "tiles": {
+      "open": "Pedidos abiertos",
+      "openHint": "Todo lo que aún no está completado ni cancelado",
+      "picking": "Por recoger",
+      "pickingHint": "{pending} en espera · {picking} en curso",
+      "packing": "Por empacar",
+      "qa": "Por revisar (QA)",
+      "issues": "Incidencias abiertas",
+      "issuesCritical": "{count, plural, one {# crítica} other {# críticas}}"
+    },
+    "chart": {
+      "title": "Pedidos por día, últimos {days} días",
+      "range": "Rango de fechas",
+      "lastDays": "{days} días",
+      "received": "Recibidos",
+      "completed": "Completados",
+      "day": "Día"
+    }
   }
 }

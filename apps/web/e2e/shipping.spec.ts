@@ -116,7 +116,7 @@ test("print three Ready orders, reprint a label, ship them confirming the unprin
   ).toBe("READY");
 
   // Reprint one label from the order page.
-  await page.goto(`/orders/${b.order.id}`);
+  await page.goto(`/orders/${b.order.id}?tab=shipping`);
   const labels = page.getByTestId("order-labels");
   await expect(labels).toContainText("Printed 1×");
   const [reprint] = await Promise.all([
@@ -145,7 +145,7 @@ test("print three Ready orders, reprint a label, ship them confirming the unprin
   const { store, wooId } = await fakeStoreFor(b.order.id);
   expect(await pushToWoo(db, store, { orderId: b.order.id })).toEqual({ outcome: "succeeded" });
   expect((await store.getOrder(wooId))?.status).toBe("completed");
-  await page.goto(`/orders/${b.order.id}`);
+  await page.goto(`/orders/${b.order.id}?tab=shipping`);
   await expect(page.getByText("Sent to Woo")).toBeVisible();
   const tracking = (
     await db.shippingLabel.findMany({

@@ -4,6 +4,7 @@ import { toFieldErrors } from "./base";
 import {
   ClaimManyInput,
   ForceStatusInput,
+  OrderActivityInput,
   OrderListInput,
   OrderReasonInput,
   OrderVersionInput,
@@ -137,5 +138,23 @@ describe("OrderListInput", () => {
         fieldsOf(OrderListInput, { statuses: ["SHIPPED"], sort: "total", pageSize: 101 }),
       ),
     ).toEqual(expect.arrayContaining(["statuses.0", "sort", "pageSize"]));
+  });
+});
+
+describe("OrderActivityInput", () => {
+  it("defaults to 14 days in UTC and coerces query strings", () => {
+    expect(OrderActivityInput.parse({})).toEqual({ days: 14, timeZone: "UTC" });
+    expect(OrderActivityInput.parse({ days: "30", timeZone: "America/Chicago" })).toEqual({
+      days: 30,
+      timeZone: "America/Chicago",
+    });
+  });
+
+  it("refuses a range outside 7–90 days and an unknown time zone", () => {
+    expect(fieldsOf(OrderActivityInput, { days: 3, timeZone: "Mars/Olympus" })).toEqual({
+      days: "errors.field.tooSmall",
+      timeZone: "errors.field.invalid",
+    });
+    expect(fieldsOf(OrderActivityInput, { days: 91 })).toEqual({ days: "errors.field.tooBig" });
   });
 });

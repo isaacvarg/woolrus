@@ -134,7 +134,7 @@ test("a packer unlocks a station with a PIN, a picker switches in by badge, and 
   await page.getByLabel(`PIN for ${packer.name}`).fill("000001");
   await expect(page.getByText("That PIN isn't right.")).toBeVisible();
   await page.getByLabel(`PIN for ${packer.name}`).fill(packer.pin);
-  await expect(page).toHaveURL(/\/boxes$/);
+  await expect(page).toHaveURL("/");
   const asPacker = await (await page.request.get("/api/v1/me")).json();
   expect(asPacker).toMatchObject({
     id: packer.id,
@@ -154,7 +154,7 @@ test("a packer unlocks a station with a PIN, a picker switches in by badge, and 
   await expect(page.getByText(`${packer.name} is on this station.`)).toBeVisible();
   await expect(page.getByLabel("Badge")).toBeFocused();
   await page.keyboard.type(`${picker.badge.toLowerCase()}\n`);
-  await expect(page).toHaveURL(/\/boxes$/);
+  await expect(page).toHaveURL("/");
   expect(await (await page.request.get("/api/v1/me")).json()).toMatchObject({
     id: picker.id,
     stationId: station.id,
@@ -183,7 +183,7 @@ test("input pushes the idle lock out, and the station locks itself at the deadli
   await page.goto("/station");
   await chooseTile(page, packer.name);
   await page.getByLabel(`PIN for ${packer.name}`).fill(packer.pin);
-  await expect(page).toHaveURL(/\/boxes$/);
+  await expect(page).toHaveURL("/");
   const me = await (await page.request.get("/api/v1/me")).json();
   expect(new Date(me.idleLockAt).getTime()).toBeGreaterThan(Date.now());
 
@@ -256,7 +256,7 @@ test("unlocking signs out a personal session left on the device, so the station 
   await page.goto("/station");
   await chooseTile(page, packer.name);
   await page.getByLabel(`PIN for ${packer.name}`).fill(packer.pin);
-  await expect(page).toHaveURL(/\/boxes$/);
+  await expect(page).toHaveURL("/");
   expect(await (await page.request.get("/api/v1/me")).json()).toMatchObject({
     id: packer.id,
     stationId: station.id,
@@ -278,7 +278,7 @@ test("with a 1-minute idle limit, input near the deadline touches before the min
       await page.goto("/station");
       await chooseTile(page, packer.name);
       await page.getByLabel(`PIN for ${packer.name}`).fill(packer.pin);
-      await expect(page).toHaveURL(/\/boxes$/);
+      await expect(page).toHaveURL("/");
 
       const touches: string[] = [];
       page.on("response", (r) => {
