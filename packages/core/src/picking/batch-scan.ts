@@ -1,5 +1,6 @@
 import type { ScanBatchInput, ScanBatchResult } from "@woolrus/contracts";
 import type { Db, DbTx } from "@woolrus/db";
+import { scanMisses } from "../activity/record-scan-miss";
 import { AppError, forbidden, notFound } from "../errors";
 import { storedResult, withIdempotency } from "../idempotency";
 import { type Actor, can, type UserActor } from "../permissions";
@@ -14,7 +15,14 @@ import {
   memberState,
 } from "./batches";
 import { normalizeCode } from "./codes";
-import { addUnit, alreadyPicked, matchingLines, needsUnit, notOnOrder } from "./scan";
+import {
+  addUnit,
+  alreadyPicked,
+  alreadyPickedMiss,
+  matchingLines,
+  needsUnit,
+  notOnOrder,
+} from "./scan";
 import { lineInclude, writeLineIn } from "./service";
 
 // Batch scan (SPEC-picking "Batch scan"): one scanned code is one unit on the first live member, by
@@ -63,7 +71,8 @@ export async function scanBatch(
 ): Promise<ScanBatchResult> {
   assertMayPick(actor);
   const wanted = normalizeCode(code);
-  const result = await db.$transaction(async (tx) => {
+  const misses = scanMisses(db, actor, { stage: "PICKING", code: wanted, scanId });
+  const scanning = db.$transaction(async (tx) => {
     // A retried scan that already counted answers as it did, even if the batch has closed since.
     const replay = await storedResult<ScanBatchResult>(tx, scanId, "pickBatches.scan", actor);
     if (replay) return replay;
@@ -84,15 +93,21 @@ export async function scanBatch(
         ).map((row) => ({ member, row })),
       );
       if (matching.length === 0) {
-        throw await notOnOrder(
+        const refusal = await notOnOrder(
           tx,
           wanted,
           can(actor, "product.manage"),
           "errors.picking.scanNotInBatch",
         );
+        // No order matched: filed under the batch's first (SPEC-order-activity "Blocked scans").
+        throw misses.notOnOrder(refusal, { orderId: (live[0] as MemberRow).order.id, batchId });
       }
       const hit = matching.find(({ row }) => needsUnit(row));
-      if (!hit) throw alreadyPicked(matching.map(({ row }) => row));
+      if (!hit) {
+        const rows = matching.map(({ row }) => row);
+        const on = (matching[0] as (typeof matching)[number]).member.order.id;
+        throw misses.refuse(alreadyPicked(rows), { ...alreadyPickedMiss(on, rows), batchId });
+      }
       await writeLineIn(tx, actor, hit.row.id, "scan", addUnit(actor), now);
       return {
         orderId: hit.member.order.id,
@@ -102,6 +117,7 @@ export async function scanBatch(
       };
     });
   });
+  const result = await misses.settle(scanning);
   // Refused only now, so a close for having nothing live left commits rather than rolling back.
   if (!result) throw new AppError("CONFLICT", "errors.picking.batchClosed");
   return result;

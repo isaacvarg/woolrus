@@ -127,6 +127,7 @@ model Order {
   returns       ReturnRequest[]
   pickBatches   PickBatchOrder[]
   rateFetches   RateFetch[]
+  scanMisses    ScanMiss[]
 
   @@index([status, priority(sort: Desc), orderedAt])
   @@index([number])
@@ -276,4 +277,54 @@ model PickBatchOrder {
   @@id([batchId, orderId])
   @@unique([batchId, slot])
   @@map("pick_batch_orders")
+}
+
+enum ScanMissStage {
+  PICKING
+  PACKING
+  QA
+
+  @@map("scan_miss_stage")
+}
+
+enum ScanMissKind {
+  /// A known product that isn't on the order (or batch).
+  NOT_ON_ORDER
+  /// No product has the code: maybe a barcode nobody linked yet.
+  UNKNOWN_CODE
+  /// The line is already picked, packed or verified.
+  ALREADY_DONE
+  /// QA: the item is in another box.
+  OTHER_PACKAGE
+
+  @@map("scan_miss_kind")
+}
+
+/// A scan picking, packing or QA refused, written in its own transaction after the refusal
+/// (SPEC-order-activity "Blocked scans").
+model ScanMiss {
+  id          String        @id @default(uuid(7)) @db.Uuid
+  /// The order scanned against; for a batch scan that matched no order, the batch's first.
+  orderId     String        @map("order_id") @db.Uuid
+  stage       ScanMissStage
+  kind        ScanMissKind
+  /// The normalized code scanned.
+  code        String
+  productName String?       @map("product_name")
+  orderItemId String?       @map("order_item_id") @db.Uuid
+  packageId   String?       @map("package_id") @db.Uuid
+  batchId     String?       @map("batch_id") @db.Uuid
+  actorId     String?       @map("actor_id") @db.Uuid
+  stationId   String?       @map("station_id") @db.Uuid
+  /// The client's scan id: a retried request records one miss.
+  scanId      String?       @unique @map("scan_id")
+  at          DateTime      @default(now()) @db.Timestamptz(3)
+
+  order   Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  actor   User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  station Station? @relation(fields: [stationId], references: [id], onDelete: SetNull)
+
+  @@index([orderId, at])
+  @@index([actorId, at])
+  @@map("scan_misses")
 }

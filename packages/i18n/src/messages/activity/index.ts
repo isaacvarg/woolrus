@@ -3,6 +3,7 @@ import packing from "./packing.json" with { type: "json" };
 import picking from "./picking.json" with { type: "json" };
 import problems from "./problems.json" with { type: "json" };
 import qa from "./qa.json" with { type: "json" };
+import scanMisses from "./scan-misses.json" with { type: "json" };
 import shipping from "./shipping.json" with { type: "json" };
 import status from "./status.json" with { type: "json" };
 import store from "./store.json" with { type: "json" };
@@ -12,7 +13,7 @@ import store from "./store.json" with { type: "json" };
 // the action with dots as underscores.
 
 type Part = { en: Record<string, string>; es: Record<string, string> };
-const parts: Part[] = [status, picking, packing, qa, shipping, problems, notes, store];
+const parts: Part[] = [status, picking, packing, qa, shipping, problems, scanMisses, notes, store];
 
 export const activityActions = {
   en: Object.assign({}, ...parts.map((part) => part.en)) as Record<string, string>,

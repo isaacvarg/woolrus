@@ -4,6 +4,7 @@ import { packingActions } from "./packing";
 import { pickingActions } from "./picking";
 import { problemActions } from "./problems";
 import { qaActions } from "./qa";
+import { scanMissActions } from "./scan-misses";
 import { shippingActions } from "./shipping";
 import { statusActions } from "./status";
 import { storeActions } from "./store";
@@ -23,6 +24,7 @@ export const actionRegistry = {
   ...qaActions,
   ...shippingActions,
   ...problemActions,
+  ...scanMissActions,
   ...noteActions,
   ...storeActions,
 } satisfies Record<string, ActionSpec>;
