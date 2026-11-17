@@ -231,6 +231,7 @@ export async function scanLot(
         await recordAudit(tx, actor, {
           entityType: "PackageItem",
           entityId: target.id,
+          orderId: order.id,
           action: "lot.scan",
           before: { lots: lotSnapshot(target.lots) },
           after: {
@@ -382,9 +383,15 @@ async function editLot<R>(
       await recordAudit(tx, actor, {
         entityType: "PackageItem",
         entityId: packageItemId,
+        orderId: order.id,
         action,
         before: { lots: lotSnapshot(before) },
-        after: { lotId, lots: lotSnapshot(after) },
+        // The edited lot's number too: the snapshots carry no ids, and the default lot moves with it.
+        after: {
+          lotId,
+          lotNumber: before.find((l) => l.id === lotId)?.lotNumber ?? null,
+          lots: lotSnapshot(after),
+        },
         at: now,
       });
       await touchClaim(tx, actor, order.id, { now });
