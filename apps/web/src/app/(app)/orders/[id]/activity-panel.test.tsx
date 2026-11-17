@@ -2,7 +2,12 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import type { ActivityEntry, ActivityItem, OrderActivityFeed } from "@woolrus/contracts";
+import {
+  type ActivityEntry,
+  type ActivityItem,
+  type OrderActivityFeed,
+  SummaryStage,
+} from "@woolrus/contracts";
 import { messages } from "@woolrus/i18n";
 import { NextIntlClientProvider } from "next-intl";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -38,7 +43,16 @@ const scans = [3, 2, 1].map((n) =>
     target: { kind: "box", number: 1 },
   }),
 );
+/** No stage events: the summary renders nothing. */
+const noSummary = {
+  summary: {
+    stages: SummaryStage.options.map((stage) => ({ stage, statusMs: 0, intervals: [] })),
+    onHoldMs: 0,
+  },
+  people: [],
+} satisfies Pick<OrderActivityFeed, "summary" | "people">;
 const feed: OrderActivityFeed = {
+  ...noSummary,
   truncated: false,
   entries: [
     single(
@@ -52,7 +66,8 @@ const feed: OrderActivityFeed = {
     single(
       item(8, {
         category: "packing",
-        action: "package.setWeight",
+        // No wording: renders the generic line.
+        action: "package.legacyChange",
         entityType: "Package",
         target: { kind: "box", number: 2 },
         details: { before: { weightOz: 36 }, after: { weightOz: 41 } },
@@ -137,6 +152,7 @@ describe("ActivityPanel", () => {
 describe("ActivityPanel notes", () => {
   it("links a note entry to the order's Notes tab, without its text", async () => {
     shownFeed = {
+      ...noSummary,
       truncated: false,
       entries: [single(item(5, { category: "notes", action: "create", entityType: "Note" }))],
     };

@@ -8,6 +8,7 @@ import { field } from "./actions/types";
 import { cleanDetails } from "./details";
 import { groupItems } from "./group";
 import { activitySources, type SourceRecord } from "./sources";
+import { summarizeActivity } from "./summary";
 
 /** SPEC-order-activity: a safety net; an order is expected to have well under 1,000 rows. */
 export const TIMELINE_ROW_CAP = 2000;
@@ -23,6 +24,7 @@ export async function getOrderActivity(
   db: DbTx,
   actor: Actor,
   { id }: { id: string },
+  { now = new Date() }: { now?: Date } = {},
 ): Promise<OrderActivityFeed> {
   assertCan(actor, "order.read");
   const order = await db.order.findUnique({ where: { id }, select: { id: true } });
@@ -40,7 +42,9 @@ export async function getOrderActivity(
     items,
     (item) => actionSpec(item.entityType, item.action)?.groups ?? false,
   );
-  return { entries, truncated: all.length > TIMELINE_ROW_CAP };
+  // From the items, before grouping: a grouped run still counts each member.
+  const { summary, people } = summarizeActivity(items, now);
+  return { summary, people, entries, truncated: all.length > TIMELINE_ROW_CAP };
 }
 
 function toItem(record: SourceRecord, ctx: DescribeContext): ActivityItem {

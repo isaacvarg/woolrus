@@ -2352,6 +2352,23 @@
     "hideDetails": "Hide changes",
     "noValue": "—",
     "openNotes": "Open the notes",
+    "summary": {
+      "title": "Time in each stage",
+      "now": "Now",
+      "onHold": "On hold for {time}, counted in no stage.",
+      "workingNote": "Working time runs from the first to the last action, breaks included.",
+      "round": "Round {round}: {time}",
+      "bar": "Waiting {waiting}, working {working}",
+      "waiting": "Waiting {time}",
+      "working": "Working {time} (first to last action)",
+      "batch": "Picked in batch {number} with {orders, plural, one {# order} other {# orders}}",
+      "person": "{name}: {count, plural, one {# action} other {# actions}}, {from}–{to} ({span})",
+      "duration": {
+        "minutes": "{minutes} min",
+        "hours": "{hours} h {minutes} min",
+        "days": "{days} d {hours} h"
+      }
+    },
     "target": {
       "box": "Box {number}",
       "label": "{carrier} label",

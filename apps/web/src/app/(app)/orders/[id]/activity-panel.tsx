@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/fields";
 import { useErrorMessage } from "@/lib/errors";
 import { orpc } from "@/lib/orpc";
 import { useReasonText } from "@/lib/reasons";
+import { ActivitySummary } from "./activity-summary";
 import { useActivityWording } from "./activity-wording";
 
 type Filter = ActivityCategory | "all";
@@ -43,6 +44,9 @@ export function ActivityPanel({ id }: { id: string }) {
       </h2>
       {activity.isPending && <p>{t("common.loading")}</p>}
       {activity.error && <p className="text-error">{errorMessage(activity.error)}</p>}
+      {activity.data && (
+        <ActivitySummary summary={activity.data.summary} people={activity.data.people} />
+      )}
       {activity.isSuccess && entries.length === 0 && <p>{t("activity.empty")}</p>}
       {entries.length > 0 && (
         <ToggleButtonGroup

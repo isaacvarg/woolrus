@@ -2352,6 +2352,23 @@
     "hideDetails": "Ocultar cambios",
     "noValue": "—",
     "openNotes": "Ver las notas",
+    "summary": {
+      "title": "Tiempo en cada etapa",
+      "now": "Ahora",
+      "onHold": "En espera {time}, sin contar en ninguna etapa.",
+      "workingNote": "El tiempo de trabajo va de la primera a la última acción, con pausas incluidas.",
+      "round": "Ronda {round}: {time}",
+      "bar": "Esperando {waiting}, trabajando {working}",
+      "waiting": "Esperando {time}",
+      "working": "Trabajando {time} (de la primera a la última acción)",
+      "batch": "Recogido en el lote {number} con {orders, plural, one {# pedido} other {# pedidos}}",
+      "person": "{name}: {count, plural, one {# acción} other {# acciones}}, {from}–{to} ({span})",
+      "duration": {
+        "minutes": "{minutes} min",
+        "hours": "{hours} h {minutes} min",
+        "days": "{days} d {hours} h"
+      }
+    },
     "target": {
       "box": "Caja {number}",
       "label": "Etiqueta de {carrier}",

@@ -67,7 +67,78 @@ export const ActivityEntry = ActivityItem.extend({
 });
 export type ActivityEntry = z.infer<typeof ActivityEntry>;
 
+/** The statuses the summary reports (SPEC-order-activity "Stage summary"), in workflow order. */
+export const SummaryStage = z.enum(["PENDING", "PICKING", "PACKING", "QA", "READY"]);
+export type SummaryStage = z.infer<typeof SummaryStage>;
+
+/** The stages people work; Pending and Ready are queues. */
+export const WorkStage = z.enum(["PICKING", "PACKING", "QA"]);
+export type WorkStage = z.infer<typeof WorkStage>;
+
+/** One stay in a status, from the move that entered it to the one that left it (or now). */
+export const StageInterval = z.object({
+  start: z.date(),
+  end: z.date(),
+  /** The order is still in it: `end` is when the summary was built. */
+  running: z.boolean(),
+  /** `end - start`, in milliseconds. */
+  statusMs: z.number().int().min(0),
+  /**
+   * Work stages only, else null. Waiting is start → the first action by a person; working is that
+   * action → end. They add up to `statusMs`; with no action yet it is all waiting.
+   */
+  waitingMs: z.number().int().min(0).nullable(),
+  workingMs: z.number().int().min(0).nullable(),
+  firstActionAt: z.date().nullable(),
+  /** A pick begun from a batch: its number and how many orders it started with. */
+  batch: z
+    .object({ number: z.number().int().nullable(), orders: z.number().int().nullable() })
+    .nullable(),
+});
+export type StageInterval = z.infer<typeof StageInterval>;
+
+export const StageSummary = z.object({
+  stage: SummaryStage,
+  /** The sum of the intervals' status time, in milliseconds. */
+  statusMs: z.number().int().min(0),
+  /** Oldest first. A repack makes a second Packing interval; a hold splits one in two. */
+  intervals: z.array(StageInterval),
+});
+export type StageSummary = z.infer<typeof StageSummary>;
+
+/** Time per status. Time on hold counts toward no stage. */
+export const OrderActivitySummary = z.object({
+  /** Every summary stage in workflow order, including ones the order hasn't reached. */
+  stages: z.array(StageSummary),
+  onHoldMs: z.number().int().min(0),
+});
+export type OrderActivitySummary = z.infer<typeof OrderActivitySummary>;
+
+/** Someone who worked a stage: their items in its intervals. Spans include pauses. */
+export const StagePerson = z.object({
+  id: Id,
+  name: z.string(),
+  /** Timeline items; a grouped entry counts each of its members. */
+  count: z.number().int().min(1),
+  firstAt: z.date(),
+  lastAt: z.date(),
+  /** First → last action, in milliseconds. */
+  spanMs: z.number().int().min(0),
+});
+export type StagePerson = z.infer<typeof StagePerson>;
+
+export const StagePeople = z.object({
+  stage: WorkStage,
+  /** In order of their first action. */
+  people: z.array(StagePerson),
+});
+export type StagePeople = z.infer<typeof StagePeople>;
+
 export const OrderActivityFeed = z.object({
+  /** Time per stage (SPEC-order-activity "Stage summary"). */
+  summary: OrderActivitySummary,
+  /** Who worked each work stage, in workflow order. */
+  people: z.array(StagePeople),
   /** Newest first. */
   entries: z.array(ActivityEntry),
   /** The read stopped at its row cap; older activity is left out. */
