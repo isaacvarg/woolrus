@@ -187,7 +187,8 @@ absent. It replaces `orders.history`, which is removed with its `OrderHistoryEnt
 
 ### Schema additions (approved with this spec)
 
-One migration, including the backfill and the `entity_type` rewrite. The hand-written constraints at the end of
+Three migrations, one per ticket that needed one: `audit_order_id` (with the backfill and the `entity_type` rewrite),
+`scan_misses` and `activity_visibility`. The hand-written constraints at the end of
 the init migration are untouched.
 
 ```prisma
@@ -259,7 +260,7 @@ every `recordAudit` call site with an order in hand (`picking`, `packing`, `lume
 `packages/core/test/factories.ts`, `packages/contracts/src/{orders,settings}.ts`, `apps/web/src/server/router.ts`,
 `apps/web/src/lib/live.ts`, `apps/web/src/app/(app)/orders/[id]/{activity-panel,order-view}.tsx` (history panel
 removed), `apps/web/src/app/(app)/{pack/[orderId]/order-drawer,qa/[orderId]/qa-drawer}.tsx`,
-`apps/web/src/app/(app)/settings/**`, `packages/db/prisma/schema/{system,orders}.prisma` + one migration,
+`apps/web/src/app/(app)/settings/**`, `packages/db/prisma/schema/{system,orders}.prisma` + three migrations,
 `packages/db/prisma/seed-orders.ts`, `packages/i18n/src/messages/{en,es}.json`, `apps/web/e2e/order-activity.spec.ts`.
 
 ## Success criteria
