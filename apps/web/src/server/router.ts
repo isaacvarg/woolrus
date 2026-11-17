@@ -92,6 +92,7 @@ import {
   markLabelNotBought,
   markOutOfStock,
   myPicks,
+  orderActivity,
   orderCustoms,
   orderMutations,
   orderPrintableLabels,
@@ -316,6 +317,9 @@ export const router = implementer.router({
   orders: {
     queue: api.orders.queue.handler(({ input, context }) => listQueue(db, context.actor, input)),
     counts: api.orders.counts.handler(({ context }) => queueCounts(db, context.actor)),
+    activity: api.orders.activity.handler(({ input, context }) =>
+      orderActivity(db, context.actor, input),
+    ),
     list: api.orders.list.handler(({ input, context }) => listOrders(db, context.actor, input)),
     get: api.orders.get.handler(({ input, context }) => getOrder(db, context.actor, input)),
     history: api.orders.history.handler(({ input, context }) =>
