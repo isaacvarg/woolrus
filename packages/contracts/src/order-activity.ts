@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { base, Id } from "./base";
+import { Role } from "./me";
 
 // The order's activity feed (SPEC-order-activity "Timeline", "API"). The server sends action keys
 // and parameters; the web app words them (`activity.action.*`), so an action with no wording yet
@@ -134,13 +135,50 @@ export const StagePeople = z.object({
 });
 export type StagePeople = z.infer<typeof StagePeople>;
 
+/**
+ * The four parts of the activity view a role may be shown (SPEC-order-activity "Visibility"):
+ * the timeline entries, their before/after details, time per stage, and who worked each stage.
+ */
+export const ActivityPart = z.enum(["timeline", "details", "summary", "people"]);
+export type ActivityPart = z.infer<typeof ActivityPart>;
+
+/** Which parts one viewer gets. */
+export const ActivityParts = z.object({
+  timeline: z.boolean(),
+  details: z.boolean(),
+  summary: z.boolean(),
+  people: z.boolean(),
+});
+export type ActivityParts = z.infer<typeof ActivityParts>;
+
+/** The roles the setting applies to. Admins always see every part. */
+export const ActivityVisibilityRole = Role.exclude(["ADMIN"]);
+export type ActivityVisibilityRole = z.infer<typeof ActivityVisibilityRole>;
+
+/**
+ * `Settings.activityVisibility`: per role, the parts switched off or on. A missing role or part is
+ * on, so `{}` (the default) shows every role everything.
+ */
+export const ActivityVisibility = z.partialRecord(
+  ActivityVisibilityRole,
+  z.strictObject({
+    timeline: z.boolean().optional(),
+    details: z.boolean().optional(),
+    summary: z.boolean().optional(),
+    people: z.boolean().optional(),
+  }),
+);
+export type ActivityVisibility = z.infer<typeof ActivityVisibility>;
+
 export const OrderActivityFeed = z.object({
+  /** The parts this viewer may see. The others are absent; with `details` off every entry's `details` is null. */
+  visible: ActivityParts,
   /** Time per stage (SPEC-order-activity "Stage summary"). */
-  summary: OrderActivitySummary,
+  summary: OrderActivitySummary.optional(),
   /** Who worked each work stage, in workflow order. */
-  people: z.array(StagePeople),
+  people: z.array(StagePeople).optional(),
   /** Newest first. */
-  entries: z.array(ActivityEntry),
+  entries: z.array(ActivityEntry).optional(),
   /** The read stopped at its row cap; older activity is left out. */
   truncated: z.boolean(),
 });

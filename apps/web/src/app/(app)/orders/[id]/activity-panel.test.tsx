@@ -51,7 +51,9 @@ const noSummary = {
   },
   people: [],
 } satisfies Pick<OrderActivityFeed, "summary" | "people">;
+const all = { timeline: true, details: true, summary: true, people: true };
 const feed: OrderActivityFeed = {
+  visible: all,
   ...noSummary,
   truncated: false,
   entries: [
@@ -152,6 +154,7 @@ describe("ActivityPanel", () => {
 describe("ActivityPanel notes", () => {
   it("links a note entry to the order's Notes tab, without its text", async () => {
     shownFeed = {
+      visible: all,
       ...noSummary,
       truncated: false,
       entries: [single(item(5, { category: "notes", action: "create", entityType: "Note" }))],
@@ -164,5 +167,34 @@ describe("ActivityPanel notes", () => {
       "/orders/0199e6a0-0000-7000-8000-000000000001?tab=notes",
     );
     expect(within(note as HTMLElement).queryByRole("button", { name: "What changed" })).toBeNull();
+  });
+});
+
+describe("ActivityPanel visibility", () => {
+  it("shows nothing when the viewer may see no part", async () => {
+    shownFeed = {
+      visible: { timeline: false, details: false, summary: false, people: false },
+      truncated: false,
+    };
+    show();
+    // Loading shows first; once the feed answers, the panel takes itself away.
+    await vi.waitFor(() => expect(screen.queryByTestId("activity-panel")).toBeNull());
+  });
+
+  it("leaves out the timeline when it is hidden, keeping the people", async () => {
+    shownFeed = {
+      visible: { ...all, timeline: false, summary: false, details: false },
+      truncated: false,
+      people: [
+        {
+          stage: "PICKING",
+          people: [{ ...ana, count: 2, firstAt: at(1), lastAt: at(3), spanMs: 2 * 60_000 }],
+        },
+      ],
+    };
+    show();
+    await screen.findByText(/Ana/);
+    expect(screen.queryByRole("group", { name: "Filter by category" })).toBeNull();
+    expect(screen.queryByText("Nothing has happened to this order yet.")).toBeNull();
   });
 });

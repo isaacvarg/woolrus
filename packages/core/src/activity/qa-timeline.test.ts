@@ -1,6 +1,7 @@
 import type { Db } from "@woolrus/db";
 import { messages } from "@woolrus/i18n";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { fullActivity } from "../../test/activity";
 import { createActor, resetDb, testDb } from "../../test/db";
 import { createOrder } from "../../test/factories";
 import { recordPackApproval } from "../packing/approval";
@@ -8,7 +9,6 @@ import { acknowledgeCheck, confirmBox } from "../qa/pack-checks";
 import { scanVerify } from "../qa/scan";
 import { setVerified } from "../qa/verify";
 import { actionMessageKey, actionRegistry } from "./actions";
-import { getOrderActivity } from "./timeline";
 
 // SPEC-order-activity #201: QA in the timeline.
 
@@ -97,7 +97,7 @@ describe("QA in the order's activity", () => {
       "packageItem.verify",
     ]);
 
-    const { entries } = await getOrderActivity(db, qa, { id: order.id });
+    const { entries } = await fullActivity(db, qa, { id: order.id });
     const byAction = (action: string) => entries.find((e) => e.action === action);
 
     expect(entries.every((e) => e.category === "qa")).toBe(true);
@@ -146,7 +146,7 @@ describe("QA in the order's activity", () => {
       },
     });
 
-    const { entries } = await getOrderActivity(db, qa, { id: order.id });
+    const { entries } = await fullActivity(db, qa, { id: order.id });
     expect(entries[0]).toMatchObject({
       category: "qa",
       target: { kind: "line", name: "Serum" },

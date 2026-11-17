@@ -1,6 +1,7 @@
 import type { Db } from "@woolrus/db";
 import { messages } from "@woolrus/i18n";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { fullActivity } from "../../../test/activity";
 import { createActor, resetDb, testDb } from "../../../test/db";
 import { createOrder, type LineSpec } from "../../../test/factories";
 import { finishBatch, removeFromBatch } from "../../picking/batch-complete";
@@ -8,7 +9,6 @@ import { createBatch } from "../../picking/batches";
 import { linkBarcode } from "../../picking/link-barcode";
 import { scan } from "../../picking/scan";
 import { markOutOfStock, pickLine, substitute, unpickLine } from "../../picking/service";
-import { getOrderActivity } from "../timeline";
 import { actionMessageKey, actionRegistry } from "./index";
 
 // SPEC-order-activity: picking's entries in an order's timeline (#199).
@@ -34,7 +34,7 @@ async function picking(lines: LineSpec[], roles: Parameters<typeof createActor>[
 
 const feed = async (orderId: string) => {
   const reader = await createActor(db, ["PICKER"]);
-  return (await getOrderActivity(db, reader, { id: orderId })).entries;
+  return (await fullActivity(db, reader, { id: orderId })).entries;
 };
 
 describe("picking in the timeline", () => {

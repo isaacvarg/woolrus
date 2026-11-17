@@ -7,6 +7,11 @@ describe("parseOrderTab", () => {
     expect(parseOrderTab("history")).toBe("history");
   });
 
+  it("falls back to Overview for History when the viewer gets no activity", () => {
+    expect(parseOrderTab("history", { history: false })).toBe("overview");
+    expect(parseOrderTab("notes", { history: false })).toBe("notes");
+  });
+
   it("falls back to Overview for a missing or unknown tab", () => {
     expect(parseOrderTab(null)).toBe("overview");
     expect(parseOrderTab("")).toBe("overview");

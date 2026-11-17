@@ -1,6 +1,7 @@
 import type { Db } from "@woolrus/db";
 import { messages } from "@woolrus/i18n";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { fullActivity } from "../../test/activity";
 import { createActor, resetDb, testDb } from "../../test/db";
 import { createOrder } from "../../test/factories";
 import { FakeLumexiaClient } from "../adapters/lumexia/fake";
@@ -18,7 +19,6 @@ import {
 } from "../packing/service";
 import { loadSettings } from "../settings/service";
 import { actionMessageKey, actionRegistry } from "./actions";
-import { getOrderActivity } from "./timeline";
 
 // SPEC-order-activity "Action registry" for Packing (#200): packages, units, weights, box scans
 // and lots at packing, each in the timeline with wording that names the box and line.
@@ -108,7 +108,7 @@ describe("packing and lots in the timeline", () => {
       await db.auditEvent.count({ where: { action: { startsWith: "lot." }, orderId: null } }),
     ).toBe(0);
 
-    const { entries } = await getOrderActivity(db, packer, { id: order.id });
+    const { entries } = await fullActivity(db, packer, { id: order.id });
     const find = (action: string) => entries.find((e) => e.action === action);
 
     expect(find("package.add")).toMatchObject({
@@ -171,7 +171,7 @@ describe("packing and lots in the timeline", () => {
     const removed = await db.auditEvent.findFirstOrThrow({ where: { action: "package.delete" } });
     expect(removed.orderId).toBe(order.id);
 
-    const { entries } = await getOrderActivity(db, packer, { id: order.id });
+    const { entries } = await fullActivity(db, packer, { id: order.id });
     const find = (action: string) => entries.find((e) => e.action === action);
 
     expect(find("package.delete")).toMatchObject({

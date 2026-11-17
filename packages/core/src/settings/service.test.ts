@@ -53,6 +53,7 @@ describe("settings service", () => {
       packCheckCustomDimensions: "WARN",
       packCheckWeightOffPercent: 25,
       qaBoxConfirm: "WHEN_TRIPPED",
+      activityVisibility: {},
       secrets: {
         wooConsumerKey: { configured: false },
         wooConsumerSecret: { configured: false },
@@ -194,6 +195,29 @@ describe("settings service", () => {
     const audit = await db.auditEvent.findFirstOrThrow({ where: { entityType: "Settings" } });
     expect(audit.before).toEqual({ rateLabMaxCombinations: 250 });
     expect(audit.after).toEqual({ rateLabMaxCombinations: 10 });
+  });
+
+  it("lets only an admin change activity visibility, audited (SPEC-order-activity)", async () => {
+    const admin = await createActor(db, ["ADMIN"]);
+    const qa = await createActor(db, ["QA"]);
+    const patch = { activityVisibility: { PACKER: { people: false } } };
+    await expect(updateSettings(db, qa, patch)).rejects.toMatchObject({ kind: "FORBIDDEN" });
+
+    const updated = await updateSettings(db, admin, patch);
+    expect(updated.activityVisibility).toEqual({ PACKER: { people: false } });
+    expect((await getSettings(db, admin)).activityVisibility).toEqual({
+      PACKER: { people: false },
+    });
+    const audit = await db.auditEvent.findFirstOrThrow({ where: { entityType: "Settings" } });
+    expect(audit.before).toEqual({ activityVisibility: {} });
+    expect(audit.after).toEqual({ activityVisibility: { PACKER: { people: false } } });
+  });
+
+  it("reads stored activity visibility that no longer fits as unset", async () => {
+    const admin = await createActor(db, ["ADMIN"]);
+    await getSettings(db, admin);
+    await db.settings.update({ where: { id: 1 }, data: { activityVisibility: { PACKER: "off" } } });
+    expect((await getSettings(db, admin)).activityVisibility).toEqual({});
   });
 
   it("saves the packing checks with an audit before/after (SPEC-packing A1, criterion 26)", async () => {

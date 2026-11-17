@@ -1,10 +1,11 @@
 "use client";
 
-import type {
-  OrderActivitySummary,
-  StageInterval,
-  StagePeople,
-  StageSummary,
+import {
+  type OrderActivitySummary,
+  type StageInterval,
+  type StagePeople,
+  type StageSummary,
+  WorkStage,
 } from "@woolrus/contracts";
 import { useFormatter, useTranslations } from "next-intl";
 import { useId } from "react";
@@ -27,19 +28,27 @@ export function useDuration() {
 
 /**
  * The top of the History tab (SPEC-order-activity "Stage summary", "UI"): status time per stage,
- * a waiting/working bar for each work interval, and who worked each work stage.
+ * a waiting/working bar for each work interval, and who worked each work stage. Either part may be
+ * absent when the viewer's roles may not see it (SPEC-order-activity "Visibility"): without the
+ * times it lists the work stages people worked.
  */
 export function ActivitySummary({
   summary,
-  people,
+  people = [],
 }: {
-  summary: OrderActivitySummary;
-  people: readonly StagePeople[];
+  summary?: OrderActivitySummary;
+  people?: readonly StagePeople[];
 }) {
   const t = useTranslations();
   const duration = useDuration();
   const headingId = useId();
-  const reached = summary.stages.filter((s) => s.intervals.length > 0);
+  const reached: { stage: StageSummary["stage"]; times: StageSummary | null }[] = summary
+    ? summary.stages
+        .filter((s) => s.intervals.length > 0)
+        .map((s) => ({ stage: s.stage, times: s }))
+    : WorkStage.options
+        .filter((stage) => people.some((p) => p.stage === stage && p.people.length > 0))
+        .map((stage) => ({ stage, times: null }));
   if (reached.length === 0) return null;
 
   return (
@@ -49,46 +58,58 @@ export function ActivitySummary({
       data-testid="activity-summary"
     >
       <h3 id={headingId} className="text-lg font-bold">
-        {t("activity.summary.title")}
+        {t(summary ? "activity.summary.title" : "activity.summary.peopleTitle")}
       </h3>
       <ul className="space-y-3">
-        {reached.map((stage) => (
+        {reached.map(({ stage, times }) => (
           <StageRow
-            key={stage.stage}
+            key={stage}
             stage={stage}
-            people={people.find((p) => p.stage === stage.stage)?.people ?? []}
+            times={times}
+            people={people.find((p) => p.stage === stage)?.people ?? []}
           />
         ))}
       </ul>
-      {summary.onHoldMs > 0 && (
+      {summary && summary.onHoldMs > 0 && (
         <p className="text-sm opacity-70">
           {t("activity.summary.onHold", { time: duration(summary.onHoldMs) })}
         </p>
       )}
-      <p className="text-sm opacity-70">{t("activity.summary.workingNote")}</p>
+      {summary && <p className="text-sm opacity-70">{t("activity.summary.workingNote")}</p>}
     </section>
   );
 }
 
-function StageRow({ stage, people }: { stage: StageSummary; people: StagePeople["people"] }) {
+/** A stage's row: its times when the viewer may see them, and its people when they may see those. */
+function StageRow({
+  stage,
+  times,
+  people,
+}: {
+  stage: StageSummary["stage"];
+  times: StageSummary | null;
+  people: StagePeople["people"];
+}) {
   const t = useTranslations();
   const format = useFormatter();
   const duration = useDuration();
   const time = (at: Date) => format.dateTime(at, { timeStyle: "short" });
-  const several = stage.intervals.length > 1;
+  const several = (times?.intervals.length ?? 0) > 1;
 
   return (
-    <li data-stage={stage.stage}>
+    <li data-stage={stage}>
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <span className="font-semibold">{t(`status.${stage.stage}`)}</span>
-        <span>
-          {duration(stage.statusMs)}
-          {stage.intervals.some((i) => i.running) && (
-            <span className="badge badge-sm badge-info ms-2">{t("activity.summary.now")}</span>
-          )}
-        </span>
+        <span className="font-semibold">{t(`status.${stage}`)}</span>
+        {times && (
+          <span>
+            {duration(times.statusMs)}
+            {times.intervals.some((i) => i.running) && (
+              <span className="badge badge-sm badge-info ms-2">{t("activity.summary.now")}</span>
+            )}
+          </span>
+        )}
       </div>
-      {stage.intervals.map((interval, index) =>
+      {times?.intervals.map((interval, index) =>
         interval.waitingMs === null ? null : (
           <WorkInterval
             key={interval.start.toISOString()}

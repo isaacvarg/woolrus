@@ -57,6 +57,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     { href: "/settings/priority-rules", label: "nav.priorityRules", show: settings },
     { href: "/settings/shipping", label: "nav.shippingSettings", show: settings },
     { href: "/settings/packing-checks", label: "nav.packingChecks", show: settings },
+    { href: "/settings/activity", label: "nav.activityVisibility", show: settings },
     { href: "/settings/customs", label: "nav.customs", show: can(actor, "product.manage") },
     { href: "/lumexia", label: "nav.lumexiaItems", show: can(actor, "lumexia.manage") },
     { href: "/sync", label: "nav.sync", show: settings },

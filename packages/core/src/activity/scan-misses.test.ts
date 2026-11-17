@@ -1,5 +1,6 @@
 import type { Db } from "@woolrus/db";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { fullActivity } from "../../test/activity";
 import { createActor, resetDb, testDb } from "../../test/db";
 import { createOrder, type LineSpec } from "../../test/factories";
 import { addPackage, scanIntoPackage } from "../packing/service";
@@ -8,7 +9,6 @@ import { scanBatch } from "../picking/batch-scan";
 import { createBatch } from "../picking/batches";
 import { scan } from "../picking/scan";
 import { scanVerify } from "../qa/scan";
-import { getOrderActivity } from "./timeline";
 
 // SPEC-order-activity success criterion 3: each scan procedure, refused for each kind that
 // applies, writes one ScanMiss and returns the same error as before.
@@ -319,7 +319,7 @@ describe("scan misses in the timeline", () => {
       ).rejects.toThrow();
     }
 
-    const { entries } = await getOrderActivity(db, picker, { id: order.id });
+    const { entries } = await fullActivity(db, picker, { id: order.id });
     const shown = entries.filter((e) => e.category === "problems");
 
     expect(shown).toHaveLength(2);

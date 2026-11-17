@@ -59,6 +59,8 @@ model Settings {
   weightDisplay          WeightDisplay @default(LB_OZ) @map("weight_display")
   /// Per-stage SLA thresholds in minutes, e.g. { "PENDING": 240, "PICKING": 60 } (FR-LIST-05).
   stageSlaMinutes        Json          @default("{}") @map("stage_sla_minutes")
+  /// Which activity parts each role sees, e.g. { "PACKER": { "people": false } }. Missing role or part = on.
+  activityVisibility     Json          @default("{}") @map("activity_visibility")
   /// Days after completion before customer PII is purged (NFR-SEC-06). Null = keep.
   piiRetentionDays       Int?          @map("pii_retention_days")
   /// Push tracking items to WooCommerce through the AST plugin. Off until IT has installed it.

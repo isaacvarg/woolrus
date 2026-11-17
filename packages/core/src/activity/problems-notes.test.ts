@@ -1,6 +1,7 @@
 import type { Db } from "@woolrus/db";
 import { messages } from "@woolrus/i18n";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { fullActivity } from "../../test/activity";
 import { createActor, resetDb, testDb } from "../../test/db";
 import { createOrder } from "../../test/factories";
 import { createMemoryStorage } from "../adapters/storage/memory";
@@ -8,7 +9,6 @@ import { reportIssue, resolveIssue, setResponsible, updateIssue } from "../excep
 import { resolveVoids, undoVoid, voidItem } from "../exceptions/voids";
 import { createNote, deleteNote, updateNote } from "../notes/service";
 import { actionMessageKey, actionRegistry } from "./actions";
-import { getOrderActivity } from "./timeline";
 
 // SPEC-order-activity (#203): voids and issues under Problems, notes under Notes, each worded,
 // and note entries without the note's text.
@@ -115,7 +115,7 @@ describe("problems and notes in the order's activity", () => {
     expect(rows.length).toBeGreaterThan(0);
     expect(rows.every((r) => r.orderId === order.id)).toBe(true);
 
-    const { entries } = await getOrderActivity(db, admin, { id: order.id });
+    const { entries } = await fullActivity(db, admin, { id: order.id });
     const of = (action: string, entityType?: string) =>
       entries.filter((e) => e.action === action && (!entityType || e.entityType === entityType));
 

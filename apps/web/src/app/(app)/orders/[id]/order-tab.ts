@@ -3,9 +3,16 @@ import type { QualityIssueView } from "@woolrus/contracts";
 export const orderTabs = ["overview", "shipping", "issues", "notes", "history"] as const;
 export type OrderTab = (typeof orderTabs)[number];
 
-/** `?tab=` as the page reads it: anything unknown is Overview. */
-export function parseOrderTab(value: string | null | undefined): OrderTab {
-  return orderTabs.find((tab) => tab === value) ?? "overview";
+/**
+ * `?tab=` as the page reads it: anything unknown is Overview, and so is History for a viewer whose
+ * roles may see no part of the activity view (SPEC-order-activity "Visibility").
+ */
+export function parseOrderTab(
+  value: string | null | undefined,
+  { history = true }: { history?: boolean } = {},
+): OrderTab {
+  const tab = orderTabs.find((t) => t === value) ?? "overview";
+  return tab === "history" && !history ? "overview" : tab;
 }
 
 /** The query string for a tab, keeping the other params; Overview is the bare URL. */

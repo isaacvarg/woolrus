@@ -1,8 +1,8 @@
 import type { Db } from "@woolrus/db";
 import { seedDemoOrders } from "@woolrus/db/demo";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { fullActivity } from "../../test/activity";
 import { createActor, resetDb, testDb } from "../../test/db";
-import { getOrderActivity } from "../activity/timeline";
 import type { Actor } from "../permissions";
 import { getBatchSuggestions } from "../picking/queries";
 import { evaluateGate, loadGateSnapshot } from "./gates";
@@ -139,11 +139,52 @@ describe("seedDemoOrders", () => {
     await seedDemoOrders(db);
 
     for (const order of await db.order.findMany()) {
-      const { entries } = await getOrderActivity(db, admin, { id: order.id });
+      const { entries } = await fullActivity(db, admin, { id: order.id });
       const latest = entries.find((e) => e.action.startsWith("stage."));
       expect(latest?.params.to, order.number).toBe(order.status);
       expect(latest?.at.getTime(), order.number).toBe(order.statusChangedAt.getTime());
     }
+  });
+
+  it('gives the demo orders realistic activity (SPEC-order-activity "Dev data")', async () => {
+    await seedDemoOrders(db);
+    const feeds = await Promise.all(
+      (await db.order.findMany()).map((o) => fullActivity(db, admin, { id: o.id })),
+    );
+    const items = feeds.flatMap((f) => f.entries.flatMap((e) => (e.count > 1 ? e.members : [e])));
+    const actions = new Set(items.map((i) => i.action));
+    for (const action of ["pick.pickLine", "package.add", "packageItem.verify", "issue.report"]) {
+      expect(actions.has(action), action).toBe(true);
+    }
+
+    // A batch: a pick interval that began in one, shared by more than one order.
+    const batched = feeds.flatMap((f) =>
+      f.summary.stages.flatMap((s) => s.intervals.flatMap((i) => (i.batch ? [i.batch] : []))),
+    );
+    expect(batched.length).toBeGreaterThan(1);
+    expect(batched[0]?.orders).toBeGreaterThan(1);
+
+    // Packing with a reweigh: one box weighed twice.
+    expect(
+      feeds.some((f) => f.entries.filter((e) => e.action === "package.setWeight").length >= 2),
+    ).toBe(true);
+    // Two QA scan misses on one order, under Problems.
+    expect(
+      feeds.some(
+        (f) =>
+          f.entries.filter((e) => e.action.startsWith("scanMiss.") && e.category === "problems")
+            .length === 2,
+      ),
+    ).toBe(true);
+    expect(await db.scanMiss.count({ where: { stage: "QA" } })).toBe(2);
+    // A repack: two Packing intervals.
+    expect(
+      feeds.some(
+        (f) => (f.summary.stages.find((s) => s.stage === "PACKING")?.intervals.length ?? 0) === 2,
+      ),
+    ).toBe(true);
+    // People worked the stages, so the summary has someone to show.
+    expect(feeds.some((f) => f.people.some((p) => p.people.length > 0))).toBe(true);
   });
 
   it("leaves some orders in each stage ready to complete and some not, so gates can be demoed", async () => {

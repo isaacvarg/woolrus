@@ -1,5 +1,6 @@
 import type { Db } from "@woolrus/db";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { fullActivity } from "../../test/activity";
 import { createActor, resetDb, testDb } from "../../test/db";
 import { createOrder } from "../../test/factories";
 import { systemActor, type UserActor } from "../permissions";
@@ -44,7 +45,7 @@ describe("getOrderActivity", () => {
     await beginPicking(db, bruno, { orderId: order.id, expectedVersion: 3 }, t(3));
     await hold(db, atStation, { orderId: order.id, expectedVersion: 4, reason: "Address" }, t(4));
 
-    const { entries, truncated } = await getOrderActivity(db, picker, { id: order.id });
+    const { entries, truncated } = await fullActivity(db, picker, { id: order.id });
 
     expect(truncated).toBe(false);
     // A move writes a stage event and an audit row; only the stage event is shown.
@@ -86,7 +87,7 @@ describe("getOrderActivity", () => {
       },
     });
 
-    const { entries } = await getOrderActivity(db, picker, { id: order.id });
+    const { entries } = await fullActivity(db, picker, { id: order.id });
     expect(entries.map((e) => [e.action, e.category, e.actor, e.system])).toEqual([
       ["order.externalChange.flagged", "store", null, "store-sync"],
       ["stage.move", "status", null, "store-sync"],
@@ -127,7 +128,7 @@ describe("getOrderActivity", () => {
     await row({ entityType: "Order", at: t(4).now });
     await row({ entityType: "Order", entityId: other.id, orderId: other.id, at: t(5).now });
 
-    const { entries } = await getOrderActivity(db, picker, { id: order.id });
+    const { entries } = await fullActivity(db, picker, { id: order.id });
     expect(entries.map((e) => [e.action, e.target])).toEqual([
       ["package.delete", { kind: "box", number: 4 }],
       ["package.setWeight", { kind: "box", number: packages[0]?.number }],
@@ -146,7 +147,7 @@ describe("getOrderActivity", () => {
         action: "label.somethingNew",
       },
     });
-    const { entries } = await getOrderActivity(db, picker, { id: order.id });
+    const { entries } = await fullActivity(db, picker, { id: order.id });
     expect(entries[0]).toMatchObject({
       action: "label.somethingNew",
       entityType: "ShippingLabel",
@@ -172,7 +173,7 @@ describe("getOrderActivity", () => {
         },
       });
     }
-    const { entries } = await getOrderActivity(db, picker, { id: order.id });
+    const { entries } = await fullActivity(db, picker, { id: order.id });
     expect(entries).toHaveLength(1);
     expect(entries[0]).toMatchObject({ count: 3, firstAt: times[0], at: times[2] });
     expect(entries[0]?.members).toHaveLength(3);
@@ -191,7 +192,7 @@ describe("getOrderActivity", () => {
         at: new Date(start + i * 600_000),
       })),
     });
-    const { entries, truncated } = await getOrderActivity(db, picker, { id: order.id });
+    const { entries, truncated } = await fullActivity(db, picker, { id: order.id });
     expect(truncated).toBe(true);
     expect(entries).toHaveLength(TIMELINE_ROW_CAP);
     // The newest are kept.
