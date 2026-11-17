@@ -182,6 +182,11 @@ describe("getOrderActivity", () => {
   it(`reads at most ${TIMELINE_ROW_CAP} rows and says when it was cut`, async () => {
     const { order } = await createOrder(db);
     const start = Date.now() - 1_000_000;
+    // The import is older than every audit row, so it is the first row the cap drops.
+    await db.orderStageEvent.deleteMany({ where: { orderId: order.id } });
+    await db.orderStageEvent.create({
+      data: { orderId: order.id, toStatus: "PENDING", at: new Date(start - 600_000) },
+    });
     // Spaced 10 minutes apart and from the system, so none of them group.
     await db.auditEvent.createMany({
       data: Array.from({ length: TIMELINE_ROW_CAP + 1 }, (_, i) => ({
@@ -192,10 +197,15 @@ describe("getOrderActivity", () => {
         at: new Date(start + i * 600_000),
       })),
     });
-    const { entries, truncated } = await fullActivity(db, picker, { id: order.id });
+    const { entries, truncated, summary } = await fullActivity(db, picker, { id: order.id });
     expect(truncated).toBe(true);
     expect(entries).toHaveLength(TIMELINE_ROW_CAP);
     // The newest are kept.
     expect(entries[0]?.at.getTime()).toBe(start + TIMELINE_ROW_CAP * 600_000);
+    expect(entries.some((e) => e.action === "stage.import")).toBe(false);
+    // The summary still reads the dropped import: Pending starts when the order arrived.
+    const pending = summary.stages.find((s) => s.stage === "PENDING");
+    expect(pending?.intervals).toHaveLength(1);
+    expect(pending?.intervals[0]?.start.getTime()).toBe(start - 600_000);
   });
 });

@@ -8,7 +8,12 @@ import { updateSettings } from "../settings/service";
 import { claim } from "../workflow/claims";
 import { beginPicking } from "../workflow/service";
 import { getOrderActivity } from "./timeline";
-import { activityPartsFor, seesActivity, visibleParts } from "./visibility";
+import {
+  activityPartsFor,
+  parseActivityVisibility,
+  seesActivity,
+  visibleParts,
+} from "./visibility";
 
 const all: ActivityParts = { timeline: true, details: true, summary: true, people: true };
 
@@ -44,6 +49,30 @@ describe("visibleParts", () => {
 
   it("gives someone with no roles nothing", () => {
     expect(seesActivity(visibleParts([], {}))).toBe(false);
+  });
+
+  it("gives no History tab for details alone, which only show inside the timeline", () => {
+    const off = { timeline: false, details: false, summary: false, people: false };
+    expect(seesActivity({ ...off, details: true })).toBe(false);
+  });
+});
+
+describe("parseActivityVisibility", () => {
+  it("keeps the valid switches when a stored role or part no longer exists", () => {
+    const stored = {
+      PACKER: { people: false, retired: false },
+      GONE: { timeline: false },
+      QA: { summary: "no" },
+    };
+    expect(parseActivityVisibility(stored)).toEqual({ PACKER: { people: false }, QA: {} });
+    expect(visibleParts(["PACKER"], parseActivityVisibility(stored))).toEqual({
+      ...all,
+      people: false,
+    });
+  });
+
+  it("reads anything that isn't an object as the default", () => {
+    for (const stored of [null, "x", 3, []]) expect(parseActivityVisibility(stored)).toEqual({});
   });
 });
 

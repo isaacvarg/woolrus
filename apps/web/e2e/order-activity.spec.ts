@@ -31,6 +31,11 @@ test("an order's History shows its stages, its wrong scan, and hides people from
   await ensureShipFrom();
   const customerName = `E2E ${crypto.randomUUID()}`;
   const order = await createOrder({ customerName, quantity: 1 });
+  // `createOrder` inserts the row directly; store sync would also write the import's stage event,
+  // which is what opens the Pending interval.
+  await db.orderStageEvent.create({
+    data: { orderId: order.id, toStatus: "PENDING", at: new Date(Date.now() - 60_000) },
+  });
 
   // Pick, with one wrong scan first.
   await signInAs(page, ["PICKER"]);

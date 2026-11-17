@@ -223,30 +223,36 @@ export async function anonymizeOrder(
 
   await tx.orderItem.updateMany({ where: { orderId }, data: { metaData: [] } });
 
-  const targets = [
+  // Every row filed under the order (lines, notes, problems and approvals too), plus the entity
+  // lookup for rows the order-id backfill couldn't place.
+  const legacy = [
     { entityType: "Order", ids: [orderId] },
     { entityType: "Package", ids: order.packages.map((p) => p.id) },
     { entityType: "ShippingLabel", ids: order.packages.flatMap((p) => p.labels.map((l) => l.id)) },
-  ];
-  for (const { entityType, ids } of targets) {
-    if (ids.length === 0) continue;
-    const events = await tx.auditEvent.findMany({ where: { entityType, entityId: { in: ids } } });
-    for (const event of events) {
-      const before = event.before === null ? undefined : scrubPii(event.before);
-      const after = event.after === null ? undefined : scrubPii(event.after);
-      if (
-        JSON.stringify(before) === JSON.stringify(event.before ?? undefined) &&
-        JSON.stringify(after) === JSON.stringify(event.after ?? undefined)
-      )
-        continue;
-      await tx.auditEvent.update({
-        where: { id: event.id },
-        data: {
-          ...(before === undefined ? {} : { before: before as Prisma.InputJsonValue }),
-          ...(after === undefined ? {} : { after: after as Prisma.InputJsonValue }),
-        },
-      });
-    }
+  ].filter(({ ids }) => ids.length > 0);
+  const events = await tx.auditEvent.findMany({
+    where: {
+      OR: [
+        { orderId },
+        ...legacy.map(({ entityType, ids }) => ({ entityType, entityId: { in: ids } })),
+      ],
+    },
+  });
+  for (const event of events) {
+    const before = event.before === null ? undefined : scrubPii(event.before);
+    const after = event.after === null ? undefined : scrubPii(event.after);
+    if (
+      JSON.stringify(before) === JSON.stringify(event.before ?? undefined) &&
+      JSON.stringify(after) === JSON.stringify(event.after ?? undefined)
+    )
+      continue;
+    await tx.auditEvent.update({
+      where: { id: event.id },
+      data: {
+        ...(before === undefined ? {} : { before: before as Prisma.InputJsonValue }),
+        ...(after === undefined ? {} : { after: after as Prisma.InputJsonValue }),
+      },
+    });
   }
 
   await recordAudit(tx, operationsActor, {

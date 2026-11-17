@@ -38,22 +38,26 @@ export async function getOrderActivity(
   const all = (await Promise.all(activitySources.map((load) => load(db, { orderId: id, take }))))
     .flat()
     .sort((a, b) => b.at.getTime() - a.at.getTime() || (a.id < b.id ? 1 : -1));
-  const records = all.slice(0, TIMELINE_ROW_CAP);
-
-  const ctx = await loadContext(db, id, records);
-  const items = records.map((record) => toItem(record, ctx, visible.details));
+  const truncated = all.length > TIMELINE_ROW_CAP;
+  // The cap trims the timeline only. The summary reads every loaded row, so an order past the cap
+  // keeps its oldest stage events (import, first claim) and its intervals still start at the start.
+  const ctx = await loadContext(db, id, all);
+  const items = all
+    .slice(0, TIMELINE_ROW_CAP)
+    .map((record) => toItem(record, ctx, visible.details));
   const entries = groupItems(
     items,
     (item) => actionSpec(item.entityType, item.action)?.groups ?? false,
   );
   // From the items, before grouping: a grouped run still counts each member.
-  const { summary, people } = summarizeActivity(items, now);
+  const summaryItems = truncated ? all.map((record) => toItem(record, ctx, false)) : items;
+  const { summary, people } = summarizeActivity(summaryItems, now);
   return {
     visible,
     ...(visible.summary && { summary }),
     ...(visible.people && { people }),
     ...(visible.timeline && { entries }),
-    truncated: all.length > TIMELINE_ROW_CAP,
+    truncated,
   };
 }
 

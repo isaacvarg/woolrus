@@ -10,10 +10,28 @@ import type { Actor } from "../permissions";
 // Which parts of the activity view a viewer gets (SPEC-order-activity "Visibility"). The server
 // leaves the rest out of `orders.activity`, so a hidden part can't be read through the API.
 
-/** Stored JSON that no longer fits the contract reads as `{}`: everyone sees everything. */
+/**
+ * The stored setting, read switch by switch: a role or part that no longer exists is dropped and
+ * the rest still apply, so one stale key can't switch every part back on for every role.
+ */
 export function parseActivityVisibility(json: Prisma.JsonValue): ActivityVisibility {
-  const parsed = ActivityVisibility.safeParse(json);
-  return parsed.success ? parsed.data : {};
+  const whole = ActivityVisibility.safeParse(json);
+  if (whole.success) return whole.data;
+  if (!json || typeof json !== "object" || Array.isArray(json)) return {};
+  const visibility: ActivityVisibility = {};
+  for (const [roleKey, switches] of Object.entries(json)) {
+    const role = ActivityVisibilityRole.safeParse(roleKey);
+    if (!role.success || !switches || typeof switches !== "object" || Array.isArray(switches)) {
+      continue;
+    }
+    const kept: Partial<Record<ActivityPart, boolean>> = {};
+    for (const [partKey, on] of Object.entries(switches)) {
+      const part = ActivityPart.safeParse(partKey);
+      if (part.success && typeof on === "boolean") kept[part.data] = on;
+    }
+    visibility[role.data] = kept;
+  }
+  return visibility;
 }
 
 /**
@@ -37,9 +55,12 @@ export function visibleParts(
   ) as ActivityParts;
 }
 
-/** Whether the viewer gets any part, i.e. whether they get a History tab at all. */
+/**
+ * Whether the viewer gets a History tab at all. `details` alone doesn't count: details only show
+ * inside timeline entries, so without the timeline there would be nothing to render.
+ */
 export function seesActivity(parts: ActivityParts): boolean {
-  return ActivityPart.options.some((part) => parts[part]);
+  return parts.timeline || parts.summary || parts.people;
 }
 
 /** The parts this actor gets under the current setting. */
