@@ -144,6 +144,7 @@ async function finish(
   await recordAudit(tx, actor, {
     entityType: "ItemVoid",
     entityId: voidId,
+    orderId: order.id,
     action,
     before,
     after,
@@ -319,9 +320,15 @@ export async function resolveVoids(
       await recordAudit(tx, actor, {
         entityType: "ItemVoid",
         entityId: v.id,
+        orderId: v.orderId,
         action: "void.resolve",
         before: { resolvedAt: null },
-        after: { resolution, resolutionNotes: text, resolvedAt: now.toISOString() },
+        after: {
+          orderItemId: v.orderItemId,
+          resolution,
+          resolutionNotes: text,
+          resolvedAt: now.toISOString(),
+        },
         at: now,
       });
     }

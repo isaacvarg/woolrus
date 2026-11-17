@@ -1,4 +1,26 @@
 {
-  "en": {},
-  "es": {}
+  "en": {
+    "void_create": "Voided {quantity, plural, one {# unit} other {# units}}",
+    "void_undo": "Undid a void",
+    "void_resolve": "Resolved a void: {resolution, select, HANDLED_MANUALLY {handled by hand} REFUNDED {refunded} LINE_EDITED {line edited} other {done}}",
+    "issue_report": "Reported {severity, select, MINOR {a minor} MAJOR {a major} CRITICAL {a critical} other {an}} issue: {type, select, WRONG_ITEM {wrong item} DAMAGED_ITEM {damaged item} MISSING_ITEM {missing item} WRONG_QUANTITY {wrong quantity} PACKAGING_DAMAGE {packaging damage} LABELING_ERROR {labeling error} WRONG_BOX_SIZE {wrong box size} other {other}}",
+    "issue_update": "Edited an issue",
+    "issue_setResponsible": "Set who is responsible for an issue: {name}",
+    "issue_resolve": "{outcome, select, DISMISSED {Dismissed an issue} other {Resolved an issue}}",
+    "issue_reopen": "Reopened an issue",
+    "issue_delete": "Deleted an issue",
+    "issue_linkRepack": "Linked an issue to a repack"
+  },
+  "es": {
+    "void_create": "Anuló {quantity, plural, one {# unidad} other {# unidades}}",
+    "void_undo": "Deshizo una anulación",
+    "void_resolve": "Resolvió una anulación: {resolution, select, HANDLED_MANUALLY {gestionada manualmente} REFUNDED {reembolsada} LINE_EDITED {línea editada} other {lista}}",
+    "issue_report": "Reportó un problema {severity, select, MINOR {menor} MAJOR {mayor} CRITICAL {crítico} other {}}: {type, select, WRONG_ITEM {artículo equivocado} DAMAGED_ITEM {artículo dañado} MISSING_ITEM {artículo faltante} WRONG_QUANTITY {cantidad incorrecta} PACKAGING_DAMAGE {empaque dañado} LABELING_ERROR {error de etiquetado} WRONG_BOX_SIZE {caja de tamaño incorrecto} other {otro}}",
+    "issue_update": "Editó un problema",
+    "issue_setResponsible": "Asignó al responsable de un problema: {name}",
+    "issue_resolve": "{outcome, select, DISMISSED {Descartó un problema} other {Resolvió un problema}}",
+    "issue_reopen": "Reabrió un problema",
+    "issue_delete": "Eliminó un problema",
+    "issue_linkRepack": "Vinculó un problema a un reempaque"
+  }
 }

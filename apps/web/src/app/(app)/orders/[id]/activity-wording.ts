@@ -34,8 +34,11 @@ export function useActivityWording() {
   const t = useTranslations();
 
   const message = (item: ActivityItem): string => {
-    const key = activityMessageKey(item.action);
-    if (t.has(key)) return t(key as never, wordParams(item.params, t) as never);
+    // Like `actionSpec` in core: `<EntityType>.<action>` first, for bare verbs like a note's `create`.
+    const key = [`${item.entityType}.${item.action}`, item.action]
+      .map(activityMessageKey)
+      .find((k) => t.has(k));
+    if (key) return t(key as never, wordParams(item.params, t) as never);
     const entity = `activity.entity.${item.entityType}`;
     return t("activity.generic", {
       entity: t.has(entity) ? t(entity as never) : t("activity.entity.other"),
