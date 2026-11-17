@@ -20,10 +20,10 @@ test("QA writes a customer-visible note, sees the Customer badge, and edits it",
   test.skip(testInfo.project.name !== "desktop", "the desktop journey");
   const order = await createOrder({ status: "QA" });
   await signInAs(page, ["QA"]);
-  await page.goto(`/orders/${order.id}`);
+  await page.goto(`/orders/${order.id}?tab=notes`);
   // A second tab on the same order: it should pick the note up from the event stream.
   const other = await context.newPage();
-  await other.goto(`/orders/${order.id}`);
+  await other.goto(`/orders/${order.id}?tab=notes`);
   await expect(other.getByText("No notes on this order yet.")).toBeVisible();
 
   const notes = page.getByRole("region", { name: "Notes" });
@@ -55,7 +55,7 @@ test("a picker writes internal notes only and can't edit someone else's", async 
   test.skip(testInfo.project.name !== "desktop", "the desktop journey");
   const order = await createOrder({ status: "PICKING" });
   await signInAs(page, ["PICKER"]);
-  await page.goto(`/orders/${order.id}`);
+  await page.goto(`/orders/${order.id}?tab=notes`);
   const notes = page.getByRole("region", { name: "Notes" });
   await expect(notes.getByRole("textbox", { name: "New note" })).toBeVisible();
   await expect(notes.getByRole("switch", { name: "Visible to the customer" })).toHaveCount(0);
@@ -67,7 +67,7 @@ test("a picker writes internal notes only and can't edit someone else's", async 
   const otherContext = await browser.newContext();
   const otherPage = await otherContext.newPage();
   await signInAs(otherPage, ["PICKER"]);
-  await otherPage.goto(`/orders/${order.id}`);
+  await otherPage.goto(`/orders/${order.id}?tab=notes`);
   const theirs = otherPage.getByTestId("note");
   await expect(theirs).toContainText("Jar lid cracked");
   await expect(theirs.getByRole("button", { name: "Edit" })).toHaveCount(0);
@@ -79,7 +79,7 @@ test("a note sent to WooCommerce is frozen, even for an admin", async ({ page },
   test.skip(testInfo.project.name !== "desktop", "the desktop journey");
   const order = await createOrder({ status: "READY" });
   await signInAs(page, ["ADMIN"]);
-  await page.goto(`/orders/${order.id}`);
+  await page.goto(`/orders/${order.id}?tab=notes`);
   const notes = page.getByRole("region", { name: "Notes" });
   await notes.getByRole("textbox", { name: "New note" }).fill("Left at the front desk");
   await notes.getByRole("button", { name: "Add note" }).click();
@@ -133,6 +133,7 @@ test("a picker notes a line with a photo and a voice memo, sees the indicators, 
   await expect(dialog).toBeHidden();
 
   await expect(line.getByRole("img", { name: "1 note" })).toBeVisible();
+  await page.getByRole("tab", { name: /^Notes/ }).click();
   const notes = page.getByRole("region", { name: "Notes" });
   const group = notes.getByRole("region", { name: "Line: E2E item ×2" });
   const note = group.getByTestId("note");
@@ -159,7 +160,7 @@ test("a picker notes a line with a photo and a voice memo, sees the indicators, 
   const otherContext = await browser.newContext();
   const otherPage = await otherContext.newPage();
   await signInAs(otherPage, ["PICKER"]);
-  await otherPage.goto(`/orders/${order.id}`);
+  await otherPage.goto(`/orders/${order.id}?tab=notes`);
   const theirs = otherPage.getByTestId("note");
   await expect(theirs).toContainText("Jar lid cracked");
   await expect(theirs.getByRole("button", { name: "Edit" })).toHaveCount(0);
@@ -174,13 +175,15 @@ test("a picker notes a line with a photo and a voice memo, sees the indicators, 
   const row = page.getByRole("row", { name: new RegExp(customerName) });
   await expect(row.getByRole("img", { name: "1 note" })).toBeVisible();
 
-  await page.goto(`/orders/${order.id}`);
+  await page.goto(`/orders/${order.id}?tab=notes`);
   await group.getByRole("button", { name: "Delete" }).click();
   await page
     .getByRole("dialog", { name: "Delete this note?" })
     .getByRole("button", { name: "Delete" })
     .click();
   await expect(notes.getByText("No notes on this order yet.")).toBeVisible();
+  await page.getByRole("tab", { name: /^Overview/ }).click();
+  await expect(line).toBeVisible();
   await expect(line.getByRole("img", { name: /note/ })).toHaveCount(0);
 });
 
@@ -229,7 +232,7 @@ test("a picker attaches photos on a tablet, opens them in the lightbox and remov
   test.skip(testInfo.project.name !== "tablet", "the floor journey");
   const order = await createOrder({ status: "PICKING" });
   await signInAs(page, ["PICKER"]);
-  await page.goto(`/orders/${order.id}`);
+  await page.goto(`/orders/${order.id}?tab=notes`);
   const notes = page.getByRole("region", { name: "Notes" });
 
   // The camera button asks for the rear camera.
@@ -302,7 +305,7 @@ test("attachments need order.read", async ({ page, browser }, testInfo) => {
   test.skip(testInfo.project.name !== "desktop", "an API check");
   const order = await createOrder({ status: "PICKING" });
   await signInAs(page, ["PICKER"]);
-  await page.goto(`/orders/${order.id}`);
+  await page.goto(`/orders/${order.id}?tab=notes`);
   const notes = page.getByRole("region", { name: "Notes" });
   await choosePhotos(page, notes, PHOTOS.slice(0, 1));
   await notes.getByRole("button", { name: "Add note" }).click();

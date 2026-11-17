@@ -112,7 +112,7 @@ test("an admin sets up both providers, packing rates from both, the QA user re-r
         await packAndFinish(page, order, name);
         expect(await runRateFetch(order.id)).toEqual({ status: "done" });
 
-        await qa.goto(`/orders/${order.id}`);
+        await qa.goto(`/orders/${order.id}?tab=shipping`);
         const shipping = qa.getByRole("region", { name: "Shipping" });
         const shipTo = shipping.getByTestId("ship-to");
         await expect(shipTo).toContainText("Corrected");

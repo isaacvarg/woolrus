@@ -438,6 +438,17 @@
   },
   "order": {
     "title": "Order #{number}",
+    "tabs": {
+      "label": "Order sections",
+      "overview": "Overview",
+      "shipping": "Shipping",
+      "issues": "Issues",
+      "history": "History",
+      "noPackages": "Rates and labels show here once the order has packages.",
+      "labelCount": "{count, plural, one {# label} other {# labels}}",
+      "openIssues": "{count, plural, one {# open issue} other {# open issues}}",
+      "openIssuesCritical": "{count, plural, one {# open issue, critical} other {# open issues, at least one critical}}"
+    },
     "status": "Status",
     "priority": "Priority",
     "customer": "Customer",

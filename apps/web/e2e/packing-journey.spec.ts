@@ -190,6 +190,9 @@ test("pick, pack into two boxes, weigh, confirm a re-weigh and finish to the nex
   await expect(page.getByTestId("order-status")).toHaveText("QA");
   await expect(page.getByTestId("order-package")).toHaveCount(2);
   await expect(page.getByTestId("order-package").first()).toContainText("E2E item ×2");
+  // The re-weigh note is a package note, so it's on the Notes tab.
+  await page.getByRole("tab", { name: /^Notes/ }).click();
+  await expect(page.getByRole("region", { name: "Notes" })).toBeVisible();
   const settings = await db.settings.findFirst({ select: { packCheckWeightStale: true } });
   const note = page.getByText("Contents changed after weighing; weight 1 lb not re-checked");
   if (settings?.packCheckWeightStale === "OFF") {

@@ -91,7 +91,7 @@ test("packing → QA fetches merged rates from both providers; a refresh skips a
         await packAndFinish(page, order, name);
         expect(await runRateFetch(order.id)).toEqual({ status: "done" });
 
-        await qa.goto(`/orders/${order.id}`);
+        await qa.goto(`/orders/${order.id}?tab=shipping`);
         const shipping = qa.getByRole("region", { name: "Shipping" });
         await expect(shipping.getByTestId("ship-to")).toContainText("1 Main St");
         // 9 oz: Bridge Source's Demo Ground at $5.47 beats ShipStation's at $5.58, but it only
@@ -154,7 +154,7 @@ test("a corrected address shows beside the original, and Use original address re
         await packAndFinish(page, order, name);
         expect(await runRateFetch(order.id)).toEqual({ status: "done" });
 
-        await qa.goto(`/orders/${order.id}`);
+        await qa.goto(`/orders/${order.id}?tab=shipping`);
         const shipTo = qa.getByRole("region", { name: "Shipping" }).getByTestId("ship-to");
         await expect(shipTo).toContainText("Corrected");
         await expect(shipTo.getByTestId("ship-to-original")).toContainText("1 Main Street");
@@ -191,7 +191,7 @@ test("a Picker sees an order's rates but can't refresh them or change the ship-t
 }) => {
   const order = await createOrder({ status: "QA" });
   await signInAs(page, ["PICKER"]);
-  await page.goto(`/orders/${order.id}`);
+  await page.goto(`/orders/${order.id}?tab=shipping`);
   // Created straight in QA with no package: nothing to show yet.
   await expect(page.getByRole("region", { name: "Shipping" })).toHaveCount(0);
 
@@ -225,7 +225,7 @@ test("a quote-only rate is badged and can't be selected; the cheapest buyable on
         // Bridge Source's account has no bookingEnabled, so it only quotes.
         expect(await runRateFetch(order.id)).toEqual({ status: "done" });
 
-        await qa.goto(`/orders/${order.id}`);
+        await qa.goto(`/orders/${order.id}?tab=shipping`);
         // 9 oz: Bridge Source's $5.47 beats ShipStation's $5.58, but can't be bought.
         const rows = rateRows(qa);
         await expect(rows).toHaveCount(2);

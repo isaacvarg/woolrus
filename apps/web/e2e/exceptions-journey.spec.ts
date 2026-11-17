@@ -74,7 +74,7 @@ test("out of stock, void, pack, report, resolve and delete: the exceptions journ
 
   // QA reports a Major packaging issue with a photo.
   await signInAs(page, ["QA"]);
-  await page.goto(`/orders/${order.id}`);
+  await page.goto(`/orders/${order.id}?tab=issues`);
   await page.getByRole("button", { name: "Report issue" }).click();
   const report = page.getByRole("dialog", { name: "Report an issue" });
   await report.getByLabel("Type").selectOption("PACKAGING_DAMAGE");
