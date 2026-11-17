@@ -1,4 +1,26 @@
 {
-  "en": {},
-  "es": {}
+  "en": {
+    "pick_scan": "Scanned {line}: {quantity} picked",
+    "pick_pickLine": "Picked {quantity} of {line}",
+    "pick_unpickLine": "Unpicked {line} ({quantity} had been picked)",
+    "pick_markOutOfStock": "Marked {line} out of stock: {quantity} found",
+    "pick_substitute": "Substituted {line} ({quantity})",
+    "pickBatch_create": "Added to pick batch {number} with {orders} orders",
+    "pickBatch_removeOrder": "Removed from pick batch {number}",
+    "pickBatch_close": "Pick batch {number} closed",
+    "pickBatch_finish": "Finished pick batch {number}",
+    "product_linkBarcode": "Linked barcode {barcode} to {line}"
+  },
+  "es": {
+    "pick_scan": "Escaneó {line}: {quantity} surtidos",
+    "pick_pickLine": "Surtió {quantity} de {line}",
+    "pick_unpickLine": "Deshizo el surtido de {line} (se habían surtido {quantity})",
+    "pick_markOutOfStock": "Marcó {line} sin existencias: se encontraron {quantity}",
+    "pick_substitute": "Sustituyó {line} ({quantity})",
+    "pickBatch_create": "Agregado al lote de surtido {number} con {orders} pedidos",
+    "pickBatch_removeOrder": "Quitado del lote de surtido {number}",
+    "pickBatch_close": "Se cerró el lote de surtido {number}",
+    "pickBatch_finish": "Terminó el lote de surtido {number}",
+    "product_linkBarcode": "Vinculó el código de barras {barcode} a {line}"
+  }
 }

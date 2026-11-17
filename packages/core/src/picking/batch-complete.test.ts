@@ -250,7 +250,7 @@ describe("finishBatch", () => {
         claimedById: picker.userId,
       });
     }
-    expect(await db.auditEvent.count({ where: { action: "pickBatch.finish" } })).toBe(1);
+    expect(await db.auditEvent.count({ where: { action: "pickBatch.finish" } })).toBe(2);
     const picks = await myPicks(db, picker);
     expect(picks.batch).toBeNull();
     expect(picks.orders).toHaveLength(2);
@@ -278,7 +278,7 @@ describe("finishBatch", () => {
     const replay = await finishBatch(db, picker, { id: batch.id });
 
     expect(replay.closedAt).toEqual(first.closedAt);
-    expect(await db.auditEvent.count({ where: { action: "pickBatch.finish" } })).toBe(1);
+    expect(await db.auditEvent.count({ where: { action: "pickBatch.finish" } })).toBe(2);
     await expect(
       finishBatch(db, picker, { id: "01900000-0000-7000-8000-000000000000" }),
     ).rejects.toMatchObject({ kind: "NOT_FOUND" });
