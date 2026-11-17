@@ -7,7 +7,7 @@ import type {
   SubstituteInput,
 } from "@woolrus/contracts";
 import type { Db, DbTx, PickStatus, Prisma } from "@woolrus/db";
-import { recordAudit } from "../audit";
+import { type ActionVerb, recordAudit } from "../audit";
 import { AppError, notFound } from "../errors";
 import { storedResult, withIdempotency } from "../idempotency";
 import { createTextNote } from "../notes/service";
@@ -100,7 +100,7 @@ async function writeLine(
   db: Db,
   actor: Actor,
   itemId: string,
-  op: string,
+  op: ActionVerb<"pick">,
   decide: (row: LineRow, now: Date) => LineWrite,
   { now = new Date() }: PickOptions,
   withNote?: WithNote,
@@ -140,7 +140,7 @@ export async function writeLineIn(
   tx: DbTx,
   actor: Actor,
   itemId: string,
-  op: string,
+  op: ActionVerb<"pick">,
   decide: (row: LineRow, now: Date) => LineWrite,
   now: Date,
   note?: (row: LineRow) => string,

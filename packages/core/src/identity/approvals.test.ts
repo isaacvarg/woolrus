@@ -87,7 +87,8 @@ async function approvedBump(
     await recordAudit(tx, actor, {
       entityType: "Order",
       entityId: input.orderId,
-      action: "test.bump",
+      orderId: input.orderId,
+      action: "order.hold",
       at: now,
     });
     return approvalId;
@@ -99,7 +100,7 @@ const reason = "pail is in the large box, rate checked";
 async function nothingWritten(orderId: string, version = 1) {
   expect(await db.approval.count()).toBe(0);
   expect(
-    await db.auditEvent.count({ where: { action: { in: ["approval.grant", "test.bump"] } } }),
+    await db.auditEvent.count({ where: { action: { in: ["approval.grant", "order.hold"] } } }),
   ).toBe(0);
   expect((await db.order.findUniqueOrThrow({ where: { id: orderId } })).version).toBe(version);
 }
