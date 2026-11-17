@@ -10,7 +10,7 @@ import type {
 import type { Db, DbTx, WorkflowStatus } from "@woolrus/db";
 import type { LumexiaClient } from "../adapters/lumexia/client";
 import { isLumexiaError } from "../adapters/lumexia/errors";
-import { recordAudit } from "../audit";
+import { type OrderScopedAction, recordAudit } from "../audit";
 import { AppError, type LineCandidate, notFound } from "../errors";
 import { storedResult, withIdempotency } from "../idempotency";
 import { createTextNote } from "../notes/service";
@@ -354,7 +354,7 @@ async function editLot<R>(
   actor: Actor,
   stage: Stage<R>,
   lotId: string,
-  action: string,
+  action: OrderScopedAction<"PackageItem">,
   { now = new Date() }: PackOptions,
   plan: (lots: LotSlot[]) => LotSlot[],
 ): Promise<R> {

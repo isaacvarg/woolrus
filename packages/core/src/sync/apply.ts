@@ -1,5 +1,5 @@
 import { type DbTx, Prisma } from "@woolrus/db";
-import { recordAudit } from "../audit";
+import { type OrderScopedAction, recordAudit } from "../audit";
 import { forgetShipTo } from "../carriers/ship-to";
 import { systemActor } from "../permissions";
 import { toCents } from "../units";
@@ -268,7 +268,7 @@ export async function writeLineChanges(
 async function audit(
   tx: DbTx,
   orderId: string,
-  action: string,
+  action: OrderScopedAction<"Order">,
   diff: ChangeSummary | undefined,
   at: Date,
 ): Promise<void> {

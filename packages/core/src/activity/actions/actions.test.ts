@@ -15,12 +15,11 @@ describe("action registry", () => {
     }
   });
 
-  // SPEC-order-activity: Status and Store are worded here; each other category's ticket words its own.
-  it.each(["en", "es"] as const)("words every Status and Store action in %s", (locale) => {
-    const missing = Object.entries(actionRegistry)
-      .filter(([, spec]) => spec.category === "status" || spec.category === "store")
-      .map(([action]) => action)
-      .filter((action) => !message(locale, actionMessageKey(action)));
+  // SPEC-order-activity success criterion 4: every registry key has en and es messages.
+  it.each(["en", "es"] as const)("words every action in %s", (locale) => {
+    const missing = Object.keys(actionRegistry).filter(
+      (action) => !message(locale, actionMessageKey(action)),
+    );
     expect(missing).toEqual([]);
   });
 

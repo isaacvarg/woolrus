@@ -11,7 +11,7 @@ import {
   type SetWeightInput,
 } from "@woolrus/contracts";
 import type { Db, DbTx } from "@woolrus/db";
-import { recordAudit } from "../audit";
+import { type ActionVerb, recordAudit } from "../audit";
 import { AppError, notFound } from "../errors";
 import { storedResult, withIdempotency } from "../idempotency";
 import { lotsAfterPacking, lotsAfterUnpacking } from "../lumexia/lot-store";
@@ -159,7 +159,7 @@ async function finish(
   tx: DbTx,
   actor: Actor,
   order: LockedOrder,
-  op: string,
+  op: ActionVerb<"package">,
   {
     packageId,
     before,

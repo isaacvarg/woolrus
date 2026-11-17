@@ -9,7 +9,7 @@ import {
   type VoidResult,
 } from "@woolrus/contracts";
 import type { Db, DbTx, Prisma } from "@woolrus/db";
-import { recordAudit } from "../audit";
+import { type OrderScopedAction, recordAudit } from "../audit";
 import { AppError, notFound } from "../errors";
 import { lotsAfterUnpacking } from "../lumexia/lot-store";
 import { invalidate } from "../packing/service";
@@ -131,7 +131,7 @@ async function finish(
     before,
     after,
   }: {
-    action: string;
+    action: OrderScopedAction<"ItemVoid">;
     voidId: string;
     before: Prisma.InputJsonValue;
     after: Prisma.InputJsonValue;
