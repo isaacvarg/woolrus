@@ -124,7 +124,7 @@ describe("applyExternalChange", () => {
     ]);
     expect(after.items[2]).toMatchObject({ pickStatus: "PENDING" });
     const audit = await db.auditEvent.findFirstOrThrow({
-      where: { entityId: order.id, action: "order.externalChange.applied" },
+      where: { orderId: order.id, action: "order.externalChange.applied" },
     });
     expect(audit.actorId).toBe(admin.userId);
     expect(audit.before).toMatchObject({ customerNote: null, version: order.version });
@@ -376,7 +376,7 @@ describe("dismissExternalChange", () => {
     });
     expect((await getOrder(db, admin, { id: order.id })).externalChange).toBeNull();
     const audit = await db.auditEvent.findFirstOrThrow({
-      where: { entityId: order.id, action: "order.externalChange.dismissed" },
+      where: { orderId: order.id, action: "order.externalChange.dismissed" },
     });
     expect(audit.actorId).toBe(admin.userId);
     expect(audit.after).toMatchObject({ reason: "Customer called, keep the old address" });

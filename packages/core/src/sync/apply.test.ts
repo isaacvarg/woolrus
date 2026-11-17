@@ -163,7 +163,7 @@ describe("store edits an order", () => {
     expect(after).toMatchObject({ externalChangeDetectedAt: null, status: "PENDING" });
     expect(after.version).toBe(order.version + 1);
     const audit = await db.auditEvent.findFirstOrThrow({
-      where: { entityId: order.id, action: "order.externalChange.applied" },
+      where: { orderId: order.id, action: "order.externalChange.applied" },
     });
     expect(audit.actorId).toBeNull();
     expect(audit.after).toMatchObject({ shippingAddress: { to: { address1: "9 New Rd" } } });

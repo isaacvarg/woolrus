@@ -8,6 +8,11 @@ export async function recordAudit(
     entityType: string;
     entityId: string;
     action: string;
+    /**
+     * The order this row is about: the order itself, or the order that owns the line, package,
+     * label, note, issue, void, check trip or approval. The order's activity feed reads by it.
+     */
+    orderId?: string;
     before?: Prisma.InputJsonValue;
     after?: Prisma.InputJsonValue;
     /** Defaults to the database clock. Workflow passes its `now` so audit and stage events agree. */

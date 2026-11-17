@@ -79,7 +79,7 @@ export async function createLabelPrint(
       });
       for (const orderId of new Set(ordered.map((l) => l.orderId))) {
         await recordAudit(tx, actor, {
-          entityType: "order",
+          entityType: "Order",
           entityId: orderId,
           action: "label.print",
           after: {

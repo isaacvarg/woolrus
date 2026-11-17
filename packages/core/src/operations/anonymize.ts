@@ -252,6 +252,7 @@ export async function anonymizeOrder(
   await recordAudit(tx, operationsActor, {
     entityType: "Order",
     entityId: orderId,
+    orderId,
     action: "pii.anonymize",
     at: now,
   });

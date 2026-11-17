@@ -275,6 +275,7 @@ async function audit(
   await recordAudit(tx, systemActor, {
     entityType: "Order",
     entityId: orderId,
+    orderId,
     action,
     ...(diff ? { after: diff as unknown as Prisma.InputJsonValue } : {}),
     at,

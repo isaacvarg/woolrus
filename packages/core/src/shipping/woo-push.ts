@@ -68,7 +68,7 @@ export async function pushToWoo(
         data: { wooPushStatus: "FAILED", wooPushError: messageKey },
       });
       await recordAudit(tx, shippingActor, {
-        entityType: "order",
+        entityType: "Order",
         entityId: orderId,
         action: "woo.push.failed",
         after: { error: messageKey, kind },
@@ -84,7 +84,7 @@ export async function pushToWoo(
       data: { wooPushStatus: "SUCCEEDED", wooPushedAt: new Date(), wooPushError: null },
     });
     await recordAudit(tx, shippingActor, {
-      entityType: "order",
+      entityType: "Order",
       entityId: orderId,
       action: "woo.push",
     });

@@ -182,7 +182,7 @@ describe("purgePii (SPEC-operations 'PII anonymization')", () => {
         });
       }
       const marker = await db.auditEvent.findMany({
-        where: { entityId: order.id, action: "pii.anonymize" },
+        where: { orderId: order.id, action: "pii.anonymize" },
       });
       expect(marker).toHaveLength(1);
       expect(marker[0]).toMatchObject({

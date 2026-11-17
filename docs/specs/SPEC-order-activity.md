@@ -3,7 +3,7 @@
 **Milestone:** M5 · **Depends on:** `workflow` (stage events, claims, the History tab), `identity` (roles,
 stations), `settings`, and the modules whose actions it shows: `picking`, `packing`, `lumexia`, `exceptions`,
 `notes`, `carriers`, `qa`, `shipping`, `store-sync` · **Used by:** `reporting` (audit rows by order, blocked scans)
-· **State:** planned (spec approved 2026-11-17; tickets #197–#207) · **Issue:** [#196](https://github.com/isaacvarg/woolrus/issues/196)
+· **State:** in progress (spec approved 2026-11-17; tickets #197–#207) · **Issue:** [#196](https://github.com/isaacvarg/woolrus/issues/196)
 
 Project-wide commands, structure, code style, testing levels and boundaries are in [`../../SPEC.md`](../../SPEC.md);
 this spec only adds what is specific to `order-activity`.

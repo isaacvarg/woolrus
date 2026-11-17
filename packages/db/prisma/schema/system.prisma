@@ -165,6 +165,9 @@ model AuditEvent {
   before     Json?
   after      Json?
   requestId  String?  @map("request_id")
+  /// The order this row is about, directly or through a line, package, label, note, issue, void,
+  /// check trip or approval (SPEC-order-activity). No foreign key: rows outlive their order.
+  orderId    String?  @map("order_id") @db.Uuid
   at         DateTime @default(now()) @db.Timestamptz(3)
 
   actor   User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
@@ -172,6 +175,7 @@ model AuditEvent {
 
   @@index([entityType, entityId, at])
   @@index([actorId, at])
+  @@index([orderId, at])
   @@map("audit_events")
 }
 

@@ -77,7 +77,7 @@ States: `not started` → `spec draft` → `spec approved` → `planned` → `in
 | `shipping` | M4 | [SPEC-shipping](docs/specs/SPEC-shipping.md) | [#28](https://github.com/isaacvarg/woolrus/issues/28) | done |
 | `operations` | M4 | [SPEC-operations](docs/specs/SPEC-operations.md) | [#29](https://github.com/isaacvarg/woolrus/issues/29) | done |
 | `lumexia` | M5 | [SPEC-lumexia](docs/specs/SPEC-lumexia.md) | [#30](https://github.com/isaacvarg/woolrus/issues/30) | done |
-| `order-activity` | M5 | [SPEC-order-activity](docs/specs/SPEC-order-activity.md) | [#196](https://github.com/isaacvarg/woolrus/issues/196) | planned |
+| `order-activity` | M5 | [SPEC-order-activity](docs/specs/SPEC-order-activity.md) | [#196](https://github.com/isaacvarg/woolrus/issues/196) | in progress |
 | `returns` | M5 | — | [#31](https://github.com/isaacvarg/woolrus/issues/31) | not started |
 | `reporting` | M5 | — | [#32](https://github.com/isaacvarg/woolrus/issues/32) | not started |
 | `rate-history` | M5 | [SPEC-rate-history](docs/specs/SPEC-rate-history.md) | [#139](https://github.com/isaacvarg/woolrus/issues/139) | done |
