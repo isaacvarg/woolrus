@@ -73,6 +73,7 @@ export async function writeOffLabel(
       entityType: "ShippingLabel",
       entityId: labelId,
       action: "label.writeOff",
+      orderId,
       before: { status: label.status },
       after: { status: "WRITTEN_OFF", reason: why },
       at: now,

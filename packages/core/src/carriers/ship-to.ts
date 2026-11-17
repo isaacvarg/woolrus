@@ -48,6 +48,7 @@ export async function keepOriginalAddress(
       entityType: "Order",
       entityId: orderId,
       action: "shipTo.useOriginal",
+      orderId,
       // Statuses only: audit events outlive the PII purge of the order's addresses.
       before: { shipToStatus },
       after: { shipToStatus: "UNCHECKED", generation },
@@ -74,6 +75,7 @@ export async function recheckAddress(
       entityType: "Order",
       entityId: orderId,
       action: "shipTo.recheck",
+      orderId,
       after: { generation },
     });
     await notifyOrderChanged(tx, { id: orderId, status: order.status });

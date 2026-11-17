@@ -82,6 +82,7 @@ export async function createLabelPrint(
           entityType: "Order",
           entityId: orderId,
           action: "label.print",
+          orderId,
           after: {
             printId: print.id,
             labelIds: ids.filter((_, i) => ordered[i]?.orderId === orderId),
