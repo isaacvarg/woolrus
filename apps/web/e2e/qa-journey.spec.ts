@@ -2,7 +2,7 @@ import { expect, type Page, test } from "@playwright/test";
 import { createDb } from "@woolrus/db";
 import { signInAs } from "./support/auth";
 import { deleteCreatedOrders } from "./support/orders";
-import { qaJourneyOrder } from "./support/qa";
+import { chooseRate, qaJourneyOrder, showPackage } from "./support/qa";
 import { withSettingsLock } from "./support/settings-lock";
 
 // SPEC-qa criterion 18: the QA journey end to end against the fake ShipStation. CI starts no
@@ -41,19 +41,23 @@ test("scan and tap every item, change a rate, complete, and the order is Ready w
     const o = await qaJourneyOrder({ qaUserId: qa.id, packages: 2 });
     try {
       await page.goto(`/qa/${o.order.id}`);
-      await expect(page.getByTestId("qa-package-count").first()).toHaveText("0 of 1 verified");
+      const tiles = page.getByTestId("qa-package-tile");
+      await expect(tiles).toHaveCount(2);
+      await expect(page.getByTestId("qa-package")).toHaveAttribute("data-package", "1");
+      await expect(page.getByTestId("qa-package-count")).toHaveText("0 of 1 verified");
 
-      // Package 1 by scanner, package 2 by tap.
+      // Package 1 by scanner; the screen then moves on to package 2, verified by tap.
       await scanCode(page, o.sku);
-      await expect(page.getByTestId("qa-package-count").first()).toHaveText("1 of 1 verified");
-      await page.getByTestId("qa-row").nth(1).click();
+      await expect(tiles.nth(0)).toHaveAttribute("data-verified", "true");
+      await expect(page.getByTestId("qa-package")).toHaveAttribute("data-package", "2");
+      await expect(tiles.nth(1)).toHaveAttribute("data-selected", "true");
+      await page.getByTestId("qa-row").click();
+      await expect(tiles.nth(1)).toHaveAttribute("data-verified", "true");
       await expect(page.getByTestId("qa-complete")).toBeVisible();
 
       // The dearer rate on package 2.
-      await page.getByTestId("qa-package").nth(1).getByTestId("qa-rate").nth(1).click();
-      await expect(
-        page.getByTestId("qa-package").nth(1).getByTestId("qa-rate").nth(1),
-      ).toHaveAttribute("data-selected", "true");
+      await chooseRate(page, 1);
+      await expect(page.getByTestId("qa-rate-chosen")).toContainText("$6.00");
 
       await page.getByTestId("qa-complete").click();
       await expect(page.getByTestId("qa-next-order")).toBeVisible();
@@ -61,17 +65,15 @@ test("scan and tap every item, change a rate, complete, and the order is Ready w
       expect(await orderStatus(o.order.id)).toBe("READY");
 
       await page.reload();
-      await expect(page.getByTestId("qa-label")).toHaveCount(2);
       const labels = await db.shippingLabel.findMany({
         where: { package: { orderId: o.order.id } },
         orderBy: { package: { number: "asc" } },
       });
       expect(labels.map((l) => l.status)).toEqual(["ACTIVE", "ACTIVE"]);
       expect(labels.map((l) => l.costCents)).toEqual([450, 600]);
-      for (const label of labels) {
-        await expect(
-          page.getByTestId("qa-label").filter({ hasText: label.trackingNumber ?? "?" }),
-        ).toBeVisible();
+      for (const [i, label] of labels.entries()) {
+        await showPackage(page, i + 1);
+        await expect(page.getByTestId("qa-label")).toContainText(label.trackingNumber ?? "?");
       }
     } finally {
       await restoreThresholds();
@@ -120,10 +122,9 @@ test("a refused label shows the failure; a new rate and a second Complete QA rea
           },
         },
       });
-      await page.getByTestId("qa-package").nth(1).getByTestId("qa-rate").nth(1).click();
-      await expect(
-        page.getByTestId("qa-package").nth(1).getByTestId("qa-rate").nth(1),
-      ).toHaveAttribute("data-selected", "true");
+      await showPackage(page, 2);
+      await chooseRate(page, 1);
+      await expect(page.getByTestId("qa-rate-chosen")).toContainText("$6.00");
       await expect(page.getByTestId("qa-complete")).toBeVisible();
       await page.getByTestId("qa-complete").click();
       await expect(page.getByTestId("qa-next-order")).toBeVisible();
@@ -132,7 +133,10 @@ test("a refused label shows the failure; a new rate and a second Complete QA rea
 
       await page.reload();
       await expect(page.getByTestId("qa-failed")).toHaveCount(0);
-      await expect(page.getByTestId("qa-label")).toHaveCount(2);
+      for (const number of [1, 2]) {
+        await showPackage(page, number);
+        await expect(page.getByTestId("qa-label")).toBeVisible();
+      }
     } finally {
       await restoreThresholds();
       await o.cleanup();
