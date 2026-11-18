@@ -105,6 +105,7 @@ export * from "./reporting/exports";
 export * from "./reporting/quality";
 export * from "./reporting/throughput";
 export * from "./reporting/today";
+export * from "./reporting/users";
 export * from "./settings/crypto";
 export { encryptionKey } from "./settings/env";
 export * from "./settings/format";

@@ -2,7 +2,7 @@ import type { CsvExport } from "@woolrus/core";
 import type { Role } from "@woolrus/db";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// The list and order-items CSV routes (SPEC-reporting "CSV exports", criteria 6 and 7): a session,
+// The list, order-items and users CSV routes (SPEC-reporting "CSV exports", criteria 6 and 7): a session,
 // then `report.read`; the screen's query parameters and the viewer's locale reach core. Core's
 // own tests cover the rows.
 
@@ -37,6 +37,7 @@ vi.mock("@woolrus/core", async (original) => {
     cycleTimeCsv: wrap("cycleTime"),
     qualityCsv: wrap("quality"),
     scanMissesCsv: wrap("scanMisses"),
+    usersCsv: wrap("users"),
   };
 });
 vi.mock("@woolrus/db", async (original) => ({
@@ -46,6 +47,7 @@ vi.mock("@woolrus/db", async (original) => ({
 
 import { GET as issues } from "../issues/export.csv/route";
 import { GET as orders } from "../orders/export.csv/route";
+import { GET as users } from "../users/export.csv/route";
 import { GET as voids } from "../voids/export.csv/route";
 import { GET as cycleTime } from "./cycle-time.csv/route";
 import { GET as orderItems } from "./order-items.csv/route";
@@ -60,6 +62,7 @@ const routes = {
   "/api/reports/cycle-time.csv": cycleTime,
   "/api/reports/quality.csv": quality,
   "/api/reports/scan-misses.csv": scanMisses,
+  "/api/users/export.csv": users,
 };
 const get = (path: keyof typeof routes, query = "") =>
   routes[path](new Request(`http://woolrus${path}${query}`));
@@ -188,6 +191,15 @@ describe("query parameters", () => {
     );
     expect(mocks.csv).toHaveBeenCalledWith(
       "scanMisses",
+      { from: "2026-11-01", to: "2026-11-07", timeZone: "UTC" },
+      expect.anything(),
+    );
+  });
+
+  it("passes the users export's range", async () => {
+    await get("/api/users/export.csv", "?from=2026-11-01&to=2026-11-07&timeZone=UTC&search=x");
+    expect(mocks.csv).toHaveBeenCalledWith(
+      "users",
       { from: "2026-11-01", to: "2026-11-07", timeZone: "UTC" },
       expect.anything(),
     );
