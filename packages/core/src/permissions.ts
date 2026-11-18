@@ -133,6 +133,8 @@ export const rolePermissions: Record<Role, readonly Permission[]> = {
   SHIPPER: [...everyone, "label.print", "order.ship", "order.repack", "note.customer"],
   // Ticked on any user next to their other roles (SPEC-rate-lab decision 13); no other role has it.
   RATE_LAB: [...everyone, "ratelab.use", "ratelab.manage"],
+  // An add-on for floor leads (SPEC-reporting decision 5): reports and exports, not settings or users.
+  REPORTS: [...everyone, "report.read"],
 };
 
 export function permissionsFor(roles: readonly Role[]): Permission[] {

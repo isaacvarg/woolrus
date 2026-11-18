@@ -44,7 +44,8 @@
     "rateLab": "Rate Lab",
     "lumexiaItems": "Artículos de Lumexia",
     "tools": "Herramientas",
-    "configs": "Configuración"
+    "configs": "Configuración",
+    "reports": "Informes"
   },
   "navFooter": {
     "preferences": "Preferencias",
@@ -1324,7 +1325,8 @@
       "emailFrom": "Usa una dirección como no-reply@example.com o Woolrus '<'no-reply@example.com>.",
       "country": "Usa el código de país de 2 letras, p. ej. US.",
       "dateRange": "La fecha final debe ser igual o posterior a la inicial.",
-      "dateRangeTooLong": "Elige un rango de 366 días como máximo."
+      "dateRangeTooLong": "Elige un rango de 366 días como máximo.",
+      "reportRangeTooLong": "Elige un rango de 92 días como máximo."
     },
     "settings": {
       "encryptionKeyMissing": "No se pueden guardar secretos: falta la clave de cifrado del servidor o no es válida. Pide a quien administra el servidor que configure SETTINGS_ENCRYPTION_KEY.",
@@ -1641,7 +1643,8 @@
       "PACKER": "Empacador",
       "QA": "QA",
       "SHIPPER": "Envíos",
-      "RATE_LAB": "Rate Lab"
+      "RATE_LAB": "Rate Lab",
+      "REPORTS": "Informes"
     },
     "setPin": "Establecer PIN",
     "clearPin": "Borrar PIN",
@@ -1959,6 +1962,34 @@
     "created": "Manifiesto creado para {count, plural, one {# etiqueta} other {# etiquetas}}.",
     "made": "Manifiesto de las {time} · {count, plural, one {# etiqueta} other {# etiquetas}}",
     "print": "Imprimir"
+  },
+  "reports": {
+    "title": "Informes",
+    "sections": "Secciones de informes",
+    "tabs": {
+      "throughput": "Rendimiento",
+      "cycleTime": "Tiempo de ciclo",
+      "quality": "Calidad",
+      "spend": "Gasto"
+    },
+    "range": {
+      "label": "Rango de fechas",
+      "today": "Hoy",
+      "7d": "Últimos 7 días",
+      "30d": "Últimos 30 días",
+      "90d": "Últimos 90 días",
+      "custom": "Personalizado",
+      "from": "Desde",
+      "to": "Hasta",
+      "days": "{from} – {to}",
+      "timeZone": "Días en {zone}"
+    },
+    "comingSoon": "Este informe aún no está listo.",
+    "spend": {
+      "title": "Gasto en envíos",
+      "body": "El costo de las etiquetas por transportista y servicio, y el costo de etiqueta frente al envío cobrado, están en la página Pedidos reales de Rate Lab.",
+      "open": "Abrir Pedidos reales para estas fechas"
+    }
   },
   "rateLab": {
     "title": "Rate Lab",

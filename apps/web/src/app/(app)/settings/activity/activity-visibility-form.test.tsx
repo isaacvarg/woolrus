@@ -55,7 +55,9 @@ describe("Settings → Activity", () => {
   it("shows a switch per role and part, on unless the setting turns it off; no Admin row", async () => {
     show();
     await screen.findByRole("table");
-    expect(screen.getAllByRole("switch")).toHaveLength(5 * 4);
+    // Picker, Packer, QA, Shipper and the add-on roles Rate Lab and Reports; four parts each.
+    expect(screen.getAllByRole("switch")).toHaveLength(6 * 4);
+    expect(screen.getByRole("rowheader", { name: "Reports" })).toBeTruthy();
     expect(screen.queryByRole("rowheader", { name: "Admin" })).toBeNull();
     expect(checked("People for Packer")).toBe(true);
     expect(checked("Change details for QA")).toBe(false);
