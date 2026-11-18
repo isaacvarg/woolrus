@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import type { DailyActivity } from "@woolrus/contracts";
+import { type DailyActivity, QueueStage } from "@woolrus/contracts";
 import {
   Ban,
   CirclePause,
@@ -31,6 +31,7 @@ import { ChartFigure } from "@/components/charts/chart-figure";
 import { seriesColor, useChartAnimation, useChartColors } from "@/components/charts/theme";
 import { orpc } from "@/lib/orpc";
 import { type Queue, queues } from "@/lib/queues";
+import { SlaAlert } from "./sla-alert";
 
 /**
  * The home dashboard. Its counts share query keys with the sidebar, so order events refresh both
@@ -39,6 +40,7 @@ import { type Queue, queues } from "@/lib/queues";
 export function Dashboard() {
   return (
     <div className="space-y-6">
+      <SlaAlert />
       <StatTiles />
       <ActivityChart />
       <QueueButtons />
@@ -54,7 +56,7 @@ function StatTiles() {
   const counts = useQuery(orpc.orders.counts.queryOptions()).data;
   const issues = useQuery(orpc.issues.counts.queryOptions()).data;
   const n = (value: number | undefined) => (value === undefined ? pending : format.number(value));
-  const open = counts && Object.values(counts).reduce((sum, count) => sum + count, 0);
+  const open = counts && QueueStage.options.reduce((sum, stage) => sum + counts[stage], 0);
 
   return (
     <dl className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-5">

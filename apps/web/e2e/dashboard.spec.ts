@@ -1,6 +1,10 @@
 import { expect, test } from "@playwright/test";
+import { createDb } from "@woolrus/db";
 import { signInAs } from "./support/auth";
 import { createOrder, deleteCreatedOrders } from "./support/orders";
+import { withSettingsLock } from "./support/settings-lock";
+
+const db = createDb();
 
 // The home dashboard: live counts, orders per day, and big buttons into each queue.
 
@@ -43,4 +47,40 @@ test("the dashboard counts open work, charts orders per day and opens each queue
   }
   await queues.getByRole("link", { name: /^Packing/ }).click();
   await expect(page).toHaveURL("/queue/packing");
+});
+
+test("a packer sees orders past their SLA above the tiles and taps through to the queue", async ({
+  page,
+}) => {
+  await signInAs(page, ["PACKER"]);
+  await withSettingsLock(async () => {
+    const before = await db.settings.findUnique({ where: { id: 1 } });
+    const slas = { ...(before?.stageSlaMinutes as object | null), PACKING: 60 };
+    await db.settings.upsert({
+      where: { id: 1 },
+      create: { id: 1, stageSlaMinutes: slas },
+      update: { stageSlaMinutes: slas },
+    });
+    try {
+      await createOrder({
+        status: "PACKING",
+        statusChangedAt: new Date(Date.now() - 2 * 3_600_000),
+      });
+      await page.goto("/");
+
+      // Other tests' orders may be late too: the count is at least ours.
+      const alert = page.getByRole("status", { name: "Orders past their stage's time limit" });
+      await expect(alert).toContainText(/past SLA$/);
+      const packing = alert.getByRole("link", { name: /^\d+ in Packing$/ });
+      await expect(packing).toBeVisible();
+      expect((await packing.boundingBox())?.height).toBeGreaterThanOrEqual(44);
+      await packing.click();
+      await expect(page).toHaveURL("/queue/packing");
+    } finally {
+      await db.settings.update({
+        where: { id: 1 },
+        data: { stageSlaMinutes: before?.stageSlaMinutes ?? {} },
+      });
+    }
+  });
 });
