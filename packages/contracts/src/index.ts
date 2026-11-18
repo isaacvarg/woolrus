@@ -42,6 +42,7 @@ export * from "./rate-lab";
 export * from "./rate-lab-real-orders";
 export * from "./rate-lab-run";
 export * from "./rate-lab-trends";
+export * from "./reports";
 export * from "./settings";
 export * from "./shipping";
 export * from "./stations";

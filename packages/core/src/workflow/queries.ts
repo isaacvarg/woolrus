@@ -476,7 +476,8 @@ export type ListOrdersInput = {
   pageSize?: number;
 };
 
-function orderBy(sort: OrderListSort, dir: "asc" | "desc"): Prisma.Sql {
+/** All Orders' ORDER BY for a sort (the CSV export uses it too, so the file matches the screen). */
+export function orderListOrderBy(sort: OrderListSort, dir: "asc" | "desc"): Prisma.Sql {
   const d = Prisma.raw(dir === "asc" ? "ASC" : "DESC");
   switch (sort) {
     // Woo order numbers are digits: shorter is smaller, so "999" sorts before "1000".
@@ -493,6 +494,15 @@ function orderBy(sort: OrderListSort, dir: "asc" | "desc"): Prisma.Sql {
       return Prisma.sql`o.ordered_at ${d}`;
   }
 }
+
+/** All Orders' WHERE for its filters, over `orders o`. */
+export const orderListWhere = ({
+  search,
+  statuses,
+}: Pick<ListOrdersInput, "search" | "statuses">) =>
+  Prisma.sql`WHERE TRUE
+    ${statuses?.length ? Prisma.sql`AND o.status = ANY(${statuses}::workflow_status[])` : Prisma.empty}
+    ${searchFilter(search)}`;
 
 type OrderListSqlRow = {
   id: string;
@@ -516,9 +526,7 @@ export async function listOrders(
   const size = Math.min(Math.max(Math.trunc(pageSize), 1), 100);
   const pageNumber = Math.max(Math.trunc(page), 1);
 
-  const where = Prisma.sql`WHERE TRUE
-    ${statuses?.length ? Prisma.sql`AND o.status = ANY(${statuses}::workflow_status[])` : Prisma.empty}
-    ${searchFilter(search)}`;
+  const where = orderListWhere({ search, statuses });
 
   const [rows, [count]] = await Promise.all([
     db.$queryRaw<OrderListSqlRow[]>`
@@ -527,7 +535,7 @@ export async function listOrders(
         o.external_change_detected_at IS NOT NULL AS "externalChange"
       FROM orders o
       ${where}
-      ORDER BY ${orderBy(sort, dir)}, o.id ASC
+      ORDER BY ${orderListOrderBy(sort, dir)}, o.id ASC
       LIMIT ${size} OFFSET ${(pageNumber - 1) * size}`,
     db.$queryRaw<{ total: number }[]>`SELECT COUNT(*)::int AS total FROM orders o ${where}`,
   ]);

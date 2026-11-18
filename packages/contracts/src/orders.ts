@@ -170,7 +170,7 @@ export const QueueCounts = z.record(QueueStage, z.number().int());
 export type QueueCounts = z.infer<typeof QueueCounts>;
 
 /** An IANA time zone (`America/Chicago`), checked against the runtime's zone database. */
-const TimeZone = z.string().refine(
+export const TimeZone = z.string().refine(
   (zone) => {
     try {
       new Intl.DateTimeFormat("en", { timeZone: zone });
