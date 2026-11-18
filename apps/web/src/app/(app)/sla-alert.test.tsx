@@ -28,15 +28,15 @@ describe("SlaAlertStrip", () => {
     expect(show(undefined).container.innerHTML).toBe("");
   });
 
-  it("names each late stage in queue order and links its count to the queue", () => {
+  it("names each late stage in queue order and links its count to its late orders", () => {
     show({ ...none, QA: 1, PACKING: 3 });
 
     const alert = screen.getByRole("status");
     expect(alert.textContent).toBe("3 in Packing and 1 in QA past SLA");
     const links = within(alert).getAllByRole("link");
     expect(links.map((l) => [l.textContent, l.getAttribute("href")])).toEqual([
-      ["3 in Packing", "/queue/packing"],
-      ["1 in QA", "/queue/qa"],
+      ["3 in Packing", "/queue/packing?late=1"],
+      ["1 in QA", "/queue/qa?late=1"],
     ]);
     // Floor tablet: each link is a full-height touch target.
     for (const link of links) expect(link.className).toMatch(/\bbtn\b/);
