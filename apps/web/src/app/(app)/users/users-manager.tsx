@@ -14,6 +14,7 @@ import { client, orpc } from "@/lib/orpc";
 import { AddEmailDialog } from "./add-email-dialog";
 import { BadgeDialog, PinDialog } from "./credentials-dialogs";
 import { AddStationUserDialog, stationRoles } from "./station-user-dialog";
+import { UsersExportLink } from "./users-export-link";
 
 const allRoles = Role.options;
 const PAGE_SIZE = 50;
@@ -24,7 +25,13 @@ function useInvalidate() {
   return () => queryClient.invalidateQueries({ queryKey: orpc.users.key() });
 }
 
-export function UsersManager({ currentUserId }: { currentUserId: string }) {
+export function UsersManager({
+  currentUserId,
+  canExport = false,
+}: {
+  currentUserId: string;
+  canExport?: boolean;
+}) {
   const t = useTranslations();
   const format = useFormatter();
   const now = useNow({ updateInterval: 60_000 });
@@ -104,6 +111,7 @@ export function UsersManager({ currentUserId }: { currentUserId: string }) {
           />
         </SearchField>
         <Button onPress={() => setAddingStationUser(true)}>{t("users.addStationUser")}</Button>
+        {canExport && <UsersExportLink />}
       </div>
       <div className="overflow-x-auto rounded-box bg-base-100 shadow-sm">
         <table className="table">

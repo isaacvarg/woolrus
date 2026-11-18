@@ -13,9 +13,12 @@ export type UsersTab = "users" | "invitations";
 /** The tab lives in `?tab=`, so a reload or a link keeps it. */
 export function UsersTabs({
   currentUserId,
+  canExport = false,
   initialTab,
 }: {
   currentUserId: string;
+  /** `report.read`: shows the users export. */
+  canExport?: boolean;
   initialTab: UsersTab;
 }) {
   const t = useTranslations("invitations");
@@ -39,7 +42,7 @@ export function UsersTabs({
         </Tab>
       </TabList>
       <TabPanel id="users">
-        <UsersManager currentUserId={currentUserId} />
+        <UsersManager currentUserId={currentUserId} canExport={canExport} />
       </TabPanel>
       <TabPanel id="invitations">
         <InvitationsManager />

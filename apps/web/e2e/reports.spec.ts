@@ -294,3 +294,59 @@ test("Quality rates a person per 1,000 units from 100 units, and exports issues 
     expect.stringMatching(new RegExp(`,PICKING,UNKNOWN_CODE,e2e-unknown,,${name},$`)),
   ]);
 });
+
+test("the users export, from the Reports header and from user admin, carries a person's work", async ({
+  page,
+}, info) => {
+  desktopOnly(info.project.name);
+  const name = `E2E user ${crypto.randomUUID().slice(0, 8)}`;
+  const picker = await db.user.create({
+    data: { name, email: `e2e-${crypto.randomUUID()}@example.test`, roles: ["PICKER"] },
+  });
+  const order = await createOrder({ quantity: 3, status: "PACKING" });
+  const now = new Date();
+  await db.orderItem.updateMany({
+    where: { orderId: order.id },
+    data: { pickedById: picker.id, pickedAt: now, pickedQuantity: 3, pickStatus: "PICKED" },
+  });
+  await db.orderStageEvent.create({
+    data: {
+      orderId: order.id,
+      fromStatus: "PICKING",
+      toStatus: "PACKING",
+      actorId: picker.id,
+      at: now,
+    },
+  });
+
+  const csv = async (link: string) => {
+    const [download] = await Promise.all([
+      page.waitForEvent("download"),
+      page.getByRole("link", { name: link, exact: true }).click(),
+    ]);
+    const lines = (await readFile(await download.path()))
+      .toString("utf8")
+      .replace(/^﻿/, "")
+      .trimEnd()
+      .split("\r\n");
+    return { name: download.suggestedFilename(), lines };
+  };
+  const row = new RegExp(`^${name},${picker.email},PICKER,yes,no,[^,]+,1,3,0,0,0,0,0,0,0,0$`);
+
+  await signInAs(page, ["ADMIN"]);
+  await page.goto("/reports/throughput?range=today");
+  const fromReports = await csv("Export users");
+  expect(fromReports.name).toMatch(/^woolrus-users-\d{4}-\d{2}-\d{2}-\d{4}-\d{2}-\d{2}\.csv$/);
+  expect(fromReports.lines[0]).toMatch(
+    /^Name,Email,Roles,Active,Station-only,Created,Picking orders,/,
+  );
+  expect(fromReports.lines.filter((l) => l.startsWith(`${name},`))).toEqual([
+    expect.stringMatching(row),
+  ]);
+
+  await page.goto("/users");
+  const fromAdmin = await csv("Export CSV (last 30 days)");
+  expect(fromAdmin.lines.filter((l) => l.startsWith(`${name},`))).toEqual([
+    expect.stringMatching(row),
+  ]);
+});

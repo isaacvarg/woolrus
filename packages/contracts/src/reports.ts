@@ -322,6 +322,10 @@ export type QualityExportInput = z.input<typeof QualityExportInput>;
 export const ScanMissesExportInput = ReportRange;
 export type ScanMissesExportInput = z.input<typeof ScanMissesExportInput>;
 
+/** One row per user, with their work over the range (`GET /api/users/export.csv`). */
+export const UsersExportInput = ReportRange;
+export type UsersExportInput = z.input<typeof UsersExportInput>;
+
 /** The home dashboard's report tiles read "today" in the viewer's zone. */
 export const ReportsTodayInput = z.object({ timeZone: TimeZone });
 export type ReportsTodayInput = z.input<typeof ReportsTodayInput>;

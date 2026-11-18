@@ -14,6 +14,7 @@ export default async function UsersPage({ searchParams }: PageProps<"/users">) {
       {actor && can(actor, "user.manage") ? (
         <UsersTabs
           currentUserId={actor.userId}
+          canExport={can(actor, "report.read")}
           initialTab={tab === "invitations" ? "invitations" : "users"}
         />
       ) : (

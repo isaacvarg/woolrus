@@ -6,6 +6,7 @@ import type { Route } from "next";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useFormatter, useTranslations } from "next-intl";
+import { ExportCsvLink } from "@/components/export-csv-link";
 import { SelectField, TextField } from "@/components/ui/fields";
 import { presetRange, type RangePreset, rangePresets } from "./range";
 import { useReportRange } from "./use-report-range";
@@ -93,6 +94,16 @@ export function ReportsHeader() {
         <p className="pb-3 text-sm text-base-content/70">
           {t("reports.range.timeZone", { zone: range.timeZone })}
         </p>
+        {!problem && (
+          <div className="ms-auto pb-1">
+            {/* Every tab's range, so it sits here rather than on one report. */}
+            <ExportCsvLink
+              path="/api/users/export.csv"
+              params={{ from: range.from, to: range.to }}
+              label={t("exports.users")}
+            />
+          </div>
+        )}
       </div>
       {problem && (
         <p role="alert" className="text-error">
