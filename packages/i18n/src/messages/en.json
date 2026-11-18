@@ -1292,7 +1292,11 @@
       "qaWaitingMin": "QA waiting (min)",
       "qaWorkingMin": "QA working (min)",
       "qaIdleMin": "QA idle (min)",
-      "readyMin": "Ready (min)"
+      "readyMin": "Ready (min)",
+      "scannedAt": "Scanned at",
+      "kind": "Kind",
+      "code": "Code",
+      "station": "Station"
     },
     "system": "System",
     "yes": "yes",
@@ -2093,6 +2097,66 @@
         "total": "Import to shipped",
         "onHold": "On hold"
       }
+    },
+    "quality": {
+      "intro": "Counts to show where more training or a clearer process would help. They describe what happened; they don't rank anyone.",
+      "severity": "Severity",
+      "anySeverity": "Any severity",
+      "status": "Status",
+      "statuses": {
+        "all": "All",
+        "open": "Open",
+        "resolved": "Resolved or dismissed"
+      },
+      "customerReported": "Reported by the customer only",
+      "loading": "Loading quality…",
+      "total": "{count, plural, =0 {No issues in these days.} one {# issue in these days} other {# issues in these days}}",
+      "bucket": {
+        "day": "Day",
+        "week": "Week of"
+      },
+      "byType": "Issues by type",
+      "byDiscovered": "Issues by the stage that found them",
+      "byOrigin": "Issues by the stage they came from",
+      "byPerson": "Issues by responsible person",
+      "chartNote": "Each bar is a {size, select, day {day} other {week, from Monday}}; its segments follow the legend.",
+      "stages": {
+        "INTAKE": "Intake",
+        "PICKING": "Picking",
+        "PACKING": "Packing",
+        "QA": "QA",
+        "SHIPPING": "Shipping",
+        "CUSTOMER": "Customer"
+      },
+      "noOrigin": "Not recorded",
+      "nobody": "Nobody",
+      "unnamed": "Unnamed user",
+      "totalColumn": "Total",
+      "ratesTitle": "Issues per 1,000 units handled",
+      "ratesNote": "Issues a person is responsible for, against the units they handled in that stage in these days, as Throughput counts them. Shown from 100 units, so a short day doesn't read as a high rate.",
+      "person": "Person",
+      "stage": "Stage",
+      "issues": "Issues",
+      "units": "Units",
+      "per1000": "Per 1,000 units",
+      "belowFloor": "Under 100 units",
+      "noUnits": "—",
+      "scansTitle": "Blocked scans",
+      "scansNote": "Scans the app stopped before they turned into a mistake. Unknown barcodes are kept apart: they're often a barcode nobody has linked to its product yet.",
+      "kinds": {
+        "NOT_ON_ORDER": "Not on the order",
+        "ALREADY_DONE": "Already done",
+        "OTHER_PACKAGE": "In another box",
+        "UNKNOWN_CODE": "Unknown barcode"
+      },
+      "scansTotal": "Total, without unknown",
+      "noScans": "No blocked scans in these days.",
+      "exportScans": "Export blocked scans CSV",
+      "voidsTitle": "Voids",
+      "resolution": "Resolution",
+      "unresolved": "Not resolved yet",
+      "voids": "Voids",
+      "noVoids": "No voids in these days."
     },
     "spend": {
       "title": "Shipping spend",

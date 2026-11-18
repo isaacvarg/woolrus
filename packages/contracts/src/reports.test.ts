@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { z } from "zod";
 import { toFieldErrors } from "./base";
-import { REPORT_RANGE_MAX_DAYS, ReportRange } from "./reports";
+import { QualityInput, qualityBucketSize, REPORT_RANGE_MAX_DAYS, ReportRange } from "./reports";
 
 function fieldsOf(schema: z.ZodType, input: unknown) {
   const result = schema.safeParse(input);
@@ -67,5 +67,21 @@ describe("ReportRange", () => {
 
   it("needs every field", () => {
     expect(Object.keys(fieldsOf(ReportRange, {})).sort()).toEqual(["from", "timeZone", "to"]);
+  });
+});
+
+describe("QualityInput", () => {
+  const range = { from: "2026-11-01", to: "2026-11-30", timeZone: "UTC" };
+
+  it("defaults to every status and reads the customer-reported flag from a query string", () => {
+    expect(QualityInput.parse(range)).toEqual({ ...range, status: "all" });
+    expect(QualityInput.parse({ ...range, customerReported: "true" }).customerReported).toBe(true);
+    expect(QualityInput.parse({ ...range, customerReported: false }).customerReported).toBe(false);
+  });
+
+  it("buckets by day up to 14 days, then by week", () => {
+    expect(qualityBucketSize({ from: "2026-11-01", to: "2026-11-14" })).toBe("day");
+    expect(qualityBucketSize({ from: "2026-11-01", to: "2026-11-15" })).toBe("week");
+    expect(qualityBucketSize({ from: "2026-11-18", to: "2026-11-18" })).toBe("day");
   });
 });

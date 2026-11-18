@@ -35,6 +35,8 @@ vi.mock("@woolrus/core", async (original) => {
     voidsCsv: wrap("voids"),
     orderItemsCsv: wrap("orderItems"),
     cycleTimeCsv: wrap("cycleTime"),
+    qualityCsv: wrap("quality"),
+    scanMissesCsv: wrap("scanMisses"),
   };
 });
 vi.mock("@woolrus/db", async (original) => ({
@@ -47,6 +49,8 @@ import { GET as orders } from "../orders/export.csv/route";
 import { GET as voids } from "../voids/export.csv/route";
 import { GET as cycleTime } from "./cycle-time.csv/route";
 import { GET as orderItems } from "./order-items.csv/route";
+import { GET as quality } from "./quality.csv/route";
+import { GET as scanMisses } from "./scan-misses.csv/route";
 
 const routes = {
   "/api/orders/export.csv": orders,
@@ -54,6 +58,8 @@ const routes = {
   "/api/voids/export.csv": voids,
   "/api/reports/order-items.csv": orderItems,
   "/api/reports/cycle-time.csv": cycleTime,
+  "/api/reports/quality.csv": quality,
+  "/api/reports/scan-misses.csv": scanMisses,
 };
 const get = (path: keyof typeof routes, query = "") =>
   routes[path](new Request(`http://woolrus${path}${query}`));
@@ -151,6 +157,37 @@ describe("query parameters", () => {
     await get("/api/reports/cycle-time.csv", "?from=2026-11-01&to=2026-11-07&timeZone=UTC&x=1");
     expect(mocks.csv).toHaveBeenCalledWith(
       "cycleTime",
+      { from: "2026-11-01", to: "2026-11-07", timeZone: "UTC" },
+      expect.anything(),
+    );
+  });
+
+  it("passes the Quality range and filters", async () => {
+    await get(
+      "/api/reports/quality.csv",
+      "?from=2026-11-01&to=2026-11-30&timeZone=UTC&severity=MAJOR&customerReported=true&status=open&x=1",
+    );
+    expect(mocks.csv).toHaveBeenCalledWith(
+      "quality",
+      {
+        from: "2026-11-01",
+        to: "2026-11-30",
+        timeZone: "UTC",
+        severity: "MAJOR",
+        customerReported: "true",
+        status: "open",
+      },
+      expect.anything(),
+    );
+  });
+
+  it("passes the blocked-scan range", async () => {
+    await get(
+      "/api/reports/scan-misses.csv",
+      "?from=2026-11-01&to=2026-11-07&timeZone=UTC&severity=MAJOR",
+    );
+    expect(mocks.csv).toHaveBeenCalledWith(
+      "scanMisses",
       { from: "2026-11-01", to: "2026-11-07", timeZone: "UTC" },
       expect.anything(),
     );

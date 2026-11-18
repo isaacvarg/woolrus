@@ -107,6 +107,7 @@ import {
   pushErrors,
   qaRemoveLot,
   qaReplaceLot,
+  quality,
   queueCounts,
   quoteOneOff,
   reactivateUser,
@@ -824,6 +825,7 @@ export const router = implementer.router({
     cycleTime: api.reports.cycleTime.handler(({ input, context }) =>
       cycleTime(db, context.actor, input),
     ),
+    quality: api.reports.quality.handler(({ input, context }) => quality(db, context.actor, input)),
   },
 });
 

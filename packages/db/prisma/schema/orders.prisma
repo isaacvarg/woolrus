@@ -328,5 +328,7 @@ model ScanMiss {
 
   @@index([orderId, at])
   @@index([actorId, at])
+  /// Reports → Quality reads blocked scans by time across orders (SPEC-reporting).
+  @@index([at])
   @@map("scan_misses")
 }

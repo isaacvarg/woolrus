@@ -22,9 +22,17 @@ export function exportQuery(params: Params): string {
 /**
  * **Export CSV** for a list or report (SPEC-reporting "CSV exports"): downloads `path` with the
  * screen's filters, and the browser's time zone so the file's times read as on screen. Render it
- * only for `report.read` holders; the route checks again.
+ * only for `report.read` holders; the route checks again. `label` names it when a screen has two.
  */
-export function ExportCsvLink({ path, params }: { path: string; params: Params }) {
+export function ExportCsvLink({
+  path,
+  params,
+  label,
+}: {
+  path: string;
+  params: Params;
+  label?: string;
+}) {
   const t = useTranslations("exports");
   // The server renders UTC; the browser's zone replaces it on hydration.
   const timeZone = useSyncExternalStore(noSubscription, browserZone, () => "UTC");
@@ -34,7 +42,7 @@ export function ExportCsvLink({ path, params }: { path: string; params: Params }
       href={`${path}?${exportQuery({ ...params, timeZone })}`}
       download
     >
-      {t("button")}
+      {label ?? t("button")}
     </a>
   );
 }
