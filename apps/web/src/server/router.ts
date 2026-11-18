@@ -28,6 +28,7 @@ import {
   createShippingProviders,
   createStationUser,
   customsProducts,
+  cycleTime,
   dailyOrderActivity,
   deactivateUser,
   deleteBox,
@@ -813,6 +814,11 @@ export const router = implementer.router({
     ),
     realOrders: api.rateLab.realOrders.handler(({ input, context }) =>
       realOrders(db, context.actor, input),
+    ),
+  },
+  reports: {
+    cycleTime: api.reports.cycleTime.handler(({ input, context }) =>
+      cycleTime(db, context.actor, input),
     ),
   },
 });

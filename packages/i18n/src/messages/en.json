@@ -1273,7 +1273,23 @@
       "packedAt": "Packed at",
       "qaBy": "QA by",
       "qaAt": "QA at",
-      "voidedQty": "Voided qty"
+      "voidedQty": "Voided qty",
+      "totalMin": "Total (min)",
+      "onHoldMin": "On hold (min)",
+      "pendingMin": "Pending (min)",
+      "pickingMin": "Picking (min)",
+      "pickingWaitingMin": "Picking waiting (min)",
+      "pickingWorkingMin": "Picking working (min)",
+      "pickingIdleMin": "Picking idle (min)",
+      "packingMin": "Packing (min)",
+      "packingWaitingMin": "Packing waiting (min)",
+      "packingWorkingMin": "Packing working (min)",
+      "packingIdleMin": "Packing idle (min)",
+      "qaMin": "QA (min)",
+      "qaWaitingMin": "QA waiting (min)",
+      "qaWorkingMin": "QA working (min)",
+      "qaIdleMin": "QA idle (min)",
+      "readyMin": "Ready (min)"
     },
     "yes": "yes",
     "no": "no"
@@ -2034,6 +2050,46 @@
       "timeZone": "Days in {zone}"
     },
     "comingSoon": "This report isn't built yet.",
+    "cycleTime": {
+      "loading": "Loading…",
+      "empty": "No orders shipped in these days.",
+      "summary": "Cycle time summary",
+      "tiles": {
+        "orders": "Orders shipped",
+        "median": "Median",
+        "p90": "90th percentile",
+        "mean": "Mean",
+        "importToShipped": "Import to shipped",
+        "onHold": "Of which on hold",
+        "onHoldDesc": "Mean per order; median {median}"
+      },
+      "stageChart": "Mean time per stage",
+      "stageNote": "Holds count in no stage. Working time leaves out pauses over 10 minutes between actions; they show as idle. The table gives median · 90th percentile · mean.",
+      "notWork": "—",
+      "parts": {
+        "inQueue": "In queue",
+        "waiting": "Waiting",
+        "working": "Working",
+        "idle": "Idle"
+      },
+      "dayChart": "Median import to shipped, by shipping day",
+      "slowest": "{count, plural, one {Slowest order} other {The # slowest orders}}",
+      "orderLink": "Order #{number}",
+      "columns": {
+        "stage": "Stage",
+        "orders": "Orders",
+        "status": "Time in stage",
+        "waiting": "Waiting",
+        "working": "Working",
+        "idle": "Idle",
+        "day": "Day",
+        "median": "Median",
+        "order": "Order",
+        "shipped": "Shipped",
+        "total": "Import to shipped",
+        "onHold": "On hold"
+      }
+    },
     "spend": {
       "title": "Shipping spend",
       "body": "What labels cost by carrier and service, and label cost against shipping charged, are on Rate Lab's Real orders page.",
