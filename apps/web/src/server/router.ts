@@ -123,6 +123,7 @@ import {
   reorderPriorityRules,
   repackOrders,
   reportIssue,
+  reportsToday,
   requestSync,
   resendInvitation,
   resolveIssue,
@@ -823,6 +824,9 @@ export const router = implementer.router({
     ),
     cycleTime: api.reports.cycleTime.handler(({ input, context }) =>
       cycleTime(db, context.actor, input),
+    ),
+    today: api.reports.today.handler(({ input, context }) =>
+      reportsToday(db, context.actor, input),
     ),
   },
 });

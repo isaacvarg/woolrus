@@ -84,3 +84,24 @@ test("a packer sees orders past their SLA above the tiles and taps through to th
     }
   });
 });
+
+test("a Reports holder gets the shipped-today and cycle-time tiles; a picker doesn't", async ({
+  page,
+}) => {
+  await signInAs(page, ["PICKER"]);
+  await page.goto("/");
+  await expect(page.getByTestId("tile-open")).toHaveText(/\d/);
+  await expect(page.getByTestId("tile-shipped-today")).toHaveCount(0);
+  await expect(page.getByTestId("tile-median-cycle")).toHaveCount(0);
+
+  await signInAs(page, ["PACKER", "REPORTS"]);
+  await page.goto("/");
+  const shipped = page.getByTestId("tile-shipped-today");
+  await expect(shipped.locator("dd").first()).toHaveText(/^\d[\d,]*$/);
+  await expect(page.getByTestId("tile-median-cycle").locator("dd").first()).toHaveText(/\d|—/);
+  await shipped.getByRole("link", { name: "Throughput report" }).click();
+  await expect(page).toHaveURL("/reports/throughput?range=today");
+  await page.goBack();
+  await page.getByRole("link", { name: "Cycle time report" }).click();
+  await expect(page).toHaveURL("/reports/cycle-time");
+});
