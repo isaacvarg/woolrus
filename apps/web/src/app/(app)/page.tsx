@@ -12,7 +12,7 @@ export default async function HomePage() {
     <section className="mx-auto max-w-6xl space-y-6">
       <h1 className="text-3xl font-bold">{t("dashboard.title")}</h1>
       {actor && can(actor, "order.read") ? (
-        <Dashboard />
+        <Dashboard canReadReports={can(actor, "report.read")} />
       ) : (
         <p role="alert" className="alert alert-error">
           {t("errors.forbidden")}

@@ -322,6 +322,24 @@ export type QualityExportInput = z.input<typeof QualityExportInput>;
 export const ScanMissesExportInput = ReportRange;
 export type ScanMissesExportInput = z.input<typeof ScanMissesExportInput>;
 
+/** The home dashboard's report tiles read "today" in the viewer's zone. */
+export const ReportsTodayInput = z.object({ timeZone: TimeZone });
+export type ReportsTodayInput = z.input<typeof ReportsTodayInput>;
+
+/** How many days back the dashboard's median cycle time reaches, today included. */
+export const REPORTS_TODAY_CYCLE_DAYS = 7;
+
+/** The home dashboard's report tiles (SPEC-reporting "Home dashboard"). */
+export const ReportsToday = z.object({
+  /** Today in the viewer's zone. */
+  today: IsoDate,
+  /** Orders whose latest move to Completed fell today, as the cycle-time cohort counts them. */
+  shippedToday: z.number().int().min(0),
+  /** Median import → shipped over the last REPORTS_TODAY_CYCLE_DAYS days; null when none shipped. */
+  medianCycleMs: Ms.nullable(),
+});
+export type ReportsToday = z.infer<typeof ReportsToday>;
+
 const tags = ["Reports"];
 
 /** The Reports area's reads; each needs `report.read`. */
@@ -353,4 +371,13 @@ export const reports = {
     })
     .input(QualityInput)
     .output(QualityReport),
+  today: base
+    .route({
+      method: "GET",
+      path: "/reports/today",
+      tags,
+      summary: "Shipped today and the 7-day median cycle time, for the home dashboard",
+    })
+    .input(ReportsTodayInput)
+    .output(ReportsToday),
 };

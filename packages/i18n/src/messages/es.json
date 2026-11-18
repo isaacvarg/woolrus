@@ -2574,6 +2574,12 @@
       "issues": "Incidencias abiertas",
       "issuesCritical": "{count, plural, one {# crítica} other {# críticas}}"
     },
+    "reportTiles": {
+      "shippedToday": "Enviados hoy",
+      "throughputLink": "Informe de rendimiento",
+      "medianCycle": "Tiempo de ciclo mediano, últimos 7 días",
+      "cycleTimeLink": "Informe de tiempo de ciclo"
+    },
     "chart": {
       "title": "Pedidos por día, últimos {days} días",
       "range": "Rango de fechas",

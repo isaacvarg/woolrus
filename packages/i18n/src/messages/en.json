@@ -2574,6 +2574,12 @@
       "issues": "Open issues",
       "issuesCritical": "{count} critical"
     },
+    "reportTiles": {
+      "shippedToday": "Shipped today",
+      "throughputLink": "Throughput report",
+      "medianCycle": "Median cycle time, last 7 days",
+      "cycleTimeLink": "Cycle time report"
+    },
     "chart": {
       "title": "Orders per day, last {days} days",
       "range": "Date range",

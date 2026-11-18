@@ -124,6 +124,7 @@ import {
   reorderPriorityRules,
   repackOrders,
   reportIssue,
+  reportsToday,
   requestSync,
   resendInvitation,
   resolveIssue,
@@ -826,6 +827,9 @@ export const router = implementer.router({
       cycleTime(db, context.actor, input),
     ),
     quality: api.reports.quality.handler(({ input, context }) => quality(db, context.actor, input)),
+    today: api.reports.today.handler(({ input, context }) =>
+      reportsToday(db, context.actor, input),
+    ),
   },
 });
 
