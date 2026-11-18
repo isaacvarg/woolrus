@@ -1,6 +1,6 @@
 import type { ActivityItem, ActivityParams, StageInterval, StagePerson } from "@woolrus/contracts";
 import { describe, expect, it } from "vitest";
-import { summarizeActivity } from "./summary";
+import { IDLE_CUTOFF_MS, stageIntervals, summarizeActivity } from "./summary";
 
 const T0 = Date.UTC(2026, 10, 17, 9, 0);
 const at = (min: number) => new Date(T0 + min * 60_000);
@@ -49,14 +49,21 @@ const stage = (result: ReturnType<typeof summarizeActivity>, name: string) => {
 const people = (result: ReturnType<typeof summarizeActivity>, name: string): StagePerson[] =>
   result.people.find((p) => p.stage === name)?.people ?? [];
 
-/** SPEC-order-activity success criterion 6. */
+/** SPEC-order-activity success criterion 6, with idle (SPEC-reporting success criterion 2). */
 function expectWaitingPlusWorking(result: ReturnType<typeof summarizeActivity>) {
   for (const s of result.summary.stages) {
     for (const interval of s.intervals) {
       if (["PICKING", "PACKING", "QA"].includes(s.stage)) {
-        expect((interval.waitingMs ?? -1) + (interval.workingMs ?? -1)).toBe(interval.statusMs);
+        expect(
+          (interval.waitingMs ?? -1) + (interval.workingMs ?? -1) + (interval.idleMs ?? -1),
+        ).toBe(interval.statusMs);
       } else {
-        expect(interval).toMatchObject({ waitingMs: null, workingMs: null, firstActionAt: null });
+        expect(interval).toMatchObject({
+          waitingMs: null,
+          workingMs: null,
+          idleMs: null,
+          firstActionAt: null,
+        });
       }
     }
   }
@@ -97,6 +104,7 @@ describe("summarizeActivity", () => {
         running: false,
         waitingMs: 0,
         workingMs: 10 * MIN,
+        idleMs: 0,
         firstActionAt: at(10),
         batch: null,
       } satisfies Partial<StageInterval>),
@@ -258,5 +266,163 @@ describe("summarizeActivity", () => {
       true,
     );
     expect(result.people.every((p) => p.people.length === 0)).toBe(true);
+  });
+});
+
+/** Import at 0, into Packing at 20 by Ana's completePicking; Bruno packs from 30. */
+const intoPacking = () => [
+  imported(0),
+  move(10, "PENDING", "PICKING", ana),
+  move(20, "PICKING", "PACKING", ana),
+  item(30, "order.claim", bruno),
+];
+
+// SPEC-reporting "Idle cutoff" (decision 6): a gap of more than 10 minutes between consecutive
+// actions by people in a work interval is idle, not working.
+describe("idle time", () => {
+  it("the cutoff is ten minutes", () => {
+    expect(IDLE_CUTOFF_MS).toBe(10 * MIN);
+  });
+
+  it("a 25-minute gap between two actions in Packing is idle", () => {
+    const result = summarize(
+      [...intoPacking(), item(55, "package.create", bruno), move(60, "PACKING", "QA", bruno)],
+      70,
+    );
+    expect(stage(result, "PACKING").intervals[0]).toMatchObject({
+      statusMs: 40 * MIN,
+      waitingMs: 10 * MIN,
+      workingMs: 5 * MIN,
+      idleMs: 25 * MIN,
+    });
+    expectWaitingPlusWorking(result);
+  });
+
+  it("a 9-minute gap stays working, and so does a gap of exactly 10", () => {
+    const result = summarize(
+      [
+        ...intoPacking(),
+        item(39, "package.create", bruno),
+        item(49, "package.update", bruno),
+        move(50, "PACKING", "QA", bruno),
+      ],
+      70,
+    );
+    expect(stage(result, "PACKING").intervals[0]).toMatchObject({
+      waitingMs: 10 * MIN,
+      workingMs: 20 * MIN,
+      idleMs: 0,
+    });
+    expectWaitingPlusWorking(result);
+  });
+
+  it("counts gaps between anyone's consecutive actions, not each person's own", () => {
+    const result = summarize(
+      [
+        ...intoPacking(),
+        item(35, "package.create", carla),
+        item(50, "package.update", bruno),
+        move(52, "PACKING", "QA", bruno),
+      ],
+      70,
+    );
+    // 30 → 35 → 50 → 52: only the 15-minute gap is idle.
+    expect(stage(result, "PACKING").intervals[0]).toMatchObject({
+      workingMs: 7 * MIN,
+      idleMs: 15 * MIN,
+    });
+    expectWaitingPlusWorking(result);
+  });
+
+  it("a repack's second round has its own idle time", () => {
+    const result = summarize(
+      [
+        ...straightRun().slice(0, -1),
+        move(60, "READY", "PACKING", carla),
+        item(64, "package.update", bruno),
+        item(90, "package.update", bruno),
+        move(92, "PACKING", "QA", bruno),
+      ],
+      100,
+    );
+    const packing = stage(result, "PACKING");
+    expect(packing.intervals.map((i) => [i.waitingMs, i.workingMs, i.idleMs])).toEqual([
+      [10 * MIN, 15 * MIN, 0],
+      [4 * MIN, 2 * MIN, 26 * MIN],
+    ]);
+    expectWaitingPlusWorking(result);
+  });
+
+  it("a hold ends the interval: the move to hold is its last action", () => {
+    const result = summarize(
+      [
+        imported(0),
+        move(10, "PENDING", "PICKING", ana),
+        item(12, "pick.scan", ana),
+        move(40, "PICKING", "ON_HOLD", bruno),
+        move(60, "ON_HOLD", "PICKING", bruno),
+        item(65, "pick.scan", ana),
+        move(70, "PICKING", "PACKING", ana),
+      ],
+      80,
+    );
+    expect(result.summary.onHoldMs).toBe(20 * MIN);
+    expect(
+      stage(result, "PICKING").intervals.map((i) => [i.waitingMs, i.workingMs, i.idleMs]),
+    ).toEqual([
+      [0, 2 * MIN, 28 * MIN],
+      [5 * MIN, 5 * MIN, 0],
+    ]);
+    expectWaitingPlusWorking(result);
+  });
+
+  it("a batch pick: the batch's own record is an action like any other", () => {
+    const result = summarize(
+      [
+        imported(0),
+        move(10, "PENDING", "PICKING", ana),
+        item(10, "pickBatch.create", ana, { number: 7, orders: 4 }),
+        item(40, "pick.scan", ana),
+        move(45, "PICKING", "PACKING", ana),
+      ],
+      50,
+    );
+    expect(stage(result, "PICKING").intervals[0]).toMatchObject({
+      batch: { number: 7, orders: 4 },
+      waitingMs: 0,
+      workingMs: 5 * MIN,
+      idleMs: 30 * MIN,
+    });
+    expectWaitingPlusWorking(result);
+  });
+
+  it("an order still in QA: time since the last action past the cutoff is idle", () => {
+    const quiet = summarize([...straightRun().slice(0, 8), item(52, "qa.scan", carla)], 80);
+    expect(stage(quiet, "QA").intervals[0]).toMatchObject({
+      running: true,
+      statusMs: 35 * MIN,
+      waitingMs: 7 * MIN,
+      workingMs: 0,
+      idleMs: 28 * MIN,
+    });
+    expectWaitingPlusWorking(quiet);
+
+    const busy = summarize([...straightRun().slice(0, 8), item(52, "qa.scan", carla)], 58);
+    expect(stage(busy, "QA").intervals[0]).toMatchObject({ workingMs: 6 * MIN, idleMs: 0 });
+  });
+
+  it("people spans still run first to last action, pauses included", () => {
+    const result = summarize(
+      [...intoPacking(), item(55, "package.create", bruno), move(60, "PACKING", "QA", bruno)],
+      70,
+    );
+    expect(people(result, "PACKING")).toEqual([
+      { ...bruno, count: 3, firstAt: at(30), lastAt: at(60), spanMs: 30 * MIN },
+    ]);
+  });
+
+  it("stageIntervals is the summary the History tab shows", () => {
+    const items = [...straightRun(), item(80, "note.create", bruno)].reverse();
+    expect(stageIntervals(items, at(90))).toEqual(summarizeActivity(items, at(90)).summary);
   });
 });
