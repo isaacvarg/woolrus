@@ -2,7 +2,7 @@
 
 **Milestone:** M5 · **Depends on:** `shipping` (shipped orders, labels), `exceptions` (issues, voids),
 `order-activity` (stage intervals, scan misses), `workflow` (stage events, SLA thresholds), `rate-lab` (Real orders
-read, reused for spend), `identity` (the new role) · **Used by:** — · **State:** spec approved (2026-11-18) ·
+read, reused for spend), `identity` (the new role) · **Used by:** — · **State:** planned (spec approved 2026-11-18; tickets #209–#218) ·
 **Issue:**
 [#32](https://github.com/isaacvarg/woolrus/issues/32)
 
