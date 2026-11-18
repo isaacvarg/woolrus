@@ -34,6 +34,7 @@ vi.mock("@woolrus/core", async (original) => {
     issuesCsv: wrap("issues"),
     voidsCsv: wrap("voids"),
     orderItemsCsv: wrap("orderItems"),
+    cycleTimeCsv: wrap("cycleTime"),
   };
 });
 vi.mock("@woolrus/db", async (original) => ({
@@ -44,6 +45,7 @@ vi.mock("@woolrus/db", async (original) => ({
 import { GET as issues } from "../issues/export.csv/route";
 import { GET as orders } from "../orders/export.csv/route";
 import { GET as voids } from "../voids/export.csv/route";
+import { GET as cycleTime } from "./cycle-time.csv/route";
 import { GET as orderItems } from "./order-items.csv/route";
 
 const routes = {
@@ -51,6 +53,7 @@ const routes = {
   "/api/issues/export.csv": issues,
   "/api/voids/export.csv": voids,
   "/api/reports/order-items.csv": orderItems,
+  "/api/reports/cycle-time.csv": cycleTime,
 };
 const get = (path: keyof typeof routes, query = "") =>
   routes[path](new Request(`http://woolrus${path}${query}`));
@@ -75,6 +78,8 @@ describe.each(Object.keys(routes) as (keyof typeof routes)[])("GET %s", (path) =
       expect((await get(path)).status).toBe(403);
     }
     expect(mocks.csv).not.toHaveBeenCalled();
+    mocks.roles = ["PACKER", "REPORTS"];
+    expect((await get(path)).status).toBe(200);
     mocks.roles = ["ADMIN"];
     const response = await get(path);
     expect(response.status).toBe(200);
@@ -137,6 +142,15 @@ describe("query parameters", () => {
     await get("/api/reports/order-items.csv", "?from=2026-11-01&to=2026-11-07&timeZone=UTC");
     expect(mocks.csv).toHaveBeenCalledWith(
       "orderItems",
+      { from: "2026-11-01", to: "2026-11-07", timeZone: "UTC" },
+      expect.anything(),
+    );
+  });
+
+  it("passes the cycle-time range", async () => {
+    await get("/api/reports/cycle-time.csv", "?from=2026-11-01&to=2026-11-07&timeZone=UTC&x=1");
+    expect(mocks.csv).toHaveBeenCalledWith(
+      "cycleTime",
       { from: "2026-11-01", to: "2026-11-07", timeZone: "UTC" },
       expect.anything(),
     );

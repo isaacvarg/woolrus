@@ -13,7 +13,7 @@ import type { CsvCell } from "../csv";
 import { AppError } from "../errors";
 import { type Actor, assertCan } from "../permissions";
 import type { CsvExport } from "../rate-lab/exports";
-import { type ExportOptions, exportKit, parseExport, type QueryOf } from "./exports";
+import { type ExportOptions, exportKit, parseExportInput, type QueryOf } from "./exports";
 
 // Throughput (FR-REP-01, SPEC-reporting "Throughput"): orders and units per day × stage × person,
 // aggregated in Postgres and bucketed by local day in the viewer's zone.
@@ -209,7 +209,7 @@ export async function throughputCsv(
   options: ExportOptions,
 ): Promise<CsvExport> {
   assertCan(actor, "report.read");
-  const parsed = parseExport(ThroughputExportInput, input);
+  const parsed = parseExportInput(ThroughputExportInput, input);
   const kit = exportKit("throughput", parsed.timeZone, options);
   const { rows } = await throughput(db, actor, parsed);
   const system = messages[options.locale].exports.system;

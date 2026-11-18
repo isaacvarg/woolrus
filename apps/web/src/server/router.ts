@@ -28,6 +28,7 @@ import {
   createShippingProviders,
   createStationUser,
   customsProducts,
+  cycleTime,
   dailyOrderActivity,
   deactivateUser,
   deleteBox,
@@ -819,6 +820,9 @@ export const router = implementer.router({
   reports: {
     throughput: api.reports.throughput.handler(({ input, context }) =>
       throughput(db, context.actor, input),
+    ),
+    cycleTime: api.reports.cycleTime.handler(({ input, context }) =>
+      cycleTime(db, context.actor, input),
     ),
   },
 });

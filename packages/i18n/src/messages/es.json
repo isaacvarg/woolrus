@@ -1276,7 +1276,23 @@
       "voidedQty": "Cant. anulada",
       "day": "Día",
       "person": "Persona",
-      "orders": "Pedidos"
+      "orders": "Pedidos",
+      "totalMin": "Tiempo total (min)",
+      "onHoldMin": "En espera (min)",
+      "pendingMin": "Pendiente (min)",
+      "pickingMin": "Recolección (min)",
+      "pickingWaitingMin": "Recolección, esperando (min)",
+      "pickingWorkingMin": "Recolección, trabajando (min)",
+      "pickingIdleMin": "Recolección, inactivo (min)",
+      "packingMin": "Empaque (min)",
+      "packingWaitingMin": "Empaque, esperando (min)",
+      "packingWorkingMin": "Empaque, trabajando (min)",
+      "packingIdleMin": "Empaque, inactivo (min)",
+      "qaMin": "QA (min)",
+      "qaWaitingMin": "QA, esperando (min)",
+      "qaWorkingMin": "QA, trabajando (min)",
+      "qaIdleMin": "QA, inactivo (min)",
+      "readyMin": "Listo (min)"
     },
     "system": "Sistema",
     "yes": "sí",
@@ -2038,6 +2054,46 @@
       "timeZone": "Días en {zone}"
     },
     "comingSoon": "Este informe aún no está listo.",
+    "cycleTime": {
+      "loading": "Cargando…",
+      "empty": "No se envió ningún pedido en estos días.",
+      "summary": "Resumen del tiempo de ciclo",
+      "tiles": {
+        "orders": "Pedidos enviados",
+        "median": "Mediana",
+        "p90": "Percentil 90",
+        "mean": "Promedio",
+        "importToShipped": "De importado a enviado",
+        "onHold": "De ello, en espera",
+        "onHoldDesc": "Promedio por pedido; mediana {median}"
+      },
+      "stageChart": "Tiempo promedio por etapa",
+      "stageNote": "Las esperas no cuentan en ninguna etapa. El tiempo de trabajo deja fuera las pausas de más de 10 minutos entre acciones; se muestran como inactivo. La tabla da mediana · percentil 90 · promedio.",
+      "notWork": "—",
+      "parts": {
+        "inQueue": "En cola",
+        "waiting": "Esperando",
+        "working": "Trabajando",
+        "idle": "Inactivo"
+      },
+      "dayChart": "Mediana de importado a enviado, por día de envío",
+      "slowest": "{count, plural, one {Pedido más lento} other {Los # pedidos más lentos}}",
+      "orderLink": "Pedido #{number}",
+      "columns": {
+        "stage": "Etapa",
+        "orders": "Pedidos",
+        "status": "Tiempo en la etapa",
+        "waiting": "Esperando",
+        "working": "Trabajando",
+        "idle": "Inactivo",
+        "day": "Día",
+        "median": "Mediana",
+        "order": "Pedido",
+        "shipped": "Enviado",
+        "total": "De importado a enviado",
+        "onHold": "En espera"
+      }
+    },
     "spend": {
       "title": "Gasto en envíos",
       "body": "El costo de las etiquetas por transportista y servicio, y el costo de etiqueta frente al envío cobrado, están en la página Pedidos reales de Rate Lab.",

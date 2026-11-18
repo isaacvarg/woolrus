@@ -113,7 +113,7 @@ export function exportKit(
   };
 }
 
-export function parseExport<S extends z.ZodType>(schema: S, input: unknown): z.infer<S> {
+export function parseExportInput<S extends z.ZodType>(schema: S, input: unknown): z.infer<S> {
   const parsed = schema.safeParse(input);
   if (!parsed.success) throw new AppError("BAD_REQUEST", "errors.validation");
   return parsed.data;
@@ -177,7 +177,7 @@ export async function ordersCsv(
   options: ExportOptions,
 ): Promise<CsvExport> {
   assertCan(actor, "report.read");
-  const { search, statuses, sort, dir, timeZone } = parseExport(OrdersExportInput, input);
+  const { search, statuses, sort, dir, timeZone } = parseExportInput(OrdersExportInput, input);
   const kit = exportKit("orders", timeZone, options);
   const ids = await db.$queryRaw<{ id: string }[]>`
     SELECT o.id FROM orders o ${orderListWhere({ search, statuses })}
@@ -256,7 +256,7 @@ export async function issuesCsv(
   options: ExportOptions,
 ): Promise<CsvExport> {
   assertCan(actor, "report.read");
-  const { timeZone, ...filters } = parseExport(IssuesExportInput, input);
+  const { timeZone, ...filters } = parseExportInput(IssuesExportInput, input);
   const kit = exportKit("issues", timeZone, options);
   const ids = await db.$queryRaw<{ id: string }[]>`
     SELECT i.id FROM quality_issues i JOIN orders o ON o.id = i.order_id
@@ -331,7 +331,7 @@ export async function voidsCsv(
   options: ExportOptions,
 ): Promise<CsvExport> {
   assertCan(actor, "report.read");
-  const { status, search, timeZone } = parseExport(VoidsExportInput, input);
+  const { status, search, timeZone } = parseExportInput(VoidsExportInput, input);
   const kit = exportKit("voids", timeZone, options);
   const at = status === "resolved" ? Prisma.sql`v.resolved_at` : Prisma.sql`v.voided_at`;
   const ids = await db.$queryRaw<{ id: string }[]>`
@@ -423,7 +423,7 @@ export async function orderItemsCsv(
   options: ExportOptions,
 ): Promise<CsvExport> {
   assertCan(actor, "report.read");
-  const { from, to, timeZone } = parseExport(OrderItemsExportInput, input);
+  const { from, to, timeZone } = parseExportInput(OrderItemsExportInput, input);
   const kit = exportKit("order-items", timeZone, options);
   const day = Prisma.sql`(o.created_at AT TIME ZONE ${timeZone})::date`;
   const ids = await db.$queryRaw<{ id: string }[]>`
