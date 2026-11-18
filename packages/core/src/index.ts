@@ -1,4 +1,5 @@
 export * from "./activity/actions";
+export * from "./activity/summary";
 export * from "./activity/timeline";
 export * from "./activity/visibility";
 export * from "./adapters/email/log";

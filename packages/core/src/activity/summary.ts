@@ -11,7 +11,15 @@ import type { WorkflowStatus } from "@woolrus/db";
 import { transitions } from "../workflow/machine";
 
 // The stage summary (SPEC-order-activity "Stage summary"). Pure: built from the timeline's items,
-// whose stage events (`stage.import`, `stage.move`) give the intervals.
+// whose stage events (`stage.import`, `stage.move`) give the intervals. The Cycle time report
+// (SPEC-reporting) reads the same `stageIntervals`, so the two can't disagree.
+
+/**
+ * A gap of more than this between consecutive actions by people in a work interval is idle, not
+ * working (SPEC-reporting decision 6, answering order-activity open question 1). A constant, not a
+ * setting, until the floor asks for one.
+ */
+export const IDLE_CUTOFF_MS = 10 * 60_000;
 
 /** Moves where the actor takes the claim (beginPicking): the move is their first action. */
 const claimingMoves = transitions.filter((t) => t.claim === "claims");
@@ -32,31 +40,42 @@ type Interval = {
 
 const isWork = (stage: string): stage is WorkStage => WorkStage.safeParse(stage).success;
 
-/**
- * Time per status and who worked each stage, as of `now`. Each item belongs to the interval that
- * contains it, start exclusive and end inclusive, so the move that leaves a stage is that stage's
- * last action; the exception is a claiming move, which opens its interval at its own time.
- */
+/** Time per status and who worked each stage, as of `now`: what the History tab shows. */
 export function summarizeActivity(
   items: readonly ActivityItem[],
   now: Date,
 ): { summary: OrderActivitySummary; people: StagePeople[] } {
-  const oldestFirst = [...items].sort(
-    (a, b) => a.at.getTime() - b.at.getTime() || (a.id < b.id ? -1 : 1),
-  );
-  const intervals = buildIntervals(oldestFirst, now.getTime());
-  for (const item of oldestFirst) intervalOf(intervals, item.at.getTime())?.items.push(item);
+  const people = WorkStage.options.map((stage) => ({
+    stage,
+    people: peopleIn(placeItems(items, now).filter((i) => i.status === stage)),
+  }));
+  return { summary: stageIntervals(items, now), people };
+}
 
+/**
+ * Time per status as of `now`, each work interval split into waiting, working and idle. Takes an
+ * order's items in any order. Each item belongs to the interval that contains it, start exclusive
+ * and end inclusive, so the move that leaves a stage is that stage's last action; the exception is
+ * a claiming move, which opens its interval at its own time.
+ */
+export function stageIntervals(items: readonly ActivityItem[], now: Date): OrderActivitySummary {
+  const intervals = placeItems(items, now);
   const stages = SummaryStage.options.map((stage) => {
     const own = intervals.filter((i) => i.status === stage).map((i) => toInterval(i, stage));
     return { stage, statusMs: sum(own.map((i) => i.statusMs)), intervals: own };
   });
   const onHoldMs = sum(intervals.filter((i) => i.status === "ON_HOLD").map((i) => i.end - i.start));
-  const people = WorkStage.options.map((stage) => ({
-    stage,
-    people: peopleIn(intervals.filter((i) => i.status === stage)),
-  }));
-  return { summary: { stages, onHoldMs }, people };
+  return { stages, onHoldMs };
+}
+
+/** The order's intervals, oldest first, each holding its items oldest first. */
+function placeItems(items: readonly ActivityItem[], now: Date): Interval[] {
+  const oldestFirst = [...items].sort(
+    (a, b) => a.at.getTime() - b.at.getTime() || (a.id < b.id ? -1 : 1),
+  );
+  const intervals = buildIntervals(oldestFirst, now.getTime());
+  for (const item of oldestFirst) intervalOf(intervals, item.at.getTime())?.items.push(item);
+  return intervals;
 }
 
 function buildIntervals(oldestFirst: readonly ActivityItem[], now: number): Interval[] {
@@ -102,19 +121,44 @@ function toInterval(interval: Interval, stage: string): StageInterval {
     statusMs,
   };
   if (!isWork(stage)) {
-    return { ...base, waitingMs: null, workingMs: null, firstActionAt: null, batch: null };
+    return {
+      ...base,
+      waitingMs: null,
+      workingMs: null,
+      idleMs: null,
+      firstActionAt: null,
+      batch: null,
+    };
   }
-  const first = interval.items.find((item) => item.actor !== null);
   // An item at the very start (a claiming move's own) waits for nothing.
-  const firstAt = first ? Math.max(first.at.getTime(), interval.start) : null;
+  const actions = interval.items
+    .filter((item) => item.actor !== null)
+    .map((item) => Math.max(item.at.getTime(), interval.start));
+  const firstAt = actions[0] ?? null;
   const waitingMs = firstAt === null ? statusMs : firstAt - interval.start;
+  const idleMs = firstAt === null ? 0 : idleBetween([...actions, interval.end]);
   return {
     ...base,
     waitingMs,
-    workingMs: statusMs - waitingMs,
+    workingMs: statusMs - waitingMs - idleMs,
+    idleMs,
     firstActionAt: firstAt === null ? null : new Date(firstAt),
     batch: stage === "PICKING" ? batchOf(interval) : null,
   };
+}
+
+/**
+ * The gaps over the cutoff between consecutive times, oldest first. The last time is the
+ * interval's end: usually the move out (a person's last action, gap 0); for an order still in the
+ * stage, `now`, so a stage nobody has touched for a while shows that as idle too.
+ */
+function idleBetween(times: readonly number[]): number {
+  let idle = 0;
+  for (let i = 1; i < times.length; i++) {
+    const gap = (times[i] ?? 0) - (times[i - 1] ?? 0);
+    if (gap > IDLE_CUTOFF_MS) idle += gap;
+  }
+  return idle;
 }
 
 /** The batch this pick began in: its `pickBatch.create`, written with the move or later. */

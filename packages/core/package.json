@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./activity-summary": "./src/activity/summary.ts",
     "./format": "./src/settings/format.ts",
     "./lot-codes": "./src/lumexia/codes.ts",
     "./units": "./src/units.ts"

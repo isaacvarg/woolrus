@@ -19,6 +19,7 @@ const queue = (start: number, end: number): StageInterval => ({
   statusMs: (end - start) * MIN,
   waitingMs: null,
   workingMs: null,
+  idleMs: null,
   firstActionAt: null,
   batch: null,
 });
@@ -26,6 +27,7 @@ const work = (start: number, first: number, end: number, over: Partial<StageInte
   ...queue(start, end),
   waitingMs: (first - start) * MIN,
   workingMs: (end - first) * MIN,
+  idleMs: 0,
   firstActionAt: at(first),
   ...over,
 });
@@ -41,7 +43,10 @@ const summary: OrderActivitySummary = {
     {
       stage: "PACKING",
       statusMs: 95 * MIN,
-      intervals: [work(20, 30, 45), work(60, 64, 140, { running: true })],
+      intervals: [
+        work(20, 30, 45),
+        work(60, 64, 140, { running: true, workingMs: 51 * MIN, idleMs: 25 * MIN }),
+      ],
     },
     { stage: "QA", statusMs: 10 * MIN, intervals: [work(45, 50, 55)] },
     { stage: "READY", statusMs: 0, intervals: [] },
@@ -97,10 +102,16 @@ describe("ActivitySummary", () => {
     const bars = within(row("PACKING")).getAllByRole("img");
     expect(bars.map((b) => b.getAttribute("aria-label"))).toEqual([
       "Waiting 10 min, working 15 min",
-      "Waiting 4 min, working 1 h 16 min",
+      "Waiting 4 min, working 51 min, idle 25 min",
     ]);
     expect(row("PACKING").textContent).toContain("Round 2: 1 h 20 min");
-    expect(row("PACKING").textContent).toContain("Working 15 min (first to last action)");
+    expect(row("PACKING").textContent).toContain("Working 15 min (pauses over 10 min left out)");
+    expect(row("PACKING").textContent).toContain("Idle 25 min");
+    // Idle is shown only where there was some.
+    expect(row("QA").textContent).not.toContain("Idle");
+    screen.getByText(
+      "Working time leaves out pauses of more than 10 minutes between actions; those show as idle.",
+    );
     expect(within(row("PACKING")).getByText("Now")).toBeTruthy();
   });
 
