@@ -86,10 +86,13 @@ export const StageInterval = z.object({
   statusMs: z.number().int().min(0),
   /**
    * Work stages only, else null. Waiting is start → the first action by a person; working is that
-   * action → end. They add up to `statusMs`; with no action yet it is all waiting.
+   * action → end, less idle: each gap of more than `IDLE_CUTOFF_MS` (10 min) between consecutive
+   * actions by people, or from the last one to the end, is idle (SPEC-reporting decision 6).
+   * The three add up to `statusMs`; with no action yet it is all waiting.
    */
   waitingMs: z.number().int().min(0).nullable(),
   workingMs: z.number().int().min(0).nullable(),
+  idleMs: z.number().int().min(0).nullable(),
   firstActionAt: z.date().nullable(),
   /** A pick begun from a batch: its number and how many orders it started with. */
   batch: z

@@ -314,8 +314,9 @@ removed), `apps/web/src/app/(app)/{pack/[orderId]/order-drawer,qa/[orderId]/qa-d
 
 ## Open questions
 
-1. **Idle cutoff.** Should working time skip pauses longer than some limit (5 or 10 minutes)? Asked in the
-   warehouse manager review; until answered, spans include pauses and the UI labels them "first to last action".
+1. **Idle cutoff.** ~~Should working time skip pauses longer than some limit (5 or 10 minutes)?~~ Answered
+   2026-11-18: gaps over 10 minutes count as idle, not working. Built by `reporting`
+   ([SPEC-reporting](SPEC-reporting.md), decision 6) in the shared `summary.ts`, which changes this view too.
 2. **Batch time.** Split a batch's picking time across its orders (evenly, or by items), or keep each order's own
    pick times as now? Also asked in the review; affects `reporting` more than this view.
 3. **Station-only users.** They hold floor roles; confirm the same per-role visibility applies to them.

@@ -28,6 +28,7 @@ import {
   createShippingProviders,
   createStationUser,
   customsProducts,
+  cycleTime,
   dailyOrderActivity,
   deactivateUser,
   deleteBox,
@@ -106,6 +107,7 @@ import {
   pushErrors,
   qaRemoveLot,
   qaReplaceLot,
+  quality,
   queueCounts,
   quoteOneOff,
   reactivateUser,
@@ -122,6 +124,7 @@ import {
   reorderPriorityRules,
   repackOrders,
   reportIssue,
+  reportsToday,
   requestSync,
   resendInvitation,
   resolveIssue,
@@ -168,6 +171,7 @@ import {
   testLumexiaConnection,
   testProvider,
   testStoreConnection,
+  throughput,
   touchStation,
   unarchiveLabAddress,
   unarchiveLabParcel,
@@ -813,6 +817,18 @@ export const router = implementer.router({
     ),
     realOrders: api.rateLab.realOrders.handler(({ input, context }) =>
       realOrders(db, context.actor, input),
+    ),
+  },
+  reports: {
+    throughput: api.reports.throughput.handler(({ input, context }) =>
+      throughput(db, context.actor, input),
+    ),
+    cycleTime: api.reports.cycleTime.handler(({ input, context }) =>
+      cycleTime(db, context.actor, input),
+    ),
+    quality: api.reports.quality.handler(({ input, context }) => quality(db, context.actor, input)),
+    today: api.reports.today.handler(({ input, context }) =>
+      reportsToday(db, context.actor, input),
     ),
   },
 });

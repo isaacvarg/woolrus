@@ -172,6 +172,7 @@ model OrderItem {
   returnItems   ReturnItem[]
 
   @@index([orderId])
+  @@index([pickedAt])
   @@map("order_items")
 }
 
@@ -192,6 +193,7 @@ model OrderStageEvent {
 
   @@index([orderId, at])
   @@index([toStatus, at])
+  @@index([at])
   @@map("order_stage_events")
 }
 
@@ -326,5 +328,7 @@ model ScanMiss {
 
   @@index([orderId, at])
   @@index([actorId, at])
+  /// Reports → Quality reads blocked scans by time across orders (SPEC-reporting).
+  @@index([at])
   @@map("scan_misses")
 }

@@ -1,6 +1,7 @@
 import { createDb } from "../src/index";
 import { seedDemoOrders } from "./seed-orders";
 import { seedRateLab } from "./seed-rate-lab";
+import { seedReportingHistory } from "./seed-reporting";
 
 const db = createDb();
 
@@ -54,6 +55,8 @@ async function main() {
     const fakeShipping = process.env.SHIPPING_PROVIDERS === "fake";
     console.log(`Seeded ${await seedDemoOrders(db, { fakeShipping })} demo orders`);
     console.log(`Seeded Rate Lab data and ${await seedRateLab(db, { fakeShipping })} lab runs`);
+    // 30 days of shipped orders, so every report has something to show (SPEC-reporting "Dev data").
+    console.log(`Seeded ${await seedReportingHistory(db)} shipped orders of report history`);
   }
 }
 

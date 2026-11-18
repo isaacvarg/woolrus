@@ -20,6 +20,7 @@ import { useFormatter, useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
 import { Input, Label, SearchField, ToggleButton, ToggleButtonGroup } from "react-aria-components";
 import type { z } from "zod";
+import { ExportCsvLink } from "@/components/export-csv-link";
 import { NoteCount } from "@/components/notes/note-count";
 import { Button } from "@/components/ui/fields";
 import { useErrorMessage } from "@/lib/errors";
@@ -83,7 +84,7 @@ const headerKey = {
   orderedAt: "queue.orderedAt",
 } as const satisfies Record<OrderListSort, string>;
 
-export function OrdersTable() {
+export function OrdersTable({ canExport }: { canExport: boolean }) {
   const t = useTranslations();
   const format = useFormatter();
   const router = useRouter();
@@ -186,6 +187,19 @@ export function OrdersTable() {
             </ToggleButton>
           ))}
         </ToggleButtonGroup>
+        {canExport && (
+          <div className="ms-auto">
+            <ExportCsvLink
+              path="/api/orders/export.csv"
+              params={{
+                search: query.search,
+                statuses: query.statuses,
+                sort: query.sort,
+                dir: query.dir,
+              }}
+            />
+          </div>
+        )}
       </div>
 
       <div className="overflow-x-auto rounded-box bg-base-100 shadow-sm">

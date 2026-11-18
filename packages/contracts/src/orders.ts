@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { base, Id } from "./base";
+import { base, Id, QueryBoolean } from "./base";
 import { LotDto } from "./lumexia";
 import { orderActivityRoute } from "./order-activity";
 import { PackApprovalInput } from "./pack-checks";
@@ -115,6 +115,8 @@ export const QueueInput = z.object({
   stage: QueueStage,
   /** Order number prefix ("#" optional) or part of the customer's name. */
   search: z.string().trim().max(100).optional(),
+  /** Only the orders past their stage's SLA (the dashboard's SLA alert links here). */
+  late: QueryBoolean.optional(),
   /** `nextCursor` of the previous page. Opaque. */
   cursor: z.string().max(500).optional(),
   // Coerced: over /api/v1 it arrives as a query string.
@@ -165,12 +167,29 @@ export type QueueRow = z.infer<typeof QueueRow>;
 export const QueuePage = z.object({ rows: z.array(QueueRow), nextCursor: z.string().nullable() });
 export type QueuePage = z.infer<typeof QueuePage>;
 
-/** Orders in each queue, for the nav. */
-export const QueueCounts = z.record(QueueStage, z.number().int());
+/** The queues an SLA can apply to (`Settings.stageSlaMinutes`): every one but On Hold. */
+export const SlaStage = QueueStage.exclude(["ON_HOLD"]);
+export type SlaStage = z.infer<typeof SlaStage>;
+
+const count = z.number().int();
+
+/**
+ * Orders in each queue, for the nav and the dashboard. `late` counts, per stage, the orders
+ * `listQueue` flags `slaBreached`: zero for a stage without an SLA.
+ */
+export const QueueCounts = z.object({
+  PENDING: count,
+  PICKING: count,
+  PACKING: count,
+  QA: count,
+  READY: count,
+  ON_HOLD: count,
+  late: z.record(SlaStage, count),
+});
 export type QueueCounts = z.infer<typeof QueueCounts>;
 
 /** An IANA time zone (`America/Chicago`), checked against the runtime's zone database. */
-const TimeZone = z.string().refine(
+export const TimeZone = z.string().refine(
   (zone) => {
     try {
       new Intl.DateTimeFormat("en", { timeZone: zone });
@@ -512,7 +531,12 @@ export const orders = {
     .input(QueueInput)
     .output(QueuePage),
   counts: base
-    .route({ method: "GET", path: "/orders/counts", tags, summary: "Orders in each queue" })
+    .route({
+      method: "GET",
+      path: "/orders/counts",
+      tags,
+      summary: "Orders in each queue, and those past their stage SLA",
+    })
     .output(QueueCounts),
   dailyActivity: base
     .route({

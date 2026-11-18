@@ -18,6 +18,7 @@ vi.mock("@/server/actor", () => ({
   resolveActor: async () =>
     mocks.roles && {
       actor: { userId: "u", roles: mocks.roles, stationId: null, requestId: "r" },
+      user: { locale: "en" },
     },
 }));
 vi.mock("@woolrus/logger", async (original) => {

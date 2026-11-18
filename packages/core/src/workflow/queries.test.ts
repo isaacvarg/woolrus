@@ -252,6 +252,68 @@ describe("queueCounts", () => {
       QA: 1,
       READY: 0,
       ON_HOLD: 1,
+      late: { PENDING: 0, PICKING: 0, PACKING: 0, QA: 0, READY: 0 },
+    });
+  });
+
+  it("counts late orders per stage with the same rule as listQueue's slaBreached", async () => {
+    const slas = { PENDING: 60, PICKING: 30, PACKING: 45, QA: 20, READY: 120 } as const;
+    await db.settings.upsert({
+      where: { id: 1 },
+      create: { id: 1, stageSlaMinutes: slas },
+      update: { stageSlaMinutes: slas },
+    });
+    const now = new Date();
+    const ago = (ms: number) => new Date(now.getTime() - ms);
+    const stages = Object.keys(slas) as (keyof typeof slas)[];
+    for (const [i, stage] of stages.entries()) {
+      const sla = slas[stage] * 60_000;
+      // Exactly at the SLA is on time; past it is late. Stage i gets i + 1 late orders.
+      await createOrder(db, { status: stage, statusChangedAt: ago(sla) });
+      await createOrder(db, { status: stage, statusChangedAt: ago(sla - 60_000) });
+      for (let n = 0; n <= i; n++) {
+        await createOrder(db, { status: stage, statusChangedAt: ago(sla + 1 + n * 1000) });
+      }
+    }
+    await createOrder(db, { status: "ON_HOLD", heldFromStatus: "QA", statusChangedAt: ago(1e9) });
+
+    const { late } = await queueCounts(db, picker, { now });
+    for (const stage of stages) {
+      const rows = (await listQueue(db, picker, { stage }, { now })).rows;
+      expect(late[stage], stage).toBe(rows.filter((r) => r.slaBreached).length);
+    }
+    expect(late).toEqual({ PENDING: 1, PICKING: 2, PACKING: 3, QA: 4, READY: 5 });
+
+    // The SLA alert links to each queue's late orders: `late` lists exactly the ones it counts.
+    for (const stage of stages) {
+      const lateRows = (await listQueue(db, picker, { stage, late: true }, { now })).rows;
+      expect(lateRows, stage).toHaveLength(late[stage]);
+      expect(
+        lateRows.every((r) => r.slaBreached),
+        stage,
+      ).toBe(true);
+    }
+    // On hold has no SLA, so nothing in it is late.
+    expect((await listQueue(db, picker, { stage: "ON_HOLD", late: true }, { now })).rows).toEqual(
+      [],
+    );
+  });
+
+  it("counts no late orders in a stage without an SLA", async () => {
+    await db.settings.upsert({
+      where: { id: 1 },
+      create: { id: 1, stageSlaMinutes: { QA: 10 } },
+      update: { stageSlaMinutes: { QA: 10 } },
+    });
+    await createOrder(db, { statusChangedAt: minutesAgo(10_000) });
+    await createOrder(db, { status: "QA", statusChangedAt: minutesAgo(11) });
+
+    expect((await queueCounts(db, picker)).late).toEqual({
+      PENDING: 0,
+      PICKING: 0,
+      PACKING: 0,
+      QA: 1,
+      READY: 0,
     });
   });
 

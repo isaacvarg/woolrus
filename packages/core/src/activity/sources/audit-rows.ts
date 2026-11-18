@@ -2,7 +2,7 @@ import { actionRegistry } from "../actions";
 import type { ActivitySource } from "./types";
 
 /** Actions another entry already shows (a move's audit row, by its stage event). */
-const hiddenActions = Object.entries(actionRegistry)
+export const hiddenActions = Object.entries(actionRegistry)
   .filter(([, spec]) => "hidden" in spec && spec.hidden)
   .map(([action]) => action);
 

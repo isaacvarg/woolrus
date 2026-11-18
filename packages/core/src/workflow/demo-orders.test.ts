@@ -1,3 +1,4 @@
+import { QueueStage } from "@woolrus/contracts";
 import type { Db } from "@woolrus/db";
 import { seedDemoOrders } from "@woolrus/db/demo";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
@@ -25,7 +26,7 @@ describe("seedDemoOrders", () => {
     expect(await seedDemoOrders(db)).toBeGreaterThanOrEqual(25);
 
     const counts = await queueCounts(db, admin);
-    for (const stage of Object.keys(counts) as (keyof typeof counts)[]) {
+    for (const stage of QueueStage.options) {
       expect(counts[stage], stage).toBeGreaterThan(0);
     }
     expect(await db.order.count({ where: { status: "COMPLETED" } })).toBeGreaterThan(0);

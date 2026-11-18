@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useFormatter, useTranslations } from "next-intl";
 import { useEffect, useId, useState } from "react";
 import { Input, Label, SearchField, Tab, TabList, Tabs } from "react-aria-components";
+import { ExportCsvLink } from "@/components/export-csv-link";
 import { Button } from "@/components/ui/fields";
 import { useErrorMessage } from "@/lib/errors";
 import { orpc } from "@/lib/orpc";
@@ -39,6 +40,7 @@ const severityBadge = {
 export function IssuesManager({
   canResolve,
   canDelete,
+  canExport,
   canWriteCustomer,
   userId,
   initialTab,
@@ -46,6 +48,7 @@ export function IssuesManager({
 }: {
   canResolve: boolean;
   canDelete: boolean;
+  canExport: boolean;
   canWriteCustomer: boolean;
   userId: string | null;
   initialTab: IssuesTab;
@@ -146,6 +149,14 @@ export function IssuesManager({
             </option>
           ))}
         </select>
+        {canExport && (
+          <div className="ms-auto">
+            <ExportCsvLink
+              path="/api/issues/export.csv"
+              params={{ status: tab, severity, type, search }}
+            />
+          </div>
+        )}
       </div>
 
       {list.isPending && <p>{t("common.loading")}</p>}

@@ -14,6 +14,7 @@ import {
   TabList,
   Tabs,
 } from "react-aria-components";
+import { ExportCsvLink } from "@/components/export-csv-link";
 import { Button } from "@/components/ui/fields";
 import { useErrorMessage } from "@/lib/errors";
 import { orpc } from "@/lib/orpc";
@@ -28,9 +29,11 @@ export type VoidsTab = "unresolved" | "resolved";
 /** The tab lives in `?tab=`, so a reload or a link keeps it. */
 export function VoidsManager({
   canResolve,
+  canExport,
   initialTab,
 }: {
   canResolve: boolean;
+  canExport: boolean;
   initialTab: VoidsTab;
 }) {
   const t = useTranslations();
@@ -103,6 +106,11 @@ export function VoidsManager({
           <Button isDisabled={chosen.length === 0} onPress={() => setResolving(chosen)}>
             {t("voids.page.resolveSelected", { count: chosen.length })}
           </Button>
+        )}
+        {canExport && (
+          <div className="ms-auto">
+            <ExportCsvLink path="/api/voids/export.csv" params={{ status: tab, search }} />
+          </div>
         )}
       </div>
 

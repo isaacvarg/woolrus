@@ -9,6 +9,7 @@ import {
   type QueueCounts,
   type QueuePage,
   QueueStage,
+  SlaStage,
   StageSlaMinutes,
 } from "@woolrus/contracts";
 import { type DbTx, Prisma, type WorkflowStatus } from "@woolrus/db";
@@ -34,6 +35,8 @@ import { displayName, nameFields } from "./people";
 export type ListQueueInput = {
   stage: QueueStage;
   search?: string;
+  /** Only orders past the stage's SLA. */
+  late?: boolean;
   cursor?: string;
   limit?: number;
 };
@@ -73,6 +76,26 @@ export const queueOrderBy = [
   { orderedAt: "asc" },
   { id: "asc" },
 ] as const satisfies Prisma.OrderOrderByWithRelationInput[];
+
+/** Each stage's SLA in minutes. Stored JSON that no longer fits reads as "no SLA", as in the settings service. */
+function stageSlas(settings: { stageSlaMinutes: unknown }): StageSlaMinutes {
+  const slas = StageSlaMinutes.safeParse(settings.stageSlaMinutes);
+  return slas.success ? slas.data : {};
+}
+
+/**
+ * The SLA rule: an order is late once its time in stage is over the stage's SLA, i.e. it
+ * entered the stage before this cutoff. Null when the stage has no SLA. `listQueue`'s
+ * `slaBreached` and `queueCounts`' `late` both use it, so the two can't disagree.
+ */
+function slaCutoff(slaMinutes: number | undefined, now: Date): Date | null {
+  return typeof slaMinutes === "number" ? new Date(now.getTime() - slaMinutes * 60_000) : null;
+}
+
+/** Only the late orders, by the same cutoff: none at all in a stage with no SLA. */
+function lateFilter(lateBefore: Date | null): Prisma.Sql {
+  return lateBefore ? Prisma.sql`AND o.status_changed_at < ${lateBefore}` : Prisma.sql`AND false`;
+}
 
 /** LIKE treats `%`, `_` and `\` as syntax; search text is literal. */
 const escapeLike = (text: string) => text.replace(/[\\%_]/g, (c) => `\\${c}`);
@@ -135,7 +158,7 @@ function printStateOf(r: QueueSqlRow): PrintState {
 export async function listQueue(
   db: DbTx,
   actor: Actor,
-  { stage, search, cursor, limit = 50 }: ListQueueInput,
+  { stage, search, late, cursor, limit = 50 }: ListQueueInput,
   { now = new Date() }: QueryOptions = {},
 ): Promise<QueuePage> {
   assertCan(actor, "order.read");
@@ -144,9 +167,7 @@ export async function listQueue(
 
   const settings = await loadSettings(db);
   const claimCutoff = new Date(now.getTime() - settings.claimExpiryMinutes * 60_000);
-  // Stored JSON that no longer fits reads as "no SLA", as in the settings service.
-  const slas = StageSlaMinutes.safeParse(settings.stageSlaMinutes);
-  const sla = stage !== "ON_HOLD" && slas.success ? slas.data[stage] : undefined;
+  const lateBefore = stage === "ON_HOLD" ? null : slaCutoff(stageSlas(settings)[stage], now);
 
   const rows = await db.$queryRaw<QueueSqlRow[]>`
     SELECT o.id, o.number, o.customer_name AS "customerName", o.pii_redacted_at IS NOT NULL AS "piiRedacted", o.priority,
@@ -236,6 +257,7 @@ export async function listQueue(
     ) pl ON pl.order_id = o.id
     WHERE o.status = ${stage}::workflow_status
       ${searchFilter(search)}
+      ${late ? lateFilter(lateBefore) : Prisma.empty}
       ${afterCursor(after)}
     ORDER BY o.priority DESC, o.ordered_at ASC, o.id ASC
     LIMIT ${pageSize + 1}`;
@@ -256,8 +278,7 @@ export async function listQueue(
       priority: r.priority,
       orderedAt: r.orderedAt,
       stageEnteredAt: r.stageEnteredAt,
-      slaBreached:
-        typeof sla === "number" && now.getTime() - r.stageEnteredAt.getTime() > sla * 60_000,
+      slaBreached: lateBefore !== null && r.stageEnteredAt < lateBefore,
       claim:
         r.claimerName !== null && r.claimerEmail !== null && r.claimedById && r.claimedAt
           ? {
@@ -284,16 +305,39 @@ export async function listQueue(
   };
 }
 
-/** How many orders wait in each queue, for the nav. */
-export async function queueCounts(db: DbTx, actor: Actor): Promise<QueueCounts> {
+/**
+ * How many orders wait in each queue, for the nav, and how many of them are past their stage's
+ * SLA, for the dashboard's alert (SPEC-reporting "Home dashboard").
+ */
+export async function queueCounts(
+  db: DbTx,
+  actor: Actor,
+  { now = new Date() }: QueryOptions = {},
+): Promise<QueueCounts> {
   assertCan(actor, "order.read");
-  const groups = await db.order.groupBy({
-    by: ["status"],
-    where: { status: { in: QueueStage.options } },
-    _count: { _all: true },
+  const slas = stageSlas(await loadSettings(db));
+  const cutoffs = SlaStage.options.flatMap((stage) => {
+    const cutoff = slaCutoff(slas[stage], now);
+    return cutoff ? [Prisma.sql`WHEN ${stage} THEN ${cutoff}::timestamptz`] : [];
   });
-  const counts = Object.fromEntries(QueueStage.options.map((s) => [s, 0])) as QueueCounts;
-  for (const g of groups) counts[g.status as QueueStage] = g._count._all;
+  const late = cutoffs.length
+    ? Prisma.sql`o.status_changed_at < CASE o.status::text ${Prisma.join(cutoffs, " ")} END`
+    : Prisma.sql`FALSE`;
+
+  const groups = await db.$queryRaw<{ status: QueueStage; total: number; late: number }[]>`
+    SELECT o.status::text AS status, COUNT(*)::int AS total,
+      COUNT(*) FILTER (WHERE ${late})::int AS late
+    FROM orders o
+    WHERE o.status = ANY(${QueueStage.options}::workflow_status[])
+    GROUP BY o.status`;
+
+  const zeros = <S extends string>(stages: readonly S[]) =>
+    Object.fromEntries(stages.map((s) => [s, 0])) as Record<S, number>;
+  const counts: QueueCounts = { ...zeros(QueueStage.options), late: zeros(SlaStage.options) };
+  for (const g of groups) {
+    counts[g.status] = g.total;
+    if (g.status !== "ON_HOLD") counts.late[g.status] = g.late;
+  }
   return counts;
 }
 
@@ -476,7 +520,8 @@ export type ListOrdersInput = {
   pageSize?: number;
 };
 
-function orderBy(sort: OrderListSort, dir: "asc" | "desc"): Prisma.Sql {
+/** All Orders' ORDER BY for a sort (the CSV export uses it too, so the file matches the screen). */
+export function orderListOrderBy(sort: OrderListSort, dir: "asc" | "desc"): Prisma.Sql {
   const d = Prisma.raw(dir === "asc" ? "ASC" : "DESC");
   switch (sort) {
     // Woo order numbers are digits: shorter is smaller, so "999" sorts before "1000".
@@ -493,6 +538,15 @@ function orderBy(sort: OrderListSort, dir: "asc" | "desc"): Prisma.Sql {
       return Prisma.sql`o.ordered_at ${d}`;
   }
 }
+
+/** All Orders' WHERE for its filters, over `orders o`. */
+export const orderListWhere = ({
+  search,
+  statuses,
+}: Pick<ListOrdersInput, "search" | "statuses">) =>
+  Prisma.sql`WHERE TRUE
+    ${statuses?.length ? Prisma.sql`AND o.status = ANY(${statuses}::workflow_status[])` : Prisma.empty}
+    ${searchFilter(search)}`;
 
 type OrderListSqlRow = {
   id: string;
@@ -516,9 +570,7 @@ export async function listOrders(
   const size = Math.min(Math.max(Math.trunc(pageSize), 1), 100);
   const pageNumber = Math.max(Math.trunc(page), 1);
 
-  const where = Prisma.sql`WHERE TRUE
-    ${statuses?.length ? Prisma.sql`AND o.status = ANY(${statuses}::workflow_status[])` : Prisma.empty}
-    ${searchFilter(search)}`;
+  const where = orderListWhere({ search, statuses });
 
   const [rows, [count]] = await Promise.all([
     db.$queryRaw<OrderListSqlRow[]>`
@@ -527,7 +579,7 @@ export async function listOrders(
         o.external_change_detected_at IS NOT NULL AS "externalChange"
       FROM orders o
       ${where}
-      ORDER BY ${orderBy(sort, dir)}, o.id ASC
+      ORDER BY ${orderListOrderBy(sort, dir)}, o.id ASC
       LIMIT ${size} OFFSET ${(pageNumber - 1) * size}`,
     db.$queryRaw<{ total: number }[]>`SELECT COUNT(*)::int AS total FROM orders o ${where}`,
   ]);

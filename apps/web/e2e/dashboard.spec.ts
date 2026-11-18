@@ -1,6 +1,10 @@
 import { expect, test } from "@playwright/test";
+import { createDb } from "@woolrus/db";
 import { signInAs } from "./support/auth";
 import { createOrder, deleteCreatedOrders } from "./support/orders";
+import { withSettingsLock } from "./support/settings-lock";
+
+const db = createDb();
 
 // The home dashboard: live counts, orders per day, and big buttons into each queue.
 
@@ -43,4 +47,69 @@ test("the dashboard counts open work, charts orders per day and opens each queue
   }
   await queues.getByRole("link", { name: /^Packing/ }).click();
   await expect(page).toHaveURL("/queue/packing");
+});
+
+test("a packer sees orders past their SLA above the tiles and taps through to the queue", async ({
+  page,
+}) => {
+  await signInAs(page, ["PACKER"]);
+  await withSettingsLock(async () => {
+    const before = await db.settings.findUnique({ where: { id: 1 } });
+    const slas = { ...(before?.stageSlaMinutes as object | null), PACKING: 60 };
+    await db.settings.upsert({
+      where: { id: 1 },
+      create: { id: 1, stageSlaMinutes: slas },
+      update: { stageSlaMinutes: slas },
+    });
+    try {
+      const overdue = await createOrder({
+        status: "PACKING",
+        statusChangedAt: new Date(Date.now() - 2 * 3_600_000),
+      });
+      const onTime = await createOrder({ status: "PACKING" });
+      await page.goto("/");
+
+      // Other tests' orders may be late too: the count is at least ours.
+      const alert = page.getByRole("status", { name: "Orders past their stage's time limit" });
+      await expect(alert).toContainText(/past SLA$/);
+      const packing = alert.getByRole("link", { name: /^\d+ in Packing$/ });
+      await expect(packing).toBeVisible();
+      expect((await packing.boundingBox())?.height).toBeGreaterThanOrEqual(44);
+      await packing.click();
+      // The queue opens filtered to its late orders, and says so.
+      await expect(page).toHaveURL("/queue/packing?late=1");
+      await expect(page.getByRole("status").filter({ hasText: "only orders past" })).toBeVisible();
+      await expect(page.getByRole("row").filter({ hasText: overdue.number })).toBeVisible();
+      await expect(page.getByRole("row").filter({ hasText: onTime.number })).toHaveCount(0);
+      await page.getByRole("link", { name: "Show all" }).click();
+      await expect(page).toHaveURL("/queue/packing");
+      await expect(page.getByRole("row").filter({ hasText: onTime.number })).toBeVisible();
+    } finally {
+      await db.settings.update({
+        where: { id: 1 },
+        data: { stageSlaMinutes: before?.stageSlaMinutes ?? {} },
+      });
+    }
+  });
+});
+
+test("a Reports holder gets the shipped-today and cycle-time tiles; a picker doesn't", async ({
+  page,
+}) => {
+  await signInAs(page, ["PICKER"]);
+  await page.goto("/");
+  await expect(page.getByTestId("tile-open")).toHaveText(/\d/);
+  await expect(page.getByTestId("tile-shipped-today")).toHaveCount(0);
+  await expect(page.getByTestId("tile-median-cycle")).toHaveCount(0);
+
+  await signInAs(page, ["PACKER", "REPORTS"]);
+  await page.goto("/");
+  const shipped = page.getByTestId("tile-shipped-today");
+  await expect(shipped.locator("dd").first()).toHaveText(/^\d[\d,]*$/);
+  await expect(page.getByTestId("tile-median-cycle").locator("dd").first()).toHaveText(/\d|—/);
+  await shipped.getByRole("link", { name: "Throughput report" }).click();
+  await expect(page).toHaveURL("/reports/throughput?range=today");
+  await page.goBack();
+  await page.getByRole("link", { name: "Cycle time report" }).click();
+  await expect(page).toHaveURL("/reports/cycle-time");
 });

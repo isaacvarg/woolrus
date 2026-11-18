@@ -17,7 +17,7 @@ const where = (status: VoidListStatus): Prisma.ItemVoidWhereInput =>
       ? { resolvedAt: { not: null } }
       : {};
 
-const sqlFilter = (status: VoidListStatus): Prisma.Sql =>
+export const voidListFilter = (status: VoidListStatus): Prisma.Sql =>
   status === "unresolved"
     ? Prisma.sql`v.undone_at IS NULL AND v.resolved_at IS NULL`
     : status === "resolved"
@@ -53,7 +53,7 @@ export async function listVoids(
   const page = await db.$queryRaw<{ id: string; at: Date }[]>`
     SELECT o.id, MAX(${at}) AS at
     FROM item_voids v JOIN orders o ON o.id = v.order_id
-    WHERE ${sqlFilter(status)} ${searchFilter(search)}
+    WHERE ${voidListFilter(status)} ${searchFilter(search)}
     GROUP BY o.id
     ${
       after

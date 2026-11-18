@@ -7,10 +7,13 @@ import {
   type StageSummary,
   WorkStage,
 } from "@woolrus/contracts";
+import { IDLE_CUTOFF_MS } from "@woolrus/core/activity-summary";
 import { useFormatter, useTranslations } from "next-intl";
 import { useId } from "react";
 
 const MINUTE = 60_000;
+/** The idle cutoff as the labels say it (SPEC-reporting decision 6). */
+const IDLE_MINUTES = IDLE_CUTOFF_MS / MINUTE;
 
 /** "45 min", "2 h 5 min", "3 d 4 h": whole minutes, the two largest units. */
 export function useDuration() {
@@ -28,7 +31,7 @@ export function useDuration() {
 
 /**
  * The top of the History tab (SPEC-order-activity "Stage summary", "UI"): status time per stage,
- * a waiting/working bar for each work interval, and who worked each work stage. Either part may be
+ * a waiting/working/idle bar for each work interval, and who worked each work stage. Either part may be
  * absent when the viewer's roles may not see it (SPEC-order-activity "Visibility"): without the
  * times it lists the work stages people worked.
  */
@@ -75,7 +78,11 @@ export function ActivitySummary({
           {t("activity.summary.onHold", { time: duration(summary.onHoldMs) })}
         </p>
       )}
-      {summary && <p className="text-sm opacity-70">{t("activity.summary.workingNote")}</p>}
+      {summary && (
+        <p className="text-sm opacity-70">
+          {t("activity.summary.workingNote", { minutes: IDLE_MINUTES })}
+        </p>
+      )}
     </section>
   );
 }
@@ -137,15 +144,18 @@ function StageRow({
   );
 }
 
-/** One stay in a work stage: its waiting/working bar, and its batch when picked in one. */
+/** One stay in a work stage: its waiting/working/idle bar, and its batch when picked in one. */
 function WorkInterval({ interval, round }: { interval: StageInterval; round: number | null }) {
   const t = useTranslations("activity.summary");
   const duration = useDuration();
   const waiting = interval.waitingMs ?? 0;
   const working = interval.workingMs ?? 0;
-  const total = waiting + working;
-  const waitingShare = total > 0 ? (waiting / total) * 100 : 100;
-  const label = t("bar", { waiting: duration(waiting), working: duration(working) });
+  const idle = interval.idleMs ?? 0;
+  const total = waiting + working + idle;
+  const share = (ms: number) => (total > 0 ? (ms / total) * 100 : 0);
+  const waitingShare = total > 0 ? share(waiting) : 100;
+  const times = { waiting: duration(waiting), working: duration(working), idle: duration(idle) };
+  const label = idle > 0 ? t("barIdle", times) : t("bar", times);
 
   return (
     <div className="mt-1 space-y-1">
@@ -160,11 +170,14 @@ function WorkInterval({ interval, round }: { interval: StageInterval; round: num
         className="bg-base-300 flex h-3 w-full overflow-hidden rounded-full"
       >
         <div className="bg-warning h-full" style={{ width: `${waitingShare}%` }} />
-        <div className="bg-success h-full" style={{ width: `${100 - waitingShare}%` }} />
+        <div className="bg-success h-full" style={{ width: `${share(working)}%` }} />
+        {/* Idle sits in the track's own colour; the text below names it, so colour isn't the cue. */}
+        <div className="bg-neutral/30 h-full" style={{ width: `${share(idle)}%` }} />
       </div>
       <div className="flex flex-wrap justify-between gap-2 text-sm">
-        <span>{t("waiting", { time: duration(waiting) })}</span>
-        <span>{t("working", { time: duration(working) })}</span>
+        <span>{t("waiting", { time: times.waiting })}</span>
+        <span>{t("working", { time: times.working, minutes: IDLE_MINUTES })}</span>
+        {idle > 0 && <span>{t("idle", { time: times.idle })}</span>}
       </div>
       {interval.batch && (
         <div className="text-sm">
