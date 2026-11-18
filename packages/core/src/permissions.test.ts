@@ -94,6 +94,26 @@ describe("permissions", () => {
     expect(can(actor(["RATE_LAB"]), "report.read")).toBe(false);
   });
 
+  it("gives the Reports role report.read and nothing else beyond the everyone set", () => {
+    expect(permissionsFor(["REPORTS"])).toEqual([
+      "box.read",
+      "issue.report",
+      "note.write",
+      "order.hold",
+      "order.read",
+      "report.read",
+      "void.create",
+    ]);
+    expect(can(actor(["ADMIN"]), "report.read")).toBe(true);
+    expect(can(actor(["PACKER", "REPORTS"]), "report.read")).toBe(true);
+    for (const role of ["PICKER", "PACKER", "QA", "SHIPPER", "RATE_LAB"] as const) {
+      expect(can(actor([role]), "report.read")).toBe(false);
+    }
+    for (const permission of ["settings.manage", "user.manage", "ratelab.use"] as const) {
+      expect(can(actor(["PACKER", "REPORTS"]), permission)).toBe(false);
+    }
+  });
+
   it("gives packCheck.approve to QA and Admin only (SPEC-packing A1 criterion 27)", () => {
     expect(can(actor(["ADMIN"]), "packCheck.approve")).toBe(true);
     expect(can(actor(["QA"]), "packCheck.approve")).toBe(true);

@@ -9,6 +9,8 @@ enum Role {
   SHIPPER
   /// Rate Lab: run price tests and manage test addresses and parcels (SPEC-rate-lab decision 13).
   RATE_LAB
+  /// Reports: read reports and the CSV exports (SPEC-reporting decision 5).
+  REPORTS
 
   @@map("role")
 }

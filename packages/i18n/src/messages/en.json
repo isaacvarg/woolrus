@@ -44,7 +44,8 @@
     "rateLab": "Rate Lab",
     "lumexiaItems": "Lumexia items",
     "tools": "Tools",
-    "configs": "Configs"
+    "configs": "Configs",
+    "reports": "Reports"
   },
   "navFooter": {
     "preferences": "Preferences",
@@ -1324,7 +1325,8 @@
       "emailFrom": "Use an address like no-reply@example.com or Woolrus '<'no-reply@example.com>.",
       "country": "Use the 2-letter country code, e.g. US.",
       "dateRange": "The end date must be on or after the start date.",
-      "dateRangeTooLong": "Pick a range of at most 366 days."
+      "dateRangeTooLong": "Pick a range of at most 366 days.",
+      "reportRangeTooLong": "Pick a range of at most 92 days."
     },
     "settings": {
       "encryptionKeyMissing": "Secrets can't be saved: the server's encryption key is missing or invalid. Ask whoever runs the server to set SETTINGS_ENCRYPTION_KEY.",
@@ -1641,7 +1643,8 @@
       "PACKER": "Packer",
       "QA": "QA",
       "SHIPPER": "Shipper",
-      "RATE_LAB": "Rate Lab"
+      "RATE_LAB": "Rate Lab",
+      "REPORTS": "Reports"
     },
     "setPin": "Set PIN",
     "clearPin": "Clear PIN",
@@ -1959,6 +1962,34 @@
     "created": "Manifest created for {count, plural, one {# label} other {# labels}}.",
     "made": "Manifest at {time} · {count, plural, one {# label} other {# labels}}",
     "print": "Print"
+  },
+  "reports": {
+    "title": "Reports",
+    "sections": "Report sections",
+    "tabs": {
+      "throughput": "Throughput",
+      "cycleTime": "Cycle time",
+      "quality": "Quality",
+      "spend": "Spend"
+    },
+    "range": {
+      "label": "Date range",
+      "today": "Today",
+      "7d": "Last 7 days",
+      "30d": "Last 30 days",
+      "90d": "Last 90 days",
+      "custom": "Custom",
+      "from": "From",
+      "to": "To",
+      "days": "{from} – {to}",
+      "timeZone": "Days in {zone}"
+    },
+    "comingSoon": "This report isn't built yet.",
+    "spend": {
+      "title": "Shipping spend",
+      "body": "What labels cost by carrier and service, and label cost against shipping charged, are on Rate Lab's Real orders page.",
+      "open": "Open Real orders for these dates"
+    }
   },
   "rateLab": {
     "title": "Rate Lab",

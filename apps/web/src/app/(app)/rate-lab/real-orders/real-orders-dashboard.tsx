@@ -1,7 +1,13 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import type { RealOrders, RealOrdersInput, RealOrdersLaneWeek } from "@woolrus/contracts";
+import {
+  IsoDate,
+  type RealOrders,
+  type RealOrdersInput,
+  type RealOrdersLaneWeek,
+} from "@woolrus/contracts";
+import { useSearchParams } from "next/navigation";
 import { useFormatter, useTranslations } from "next-intl";
 import { useState } from "react";
 import {
@@ -47,11 +53,19 @@ export type Filters = {
   includeFake: boolean;
 };
 
-export function initialFilters(): Filters {
-  const today = new Date();
+const urlDay = (value: string | null) => (IsoDate.safeParse(value).success ? value : null);
+
+/**
+ * The filters it opens on: the last 30 days, or the `from`/`to` days in the URL (Reports → Spend
+ * links here with its range). A malformed day keeps its default.
+ */
+export function initialFilters(
+  params: URLSearchParams = new URLSearchParams(),
+  now = new Date(),
+): Filters {
   return {
-    from: day(new Date(today.getTime() - 29 * DAY_MS)),
-    to: day(today),
+    from: urlDay(params.get("from")) ?? day(new Date(now.getTime() - 29 * DAY_MS)),
+    to: urlDay(params.get("to")) ?? day(now),
     carrierId: ALL,
     serviceId: ALL,
     country: ALL,
@@ -83,7 +97,8 @@ const laneName = (lane: { country: string; state: string | null }) =>
 export function RealOrdersDashboard() {
   const t = useTranslations("rateLab.realOrders");
   const errorMessage = useErrorMessage();
-  const [filters, setFilters] = useState(initialFilters);
+  const params = useSearchParams();
+  const [filters, setFilters] = useState(() => initialFilters(params));
   const set = <K extends keyof Filters>(key: K, value: Filters[K]) =>
     setFilters((current) => ({
       ...current,

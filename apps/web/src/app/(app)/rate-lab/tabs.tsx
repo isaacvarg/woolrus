@@ -4,23 +4,34 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 
+const REAL_ORDERS = "/rate-lab/real-orders";
+
 const tabs = [
   { href: "/rate-lab/runs", label: "rateLab.tabs.runs" },
   { href: "/rate-lab/addresses", label: "rateLab.tabs.addresses" },
   { href: "/rate-lab/parcels", label: "rateLab.tabs.parcels" },
   { href: "/rate-lab/quote", label: "rateLab.tabs.quote" },
   { href: "/rate-lab/trends", label: "rateLab.tabs.trends" },
-  { href: "/rate-lab/real-orders", label: "rateLab.tabs.realOrders" },
+  { href: REAL_ORDERS, label: "rateLab.tabs.realOrders" },
 ] as const;
 
-/** Links styled as tabs: each section is its own page, so the browser's back button works. */
-export function RateLabTabs({ showRealOrders }: { showRealOrders: boolean }) {
+/**
+ * Links styled as tabs: each section is its own page, so the browser's back button works. The lab's
+ * sections need `ratelab.use`; Real orders needs `report.read`.
+ */
+export function RateLabTabs({
+  showLab,
+  showRealOrders,
+}: {
+  showLab: boolean;
+  showRealOrders: boolean;
+}) {
   const t = useTranslations();
   const pathname = usePathname();
   return (
     <nav aria-label={t("rateLab.sections")} className="tabs tabs-border">
       {tabs
-        .filter((tab) => showRealOrders || tab.href !== "/rate-lab/real-orders")
+        .filter((tab) => (tab.href === REAL_ORDERS ? showRealOrders : showLab))
         .map(({ href, label }) => {
           const active = pathname === href || pathname.startsWith(`${href}/`);
           return (

@@ -43,9 +43,15 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     links: { href: Route; label: Extract<MessageKey, `nav.${string}`>; show: boolean }[],
   ) => links.filter((link) => link.show);
   const tools = visible([
+    { href: "/reports", label: "nav.reports", show: can(actor, "report.read") },
     { href: "/lots", label: "nav.lotLookup", show: can(actor, "order.read") },
     { href: "/manifests", label: "nav.manifests", show: can(actor, "order.ship") },
-    { href: "/rate-lab", label: "nav.rateLab", show: can(actor, "ratelab.use") },
+    // Reports holders reach Real orders, under Rate Lab, without the lab itself.
+    {
+      href: "/rate-lab",
+      label: "nav.rateLab",
+      show: can(actor, "ratelab.use") || can(actor, "report.read"),
+    },
   ]);
   const showFailedJobs = can(actor, "ops.jobs");
   const settings = can(actor, "settings.manage");
