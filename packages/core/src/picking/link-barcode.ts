@@ -53,6 +53,7 @@ export async function linkBarcode(
     const item = await tx.orderItem.findUnique({
       where: { id: orderItemId },
       select: {
+        orderId: true,
         product: { select: { id: true, name: true, barcode: true } },
         variation: { select: { id: true, name: true, barcode: true } },
       },
@@ -87,8 +88,10 @@ export async function linkBarcode(
       entityType: target.entityType,
       entityId: target.row.id,
       action: "product.linkBarcode",
+      orderId: item.orderId,
       before: { barcode: target.row.barcode },
-      after: { barcode },
+      // The line it was linked from, so the order's timeline can name it.
+      after: { barcode, orderItemId },
     });
     return {
       barcode,

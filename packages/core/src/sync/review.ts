@@ -52,6 +52,7 @@ export async function applyExternalChange(
     await recordAudit(tx, actor, {
       entityType: "Order",
       entityId: orderId,
+      orderId,
       action: "order.externalChange.applied",
       before: { ...before, version: order.version } as Prisma.InputJsonValue,
       after: { ...header, lines: diff.lines, version: updated.version } as Prisma.InputJsonValue,
@@ -91,6 +92,7 @@ export async function dismissExternalChange(
     await recordAudit(tx, actor, {
       entityType: "Order",
       entityId: orderId,
+      orderId,
       action: "order.externalChange.dismissed",
       before: summary.diff as unknown as Prisma.InputJsonValue,
       after: { reason: reasonText, version: updated.version },

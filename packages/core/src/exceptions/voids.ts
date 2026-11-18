@@ -9,7 +9,7 @@ import {
   type VoidResult,
 } from "@woolrus/contracts";
 import type { Db, DbTx, Prisma } from "@woolrus/db";
-import { recordAudit } from "../audit";
+import { type OrderScopedAction, recordAudit } from "../audit";
 import { AppError, notFound } from "../errors";
 import { lotsAfterUnpacking } from "../lumexia/lot-store";
 import { invalidate } from "../packing/service";
@@ -131,7 +131,7 @@ async function finish(
     before,
     after,
   }: {
-    action: string;
+    action: OrderScopedAction<"ItemVoid">;
     voidId: string;
     before: Prisma.InputJsonValue;
     after: Prisma.InputJsonValue;
@@ -144,6 +144,7 @@ async function finish(
   await recordAudit(tx, actor, {
     entityType: "ItemVoid",
     entityId: voidId,
+    orderId: order.id,
     action,
     before,
     after,
@@ -319,9 +320,15 @@ export async function resolveVoids(
       await recordAudit(tx, actor, {
         entityType: "ItemVoid",
         entityId: v.id,
+        orderId: v.orderId,
         action: "void.resolve",
         before: { resolvedAt: null },
-        after: { resolution, resolutionNotes: text, resolvedAt: now.toISOString() },
+        after: {
+          orderItemId: v.orderItemId,
+          resolution,
+          resolutionNotes: text,
+          resolvedAt: now.toISOString(),
+        },
         at: now,
       });
     }

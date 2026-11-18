@@ -94,6 +94,7 @@ export async function voidLabelStep(
       entityType: "ShippingLabel",
       entityId: labelId,
       action: "label.void",
+      orderId,
       before: { status: label.status },
       after: { status: "VOID_REQUESTED", reason: why },
       at: now,
@@ -127,6 +128,7 @@ export async function voidLabelStep(
       entityType: "ShippingLabel",
       entityId: labelId,
       action: approved ? "label.voided" : "label.voidRejected",
+      orderId,
       after: { status: approved ? "VOIDED" : "VOID_REJECTED" },
       at: now,
     });
@@ -179,6 +181,7 @@ export async function markLabelNotBought(
       entityType: "ShippingLabel",
       entityId: labelId,
       action: "label.markNotBought",
+      orderId,
       before: { status: label.status, error: label.error },
       after: { status: "PURCHASE_FAILED", reason },
       at: now,

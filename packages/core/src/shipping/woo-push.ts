@@ -68,9 +68,10 @@ export async function pushToWoo(
         data: { wooPushStatus: "FAILED", wooPushError: messageKey },
       });
       await recordAudit(tx, shippingActor, {
-        entityType: "order",
+        entityType: "Order",
         entityId: orderId,
         action: "woo.push.failed",
+        orderId,
         after: { error: messageKey, kind },
       });
       await notifyOrderChanged(tx, { id: orderId, status: "COMPLETED" });
@@ -84,9 +85,10 @@ export async function pushToWoo(
       data: { wooPushStatus: "SUCCEEDED", wooPushedAt: new Date(), wooPushError: null },
     });
     await recordAudit(tx, shippingActor, {
-      entityType: "order",
+      entityType: "Order",
       entityId: orderId,
       action: "woo.push",
+      orderId,
     });
     await notifyOrderChanged(tx, { id: orderId, status: "COMPLETED" });
   });

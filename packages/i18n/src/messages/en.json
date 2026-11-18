@@ -30,6 +30,7 @@
     "priorityRules": "Priority rules",
     "shippingSettings": "Shipping",
     "packingChecks": "Packing checks",
+    "activityVisibility": "Activity visibility",
     "sync": "Sync",
     "users": "Users",
     "stations": "Stations",
@@ -323,6 +324,26 @@
       "save": "Save",
       "saved": "Packing checks saved.",
       "stats": "Last 30 days: {trips, plural, one {# trip} other {# trips}}, {approved} approved"
+    },
+    "activity": {
+      "title": "Activity visibility",
+      "intro": "Choose which parts of an order's History each role sees: on the order page and in the pack and QA drawers. Everything starts on. Someone with several roles sees a part if any of their roles does. Admins always see everything. A role with every part off gets no History tab.",
+      "caption": "Activity parts each role sees",
+      "role": "Role",
+      "part": {
+        "timeline": "Timeline",
+        "details": "Change details",
+        "summary": "Stage times",
+        "people": "People"
+      },
+      "hint": {
+        "timeline": "every entry, with who did it, where and when.",
+        "details": "the before and after values when an entry is expanded.",
+        "summary": "status, waiting and working time per stage.",
+        "people": "who worked each stage, and from when to when."
+      },
+      "switch": "{part} for {role}",
+      "saved": "Activity visibility saved."
     }
   },
   "priorityRules": {
@@ -510,18 +531,6 @@
     "newStatus": "New status",
     "takeOverTitle": "Take over this order?",
     "takeOverBody": "{name} is working on this order. Taking it over moves the claim to you.",
-    "history": {
-      "title": "History",
-      "empty": "Nothing has happened to this order yet.",
-      "stage": "{from} → {to}",
-      "imported": "Imported as {to}",
-      "claim": "Claimed",
-      "takeOver": "Took over from {name}",
-      "release": "Released",
-      "by": "by {name}",
-      "system": "Store sync",
-      "at": "at {station}"
-    },
     "externalChange": {
       "title": "Changed in the store",
       "detected": "WooCommerce changed this order {time}. Nothing has been changed here yet.",
@@ -2331,6 +2340,77 @@
       "received": "Received",
       "completed": "Completed",
       "day": "Day"
+    }
+  },
+  "activity": {
+    "title": "History",
+    "empty": "Nothing has happened to this order yet.",
+    "truncated": "Showing the latest {count} entries. Older activity is left out.",
+    "filters": "Filter by category",
+    "all": "All",
+    "category": {
+      "status": "Status",
+      "picking": "Picking",
+      "packing": "Packing",
+      "qa": "QA",
+      "shipping": "Shipping",
+      "problems": "Problems",
+      "notes": "Notes",
+      "store": "Store"
+    },
+    "system": {
+      "store-sync": "Store sync",
+      "operations": "Operations",
+      "shipping": "Shipping",
+      "lumexia": "Lumexia",
+      "unknown": "System"
+    },
+    "at": "at {station}",
+    "grouped": "{count, plural, one {# time} other {# times}}, {from}–{to}",
+    "showMembers": "Show each",
+    "hideMembers": "Hide each",
+    "showDetails": "What changed",
+    "hideDetails": "Hide changes",
+    "noValue": "—",
+    "openNotes": "Open the notes",
+    "summary": {
+      "title": "Time in each stage",
+      "peopleTitle": "Who worked each stage",
+      "now": "Now",
+      "onHold": "On hold for {time}, counted in no stage.",
+      "workingNote": "Working time runs from the first to the last action, breaks included.",
+      "round": "Round {round}: {time}",
+      "bar": "Waiting {waiting}, working {working}",
+      "waiting": "Waiting {time}",
+      "working": "Working {time} (first to last action)",
+      "batch": "Picked in batch {number} with {orders, plural, one {# order} other {# orders}}",
+      "person": "{name}: {count, plural, one {# action} other {# actions}}, {from}–{to} ({span})",
+      "duration": {
+        "minutes": "{minutes} min",
+        "hours": "{hours} h {minutes} min",
+        "days": "{days} d {hours} h"
+      }
+    },
+    "target": {
+      "box": "Box {number}",
+      "label": "{carrier} label",
+      "labelTracking": "{carrier} label …{end}"
+    },
+    "generic": "Changed {entity}",
+    "entity": {
+      "Order": "the order",
+      "OrderItem": "a line",
+      "Package": "a box",
+      "PackageItem": "an item in a box",
+      "PackageCheckTrip": "a packing check",
+      "ShippingLabel": "a label",
+      "Note": "a note",
+      "QualityIssue": "an issue",
+      "ItemVoid": "a void",
+      "Approval": "an approval",
+      "PickBatch": "a pick batch",
+      "Product": "a product",
+      "other": "something"
     }
   }
 }

@@ -29,7 +29,11 @@ export async function acknowledgeCheck(
   return db.$transaction(async (tx) => {
     const ref = await tx.packageCheckTrip.findUnique({
       where: { id: tripId },
-      select: { package: { select: { orderId: true, discardedAt: true } } },
+      select: {
+        check: true,
+        packageId: true,
+        package: { select: { orderId: true, discardedAt: true } },
+      },
     });
     if (!ref || ref.package.discardedAt) throw notFound();
     const { orderId } = ref.package;
@@ -44,8 +48,9 @@ export async function acknowledgeCheck(
         entityType: "PackageCheckTrip",
         entityId: tripId,
         action: "packCheckTrip.acknowledge",
+        orderId,
         before: { acknowledged: false },
-        after: { acknowledged: true },
+        after: { acknowledged: true, check: ref.check, packageId: ref.packageId },
         at: now,
       });
       await touchClaim(tx, actor, orderId, { now });
@@ -100,6 +105,7 @@ export async function confirmBox(
         entityType: "Package",
         entityId: packageId,
         action: "package.confirmBox",
+        orderId: ref.orderId,
         before: { boxConfirmed: pkg.boxConfirmedAt !== null },
         after: { boxConfirmed: true, acknowledged: trips.map((t) => t.check) },
         at: now,

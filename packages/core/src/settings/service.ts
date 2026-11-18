@@ -10,6 +10,7 @@ import {
   type UpdateSettingsResult,
 } from "@woolrus/contracts";
 import type { Db, DbTx, Prisma, Settings } from "@woolrus/db";
+import { parseActivityVisibility } from "../activity/visibility";
 import type { StoreAdapter } from "../adapters/woocommerce/adapter";
 import { StoreError } from "../adapters/woocommerce/errors";
 import { recordAudit } from "../audit";
@@ -96,6 +97,7 @@ function toAdminSettings(row: Settings): AdminSettings {
     packCheckCustomDimensions: row.packCheckCustomDimensions,
     packCheckWeightOffPercent: row.packCheckWeightOffPercent,
     qaBoxConfirm: row.qaBoxConfirm,
+    activityVisibility: parseActivityVisibility(row.activityVisibility),
     // Status comes from the column alone, so reads never decrypt and work without a key.
     secrets: Object.fromEntries(
       SecretName.options.map((name) => [name, { configured: row[secretColumns[name]] !== null }]),

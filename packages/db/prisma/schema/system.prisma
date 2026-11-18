@@ -59,6 +59,8 @@ model Settings {
   weightDisplay          WeightDisplay @default(LB_OZ) @map("weight_display")
   /// Per-stage SLA thresholds in minutes, e.g. { "PENDING": 240, "PICKING": 60 } (FR-LIST-05).
   stageSlaMinutes        Json          @default("{}") @map("stage_sla_minutes")
+  /// Which activity parts each role sees, e.g. { "PACKER": { "people": false } }. Missing role or part = on.
+  activityVisibility     Json          @default("{}") @map("activity_visibility")
   /// Days after completion before customer PII is purged (NFR-SEC-06). Null = keep.
   piiRetentionDays       Int?          @map("pii_retention_days")
   /// Push tracking items to WooCommerce through the AST plugin. Off until IT has installed it.
@@ -165,6 +167,9 @@ model AuditEvent {
   before     Json?
   after      Json?
   requestId  String?  @map("request_id")
+  /// The order this row is about, directly or through a line, package, label, note, issue, void,
+  /// check trip or approval (SPEC-order-activity). No foreign key: rows outlive their order.
+  orderId    String?  @map("order_id") @db.Uuid
   at         DateTime @default(now()) @db.Timestamptz(3)
 
   actor   User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
@@ -172,6 +177,7 @@ model AuditEvent {
 
   @@index([entityType, entityId, at])
   @@index([actorId, at])
+  @@index([orderId, at])
   @@map("audit_events")
 }
 

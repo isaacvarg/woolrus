@@ -142,7 +142,8 @@ export async function removeFromBatch(
       entityType: "PickBatch",
       entityId: id,
       action: "pickBatch.removeOrder",
-      after: { orderId, slot: member.slot },
+      orderId,
+      after: { orderId, number: row.number, slot: member.slot },
       at: now,
     });
     return readBatch(tx, id, expiry, now);

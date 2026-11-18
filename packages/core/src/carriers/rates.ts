@@ -498,6 +498,7 @@ export async function refreshRates(
       entityType: "Order",
       entityId: orderId,
       action: "rates.refresh",
+      orderId,
       after: { generation },
     });
     await notifyOrderChanged(tx, { id: orderId, status: order.status });

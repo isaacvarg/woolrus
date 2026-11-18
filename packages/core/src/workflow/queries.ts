@@ -1,7 +1,6 @@
 import {
   LineAttribute,
   type OrderAddress,
-  type OrderHistoryEntry,
   type OrderListPage,
   type OrderListSort,
   type OrderView,
@@ -466,87 +465,6 @@ export async function getOrder(
       externalChange: externalChange !== null,
     }),
   };
-}
-
-/** Audit actions that belong in the history panel next to stage changes. */
-const claimActions = {
-  "order.claim": "claim",
-  "order.takeOver": "takeOver",
-  "order.release": "release",
-} as const;
-
-const previousHolderId = (before: Prisma.JsonValue): string | null =>
-  before &&
-  typeof before === "object" &&
-  !Array.isArray(before) &&
-  typeof before.claimedById === "string"
-    ? before.claimedById
-    : null;
-
-/** Stage changes and claim moves, newest first, with who and where (FR-WF-05). */
-export async function getOrderHistory(
-  db: DbTx,
-  actor: Actor,
-  { id }: { id: string },
-): Promise<OrderHistoryEntry[]> {
-  assertCan(actor, "order.read");
-  const order = await db.order.findUnique({ where: { id }, select: { id: true } });
-  if (!order) throw notFound();
-
-  const names = { actor: { select: nameFields }, station: { select: { name: true } } };
-  const [stages, audits] = await Promise.all([
-    db.orderStageEvent.findMany({ where: { orderId: id }, include: names }),
-    db.auditEvent.findMany({
-      where: { entityType: "Order", entityId: id, action: { in: Object.keys(claimActions) } },
-      include: names,
-    }),
-  ]);
-
-  const takenFrom = audits.flatMap((a) =>
-    a.action === "order.takeOver" ? [previousHolderId(a.before)].filter((x) => x !== null) : [],
-  );
-  const holders = new Map(
-    (
-      await db.user.findMany({
-        where: { id: { in: [...new Set(takenFrom)] } },
-        select: { id: true, ...nameFields },
-      })
-    ).map((u) => [u.id, displayName(u)]),
-  );
-
-  // A null actorId means store sync: people are deactivated, never deleted, so SetNull never fires.
-  const entries: OrderHistoryEntry[] = [
-    ...stages.map((e) => ({
-      id: e.id,
-      at: e.at,
-      type: "stage" as const,
-      fromStatus: e.fromStatus,
-      toStatus: e.toStatus,
-      reason: e.reason,
-      actorName: e.actor ? displayName(e.actor) : null,
-      bySystem: e.actorId === null,
-      stationName: e.station?.name ?? null,
-      previousHolderName: null,
-    })),
-    ...audits.map((a) => {
-      const type = claimActions[a.action as keyof typeof claimActions];
-      const previous = type === "takeOver" ? previousHolderId(a.before) : null;
-      return {
-        id: a.id,
-        at: a.at,
-        type,
-        fromStatus: null,
-        toStatus: null,
-        reason: null,
-        actorName: a.actor ? displayName(a.actor) : null,
-        bySystem: a.actorId === null,
-        stationName: a.station?.name ?? null,
-        previousHolderName: previous ? (holders.get(previous) ?? null) : null,
-      };
-    }),
-  ];
-  // Ids are UUIDv7, so they break ties in write order.
-  return entries.sort((a, b) => b.at.getTime() - a.at.getTime() || (a.id < b.id ? 1 : -1));
 }
 
 export type ListOrdersInput = {

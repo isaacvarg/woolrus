@@ -27,8 +27,8 @@ import { toast } from "@/components/ui/toast";
 import { formatAddress } from "@/lib/address";
 import { useErrorMessage } from "@/lib/errors";
 import { client, orpc } from "@/lib/orpc";
+import { ActivityPanel } from "./activity-panel";
 import { ExternalChangeBanner } from "./external-change-banner";
-import { HistoryPanel } from "./history-panel";
 import { OrderActions } from "./order-actions";
 import { openIssueSummary, orderTabSearch, parseOrderTab } from "./order-tab";
 
@@ -73,6 +73,7 @@ export function OrderView({
   canRefreshRates,
   canPrint = false,
   canRetryPush = false,
+  showHistory = true,
 }: {
   id: string;
   userId: string | null;
@@ -82,6 +83,8 @@ export function OrderView({
   canRefreshRates: boolean;
   canPrint?: boolean;
   canRetryPush?: boolean;
+  /** False when the viewer's roles may see no part of the activity view: no History tab. */
+  showHistory?: boolean;
 }) {
   const t = useTranslations();
   const errorMessage = useErrorMessage();
@@ -105,6 +108,7 @@ export function OrderView({
       canRefreshRates={canRefreshRates}
       canPrint={canPrint}
       canRetryPush={canRetryPush}
+      showHistory={showHistory}
     />
   );
 }
@@ -118,6 +122,7 @@ function OrderLayout({
   canRefreshRates,
   canPrint,
   canRetryPush,
+  showHistory,
 }: {
   order: Order;
   userId: string | null;
@@ -127,14 +132,15 @@ function OrderLayout({
   canRefreshRates: boolean;
   canPrint: boolean;
   canRetryPush: boolean;
+  showHistory: boolean;
 }) {
   const t = useTranslations();
   const targets = useNoteTargets(order);
   const notes = { orderId: order.id, canWriteCustomer, targets };
-  const tab = parseOrderTab(useSearchParams().get("tab"));
+  const tab = parseOrderTab(useSearchParams().get("tab"), { history: showHistory });
   // Next keeps useSearchParams in step with the History API, so Back and Forward switch tabs.
   const selectTab = (key: Key) => {
-    const next = parseOrderTab(String(key));
+    const next = parseOrderTab(String(key), { history: showHistory });
     if (next === tab) return;
     const url = `${window.location.pathname}${orderTabSearch(window.location.search, next)}`;
     window.history.pushState(null, "", url);
@@ -161,7 +167,7 @@ function OrderLayout({
       )}
       {order.status === "READY" && <StuckLabels orderId={order.id} />}
       <Tabs selectedKey={tab} onSelectionChange={selectTab} className="space-y-4">
-        <OrderTabList order={order} />
+        <OrderTabList order={order} showHistory={showHistory} />
         <TabPanel id="overview" className="space-y-6 outline-none">
           <OrderLines order={order} notes={notes} canVoid={canVoid} />
           <OrderPackages order={order} notes={notes} />
@@ -193,9 +199,11 @@ function OrderLayout({
             targets={targets.all}
           />
         </TabPanel>
-        <TabPanel id="history" className="outline-none">
-          <HistoryPanel id={order.id} />
-        </TabPanel>
+        {showHistory && (
+          <TabPanel id="history" className="outline-none">
+            <ActivityPanel id={order.id} />
+          </TabPanel>
+        )}
       </Tabs>
     </section>
   );
@@ -208,7 +216,7 @@ const tabClass = ({ isSelected }: { isSelected: boolean }) =>
  * The tabs, each with a count where one says something at a glance. On a narrow screen the list
  * scrolls sideways instead of wrapping.
  */
-function OrderTabList({ order }: { order: Order }) {
+function OrderTabList({ order, showHistory }: { order: Order; showHistory: boolean }) {
   const t = useTranslations();
   // The same queries the Notes panel uses, so opening the tab shows them without a second fetch.
   const notes = useQuery(orpc.notes.list.queryOptions({ input: { orderId: order.id } }));
@@ -248,9 +256,11 @@ function OrderTabList({ order }: { order: Order }) {
           className="badge-info"
         />
       </Tab>
-      <Tab id="history" className={tabClass}>
-        {t("order.tabs.history")}
-      </Tab>
+      {showHistory && (
+        <Tab id="history" className={tabClass}>
+          {t("order.tabs.history")}
+        </Tab>
+      )}
     </TabList>
   );
 }

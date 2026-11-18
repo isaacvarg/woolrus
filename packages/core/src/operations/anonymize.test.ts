@@ -81,11 +81,12 @@ async function finished(status: "COMPLETED" | "CANCELLED", days: number) {
     data: { storageKey: "labels/x.pdf", trackingNumber: "TRK1", costCents: 612 },
   });
   await db.note.create({ data: { orderId: order.id, content: "Packed with care" } });
-  const audit = (entityType: string, entityId: string) =>
+  const audit = (entityType: string, entityId: string, orderId?: string) =>
     db.auditEvent.create({
       data: {
         entityType,
         entityId,
+        orderId,
         action: "edit",
         before: { customerEmail: "ann@example.test", status: "A" },
         after: { shipTo: personal, status: "B", nested: { email: "x@y.z", keep: 1 } },
@@ -94,6 +95,8 @@ async function finished(status: "COMPLETED" | "CANCELLED", days: number) {
   await audit("Order", order.id);
   await audit("Package", pkg.id);
   await audit("ShippingLabel", label.id);
+  // Found only by its order id: no entity lookup covers order lines.
+  await audit("OrderItem", item.id, order.id);
   return { order, pkg, label };
 }
 
@@ -165,6 +168,7 @@ describe("purgePii (SPEC-operations 'PII anonymization')", () => {
           entityId: {
             in: [
               order.id,
+              ...o.items.map((i) => i.id),
               ...o.packages.map((p) => p.id),
               ...o.packages.flatMap((p) => p.labels.map((l) => l.id)),
             ],
@@ -172,7 +176,7 @@ describe("purgePii (SPEC-operations 'PII anonymization')", () => {
           action: "edit",
         },
       });
-      expect(events).toHaveLength(3);
+      expect(events).toHaveLength(4);
       for (const e of events) {
         expect(e.before).toEqual({ customerEmail: "[redacted]", status: "A" });
         expect(e.after).toEqual({
@@ -182,7 +186,7 @@ describe("purgePii (SPEC-operations 'PII anonymization')", () => {
         });
       }
       const marker = await db.auditEvent.findMany({
-        where: { entityId: order.id, action: "pii.anonymize" },
+        where: { orderId: order.id, action: "pii.anonymize" },
       });
       expect(marker).toHaveLength(1);
       expect(marker[0]).toMatchObject({

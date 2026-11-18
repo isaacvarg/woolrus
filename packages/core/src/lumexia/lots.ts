@@ -10,7 +10,7 @@ import type {
 import type { Db, DbTx, WorkflowStatus } from "@woolrus/db";
 import type { LumexiaClient } from "../adapters/lumexia/client";
 import { isLumexiaError } from "../adapters/lumexia/errors";
-import { recordAudit } from "../audit";
+import { type OrderScopedAction, recordAudit } from "../audit";
 import { AppError, type LineCandidate, notFound } from "../errors";
 import { storedResult, withIdempotency } from "../idempotency";
 import { createTextNote } from "../notes/service";
@@ -231,6 +231,7 @@ export async function scanLot(
         await recordAudit(tx, actor, {
           entityType: "PackageItem",
           entityId: target.id,
+          orderId: order.id,
           action: "lot.scan",
           before: { lots: lotSnapshot(target.lots) },
           after: {
@@ -353,7 +354,7 @@ async function editLot<R>(
   actor: Actor,
   stage: Stage<R>,
   lotId: string,
-  action: string,
+  action: OrderScopedAction<"PackageItem">,
   { now = new Date() }: PackOptions,
   plan: (lots: LotSlot[]) => LotSlot[],
 ): Promise<R> {
@@ -382,9 +383,15 @@ async function editLot<R>(
       await recordAudit(tx, actor, {
         entityType: "PackageItem",
         entityId: packageItemId,
+        orderId: order.id,
         action,
         before: { lots: lotSnapshot(before) },
-        after: { lotId, lots: lotSnapshot(after) },
+        // The edited lot's number too: the snapshots carry no ids, and the default lot moves with it.
+        after: {
+          lotId,
+          lotNumber: before.find((l) => l.id === lotId)?.lotNumber ?? null,
+          lots: lotSnapshot(after),
+        },
         at: now,
       });
       await touchClaim(tx, actor, order.id, { now });
@@ -462,6 +469,7 @@ export async function qaReplaceLot(
           entityType: "PackageItem",
           entityId: line.id,
           action: "lot.qaReplace",
+          orderId: order.id,
           before: { lots: lotSnapshot(before) },
           after: {
             lotId,

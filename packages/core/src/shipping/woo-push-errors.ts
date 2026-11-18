@@ -74,9 +74,10 @@ export async function retryWooPush(
       });
       if (count === 0) return false;
       await recordAudit(tx, actor, {
-        entityType: "order",
+        entityType: "Order",
         entityId: orderId,
         action: "woo.push.retry",
+        orderId,
       });
       await enqueue(tx, queues.wooPush, { orderId }, { singletonKey: orderId });
       return true;

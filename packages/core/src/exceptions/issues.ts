@@ -170,6 +170,7 @@ export async function reportIssue(
     await recordAudit(tx, actor, {
       entityType: "QualityIssue",
       entityId: created.id,
+      orderId,
       action: "issue.report",
       after: {
         orderId,
@@ -274,6 +275,7 @@ export async function updateIssue(
     await recordAudit(tx, actor, {
       entityType: "QualityIssue",
       entityId: issueId,
+      orderId: order.id,
       action: "issue.update",
       before: pick(issue),
       after: pick({ ...next, responsibleUserId }),
@@ -308,6 +310,7 @@ export async function setResponsible(
     await recordAudit(tx, actor, {
       entityType: "QualityIssue",
       entityId: issueId,
+      orderId: order.id,
       action: "issue.setResponsible",
       before: {
         responsibleUserId: issue.responsibleUserId,
@@ -342,6 +345,7 @@ export async function resolveIssue(
     await recordAudit(tx, actor, {
       entityType: "QualityIssue",
       entityId: issueId,
+      orderId: order.id,
       action: "issue.resolve",
       before: { status: issue.status },
       after: { status: outcome, resolutionNotes: text, resolvedAt: now.toISOString() },
@@ -385,6 +389,7 @@ export async function reopenIssue(
     await recordAudit(tx, actor, {
       entityType: "QualityIssue",
       entityId: issueId,
+      orderId: order.id,
       action: "issue.reopen",
       before: { status: issue.status, resolutionNotes: issue.resolutionNotes },
       after: { status: "OPEN" },
@@ -415,6 +420,7 @@ export async function deleteIssue(
     await recordAudit(tx, actor, {
       entityType: "QualityIssue",
       entityId: issueId,
+      orderId: order.id,
       action: "issue.delete",
       before: {
         orderId: issue.orderId,
@@ -464,6 +470,7 @@ export async function linkIssueToRepack(
   await recordAudit(tx, actor, {
     entityType: "QualityIssue",
     entityId: issueId,
+    orderId: issue.orderId,
     action: "issue.linkRepack",
     before: { labelId: issue.labelId, triggeredRepack: issue.triggeredRepack },
     after: { labelId, triggeredRepack: true },

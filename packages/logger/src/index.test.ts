@@ -62,3 +62,14 @@ describe("redaction", () => {
     expect(PII_KEYS).toContain("shipToOriginal");
   });
 });
+
+describe("isSecretKey", () => {
+  it("matches the secret keys in any spelling, and suffixed ones", async () => {
+    const { isSecretKey } = await import("./index");
+    for (const key of ["password", "PIN", "api_key", "apiKey", "accessToken", "webhookSecret"]) {
+      expect(isSecretKey(key)).toBe(true);
+    }
+    for (const key of ["shipping", "spin", "weight", "status"])
+      expect(isSecretKey(key)).toBe(false);
+  });
+});

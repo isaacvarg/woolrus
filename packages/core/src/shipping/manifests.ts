@@ -241,7 +241,7 @@ export async function createManifest(
           data: { manifestId: manifest.id },
         });
         await recordAudit(tx, actor, {
-          entityType: "manifest",
+          entityType: "Manifest",
           entityId: manifest.id,
           action: "manifest.create",
           after: {

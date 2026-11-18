@@ -77,7 +77,7 @@ describe("claim", () => {
     expect(claimed).toMatchObject({ status: "PENDING", claimedById: picker.userId, version: 2 });
     expect(claimed.claimedAt).not.toBeNull();
     expect(await db.orderStageEvent.count()).toBe(0);
-    expect(await db.auditEvent.findMany({ where: { entityId: order.id } })).toMatchObject([
+    expect(await db.auditEvent.findMany({ where: { orderId: order.id } })).toMatchObject([
       { action: "order.claim", actorId: picker.userId },
     ]);
   });
@@ -189,7 +189,7 @@ describe("takeOver", () => {
     });
 
     expect(taken).toMatchObject({ claimedById: picker.userId, version: 2 });
-    expect(await db.auditEvent.findMany({ where: { entityId: order.id } })).toMatchObject([
+    expect(await db.auditEvent.findMany({ where: { orderId: order.id } })).toMatchObject([
       {
         action: "order.takeOver",
         before: { claimedById: holder.userId },
@@ -216,7 +216,7 @@ describe("release", () => {
     const released = await release(db, picker, { orderId: order.id });
 
     expect(released).toMatchObject({ claimedById: null, claimedAt: null, version: 2 });
-    expect(await db.auditEvent.findMany({ where: { entityId: order.id } })).toMatchObject([
+    expect(await db.auditEvent.findMany({ where: { orderId: order.id } })).toMatchObject([
       { action: "order.release", before: { claimedById: picker.userId } },
     ]);
   });

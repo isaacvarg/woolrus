@@ -31,6 +31,7 @@ export * from "./lumexia";
 export * from "./me";
 export * from "./notes";
 export * from "./operations";
+export * from "./order-activity";
 export * from "./orders";
 export * from "./pack-checks";
 export * from "./packing";

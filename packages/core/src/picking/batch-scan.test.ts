@@ -154,7 +154,7 @@ describe("scanBatch", () => {
     });
     expect(
       await db.auditEvent.count({ where: { entityId: batch.id, action: "pickBatch.close" } }),
-    ).toBe(1);
+    ).toBe(2);
   });
 
   it("shows on the batch list", async () => {

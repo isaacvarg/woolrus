@@ -26,7 +26,7 @@ function invalidateLists(queryClient: QueryClient) {
     orpc.orders.queue.key(),
     orpc.orders.counts.key(),
     // The dashboard chart counts orders received and completed per day.
-    orpc.orders.activity.key(),
+    orpc.orders.dailyActivity.key(),
     orpc.orders.list.key(),
     // Resolving a void notifies its order; the Voids page and its nav count follow.
     orpc.voids.key(),
@@ -61,7 +61,7 @@ function invalidateOrders(queryClient: QueryClient, ids: Iterable<string>) {
   invalidateLists(queryClient);
   for (const id of ids) {
     void queryClient.invalidateQueries({ queryKey: orpc.orders.get.key({ input: { id } }) });
-    void queryClient.invalidateQueries({ queryKey: orpc.orders.history.key({ input: { id } }) });
+    void queryClient.invalidateQueries({ queryKey: orpc.orders.activity.key({ input: { id } }) });
     void queryClient.invalidateQueries({
       queryKey: orpc.picking.view.key({ input: { orderId: id } }),
     });

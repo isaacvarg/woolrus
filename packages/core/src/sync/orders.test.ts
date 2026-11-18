@@ -185,7 +185,7 @@ describe("syncOrders: first import (SC 1)", () => {
     expect(Number(teeLine?.variation?.weightOz)).toBe(8);
     expect(goneLine).toMatchObject({ productId: null, variationId: null, sku: "OLD" });
 
-    const audit = await db.auditEvent.findMany({ where: { entityId: order.id } });
+    const audit = await db.auditEvent.findMany({ where: { orderId: order.id } });
     expect(audit).toMatchObject([{ action: "order.import", actorId: null }]);
   });
 

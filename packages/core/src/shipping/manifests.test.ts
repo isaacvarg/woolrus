@@ -151,7 +151,7 @@ describe("createManifest", () => {
     ).toBeNull();
     expect(provider.requests.map((r) => r.operation)).toEqual(["findManifests", "createManifest"]);
     const audit = await db.auditEvent.findFirstOrThrow({ where: { action: "manifest.create" } });
-    expect(audit).toMatchObject({ entityType: "manifest", entityId: made.manifestId });
+    expect(audit).toMatchObject({ entityType: "Manifest", entityId: made.manifestId });
   });
 
   it("is idempotent for the same key and refuses when nothing is left to manifest", async () => {

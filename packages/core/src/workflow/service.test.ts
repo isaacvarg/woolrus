@@ -70,7 +70,7 @@ describe("beginPicking", () => {
         reason: null,
       },
     ]);
-    expect(await db.auditEvent.findMany({ where: { entityId: order.id } })).toMatchObject([
+    expect(await db.auditEvent.findMany({ where: { orderId: order.id } })).toMatchObject([
       { entityType: "Order", action: "order.beginPicking", actorId: picker.userId },
     ]);
   });
@@ -736,7 +736,7 @@ describe("history and audit (SC 8)", () => {
       },
     ]);
     const audit = await db.auditEvent.findMany({
-      where: { entityId: order.id },
+      where: { orderId: order.id },
       orderBy: { at: "asc" },
     });
     expect(audit.map((a) => a.action)).toEqual(["order.hold", "order.resume", "order.cancel"]);
@@ -761,7 +761,7 @@ describe("system actor (store-sync)", () => {
     expect(await db.orderStageEvent.findMany({ where: { orderId: order.id } })).toMatchObject([
       { fromStatus: "PENDING", toStatus: "CANCELLED", actorId: null, stationId: null },
     ]);
-    expect(await db.auditEvent.findMany({ where: { entityId: order.id } })).toMatchObject([
+    expect(await db.auditEvent.findMany({ where: { orderId: order.id } })).toMatchObject([
       { action: "order.cancel", actorId: null, stationId: null },
     ]);
   });

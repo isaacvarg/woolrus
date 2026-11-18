@@ -228,6 +228,7 @@ export async function completeQaWithLabels(
       entityType: "Order",
       entityId: orderId,
       action: "labels.purchaseRequested",
+      orderId,
       after: {
         packages: toBuy.map((p) => p.number),
         costConfirmed: confirmCost && needsCostConfirmation(labelCost, chargedCents, guard),

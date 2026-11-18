@@ -278,6 +278,7 @@ class Purchase {
         entityType: "ShippingLabel",
         entityId: label.id,
         action: "label.purchase",
+        orderId: this.orderId,
         after: {
           packageId: label.packageId,
           trackingNumber: purchased.trackingNumber,

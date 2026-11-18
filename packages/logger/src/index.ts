@@ -7,7 +7,17 @@ export { isPiiKey, isPiiMetaPair, maskEmails, PAIR_VALUES, PII_KEYS };
 
 const isDev = process.env.NODE_ENV !== "production";
 
-const SECRET_PATHS = ["*.password", "*.pin", "*.token", "*.apiKey", "*.secret"];
+/** Keys whose values are secrets: redacted from logs, and from audit details shown in the order activity feed. */
+export const SECRET_KEYS = ["password", "pin", "token", "apiKey", "secret"] as const;
+const SECRET_KEY_SET: ReadonlySet<string> = new Set(SECRET_KEYS.map((key) => key.toLowerCase()));
+/** Case-insensitive; also matches suffixed spellings like `accessToken` or `api_key`. */
+export const isSecretKey = (key: string): boolean => {
+  const k = key.replace(/[_-]/g, "").toLowerCase();
+  // "pin" only as itself: as a suffix it would catch ordinary words.
+  return [...SECRET_KEY_SET].some((s) => k === s || (s.length > 3 && k.endsWith(s)));
+};
+
+const SECRET_PATHS = SECRET_KEYS.map((key) => `*.${key}`);
 
 const words = (key: string) =>
   key

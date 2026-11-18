@@ -301,6 +301,7 @@ async function createOrder(
   await recordAudit(tx, systemActor, {
     entityType: "Order",
     entityId: order.id,
+    orderId: order.id,
     action: "order.import",
     after: { wooOrderId: order.wooOrderId, number: order.number, status: order.status },
     at: now,

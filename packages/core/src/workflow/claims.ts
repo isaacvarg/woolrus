@@ -98,6 +98,7 @@ export async function writeClaim(
   await recordAudit(tx, actor, {
     entityType: "Order",
     entityId: order.id,
+    orderId: order.id,
     action,
     before: { claimedById: live ? order.claimedById : null, version: order.version },
     after: { claimedById: actor.userId, version: updated.version },
@@ -221,6 +222,7 @@ export async function release(
     await recordAudit(tx, actor, {
       entityType: "Order",
       entityId: orderId,
+      orderId,
       action: "order.release",
       before: { claimedById: order.claimedById, version: order.version },
       after: { claimedById: null, version: updated.version },

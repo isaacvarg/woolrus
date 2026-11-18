@@ -1,0 +1,14 @@
+{
+  "en": {
+    "scanMiss_notOnOrder": "{stage, select, PICKING {Picking} PACKING {Packing} other {QA}} scanned {name}: not on this {batch, select, yes {batch} other {order}}",
+    "scanMiss_unknownCode": "{stage, select, PICKING {Picking} PACKING {Packing} other {QA}} scanned {code}: unknown code. It may be a barcode nobody has linked yet",
+    "scanMiss_alreadyDone": "{stage, select, PICKING {Picking} PACKING {Packing} other {QA}} scanned {name}: already {stage, select, PICKING {picked} PACKING {packed} other {verified}}",
+    "scanMiss_otherPackage": "{stage, select, PICKING {Picking} PACKING {Packing} other {QA}} scanned {name}: it's in Box {box}"
+  },
+  "es": {
+    "scanMiss_notOnOrder": "{stage, select, PICKING {Surtido} PACKING {Empaque} other {Control de calidad}} escaneó {name}: no está en {batch, select, yes {este lote} other {este pedido}}",
+    "scanMiss_unknownCode": "{stage, select, PICKING {Surtido} PACKING {Empaque} other {Control de calidad}} escaneó {code}: código desconocido. Puede ser un código de barras que nadie ha vinculado todavía",
+    "scanMiss_alreadyDone": "{stage, select, PICKING {Surtido} PACKING {Empaque} other {Control de calidad}} escaneó {name}: ya estaba {stage, select, PICKING {surtido} PACKING {empacado} other {verificado}}",
+    "scanMiss_otherPackage": "{stage, select, PICKING {Surtido} PACKING {Empaque} other {Control de calidad}} escaneó {name}: está en la caja {box}"
+  }
+}

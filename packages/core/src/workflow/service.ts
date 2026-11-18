@@ -125,6 +125,7 @@ export async function transition(
   await recordAudit(tx, actor, {
     entityType: "Order",
     entityId: orderId,
+    orderId,
     action: `order.${kind}`,
     before: { status: order.status, version: order.version },
     after: { status: to, version: updated.version, ...(reasonText ? { reason: reasonText } : {}) },
