@@ -46,6 +46,8 @@ test("an order's History shows its stages, its wrong scan, and hides people from
     .getByRole("button", { name: "Begin Picking" })
     .click();
   await expect(page).toHaveURL(`/pick/${order.id}`);
+  // The scanner listens once the pick screen has rendered; a scan before that is lost.
+  await expect(page.getByRole("heading", { name: `Pick #${order.number}` })).toBeVisible();
   await scanCode(page, "NOT-A-CODE-OA");
   await expect(page.getByTestId("scan-banner")).toBeVisible();
   await scanCode(page, "E2E-SKU");
@@ -55,8 +57,16 @@ test("an order's History shows its stages, its wrong scan, and hides people from
 
   // Pack, then verify in QA.
   await packAndFinish(page, order, customerName);
+  // Start QA from the queue: it claims the order, and an unclaimed order's rows are disabled.
   await signInAs(page, ["QA"]);
-  await page.goto(`/qa/${order.id}`);
+  await page.goto("/queue/qa");
+  await page.getByRole("searchbox", { name: "Search orders" }).fill(customerName);
+  await page
+    .getByRole("row", { name: new RegExp(order.number) })
+    .getByRole("button", { name: "Start QA" })
+    .click();
+  await expect(page).toHaveURL(`/qa/${order.id}`, { timeout: 20_000 });
+  await expect(page.getByRole("heading", { name: `QA #${order.number}` })).toBeVisible();
   await page.getByTestId("qa-row").click();
   await expect(page.getByTestId("qa-package-count")).toHaveText("1 of 1 verified");
 
