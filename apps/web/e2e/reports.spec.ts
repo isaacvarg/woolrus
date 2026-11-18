@@ -134,10 +134,19 @@ test("the range lives in the URL, survives a reload, and Spend opens Real orders
   await page.reload();
   await expect(day(page, "To")).toHaveValue("2026-10-15");
 
-  // More than 92 days is refused in the header.
+  // More than 92 days is refused in the header, and the last range's figures and exports go with it.
+  const total = page.getByText(/issues? in these days/);
+  const exportCsv = page.getByRole("link", { name: "Export CSV", exact: true });
+  await expect(total).toBeVisible();
+  await expect(exportCsv).toBeVisible();
   await setDay(page, "From", "2026-01-01");
   await expect(page.getByText("Pick a range of at most 92 days.")).toBeVisible();
+  await expect(total).toHaveCount(0);
+  await expect(exportCsv).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Export blocked scans CSV" })).toHaveCount(0);
   await setDay(page, "From", "2026-10-01");
+  await expect(total).toBeVisible();
+  await expect(exportCsv).toBeVisible();
 
   await tabs(page).getByRole("link", { name: "Spend" }).click();
   await expect(page).toHaveURL("/reports/spend?range=custom&from=2026-10-01&to=2026-10-15");

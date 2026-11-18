@@ -26,6 +26,7 @@ import { ExportCsvLink } from "@/components/export-csv-link";
 import { SelectField } from "@/components/ui/fields";
 import { useErrorMessage } from "@/lib/errors";
 import { orpc } from "@/lib/orpc";
+import { ReportBody, reportView } from "../report-view";
 import { useReportRange } from "../use-report-range";
 
 const ALL = "all";
@@ -78,12 +79,13 @@ export function ThroughputReport() {
   const { range } = useReportRange();
   const { stage, person, set } = useFilters();
   const input = { ...range, stage, person };
+  const valid = ReportRange.safeParse(range).success;
   const query = useQuery({
     ...orpc.reports.throughput.queryOptions({ input }),
-    enabled: ReportRange.safeParse(range).success,
+    enabled: valid,
     placeholderData: (previous) => previous,
   });
-  const data = query.data;
+  const { data, loading, busy, error } = reportView(query, valid);
 
   const persons = data?.persons ?? [];
   const personOptions = [
@@ -113,22 +115,24 @@ export function ThroughputReport() {
             options={personOptions}
           />
         </div>
-        <div className="ms-auto">
-          <ExportCsvLink
-            path="/api/reports/throughput.csv"
-            params={{ from: range.from, to: range.to, stage, person }}
-          />
-        </div>
+        {valid && (
+          <div className="ms-auto">
+            <ExportCsvLink
+              path="/api/reports/throughput.csv"
+              params={{ from: range.from, to: range.to, stage, person }}
+            />
+          </div>
+        )}
       </div>
 
-      {query.isPending && query.fetchStatus !== "idle" && <p>{t("loading")}</p>}
-      {query.error && (
+      {loading && <p>{t("loading")}</p>}
+      {error && (
         <p role="alert" className="text-error">
-          {errorMessage(query.error)}
+          {errorMessage(error)}
         </p>
       )}
       {data && (
-        <>
+        <ReportBody busy={busy}>
           {data.rows.length === 0 ? (
             <p className="rounded-box bg-base-100 p-4 shadow-sm">{t("empty")}</p>
           ) : (
@@ -136,7 +140,7 @@ export function ThroughputReport() {
           )}
           <Warehouse data={data} />
           {data.people.length > 0 && <ByPerson data={data} />}
-        </>
+        </ReportBody>
       )}
     </div>
   );

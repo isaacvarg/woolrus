@@ -33,6 +33,7 @@ import { ExportCsvLink } from "@/components/export-csv-link";
 import { useErrorMessage } from "@/lib/errors";
 import { orpc } from "@/lib/orpc";
 import { useDuration } from "../../orders/[id]/activity-summary";
+import { ReportBody, reportView } from "../report-view";
 import { useReportRange } from "../use-report-range";
 
 const MINUTE = 60_000;
@@ -52,28 +53,33 @@ export function CycleTimeReport() {
     enabled: valid,
     placeholderData: (previous) => previous,
   });
-  const data = query.data;
+  const { data, loading, busy, error } = reportView(query, valid);
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-end">
-        <ExportCsvLink
-          path="/api/reports/cycle-time.csv"
-          params={{ from: range.from, to: range.to }}
-        />
-      </div>
-      {query.isPending && valid && <p>{t("loading")}</p>}
-      {query.error && (
+      {valid && (
+        <div className="flex justify-end">
+          <ExportCsvLink
+            path="/api/reports/cycle-time.csv"
+            params={{ from: range.from, to: range.to }}
+          />
+        </div>
+      )}
+      {loading && <p>{t("loading")}</p>}
+      {error && (
         <p role="alert" className="text-error">
-          {errorMessage(query.error)}
+          {errorMessage(error)}
         </p>
       )}
-      {data &&
-        (data.total.count === 0 ? (
-          <p className="rounded-box bg-base-100 p-4 shadow-sm">{t("empty")}</p>
-        ) : (
-          <Figures data={data} />
-        ))}
+      {data && (
+        <ReportBody busy={busy}>
+          {data.total.count === 0 ? (
+            <p className="rounded-box bg-base-100 p-4 shadow-sm">{t("empty")}</p>
+          ) : (
+            <Figures data={data} />
+          )}
+        </ReportBody>
+      )}
     </div>
   );
 }

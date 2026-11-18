@@ -28,6 +28,7 @@ import { ExportCsvLink } from "@/components/export-csv-link";
 import { Checkbox, SelectField } from "@/components/ui/fields";
 import { useErrorMessage } from "@/lib/errors";
 import { orpc } from "@/lib/orpc";
+import { ReportBody, reportView } from "../report-view";
 import { useReportRange } from "../use-report-range";
 
 const ANY = "any";
@@ -88,7 +89,7 @@ export function QualityReport() {
     enabled: valid,
     placeholderData: (previous) => previous,
   });
-  const data = query.data;
+  const { data, loading, busy, error } = reportView(query, valid);
   const exportParams = { from: range.from, to: range.to };
 
   return (
@@ -123,27 +124,29 @@ export function QualityReport() {
         >
           {t("customerReported")}
         </Checkbox>
-        <div className="ms-auto">
-          <ExportCsvLink
-            path="/api/reports/quality.csv"
-            params={{
-              ...exportParams,
-              severity,
-              status: status === "all" ? undefined : status,
-              customerReported: customerReported ? "true" : undefined,
-            }}
-          />
-        </div>
+        {valid && (
+          <div className="ms-auto">
+            <ExportCsvLink
+              path="/api/reports/quality.csv"
+              params={{
+                ...exportParams,
+                severity,
+                status: status === "all" ? undefined : status,
+                customerReported: customerReported ? "true" : undefined,
+              }}
+            />
+          </div>
+        )}
       </div>
 
-      {query.isPending && valid && <p>{t("loading")}</p>}
-      {query.error && (
+      {loading && <p>{t("loading")}</p>}
+      {error && (
         <p role="alert" className="text-error">
-          {errorMessage(query.error)}
+          {errorMessage(error)}
         </p>
       )}
       {data && (
-        <>
+        <ReportBody busy={busy}>
           <p className="rounded-box bg-base-100 p-4 font-semibold shadow-sm">
             {t("total", { count: data.total })}
           </p>
@@ -151,7 +154,7 @@ export function QualityReport() {
           {data.people.length > 0 && <Rates data={data} />}
           <Scans data={data} exportParams={exportParams} />
           <Voids data={data} />
-        </>
+        </ReportBody>
       )}
     </div>
   );
