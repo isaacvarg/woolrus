@@ -443,6 +443,8 @@
     },
     "begunPicking": "Order {number} is now in Picking.",
     "loadMore": "Load more",
+    "lateOnly": "Showing only orders past their time limit.",
+    "showAll": "Show all",
     "noOrders": "No orders in this queue.",
     "startPacking": "Start packing",
     "startedPacking": "Order {number} is yours to pack.",

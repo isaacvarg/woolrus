@@ -46,7 +46,7 @@ export function SlaAlertStrip({ late }: { late: Record<SlaStage, number> | undef
     return (
       <Link
         key={stage.stage}
-        href={`/queue/${stage.slug}`}
+        href={`/queue/${stage.slug}?late=1`}
         className="btn btn-sm min-h-11 border-warning-content/40 bg-warning-content/10 px-3 text-base text-warning-content hover:bg-warning-content/20"
       >
         {t(`stage.${stage.stage}`, { count: stage.count })}

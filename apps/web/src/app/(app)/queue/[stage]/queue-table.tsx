@@ -42,6 +42,8 @@ const priorityBadge: Record<number, string> = { 1: "badge-warning", 2: "badge-er
 
 export function QueueTable({
   stage,
+  slug,
+  lateOnly = false,
   userId,
   canBeginPicking,
   canPack,
@@ -51,6 +53,10 @@ export function QueueTable({
   canRepack = false,
 }: {
   stage: QueueStage;
+  /** The queue's URL slug, for the link back from the late-only view. */
+  slug: string;
+  /** Only the orders past their SLA (`?late=1`, from the dashboard's SLA alert). */
+  lateOnly?: boolean;
   userId: string | null;
   canBeginPicking: boolean;
   canPack: boolean;
@@ -74,7 +80,12 @@ export function QueueTable({
 
   const queue = useInfiniteQuery(
     orpc.orders.queue.infiniteOptions({
-      input: (cursor: string | undefined) => ({ stage, search: search || undefined, cursor }),
+      input: (cursor: string | undefined) => ({
+        stage,
+        search: search || undefined,
+        late: lateOnly || undefined,
+        cursor,
+      }),
       initialPageParam: undefined,
       getNextPageParam: (page) => page.nextCursor ?? undefined,
     }),
@@ -160,6 +171,14 @@ export function QueueTable({
 
   return (
     <div className="space-y-4">
+      {lateOnly && (
+        <div role="status" className="alert alert-warning flex flex-wrap items-center gap-3">
+          <span>{t("queue.lateOnly")}</span>
+          <Link href={`/queue/${slug}`} className="btn btn-sm min-h-11">
+            {t("queue.showAll")}
+          </Link>
+        </div>
+      )}
       <SearchField
         value={searchText}
         onChange={setSearchText}

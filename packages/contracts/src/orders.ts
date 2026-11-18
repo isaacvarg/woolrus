@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { base, Id } from "./base";
+import { base, Id, QueryBoolean } from "./base";
 import { LotDto } from "./lumexia";
 import { orderActivityRoute } from "./order-activity";
 import { PackApprovalInput } from "./pack-checks";
@@ -115,6 +115,8 @@ export const QueueInput = z.object({
   stage: QueueStage,
   /** Order number prefix ("#" optional) or part of the customer's name. */
   search: z.string().trim().max(100).optional(),
+  /** Only the orders past their stage's SLA (the dashboard's SLA alert links here). */
+  late: QueryBoolean.optional(),
   /** `nextCursor` of the previous page. Opaque. */
   cursor: z.string().max(500).optional(),
   // Coerced: over /api/v1 it arrives as a query string.

@@ -35,6 +35,8 @@ import { displayName, nameFields } from "./people";
 export type ListQueueInput = {
   stage: QueueStage;
   search?: string;
+  /** Only orders past the stage's SLA. */
+  late?: boolean;
   cursor?: string;
   limit?: number;
 };
@@ -88,6 +90,11 @@ function stageSlas(settings: { stageSlaMinutes: unknown }): StageSlaMinutes {
  */
 function slaCutoff(slaMinutes: number | undefined, now: Date): Date | null {
   return typeof slaMinutes === "number" ? new Date(now.getTime() - slaMinutes * 60_000) : null;
+}
+
+/** Only the late orders, by the same cutoff: none at all in a stage with no SLA. */
+function lateFilter(lateBefore: Date | null): Prisma.Sql {
+  return lateBefore ? Prisma.sql`AND o.status_changed_at < ${lateBefore}` : Prisma.sql`AND false`;
 }
 
 /** LIKE treats `%`, `_` and `\` as syntax; search text is literal. */
@@ -151,7 +158,7 @@ function printStateOf(r: QueueSqlRow): PrintState {
 export async function listQueue(
   db: DbTx,
   actor: Actor,
-  { stage, search, cursor, limit = 50 }: ListQueueInput,
+  { stage, search, late, cursor, limit = 50 }: ListQueueInput,
   { now = new Date() }: QueryOptions = {},
 ): Promise<QueuePage> {
   assertCan(actor, "order.read");
@@ -250,6 +257,7 @@ export async function listQueue(
     ) pl ON pl.order_id = o.id
     WHERE o.status = ${stage}::workflow_status
       ${searchFilter(search)}
+      ${late ? lateFilter(lateBefore) : Prisma.empty}
       ${afterCursor(after)}
     ORDER BY o.priority DESC, o.ordered_at ASC, o.id ASC
     LIMIT ${pageSize + 1}`;

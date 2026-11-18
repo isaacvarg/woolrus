@@ -443,6 +443,8 @@
     },
     "begunPicking": "El pedido {number} está ahora en surtido.",
     "loadMore": "Cargar más",
+    "lateOnly": "Solo se muestran los pedidos que pasaron su tiempo límite.",
+    "showAll": "Mostrar todos",
     "noOrders": "No hay pedidos en esta cola.",
     "startPacking": "Empezar a empacar",
     "startedPacking": "Empacarás el pedido {number}.",

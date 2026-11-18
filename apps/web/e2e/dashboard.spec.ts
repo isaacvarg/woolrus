@@ -62,10 +62,11 @@ test("a packer sees orders past their SLA above the tiles and taps through to th
       update: { stageSlaMinutes: slas },
     });
     try {
-      await createOrder({
+      const overdue = await createOrder({
         status: "PACKING",
         statusChangedAt: new Date(Date.now() - 2 * 3_600_000),
       });
+      const onTime = await createOrder({ status: "PACKING" });
       await page.goto("/");
 
       // Other tests' orders may be late too: the count is at least ours.
@@ -75,7 +76,14 @@ test("a packer sees orders past their SLA above the tiles and taps through to th
       await expect(packing).toBeVisible();
       expect((await packing.boundingBox())?.height).toBeGreaterThanOrEqual(44);
       await packing.click();
+      // The queue opens filtered to its late orders, and says so.
+      await expect(page).toHaveURL("/queue/packing?late=1");
+      await expect(page.getByRole("status").filter({ hasText: "only orders past" })).toBeVisible();
+      await expect(page.getByRole("row").filter({ hasText: overdue.number })).toBeVisible();
+      await expect(page.getByRole("row").filter({ hasText: onTime.number })).toHaveCount(0);
+      await page.getByRole("link", { name: "Show all" }).click();
       await expect(page).toHaveURL("/queue/packing");
+      await expect(page.getByRole("row").filter({ hasText: onTime.number })).toBeVisible();
     } finally {
       await db.settings.update({
         where: { id: 1 },

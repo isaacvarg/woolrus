@@ -283,6 +283,20 @@ describe("queueCounts", () => {
       expect(late[stage], stage).toBe(rows.filter((r) => r.slaBreached).length);
     }
     expect(late).toEqual({ PENDING: 1, PICKING: 2, PACKING: 3, QA: 4, READY: 5 });
+
+    // The SLA alert links to each queue's late orders: `late` lists exactly the ones it counts.
+    for (const stage of stages) {
+      const lateRows = (await listQueue(db, picker, { stage, late: true }, { now })).rows;
+      expect(lateRows, stage).toHaveLength(late[stage]);
+      expect(
+        lateRows.every((r) => r.slaBreached),
+        stage,
+      ).toBe(true);
+    }
+    // On hold has no SLA, so nothing in it is late.
+    expect((await listQueue(db, picker, { stage: "ON_HOLD", late: true }, { now })).rows).toEqual(
+      [],
+    );
   });
 
   it("counts no late orders in a stage without an SLA", async () => {
