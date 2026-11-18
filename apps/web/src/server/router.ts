@@ -168,6 +168,7 @@ import {
   testLumexiaConnection,
   testProvider,
   testStoreConnection,
+  throughput,
   touchStation,
   unarchiveLabAddress,
   unarchiveLabParcel,
@@ -813,6 +814,11 @@ export const router = implementer.router({
     ),
     realOrders: api.rateLab.realOrders.handler(({ input, context }) =>
       realOrders(db, context.actor, input),
+    ),
+  },
+  reports: {
+    throughput: api.reports.throughput.handler(({ input, context }) =>
+      throughput(db, context.actor, input),
     ),
   },
 });

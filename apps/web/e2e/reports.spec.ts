@@ -1,13 +1,16 @@
+import { readFile } from "node:fs/promises";
 import { expect, type Page, test } from "@playwright/test";
 import { createDb } from "@woolrus/db";
 import { signInAs, signInAsUser } from "./support/auth";
 import { openNav } from "./support/nav";
+import { createOrder, deleteCreatedOrders } from "./support/orders";
 import { findUserRow } from "./support/users";
 
 // The Reports role and the Reports area (SPEC-reporting, ticket #210): who reaches /reports, the
 // shared date range in the URL, and the Spend tab's link to Rate Lab → Real orders.
 
 const db = createDb();
+test.afterAll(deleteCreatedOrders);
 const forbidden = "You don't have permission to do that.";
 
 const desktopOnly = (projectName: string) =>
@@ -69,7 +72,7 @@ test("an admin ticks the Reports role; a Packer with it reaches Reports and Real
       "Quality",
       "Spend",
     ]);
-    await expect(lead.getByText("This report isn't built yet.")).toBeVisible();
+    await expect(lead.getByRole("heading", { name: "Orders imported and shipped" })).toBeVisible();
 
     // Under Rate Lab they get Real orders and nothing of the lab itself.
     await lead.goto("/rate-lab");
@@ -142,4 +145,67 @@ test("the range lives in the URL, survives a reload, and Spend opens Real orders
   await expect(page).toHaveURL("/rate-lab/real-orders?from=2026-10-01&to=2026-10-15");
   await expect(day(page, "From")).toHaveValue("2026-10-01");
   await expect(day(page, "To")).toHaveValue("2026-10-15");
+});
+
+test("Throughput shows a person's orders and units for the day, filtered, and exports them", async ({
+  page,
+}, info) => {
+  desktopOnly(info.project.name);
+  const name = `E2E picker ${crypto.randomUUID().slice(0, 8)}`;
+  const picker = await db.user.create({
+    data: { name, email: `e2e-${crypto.randomUUID()}@example.test`, roles: ["PICKER"] },
+  });
+  const order = await createOrder({ quantity: 4, status: "PACKING" });
+  const now = new Date();
+  await db.orderItem.updateMany({
+    where: { orderId: order.id },
+    data: { pickedById: picker.id, pickedAt: now, pickedQuantity: 4, pickStatus: "PICKED" },
+  });
+  await db.orderStageEvent.create({
+    data: {
+      orderId: order.id,
+      fromStatus: "PICKING",
+      toStatus: "PACKING",
+      actorId: picker.id,
+      at: now,
+    },
+  });
+
+  await signInAs(page, ["PACKER", "REPORTS"]);
+  // Today, in the browser's zone; other tests' work shares the dev database, so filter to the picker.
+  await page.goto(`/reports/throughput?range=today&person=${picker.id}`);
+  const byPerson = page.getByTestId("throughput-by-person");
+  await expect(byPerson.getByRole("row")).toHaveCount(2);
+  await expect(byPerson.getByRole("row").nth(1)).toHaveText(
+    new RegExp(`${name}\\s*Picking\\s*1\\s*4\\s*1`),
+  );
+  await expect(page.getByRole("button", { name: /Person/ })).toContainText(name);
+
+  // The Packing stage filter leaves nothing of theirs.
+  await page.getByRole("button", { name: /Stage/ }).click();
+  await page.getByRole("option", { name: "Packing" }).click();
+  await expect(page).toHaveURL(/stage=PACKING/);
+  await expect(
+    page.getByText("No picks, packs, QA checks or shipments in these days."),
+  ).toBeVisible();
+  await page.getByRole("button", { name: /Stage/ }).click();
+  await page.getByRole("option", { name: "Picking" }).click();
+  await expect(byPerson.getByRole("row")).toHaveCount(2);
+
+  const [download] = await Promise.all([
+    page.waitForEvent("download"),
+    page.getByRole("link", { name: "Export CSV" }).click(),
+  ]);
+  expect(download.suggestedFilename()).toMatch(
+    /^woolrus-throughput-\d{4}-\d{2}-\d{2}-\d{4}-\d{2}-\d{2}\.csv$/,
+  );
+  const lines = (await readFile(await download.path()))
+    .toString("utf8")
+    .replace(/^﻿/, "")
+    .trimEnd()
+    .split("\r\n");
+  expect(lines[0]).toBe("Day,Stage,Person,Orders,Units");
+  expect(lines.slice(1)).toEqual([
+    expect.stringMatching(new RegExp(`^\\d{4}-\\d{2}-\\d{2},PICKING,${name},1,4$`)),
+  ]);
 });

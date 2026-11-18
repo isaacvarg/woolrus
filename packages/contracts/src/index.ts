@@ -14,6 +14,7 @@ import { pickBatches, picking } from "./picking";
 import { priorityRules } from "./priority-rules";
 import { qa } from "./qa";
 import { rateLab } from "./rate-lab";
+import { reports } from "./reports";
 import { settings } from "./settings";
 import { shipping } from "./shipping";
 import { station, stations } from "./stations";
@@ -79,5 +80,6 @@ export const contract = {
   shipping,
   rateLab,
   lumexia,
+  reports,
 };
 export type Contract = typeof contract;

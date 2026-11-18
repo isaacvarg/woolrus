@@ -1273,8 +1273,12 @@
       "packedAt": "Empacado",
       "qaBy": "QA por",
       "qaAt": "QA",
-      "voidedQty": "Cant. anulada"
+      "voidedQty": "Cant. anulada",
+      "day": "Día",
+      "person": "Persona",
+      "orders": "Pedidos"
     },
+    "system": "Sistema",
     "yes": "sí",
     "no": "no"
   },
@@ -2038,6 +2042,32 @@
       "title": "Gasto en envíos",
       "body": "El costo de las etiquetas por transportista y servicio, y el costo de etiqueta frente al envío cobrado, están en la página Pedidos reales de Rate Lab.",
       "open": "Abrir Pedidos reales para estas fechas"
+    },
+    "throughput": {
+      "stage": "Etapa",
+      "person": "Persona",
+      "all": "Todas",
+      "system": "Sistema",
+      "unnamed": "Usuario sin nombre",
+      "stages": {
+        "PICKING": "Recolección",
+        "PACKING": "Empaque",
+        "QA": "QA",
+        "SHIPPING": "Envío"
+      },
+      "loading": "Cargando rendimiento…",
+      "empty": "No hubo recolecciones, empaques, revisiones de QA ni envíos en estos días.",
+      "byDayTitle": "Unidades por día, por etapa",
+      "byDayNote": "Cada barra es un día; sus segmentos son las etapas, en el orden de la leyenda.",
+      "day": "Día",
+      "warehouseTitle": "Pedidos importados y enviados",
+      "imported": "Importados",
+      "shipped": "Enviados",
+      "byPersonTitle": "Por persona",
+      "orders": "Pedidos",
+      "units": "Unidades",
+      "activeDays": "Días activos",
+      "total": "Total"
     }
   },
   "rateLab": {
