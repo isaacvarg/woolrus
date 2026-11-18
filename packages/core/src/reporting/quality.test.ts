@@ -52,9 +52,23 @@ async function seed() {
     lines: [{ quantity: 50, pickStatus: "PICKED" }],
     packages: [{ items: [{ line: 0, quantity: 50 }] }],
   });
-  await db.packageItem.updateMany({
-    where: { package: { orderId: packed.order.id } },
-    data: { packedById: ana.id, packedAt: at("2026-11-09T15:00:00Z") },
+  // Throughput credits packing from the audit row Pack remaining writes.
+  const box = await db.package.findFirstOrThrow({
+    where: { orderId: packed.order.id },
+    include: { items: true },
+  });
+  await db.auditEvent.create({
+    data: {
+      actorId: ana.id,
+      entityType: "Package",
+      entityId: box.id,
+      action: "package.packRemaining",
+      before: { items: [] },
+      after: {
+        items: box.items.map((it) => ({ orderItemId: it.orderItemId, quantity: it.quantity })),
+      },
+      at: at("2026-11-09T15:00:00Z"),
+    },
   });
 
   const issue = (data: {

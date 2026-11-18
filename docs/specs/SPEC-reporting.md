@@ -91,15 +91,19 @@ For each day × stage × person: **orders** and **units**.
 | Stage | Orders (credited to) | Units (credited to) |
 |---|---|---|
 | Picking | stage events `PICKING → PACKING` (actor) | `OrderItem.pickedQuantity` by `pickedById` on `pickedAt` |
-| Packing | stage events `PACKING → QA` (actor) | `PackageItem.quantity` by `packedById` on `packedAt` |
-| QA | stage events `QA → READY` (actor) | `PackageItem.quantity` by `qaVerifiedById` on `qaVerifiedAt` |
+| Packing | stage events `PACKING → QA` (actor) | units each `package.packUnits` / `packRemaining` / `scan` / `unpackUnits` audit row added (after − before), by its actor |
+| QA | stage events `QA → READY` (actor) | verified units each `packageItem.scan` / `verify` / `unverify` audit row added (after − before), by its actor |
 | Shipping | stage events `READY → COMPLETED` (actor) | units on the order's live packages |
 
 Plus a warehouse row per day: orders imported (stage events with no `fromStatus`) and orders shipped.
 
 - A repack sends an order through Packing and QA again. Each pass counts: the work happened. Package items of a
   discarded package still count for the person who packed them.
-- Voided units are left out of units; an order fully voided and cancelled never reaches a `→ COMPLETED` event.
+- Packing and QA units come from the audit trail, because a box line keeps only its latest packer and verifier and a
+  repack clears QA. Two packers on one line each get their own units. Taking units out or unverifying takes them
+  back from whoever does it; deleting a package or a void trimming a box takes nothing back.
+- Voided units are left out of picking units (and so of what ships); a unit voided after it was boxed or verified still
+  counts for that packer or verifier. An order fully voided and cancelled never reaches a `→ COMPLETED` event.
 - Events by the system actor (no `actorId`) count in the warehouse totals and under "System" in the per-person
   rows.
 - Views: **by day** (stacked bars per stage) and **by person** (table: person × stage, orders and units for the

@@ -34,6 +34,20 @@ async function event(
   });
 }
 
+async function audit(
+  actorId: string,
+  entityType: "Package" | "PackageItem",
+  entityId: string,
+  action: string,
+  before: object,
+  after: object,
+  when: string,
+) {
+  await db.auditEvent.create({
+    data: { actorId, entityType, entityId, action, before, after, at: at(when) },
+  });
+}
+
 /**
  * Order 1001 goes the whole way on Nov 2, with a repack and a voided unit, and ships at 23:30 local
  * by the system. Order 1002 is imported on Nov 3 and picked at 23:30 local that day. One more pick
@@ -59,25 +73,100 @@ async function seed() {
     where: { id: line.id },
     data: { pickedById: picker.id, pickedAt: at("2026-11-02T15:00:00Z") },
   });
-  // The first package was thrown away by the repack: its packer still gets the units.
+  // Box work is read from the audit trail, as the app writes it: the box lines keep only their
+  // latest state. Pass 1: Ana packs 2 into the first box and Quinn scans both.
+  const box = (units: number) => ({
+    items: units ? [{ orderItemId: line.id, quantity: units }] : [],
+  });
+  const verified = (n: number) => ({ verifiedQuantity: n, quantity: 2 });
+  await audit(
+    packerA.id,
+    "Package",
+    first.id,
+    "package.packUnits",
+    box(0),
+    box(2),
+    "2026-11-02T17:00:00Z",
+  );
+  await audit(
+    qa.id,
+    "PackageItem",
+    line.id,
+    "packageItem.scan",
+    verified(0),
+    verified(1),
+    "2026-11-02T17:20:00Z",
+  );
+  await audit(
+    qa.id,
+    "PackageItem",
+    line.id,
+    "packageItem.scan",
+    verified(1),
+    verified(2),
+    "2026-11-02T17:21:00Z",
+  );
+  // The repack at 17:30 clears QA without an audit row of its own. Pass 2: Ben packs 1 into the
+  // second box and Ana scans 1 more into the same line; the first box is thrown away (it keeps
+  // counting for Ana). Quinn verifies the line, takes it back by mistake and verifies it again.
+  await audit(
+    packerB.id,
+    "Package",
+    second.id,
+    "package.packUnits",
+    box(0),
+    box(1),
+    "2026-11-02T18:00:00Z",
+  );
+  await audit(
+    packerA.id,
+    "Package",
+    second.id,
+    "package.scan",
+    box(1),
+    box(2),
+    "2026-11-02T18:02:00Z",
+  );
+  await audit(
+    packerB.id,
+    "Package",
+    first.id,
+    "package.delete",
+    box(2),
+    box(0),
+    "2026-11-02T18:30:00Z",
+  );
   await db.package.update({
     where: { id: first.id },
     data: { discardedAt: at("2026-11-02T18:30Z") },
   });
-  await db.packageItem.updateMany({
-    where: { packageId: first.id },
-    data: { packedById: packerA.id, packedAt: at("2026-11-02T17:00:00Z") },
-  });
-  await db.packageItem.updateMany({
-    where: { packageId: second.id },
-    data: {
-      packedById: packerB.id,
-      packedAt: at("2026-11-02T18:00:00Z"),
-      qaVerifiedById: qa.id,
-      qaVerifiedAt: at("2026-11-02T19:00:00Z"),
-      qaVerifiedQuantity: 2,
-    },
-  });
+  await audit(
+    qa.id,
+    "PackageItem",
+    line.id,
+    "packageItem.verify",
+    verified(0),
+    verified(2),
+    "2026-11-02T18:50:00Z",
+  );
+  await audit(
+    qa.id,
+    "PackageItem",
+    line.id,
+    "packageItem.unverify",
+    verified(2),
+    verified(0),
+    "2026-11-02T18:55:00Z",
+  );
+  await audit(
+    qa.id,
+    "PackageItem",
+    line.id,
+    "packageItem.verify",
+    verified(0),
+    verified(2),
+    "2026-11-02T19:00:00Z",
+  );
   await event(id, null, "PENDING", "2026-11-02T14:00:00Z");
   await event(id, "PENDING", "PICKING", "2026-11-02T14:30:00Z", picker.id);
   await event(id, "PICKING", "PACKING", "2026-11-02T16:00:00Z", picker.id);
@@ -134,10 +223,10 @@ describe("throughput", () => {
     expect(report.rows).toEqual([
       // 3 picked, 1 voided.
       { day: "2026-11-02", stage: "PICKING", person: p.picker, orders: 1, units: 2 },
-      // Both passes of the repack count; the discarded package still counts for Ana.
-      { day: "2026-11-02", stage: "PACKING", person: p.packerA, orders: 1, units: 2 },
-      { day: "2026-11-02", stage: "PACKING", person: p.packerB, orders: 1, units: 2 },
-      { day: "2026-11-02", stage: "QA", person: p.qa, orders: 1, units: 2 },
+      // Both passes count: Ana keeps the discarded box and her unit on Ben's line; Ben his own.
+      { day: "2026-11-02", stage: "PACKING", person: p.packerA, orders: 1, units: 3 },
+      { day: "2026-11-02", stage: "PACKING", person: p.packerB, orders: 1, units: 1 },
+      { day: "2026-11-02", stage: "QA", person: p.qa, orders: 1, units: 4 },
       // Shipped by the system at 23:30 local: Nov 2, under System, with the live package's units.
       { day: "2026-11-02", stage: "SHIPPING", person: p.system, orders: 1, units: 2 },
       // Picked at 23:30 local on Nov 3; the 00:30 Nov 4 pick is outside the range.
@@ -145,9 +234,9 @@ describe("throughput", () => {
     ]);
     expect(report.people).toEqual([
       { stage: "PICKING", person: p.picker, orders: 2, units: 3, activeDays: 2 },
-      { stage: "PACKING", person: p.packerA, orders: 1, units: 2, activeDays: 1 },
-      { stage: "PACKING", person: p.packerB, orders: 1, units: 2, activeDays: 1 },
-      { stage: "QA", person: p.qa, orders: 1, units: 2, activeDays: 1 },
+      { stage: "PACKING", person: p.packerA, orders: 1, units: 3, activeDays: 1 },
+      { stage: "PACKING", person: p.packerB, orders: 1, units: 1, activeDays: 1 },
+      { stage: "QA", person: p.qa, orders: 1, units: 4, activeDays: 1 },
       { stage: "SHIPPING", person: p.system, orders: 1, units: 2, activeDays: 1 },
     ]);
     expect(report.persons).toEqual([p.packerA, p.packerB, p.picker, p.qa, p.system]);
@@ -172,7 +261,7 @@ describe("throughput", () => {
 
     const ben = await throughput(db, admin, { ...range, person: p.packerB.id });
     expect(ben.rows).toEqual([
-      { day: "2026-11-02", stage: "PACKING", person: p.packerB, orders: 1, units: 2 },
+      { day: "2026-11-02", stage: "PACKING", person: p.packerB, orders: 1, units: 1 },
     ]);
 
     const system = await throughput(db, admin, { ...range, person: "system" });
@@ -217,9 +306,9 @@ describe("throughputCsv", () => {
     expect(await lines(all)).toEqual([
       "Day,Stage,Person,Orders,Units",
       "2026-11-02,PICKING,Pat Picker,1,2",
-      "2026-11-02,PACKING,Ana Packer,1,2",
-      "2026-11-02,PACKING,Ben Packer,1,2",
-      "2026-11-02,QA,Quinn QA,1,2",
+      "2026-11-02,PACKING,Ana Packer,1,3",
+      "2026-11-02,PACKING,Ben Packer,1,1",
+      "2026-11-02,QA,Quinn QA,1,4",
       "2026-11-02,SHIPPING,System,1,2",
       "2026-11-03,PICKING,Pat Picker,1,1",
     ]);
@@ -227,7 +316,7 @@ describe("throughputCsv", () => {
     const qa = await throughputCsv(db, admin, { ...range, stage: "QA" }, { locale: "es" });
     expect(await lines(qa)).toEqual([
       "Día,Etapa,Persona,Pedidos,Unidades",
-      "2026-11-02,QA,Quinn QA,1,2",
+      "2026-11-02,QA,Quinn QA,1,4",
     ]);
   });
 
@@ -265,5 +354,8 @@ describe("indexes", () => {
         `CREATE INDEX ${table}_${column}_idx ON public.${table} USING btree (${column})`,
       );
     }
+    expect(defs).toContain(
+      "CREATE INDEX audit_events_entity_type_at_idx ON public.audit_events USING btree (entity_type, at)",
+    );
   });
 });

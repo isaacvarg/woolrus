@@ -178,6 +178,8 @@ model AuditEvent {
   @@index([entityType, entityId, at])
   @@index([actorId, at])
   @@index([orderId, at])
+  /// Throughput reads pack and QA work by time (SPEC-reporting "Throughput").
+  @@index([entityType, at])
   @@map("audit_events")
 }
 

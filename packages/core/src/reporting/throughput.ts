@@ -19,13 +19,37 @@ import { type ExportOptions, exportKit, parseExportInput, type QueryOf } from ".
 // aggregated in Postgres and bucketed by local day in the viewer's zone.
 //
 // Orders go to whoever moved the order out of the stage (Picking → Packing, Packing → QA,
-// QA → Ready, Ready → Completed). Units go to whoever picked the line, packed or QA-verified the box
-// line, or shipped the order (its live packages' units). A repack's passes each count, and a
-// discarded package's lines still count for their packer: the work happened. Voided units are out
-// of picking (the stored count is capped at the line's active quantity) and out of the boxes, which
-// a void already trims. Work with no actor is the system's.
+// QA → Ready, Ready → Completed). Units go to whoever picked the line, packed or QA-verified it, or
+// shipped the order (its live packages' units). Work with no actor is the system's.
+//
+// Packing and QA units come from the audit trail, not the box lines: a box line keeps only its
+// latest packer and verifier, a repack clears QA and a discarded package loses its lines, so the
+// columns can't say who did each pass. Each pack or QA audit row credits its actor with the units
+// it added (after − before); taking units out or unverifying takes them back from whoever does it.
+// So a repack's passes each count, two packers on one line each get their own units, and deleting
+// a package (discarded or not) or a void trimming a box takes nothing back: the work happened.
+// Voided units are out of picking (the stored count is capped at the line's active quantity).
 
 const DAY_MS = 86_400_000;
+
+/** The pack actions that put units in a box or take them out; each audits the package before and after. */
+const PACKING_ACTIONS = [
+  "package.packUnits",
+  "package.packRemaining",
+  "package.scan",
+  "package.unpackUnits",
+]
+  .map((a) => `'${a}'`)
+  .join(", ");
+
+/** The QA actions that change a box line's verified count; each audits it before and after. */
+const QA_ACTIONS = ["packageItem.scan", "packageItem.verify", "packageItem.unverify"]
+  .map((a) => `'${a}'`)
+  .join(", ");
+
+/** The units in a package audit snapshot (`{ items: [{ quantity }] }`); 0 when there is none. */
+const boxedUnits = (snapshot: string) =>
+  `coalesce((SELECT sum((it->>'quantity')::int) FROM jsonb_array_elements(${snapshot}->'items') it), 0)`;
 
 /** Every calendar day from `from` to `to`, inclusive. */
 export function daysOf(from: string, to: string): string[] {
@@ -72,7 +96,7 @@ function workCells(db: DbTx, range: Range): Promise<Cell[]> {
   const { local, inRange, params } = rangeSql(range);
   return db.$queryRawUnsafe<Cell[]>(
     `SELECT to_char(day, 'YYYY-MM-DD') AS day, stage, person_id AS "personId",
-       sum(orders)::int AS orders, sum(units)::int AS units
+       sum(orders)::int AS orders, greatest(sum(units), 0)::int AS units
      FROM (
        SELECT ${local("e.at")} AS day,
          CASE e.from_status WHEN 'PICKING' THEN 'PICKING' WHEN 'PACKING' THEN 'PACKING'
@@ -94,13 +118,16 @@ function workCells(db: DbTx, range: Range): Promise<Cell[]> {
        FROM order_items i
        WHERE ${inRange("i.picked_at")} AND i.picked_quantity > 0
        UNION ALL
-       SELECT ${local("pi.packed_at")}, 'PACKING', pi.packed_by_id, 0, pi.quantity
-       FROM package_items pi
-       WHERE ${inRange("pi.packed_at")}
+       SELECT ${local("a.at")}, 'PACKING', a.actor_id, 0,
+         ${boxedUnits("a.after")} - ${boxedUnits("a.before")}
+       FROM audit_events a
+       WHERE a.entity_type = 'Package' AND a.action IN (${PACKING_ACTIONS}) AND ${inRange("a.at")}
        UNION ALL
-       SELECT ${local("pi.qa_verified_at")}, 'QA', pi.qa_verified_by_id, 0, pi.quantity
-       FROM package_items pi
-       WHERE ${inRange("pi.qa_verified_at")}
+       SELECT ${local("a.at")}, 'QA', a.actor_id, 0,
+         coalesce((a.after->>'verifiedQuantity')::int, 0)
+           - coalesce((a.before->>'verifiedQuantity')::int, 0)
+       FROM audit_events a
+       WHERE a.entity_type = 'PackageItem' AND a.action IN (${QA_ACTIONS}) AND ${inRange("a.at")}
      ) work
      GROUP BY day, stage, person_id
      HAVING sum(orders) > 0 OR sum(units) > 0`,

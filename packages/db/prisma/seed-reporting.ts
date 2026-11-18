@@ -387,6 +387,14 @@ function buildOrder(i: number, b: Build): void {
       orderItemId: line.id,
       quantity: line.active,
     }));
+    // Throughput credits packing from this row, as the app writes it on Pack remaining.
+    audit(packer, "Package", packageId, "package.packRemaining", packedAt, {
+      before: { number: packageNumber, items: [] },
+      after: {
+        number: packageNumber,
+        items: boxed.map((item) => ({ orderItemId: item.orderItemId, quantity: item.quantity })),
+      },
+    });
     t = start.getTime() + (round === 1 ? d.packWait + d.packWork : 2 * Math.floor(d.repack / 3));
     move("PACKING", "QA", at(), packer);
 
