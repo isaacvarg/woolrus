@@ -114,15 +114,18 @@ Cohort: orders whose `→ COMPLETED` stage event falls in the range.
 - **Per stage:** status time per stage, built with the interval rules in `order-activity`'s
   `activity/summary.ts` (holds count in no stage; a repack adds a second Packing interval, summed). For Picking,
   Packing and QA, also waiting (interval start → first action) and working (first action → interval end).
-- **Figures:** count, median, p90 and mean for each; computed in TypeScript over the cohort's stage events and
-  first actions (two queries), since the interval rules live there. Expected cohort: a few thousand orders for 90
-  days.
+- **Figures:** count, median, p90 and mean for each; computed in TypeScript over the cohort's summary records
+  (`activity/summary-items.ts`: stage events, visible audit rows and blocked scans, the History tab's sources),
+  since the interval rules live there. They're read with one raw query per 2,000 orders, the batches side by side:
+  through `findMany`, mapping the rows took most of a 10,000-order read. Expected cohort: a few thousand orders
+  for 90 days.
 - **By day:** median import → shipped per shipping day (line chart), so a slow week stands out.
 - **Slowest orders:** the 20 longest import → shipped in the cohort, each linking to the order's History tab.
 - Orders that are still open aren't in the cohort. The home dashboard's SLA alert covers those.
 
-`summary.ts` gets a pure `stageIntervals(events, firstActions, now)` export if the current shape doesn't already
-offer one; the History tab keeps using the same function, so the two can't disagree.
+`summary.ts` exports a pure `stageIntervals(items, now)`, taking an order's activity items (every action, not
+just the first, since idle needs each gap); the History tab keeps using the same function, so the two can't
+disagree.
 
 **Idle cutoff** (answers `order-activity` open question 1): a gap of more than **10 minutes** between two
 consecutive actions by people in a work interval is not working time. It moves to a third bucket, **idle**, so
@@ -197,8 +200,8 @@ the screen it sits on, so the file matches what's shown. Filenames: `woolrus-<re
 
 ### Schema additions (approved with this spec)
 
-Two migrations: `reports_role` (adds `REPORTS` to the `role` enum) and `reporting_indexes`. No new tables or
-columns. The hand-written constraints at the end of the init
+Three migrations: `reports_role` (adds `REPORTS` to the `role` enum), `reporting_throughput_indexes` (order
+items, package items, stage events) and `reporting_quality_indexes` (scan misses). No new tables or columns. The hand-written constraints at the end of the init
 migration are untouched.
 
 ```prisma
@@ -223,8 +226,14 @@ model OrderStageEvent { @@index([at]) }   // the import/shipped cohort scans; [t
 
 ### Dev data
 
-The seed spreads its orders over the last 30 days with picks, packs, QA, ships, a repack, issues of several types
-and some scan misses, so every report has something to show.
+`seedReportingHistory` (`packages/db/prisma/seed-reporting.ts`, run by `pnpm db:seed` after the demo orders)
+adds 150 shipped orders spread over the last 30 days, a few shipped within the last hours so the home tiles show
+today. They're picked, packed, checked and shipped by named demo people (two pickers, two packers, a QA checker
+and a shipper; the carrier completes one order in 17, under System), with holds, a repack every 37 orders, a
+20-minute pause on some picks (idle), an issue on one order in six cycling through every type (origins,
+responsible people, open, resolved and dismissed, some customer-reported), a blocked scan on one in five
+cycling through every kind and stage, and a few voids. Ids are in their own range (9,100,001+); re-running adds
+nothing. The generator is deterministic, and the speed check (criterion 8) runs it at 10,000 orders over 90 days.
 
 ### Files expected to change
 
@@ -237,8 +246,9 @@ picker, `packages/db/prisma/schema/auth.prisma`,
 `apps/web/src/app/(app)/reports/**`, `apps/web/src/app/(app)/{dashboard,drawer-nav}.tsx`,
 `apps/web/src/app/(app)/{orders,issues,voids}/*` (export buttons),
 `apps/web/src/app/(app)/rate-lab/real-orders/*` (read `from`/`to` params),
-`packages/db/prisma/schema/{orders,shipping}.prisma` + one migration, `packages/db/prisma/seed-orders.ts`,
-`packages/i18n/src/messages/{en,es}.json`, `apps/web/e2e/reporting.spec.ts`.
+`packages/db/prisma/schema/{orders,shipping}.prisma` + their migrations, `packages/db/prisma/seed-reporting.ts`
+(+ `seed.ts`), `packages/core/src/activity/summary-items.ts`, `packages/core/src/reporting/reporting.bench.test.ts`,
+`packages/i18n/src/messages/{en,es}.json`, `apps/web/e2e/reports.spec.ts` and `apps/web/e2e/reports-journey.spec.ts`.
 
 ## Success criteria
 
@@ -264,7 +274,9 @@ picker, `packages/db/prisma/schema/auth.prisma`,
    hidden without `report.read`; a `REPORTS` user still can't reach settings or user admin; the role can be
    ticked in user admin and has `en`/`es` labels.
 8. **Performance:** on 10,000 orders over 90 days (with their events, items and issues), each report read answers in
-   under 1 s and a 90-day throughput CSV streams in under 5 s on the dev stack.
+   under 1 s and a 90-day throughput CSV streams in under 5 s on the dev stack. (`reporting.bench.test.ts`,
+   2026-11-18, with other suites loading the machine: Throughput ~0.3 s, Cycle time ~0.65–0.8 s, Quality ~0.3 s,
+   home tiles <0.1 s, the CSV ~0.3 s. No rollup needed; Cycle time is the one to watch as volume grows.)
 9. **UI:** one Playwright test opens each Reports tab with the seed, changes the range, checks a known figure,
    downloads one CSV, and checks a Packer sees no Reports item but sees the SLA alert.
 
