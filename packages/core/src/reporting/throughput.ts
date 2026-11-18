@@ -28,7 +28,7 @@ import { type ExportOptions, exportKit, parseExportInput, type QueryOf } from ".
 const DAY_MS = 86_400_000;
 
 /** Every calendar day from `from` to `to`, inclusive. */
-function daysOf(from: string, to: string): string[] {
+export function daysOf(from: string, to: string): string[] {
   const start = Date.parse(`${from}T00:00:00Z`);
   const count = Math.round((Date.parse(`${to}T00:00:00Z`) - start) / DAY_MS) + 1;
   return Array.from({ length: count }, (_, i) =>
@@ -52,59 +52,90 @@ function byPerson(a: ThroughputPersonRef, b: ThroughputPersonRef): number {
   return (a.name ?? "").localeCompare(b.name ?? "") || a.id.localeCompare(b.id);
 }
 
-async function readCells(
-  db: DbTx,
-  { from, to, timeZone }: { from: string; to: string; timeZone: string },
-): Promise<{ cells: Cell[]; days: ThroughputReport["days"] }> {
-  // A day either side of the UTC midnights covers every zone offset and lets the time indexes
-  // narrow the scan; the exact cut is on the local date.
+type Range = { from: string; to: string; timeZone: string };
+
+/**
+ * A day either side of the UTC midnights covers every zone offset and lets the time indexes narrow
+ * the scan; the exact cut is on the local date. Parameters $1–$5 are from, to, zone, since, until.
+ */
+function rangeSql({ from, to, timeZone }: Range) {
   const since = new Date(Date.parse(`${from}T00:00:00Z`) - DAY_MS);
   const until = new Date(Date.parse(`${to}T00:00:00Z`) + 2 * DAY_MS);
   const local = (column: string) => `(${column} AT TIME ZONE $3)::date`;
   const inRange = (column: string) =>
     `${column} >= $4 AND ${column} < $5 AND ${local(column)} BETWEEN $1::date AND $2::date`;
+  return { local, inRange, params: [from, to, timeZone, since, until] as const };
+}
 
+/** Orders and units per local day × stage × person; non-zero cells only. */
+function workCells(db: DbTx, range: Range): Promise<Cell[]> {
+  const { local, inRange, params } = rangeSql(range);
+  return db.$queryRawUnsafe<Cell[]>(
+    `SELECT to_char(day, 'YYYY-MM-DD') AS day, stage, person_id AS "personId",
+       sum(orders)::int AS orders, sum(units)::int AS units
+     FROM (
+       SELECT ${local("e.at")} AS day,
+         CASE e.from_status WHEN 'PICKING' THEN 'PICKING' WHEN 'PACKING' THEN 'PACKING'
+           WHEN 'QA' THEN 'QA' ELSE 'SHIPPING' END AS stage,
+         e.actor_id AS person_id, 1 AS orders,
+         CASE WHEN e.from_status = 'READY' THEN (
+           SELECT coalesce(sum(pi.quantity), 0) FROM package_items pi
+           JOIN packages p ON p.id = pi.package_id AND p.discarded_at IS NULL
+           WHERE p.order_id = e.order_id) ELSE 0 END AS units
+       FROM order_stage_events e
+       WHERE ${inRange("e.at")}
+         AND (e.from_status, e.to_status) IN (('PICKING', 'PACKING'), ('PACKING', 'QA'),
+           ('QA', 'READY'), ('READY', 'COMPLETED'))
+       UNION ALL
+       SELECT ${local("i.picked_at")}, 'PICKING', i.picked_by_id, 0,
+         greatest(least(i.picked_quantity, i.quantity - coalesce((
+           SELECT sum(v.quantity) FROM item_voids v
+           WHERE v.order_item_id = i.id AND v.undone_at IS NULL), 0)), 0)
+       FROM order_items i
+       WHERE ${inRange("i.picked_at")} AND i.picked_quantity > 0
+       UNION ALL
+       SELECT ${local("pi.packed_at")}, 'PACKING', pi.packed_by_id, 0, pi.quantity
+       FROM package_items pi
+       WHERE ${inRange("pi.packed_at")}
+       UNION ALL
+       SELECT ${local("pi.qa_verified_at")}, 'QA', pi.qa_verified_by_id, 0, pi.quantity
+       FROM package_items pi
+       WHERE ${inRange("pi.qa_verified_at")}
+     ) work
+     GROUP BY day, stage, person_id
+     HAVING sum(orders) > 0 OR sum(units) > 0`,
+    ...params,
+  );
+}
+
+/**
+ * Units each person handled per stage over the range, exactly as Throughput counts them; the
+ * system's (no actor) under a null id. Quality's per-person rates divide by these.
+ */
+export async function throughputUnits(
+  db: DbTx,
+  range: Range,
+): Promise<{ stage: ThroughputStage; personId: string | null; units: number }[]> {
+  const totals = new Map<
+    string,
+    { stage: ThroughputStage; personId: string | null; units: number }
+  >();
+  for (const cell of await workCells(db, range)) {
+    const key = `${cell.stage}:${cell.personId}`;
+    const total = totals.get(key) ?? { stage: cell.stage, personId: cell.personId, units: 0 };
+    total.units += cell.units;
+    totals.set(key, total);
+  }
+  return [...totals.values()];
+}
+
+async function readCells(
+  db: DbTx,
+  range: Range,
+): Promise<{ cells: Cell[]; days: ThroughputReport["days"] }> {
+  const { local, inRange, params } = rangeSql(range);
   const [cells, warehouse] = await Promise.all([
-    db.$queryRawUnsafe<Cell[]>(
-      `SELECT to_char(day, 'YYYY-MM-DD') AS day, stage, person_id AS "personId",
-         sum(orders)::int AS orders, sum(units)::int AS units
-       FROM (
-         SELECT ${local("e.at")} AS day,
-           CASE e.from_status WHEN 'PICKING' THEN 'PICKING' WHEN 'PACKING' THEN 'PACKING'
-             WHEN 'QA' THEN 'QA' ELSE 'SHIPPING' END AS stage,
-           e.actor_id AS person_id, 1 AS orders,
-           CASE WHEN e.from_status = 'READY' THEN (
-             SELECT coalesce(sum(pi.quantity), 0) FROM package_items pi
-             JOIN packages p ON p.id = pi.package_id AND p.discarded_at IS NULL
-             WHERE p.order_id = e.order_id) ELSE 0 END AS units
-         FROM order_stage_events e
-         WHERE ${inRange("e.at")}
-           AND (e.from_status, e.to_status) IN (('PICKING', 'PACKING'), ('PACKING', 'QA'),
-             ('QA', 'READY'), ('READY', 'COMPLETED'))
-         UNION ALL
-         SELECT ${local("i.picked_at")}, 'PICKING', i.picked_by_id, 0,
-           greatest(least(i.picked_quantity, i.quantity - coalesce((
-             SELECT sum(v.quantity) FROM item_voids v
-             WHERE v.order_item_id = i.id AND v.undone_at IS NULL), 0)), 0)
-         FROM order_items i
-         WHERE ${inRange("i.picked_at")} AND i.picked_quantity > 0
-         UNION ALL
-         SELECT ${local("pi.packed_at")}, 'PACKING', pi.packed_by_id, 0, pi.quantity
-         FROM package_items pi
-         WHERE ${inRange("pi.packed_at")}
-         UNION ALL
-         SELECT ${local("pi.qa_verified_at")}, 'QA', pi.qa_verified_by_id, 0, pi.quantity
-         FROM package_items pi
-         WHERE ${inRange("pi.qa_verified_at")}
-       ) work
-       GROUP BY day, stage, person_id
-       HAVING sum(orders) > 0 OR sum(units) > 0`,
-      from,
-      to,
-      timeZone,
-      since,
-      until,
-    ),
+    workCells(db, range),
     db.$queryRawUnsafe<{ day: string; imported: number; shipped: number }[]>(
       `SELECT to_char(${local("e.at")}, 'YYYY-MM-DD') AS day,
          count(*) FILTER (WHERE e.from_status IS NULL)::int AS imported,
@@ -113,15 +144,11 @@ async function readCells(
        FROM order_stage_events e
        WHERE ${inRange("e.at")} AND (e.from_status IS NULL OR e.to_status = 'COMPLETED')
        GROUP BY 1`,
-      from,
-      to,
-      timeZone,
-      since,
-      until,
+      ...params,
     ),
   ]);
   const byDay = new Map(warehouse.map((row) => [row.day, row]));
-  const days = daysOf(from, to).map((day) => ({
+  const days = daysOf(range.from, range.to).map((day) => ({
     day,
     imported: byDay.get(day)?.imported ?? 0,
     shipped: byDay.get(day)?.shipped ?? 0,

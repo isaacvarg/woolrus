@@ -1292,7 +1292,11 @@
       "qaWaitingMin": "QA, esperando (min)",
       "qaWorkingMin": "QA, trabajando (min)",
       "qaIdleMin": "QA, inactivo (min)",
-      "readyMin": "Listo (min)"
+      "readyMin": "Listo (min)",
+      "scannedAt": "Escaneado",
+      "kind": "Motivo del bloqueo",
+      "code": "Código",
+      "station": "Estación"
     },
     "system": "Sistema",
     "yes": "sí",
@@ -2093,6 +2097,66 @@
         "total": "De importado a enviado",
         "onHold": "En espera"
       }
+    },
+    "quality": {
+      "intro": "Recuentos para ver dónde ayudaría más formación o un proceso más claro. Describen lo que pasó; no clasifican a nadie.",
+      "severity": "Gravedad",
+      "anySeverity": "Cualquier gravedad",
+      "status": "Estado",
+      "statuses": {
+        "all": "Todas",
+        "open": "Abiertas",
+        "resolved": "Resueltas o descartadas"
+      },
+      "customerReported": "Solo las reportadas por el cliente",
+      "loading": "Cargando calidad…",
+      "total": "{count, plural, =0 {No hay incidencias en estos días.} one {# incidencia en estos días} other {# incidencias en estos días}}",
+      "bucket": {
+        "day": "Día",
+        "week": "Semana del"
+      },
+      "byType": "Incidencias por tipo",
+      "byDiscovered": "Incidencias por la etapa que las detectó",
+      "byOrigin": "Incidencias por la etapa de origen",
+      "byPerson": "Incidencias por persona responsable",
+      "chartNote": "Cada barra es {size, select, day {un día} other {una semana, desde el lunes}}; sus segmentos siguen la leyenda.",
+      "stages": {
+        "INTAKE": "Recepción",
+        "PICKING": "Recolección",
+        "PACKING": "Empaque",
+        "QA": "Control de calidad",
+        "SHIPPING": "Envío",
+        "CUSTOMER": "Cliente"
+      },
+      "noOrigin": "Sin registrar",
+      "nobody": "Nadie",
+      "unnamed": "Usuario sin nombre",
+      "totalColumn": "Total",
+      "ratesTitle": "Incidencias por cada 1000 unidades",
+      "ratesNote": "Incidencias de las que una persona es responsable, frente a las unidades que manejó en esa etapa en estos días, como las cuenta Rendimiento. Se muestra a partir de 100 unidades, para que un día corto no parezca una tasa alta.",
+      "person": "Persona",
+      "stage": "Etapa",
+      "issues": "Incidencias",
+      "units": "Unidades",
+      "per1000": "Por cada 1000 unidades",
+      "belowFloor": "Menos de 100 unidades",
+      "noUnits": "—",
+      "scansTitle": "Escaneos bloqueados",
+      "scansNote": "Escaneos que la app detuvo antes de que se convirtieran en un error. Los códigos desconocidos van aparte: a menudo son un código de barras que nadie ha vinculado aún a su producto.",
+      "kinds": {
+        "NOT_ON_ORDER": "No está en el pedido",
+        "ALREADY_DONE": "Ya hecho",
+        "OTHER_PACKAGE": "En otra caja",
+        "UNKNOWN_CODE": "Código desconocido"
+      },
+      "scansTotal": "Total, sin desconocidos",
+      "noScans": "No hay escaneos bloqueados en estos días.",
+      "exportScans": "Exportar CSV de escaneos bloqueados",
+      "voidsTitle": "Anulaciones",
+      "resolution": "Resolución",
+      "unresolved": "Sin resolver",
+      "voids": "Anulaciones",
+      "noVoids": "No hay anulaciones en estos días."
     },
     "spend": {
       "title": "Gasto en envíos",

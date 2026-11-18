@@ -1,8 +1,15 @@
 import { z } from "zod";
-import { base, Id } from "./base";
-import { IssueListInput } from "./issues";
+import { base, Id, QueryBoolean } from "./base";
+import { IssueListInput, IssueListStatus } from "./issues";
 import { SummaryStage } from "./order-activity";
-import { OrderListInput, TimeZone } from "./orders";
+import {
+  FulfillmentStage,
+  OrderListInput,
+  QualityIssueSeverity,
+  QualityIssueType,
+  TimeZone,
+  VoidResolution,
+} from "./orders";
 import { VoidListInput } from "./voids";
 
 // The Reports area and CSV exports (SPEC-reporting "Shared input", "CSV exports"): every report reads
@@ -201,6 +208,120 @@ export type CycleTimeReport = z.infer<typeof CycleTimeReport>;
 export const CycleTimeInput = ReportRange;
 export type CycleTimeInput = z.input<typeof CycleTimeInput>;
 
+// ─── Quality (FR-QI-07, SPEC-reporting "Quality") ─────────────────────────────────────────────
+
+/** Ranges of at most this many days are bucketed by day; longer ones by week (Monday start). */
+export const QUALITY_DAILY_MAX_DAYS = 14;
+
+/** A person's rate per 1,000 units shows only from this many units in the stage. */
+export const QUALITY_RATE_MIN_UNITS = 100;
+
+export const QualityBucketSize = z.enum(["day", "week"]);
+export type QualityBucketSize = z.infer<typeof QualityBucketSize>;
+
+/** Day buckets for ranges of up to QUALITY_DAILY_MAX_DAYS days, week buckets past that. */
+export function qualityBucketSize({ from, to }: { from: string; to: string }): QualityBucketSize {
+  return daysBetween(from, to) + 1 <= QUALITY_DAILY_MAX_DAYS ? "day" : "week";
+}
+
+/** Where a blocked scan happened (`ScanMiss.stage`). */
+export const ScanMissStage = z.enum(["PICKING", "PACKING", "QA"]);
+export type ScanMissStage = z.infer<typeof ScanMissStage>;
+
+/** Why a scan was blocked (`ScanMiss.kind`); UNKNOWN_CODE is often a barcode nobody linked yet. */
+export const ScanMissKind = z.enum([
+  "NOT_ON_ORDER",
+  "ALREADY_DONE",
+  "OTHER_PACKAGE",
+  "UNKNOWN_CODE",
+]);
+export type ScanMissKind = z.infer<typeof ScanMissKind>;
+
+/** Issues created in the range; the filters apply to issues only, not to scans or voids. */
+export const QualityInput = ReportRange.extend({
+  severity: QualityIssueSeverity.optional(),
+  /** Only issues reported by the customer. */
+  customerReported: QueryBoolean.optional(),
+  /** `resolved` includes dismissed, as on the Issues list. */
+  status: IssueListStatus.default("all"),
+});
+export type QualityInput = z.input<typeof QualityInput>;
+
+/** Someone on the floor; `id` null is nobody (no responsible user, or a scan with no actor). */
+export const QualityPersonRef = z.object({ id: Id.nullable(), name: z.string().nullable() });
+export type QualityPersonRef = z.infer<typeof QualityPersonRef>;
+
+/** Issue counts per bucket and over the range, keyed by one dimension. */
+function breakdown<K extends z.ZodType>(key: K) {
+  return z.object({
+    /** Non-zero cells, by bucket then key. */
+    series: z.array(z.object({ bucket: IsoDate, key, count: z.number().int() })),
+    /** The range's counts, largest first. */
+    totals: z.array(z.object({ key, count: z.number().int() })),
+  });
+}
+
+/** Per responsible person and origin stage: issues, the units they handled there, and the rate. */
+export const QualityPersonRate = z.object({
+  person: QualityPersonRef,
+  /** The issue's origin stage; null when it wasn't recorded. */
+  stage: FulfillmentStage.nullable(),
+  issues: z.number().int(),
+  /** Units this person handled in the stage in the range, as Throughput counts them; null for stages with no units. */
+  units: z.number().int().nullable(),
+  /** Issues per 1,000 units; null below QUALITY_RATE_MIN_UNITS units. */
+  per1000: z.number().nullable(),
+});
+export type QualityPersonRate = z.infer<typeof QualityPersonRate>;
+
+/** Blocked scans per stage and person, by kind. */
+export const QualityScanRow = z.object({
+  stage: ScanMissStage,
+  person: QualityPersonRef,
+  notOnOrder: z.number().int(),
+  alreadyDone: z.number().int(),
+  otherPackage: z.number().int(),
+  /** Kept apart: often a barcode nobody linked yet, not a mistake. */
+  unknownCode: z.number().int(),
+});
+export type QualityScanRow = z.infer<typeof QualityScanRow>;
+
+/** Voids made in the range and not undone, per stage and resolution (null: not resolved yet). */
+export const QualityVoidRow = z.object({
+  stage: FulfillmentStage,
+  resolution: VoidResolution.nullable(),
+  voids: z.number().int(),
+  units: z.number().int(),
+});
+export type QualityVoidRow = z.infer<typeof QualityVoidRow>;
+
+export const QualityReport = z.object({
+  bucketSize: QualityBucketSize,
+  /** Every bucket's first day (a week's Monday, which may be before `from`), oldest first. */
+  buckets: z.array(IsoDate),
+  /** Issues matching the range and filters. */
+  total: z.number().int(),
+  byType: breakdown(QualityIssueType),
+  byDiscoveredStage: breakdown(FulfillmentStage),
+  byOriginStage: breakdown(FulfillmentStage.nullable()),
+  /** Keyed by the responsible user's id; null is nobody. Names are in `people`. */
+  byPerson: breakdown(Id.nullable()),
+  /** One row per responsible person × origin stage, by name. */
+  people: z.array(QualityPersonRate),
+  /** Blocked scans in the range, by stage then person. */
+  scans: z.array(QualityScanRow),
+  voids: z.array(QualityVoidRow),
+});
+export type QualityReport = z.infer<typeof QualityReport>;
+
+/** One row per issue, with the screen's range and filters. */
+export const QualityExportInput = QualityInput;
+export type QualityExportInput = z.input<typeof QualityExportInput>;
+
+/** One row per blocked scan in the range. */
+export const ScanMissesExportInput = ReportRange;
+export type ScanMissesExportInput = z.input<typeof ScanMissesExportInput>;
+
 const tags = ["Reports"];
 
 /** The Reports area's reads; each needs `report.read`. */
@@ -223,4 +344,13 @@ export const reports = {
     })
     .input(CycleTimeInput)
     .output(CycleTimeReport),
+  quality: base
+    .route({
+      method: "GET",
+      path: "/reports/quality",
+      tags,
+      summary: "Quality issues, blocked scans and voids over a range",
+    })
+    .input(QualityInput)
+    .output(QualityReport),
 };

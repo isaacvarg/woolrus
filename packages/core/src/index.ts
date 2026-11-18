@@ -102,6 +102,7 @@ export * from "./rate-lab/runs";
 export * from "./rate-lab/trends";
 export * from "./reporting/cycle-time";
 export * from "./reporting/exports";
+export * from "./reporting/quality";
 export * from "./reporting/throughput";
 export * from "./settings/crypto";
 export { encryptionKey } from "./settings/env";

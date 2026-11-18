@@ -209,3 +209,88 @@ test("Throughput shows a person's orders and units for the day, filtered, and ex
     expect.stringMatching(new RegExp(`^\\d{4}-\\d{2}-\\d{2},PICKING,${name},1,4$`)),
   ]);
 });
+
+test("Quality rates a person per 1,000 units from 100 units, and exports issues and blocked scans", async ({
+  page,
+}, info) => {
+  desktopOnly(info.project.name);
+  const name = `E2E picker ${crypto.randomUUID().slice(0, 8)}`;
+  const picker = await db.user.create({
+    data: { name, email: `e2e-${crypto.randomUUID()}@example.test`, roles: ["PICKER"] },
+  });
+  const order = await createOrder({ quantity: 120, status: "PACKING" });
+  const now = new Date();
+  await db.orderItem.updateMany({
+    where: { orderId: order.id },
+    data: { pickedById: picker.id, pickedAt: now, pickedQuantity: 120, pickStatus: "PICKED" },
+  });
+  for (const type of ["WRONG_ITEM", "WRONG_QUANTITY"] as const)
+    await db.qualityIssue.create({
+      data: {
+        orderId: order.id,
+        type,
+        severity: "MAJOR",
+        description: "e2e",
+        discoveredStage: "PACKING",
+        originStage: "PICKING",
+        responsibleUserId: picker.id,
+        createdAt: now,
+      },
+    });
+  await db.scanMiss.create({
+    data: {
+      orderId: order.id,
+      stage: "PICKING",
+      kind: "UNKNOWN_CODE",
+      code: "e2e-unknown",
+      actorId: picker.id,
+      at: now,
+    },
+  });
+
+  await signInAs(page, ["PACKER", "REPORTS"]);
+  // Today, in the browser's zone; other tests' issues share the dev database, so find the picker's rows.
+  await page.goto("/reports/quality?range=today");
+  // 2 issues over 120 picked units.
+  await expect(
+    page.getByTestId("quality-rates").getByRole("row").filter({ hasText: name }),
+  ).toHaveText(new RegExp(`${name}\\s*Picking\\s*2\\s*120\\s*16\\.7`));
+  // The unknown barcode is in its own column, out of the total.
+  await expect(
+    page.getByTestId("quality-scans").getByRole("row").filter({ hasText: name }),
+  ).toHaveText(new RegExp(`Picking\\s*${name}\\s*0\\s*0\\s*0\\s*0\\s*1$`));
+
+  // A Critical-only view leaves out the picker's Major issues.
+  await page.getByRole("button", { name: /Severity/ }).click();
+  await page.getByRole("option", { name: "Critical" }).click();
+  await expect(page).toHaveURL(/severity=CRITICAL/);
+  await expect(
+    page.getByTestId("quality-rates").getByRole("row").filter({ hasText: name }),
+  ).toHaveCount(0);
+  await page.getByRole("button", { name: /Severity/ }).click();
+  await page.getByRole("option", { name: "Any severity" }).click();
+
+  const csv = async (link: string) => {
+    const [download] = await Promise.all([
+      page.waitForEvent("download"),
+      page.getByRole("link", { name: link }).click(),
+    ]);
+    const lines = (await readFile(await download.path()))
+      .toString("utf8")
+      .replace(/^﻿/, "")
+      .trimEnd()
+      .split("\r\n");
+    return { name: download.suggestedFilename(), lines };
+  };
+  const issues = await csv("Export CSV");
+  expect(issues.name).toMatch(/^woolrus-quality-\d{4}-\d{2}-\d{2}-\d{4}-\d{2}-\d{2}\.csv$/);
+  expect(issues.lines[0]).toBe(
+    "Order,Created,Type,Severity,Status,Discovered stage,Origin stage,Responsible,Customer-reported,Resolved at",
+  );
+  expect(issues.lines.filter((l) => l.includes(name))).toHaveLength(2);
+  const scans = await csv("Export blocked scans CSV");
+  expect(scans.name).toMatch(/^woolrus-scan-misses-/);
+  expect(scans.lines.filter((l) => l.includes(name))).toEqual([
+    expect.stringMatching(new RegExp(`,PICKING,UNKNOWN_CODE,e2e-unknown,,${name},$`)),
+  ]);
+});
