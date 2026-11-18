@@ -2354,6 +2354,17 @@
   },
   "dashboard": {
     "title": "Dashboard",
+    "slaAlert": {
+      "label": "Orders past their stage's time limit",
+      "summary": "{list} past SLA",
+      "stage": {
+        "PENDING": "{count, number} in Pending",
+        "PICKING": "{count, number} in Picking",
+        "PACKING": "{count, number} in Packing",
+        "QA": "{count, number} in QA",
+        "READY": "{count, number} in Ready"
+      }
+    },
     "tiles": {
       "open": "Open orders",
       "openHint": "Everything not yet completed or cancelled",

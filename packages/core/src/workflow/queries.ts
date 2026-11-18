@@ -9,6 +9,7 @@ import {
   type QueueCounts,
   type QueuePage,
   QueueStage,
+  SlaStage,
   StageSlaMinutes,
 } from "@woolrus/contracts";
 import { type DbTx, Prisma, type WorkflowStatus } from "@woolrus/db";
@@ -73,6 +74,21 @@ export const queueOrderBy = [
   { orderedAt: "asc" },
   { id: "asc" },
 ] as const satisfies Prisma.OrderOrderByWithRelationInput[];
+
+/** Each stage's SLA in minutes. Stored JSON that no longer fits reads as "no SLA", as in the settings service. */
+function stageSlas(settings: { stageSlaMinutes: unknown }): StageSlaMinutes {
+  const slas = StageSlaMinutes.safeParse(settings.stageSlaMinutes);
+  return slas.success ? slas.data : {};
+}
+
+/**
+ * The SLA rule: an order is late once its time in stage is over the stage's SLA, i.e. it
+ * entered the stage before this cutoff. Null when the stage has no SLA. `listQueue`'s
+ * `slaBreached` and `queueCounts`' `late` both use it, so the two can't disagree.
+ */
+function slaCutoff(slaMinutes: number | undefined, now: Date): Date | null {
+  return typeof slaMinutes === "number" ? new Date(now.getTime() - slaMinutes * 60_000) : null;
+}
 
 /** LIKE treats `%`, `_` and `\` as syntax; search text is literal. */
 const escapeLike = (text: string) => text.replace(/[\\%_]/g, (c) => `\\${c}`);
@@ -144,9 +160,7 @@ export async function listQueue(
 
   const settings = await loadSettings(db);
   const claimCutoff = new Date(now.getTime() - settings.claimExpiryMinutes * 60_000);
-  // Stored JSON that no longer fits reads as "no SLA", as in the settings service.
-  const slas = StageSlaMinutes.safeParse(settings.stageSlaMinutes);
-  const sla = stage !== "ON_HOLD" && slas.success ? slas.data[stage] : undefined;
+  const lateBefore = stage === "ON_HOLD" ? null : slaCutoff(stageSlas(settings)[stage], now);
 
   const rows = await db.$queryRaw<QueueSqlRow[]>`
     SELECT o.id, o.number, o.customer_name AS "customerName", o.pii_redacted_at IS NOT NULL AS "piiRedacted", o.priority,
@@ -256,8 +270,7 @@ export async function listQueue(
       priority: r.priority,
       orderedAt: r.orderedAt,
       stageEnteredAt: r.stageEnteredAt,
-      slaBreached:
-        typeof sla === "number" && now.getTime() - r.stageEnteredAt.getTime() > sla * 60_000,
+      slaBreached: lateBefore !== null && r.stageEnteredAt < lateBefore,
       claim:
         r.claimerName !== null && r.claimerEmail !== null && r.claimedById && r.claimedAt
           ? {
@@ -284,16 +297,39 @@ export async function listQueue(
   };
 }
 
-/** How many orders wait in each queue, for the nav. */
-export async function queueCounts(db: DbTx, actor: Actor): Promise<QueueCounts> {
+/**
+ * How many orders wait in each queue, for the nav, and how many of them are past their stage's
+ * SLA, for the dashboard's alert (SPEC-reporting "Home dashboard").
+ */
+export async function queueCounts(
+  db: DbTx,
+  actor: Actor,
+  { now = new Date() }: QueryOptions = {},
+): Promise<QueueCounts> {
   assertCan(actor, "order.read");
-  const groups = await db.order.groupBy({
-    by: ["status"],
-    where: { status: { in: QueueStage.options } },
-    _count: { _all: true },
+  const slas = stageSlas(await loadSettings(db));
+  const cutoffs = SlaStage.options.flatMap((stage) => {
+    const cutoff = slaCutoff(slas[stage], now);
+    return cutoff ? [Prisma.sql`WHEN ${stage} THEN ${cutoff}::timestamptz`] : [];
   });
-  const counts = Object.fromEntries(QueueStage.options.map((s) => [s, 0])) as QueueCounts;
-  for (const g of groups) counts[g.status as QueueStage] = g._count._all;
+  const late = cutoffs.length
+    ? Prisma.sql`o.status_changed_at < CASE o.status::text ${Prisma.join(cutoffs, " ")} END`
+    : Prisma.sql`FALSE`;
+
+  const groups = await db.$queryRaw<{ status: QueueStage; total: number; late: number }[]>`
+    SELECT o.status::text AS status, COUNT(*)::int AS total,
+      COUNT(*) FILTER (WHERE ${late})::int AS late
+    FROM orders o
+    WHERE o.status = ANY(${QueueStage.options}::workflow_status[])
+    GROUP BY o.status`;
+
+  const zeros = <S extends string>(stages: readonly S[]) =>
+    Object.fromEntries(stages.map((s) => [s, 0])) as Record<S, number>;
+  const counts: QueueCounts = { ...zeros(QueueStage.options), late: zeros(SlaStage.options) };
+  for (const g of groups) {
+    counts[g.status] = g.total;
+    if (g.status !== "ON_HOLD") counts.late[g.status] = g.late;
+  }
   return counts;
 }
 

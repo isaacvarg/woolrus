@@ -2354,6 +2354,17 @@
   },
   "dashboard": {
     "title": "Panel",
+    "slaAlert": {
+      "label": "Pedidos fuera del plazo de su etapa",
+      "summary": "{list} fuera de plazo",
+      "stage": {
+        "PENDING": "{count, number} en pendientes",
+        "PICKING": "{count, number} en surtido",
+        "PACKING": "{count, number} en empaque",
+        "QA": "{count, number} en control de calidad",
+        "READY": "{count, number} en listos"
+      }
+    },
     "tiles": {
       "open": "Pedidos abiertos",
       "openHint": "Todo lo que aún no está completado ni cancelado",
