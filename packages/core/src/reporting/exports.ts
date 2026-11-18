@@ -38,7 +38,7 @@ export type ExportOptions = {
 };
 
 /** An export's input: its contract's fields, parsed here, so a route can pass query parameters as they come. */
-type QueryOf<S extends z.ZodType> = { [K in keyof z.input<S>]?: unknown };
+export type QueryOf<S extends z.ZodType> = { [K in keyof z.input<S>]?: unknown };
 
 type Column = keyof (typeof messages)["en"]["exports"]["columns"];
 
@@ -90,7 +90,7 @@ export async function* capRows(
 }
 
 /** The pieces every export shares: header, time format, the cap and the file name's date. */
-function exportKit(
+export function exportKit(
   name: string,
   timeZone: string,
   { locale, now = new Date(), cap }: ExportOptions,
@@ -113,7 +113,7 @@ function exportKit(
   };
 }
 
-function parse<S extends z.ZodType>(schema: S, input: unknown): z.infer<S> {
+export function parseExport<S extends z.ZodType>(schema: S, input: unknown): z.infer<S> {
   const parsed = schema.safeParse(input);
   if (!parsed.success) throw new AppError("BAD_REQUEST", "errors.validation");
   return parsed.data;
@@ -177,7 +177,7 @@ export async function ordersCsv(
   options: ExportOptions,
 ): Promise<CsvExport> {
   assertCan(actor, "report.read");
-  const { search, statuses, sort, dir, timeZone } = parse(OrdersExportInput, input);
+  const { search, statuses, sort, dir, timeZone } = parseExport(OrdersExportInput, input);
   const kit = exportKit("orders", timeZone, options);
   const ids = await db.$queryRaw<{ id: string }[]>`
     SELECT o.id FROM orders o ${orderListWhere({ search, statuses })}
@@ -256,7 +256,7 @@ export async function issuesCsv(
   options: ExportOptions,
 ): Promise<CsvExport> {
   assertCan(actor, "report.read");
-  const { timeZone, ...filters } = parse(IssuesExportInput, input);
+  const { timeZone, ...filters } = parseExport(IssuesExportInput, input);
   const kit = exportKit("issues", timeZone, options);
   const ids = await db.$queryRaw<{ id: string }[]>`
     SELECT i.id FROM quality_issues i JOIN orders o ON o.id = i.order_id
@@ -331,7 +331,7 @@ export async function voidsCsv(
   options: ExportOptions,
 ): Promise<CsvExport> {
   assertCan(actor, "report.read");
-  const { status, search, timeZone } = parse(VoidsExportInput, input);
+  const { status, search, timeZone } = parseExport(VoidsExportInput, input);
   const kit = exportKit("voids", timeZone, options);
   const at = status === "resolved" ? Prisma.sql`v.resolved_at` : Prisma.sql`v.voided_at`;
   const ids = await db.$queryRaw<{ id: string }[]>`
@@ -423,7 +423,7 @@ export async function orderItemsCsv(
   options: ExportOptions,
 ): Promise<CsvExport> {
   assertCan(actor, "report.read");
-  const { from, to, timeZone } = parse(OrderItemsExportInput, input);
+  const { from, to, timeZone } = parseExport(OrderItemsExportInput, input);
   const kit = exportKit("order-items", timeZone, options);
   const day = Prisma.sql`(o.created_at AT TIME ZONE ${timeZone})::date`;
   const ids = await db.$queryRaw<{ id: string }[]>`

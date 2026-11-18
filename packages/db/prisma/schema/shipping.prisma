@@ -171,6 +171,8 @@ model PackageItem {
   @@unique([packageId, orderItemId])
   @@index([packageId])
   @@index([orderItemId])
+  @@index([packedAt])
+  @@index([qaVerifiedAt])
   @@map("package_items")
 }
 

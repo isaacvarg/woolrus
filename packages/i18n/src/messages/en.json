@@ -1273,8 +1273,12 @@
       "packedAt": "Packed at",
       "qaBy": "QA by",
       "qaAt": "QA at",
-      "voidedQty": "Voided qty"
+      "voidedQty": "Voided qty",
+      "day": "Day",
+      "person": "Person",
+      "orders": "Orders"
     },
+    "system": "System",
     "yes": "yes",
     "no": "no"
   },
@@ -2038,6 +2042,32 @@
       "title": "Shipping spend",
       "body": "What labels cost by carrier and service, and label cost against shipping charged, are on Rate Lab's Real orders page.",
       "open": "Open Real orders for these dates"
+    },
+    "throughput": {
+      "stage": "Stage",
+      "person": "Person",
+      "all": "All",
+      "system": "System",
+      "unnamed": "Unnamed user",
+      "stages": {
+        "PICKING": "Picking",
+        "PACKING": "Packing",
+        "QA": "QA",
+        "SHIPPING": "Shipping"
+      },
+      "loading": "Loading throughput…",
+      "empty": "No picks, packs, QA checks or shipments in these days.",
+      "byDayTitle": "Units per day, by stage",
+      "byDayNote": "Each bar is a day; its segments are the stages, in the order of the legend.",
+      "day": "Day",
+      "warehouseTitle": "Orders imported and shipped",
+      "imported": "Imported",
+      "shipped": "Shipped",
+      "byPersonTitle": "By person",
+      "orders": "Orders",
+      "units": "Units",
+      "activeDays": "Active days",
+      "total": "Total"
     }
   },
   "rateLab": {
