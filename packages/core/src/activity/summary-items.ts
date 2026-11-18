@@ -8,10 +8,45 @@ import { hiddenActions } from "./sources/audit-rows";
 // down to the fields the summary uses. A new source in `sources/index.ts` that carries actions by
 // people belongs here too, or the report and the History tab would disagree.
 
-/** Orders are read this many at a time. */
-const BATCH = 500;
+/**
+ * Orders are read this many at a time, the batches side by side. One raw query per batch: through
+ * `findMany`, mapping the rows took most of a 10,000-order Cycle time read (SPEC-reporting
+ * criterion 8, #218).
+ */
+const BATCH = 2_000;
 
 const person = (actorId: string | null) => (actorId ? { id: actorId, name: "" } : null);
+
+type Row = {
+  source: "event" | "audit" | "miss";
+  id: string;
+  orderId: string;
+  /** Epoch milliseconds: the driver parses numbers far faster than timestamps. */
+  ms: number;
+  actorId: string | null;
+  /** Event: from status; audit: action. */
+  a: string | null;
+  /** Event: to status; audit: entity type. */
+  b: string | null;
+};
+
+function readBatch(db: DbTx, ids: readonly string[]): Promise<Row[]> {
+  const list = [...ids];
+  return db.$queryRaw<Row[]>`
+    SELECT 'event' AS source, id::text, order_id::text AS "orderId",
+      (extract(epoch FROM at) * 1000)::float8 AS ms, actor_id::text AS "actorId",
+      from_status::text AS a, to_status::text AS b
+    FROM order_stage_events WHERE order_id = ANY(${list}::uuid[])
+    UNION ALL
+    SELECT 'audit', id::text, order_id::text, (extract(epoch FROM at) * 1000)::float8,
+      actor_id::text, action, entity_type
+    FROM audit_events
+    WHERE order_id = ANY(${list}::uuid[]) AND NOT (action = ANY(${hiddenActions}::text[]))
+    UNION ALL
+    SELECT 'miss', id::text, order_id::text, (extract(epoch FROM at) * 1000)::float8,
+      actor_id::text, NULL, NULL
+    FROM scan_misses WHERE order_id = ANY(${list}::uuid[])`;
+}
 
 /** Each order's summary items, in no particular order; an order with none maps to `[]`. */
 export async function summaryItems(
@@ -19,66 +54,43 @@ export async function summaryItems(
   orderIds: readonly string[],
 ): Promise<Map<string, ActivityItem[]>> {
   const byOrder = new Map<string, ActivityItem[]>(orderIds.map((id) => [id, []]));
-  const add = (orderId: string | null, item: ActivityItem) => {
-    if (orderId) byOrder.get(orderId)?.push(item);
-  };
+  const batches: Promise<Row[]>[] = [];
   for (let i = 0; i < orderIds.length; i += BATCH) {
-    const ids = orderIds.slice(i, i + BATCH);
-    const [events, audits, misses] = await Promise.all([
-      db.orderStageEvent.findMany({
-        where: { orderId: { in: ids } },
-        select: {
-          id: true,
-          orderId: true,
-          at: true,
-          actorId: true,
-          fromStatus: true,
-          toStatus: true,
-        },
-      }),
-      db.auditEvent.findMany({
-        where: { orderId: { in: ids }, action: { notIn: hiddenActions } },
-        select: {
-          id: true,
-          orderId: true,
-          at: true,
-          actorId: true,
-          action: true,
-          entityType: true,
-        },
-      }),
-      db.scanMiss.findMany({
-        where: { orderId: { in: ids } },
-        select: { id: true, orderId: true, at: true, actorId: true },
-      }),
-    ]);
-    for (const e of events) {
-      add(e.orderId, {
-        ...blank(e.id, e.at, e.actorId),
-        category: "status",
-        action: e.fromStatus ? "stage.move" : "stage.import",
-        entityType: "Order",
-        params: { from: e.fromStatus, to: e.toStatus },
-      });
-    }
-    for (const a of audits) {
-      add(a.orderId, {
-        ...blank(a.id, a.at, a.actorId),
-        category: actionSpec(a.entityType, a.action)?.category ?? categoryForEntity(a.entityType),
-        action: a.action,
-        entityType: a.entityType,
-      });
-    }
-    for (const m of misses) {
-      add(m.orderId, {
-        ...blank(m.id, m.at, m.actorId),
-        category: categoryForEntity("ScanMiss"),
-        action: "scanMiss",
-        entityType: "ScanMiss",
-      });
-    }
+    batches.push(readBatch(db, orderIds.slice(i, i + BATCH)));
+  }
+  for (const rows of await Promise.all(batches)) {
+    for (const row of rows) byOrder.get(row.orderId)?.push(toItem(row));
   }
   return byOrder;
+}
+
+function toItem({ source, id, ms, actorId, a, b }: Row): ActivityItem {
+  const at = new Date(ms);
+  if (source === "event") {
+    return {
+      ...blank(id, at, actorId),
+      category: "status",
+      action: a ? "stage.move" : "stage.import",
+      entityType: "Order",
+      params: { from: a, to: b },
+    };
+  }
+  if (source === "audit") {
+    const action = a ?? "";
+    const entityType = b ?? "";
+    return {
+      ...blank(id, at, actorId),
+      category: actionSpec(entityType, action)?.category ?? categoryForEntity(entityType),
+      action,
+      entityType,
+    };
+  }
+  return {
+    ...blank(id, at, actorId),
+    category: categoryForEntity("ScanMiss"),
+    action: "scanMiss",
+    entityType: "ScanMiss",
+  };
 }
 
 function blank(id: string, at: Date, actorId: string | null) {
