@@ -79,7 +79,7 @@ States: `not started` → `spec draft` → `spec approved` → `planned` → `in
 | `lumexia` | M5 | [SPEC-lumexia](docs/specs/SPEC-lumexia.md) | [#30](https://github.com/isaacvarg/woolrus/issues/30) | done |
 | `order-activity` | M5 | [SPEC-order-activity](docs/specs/SPEC-order-activity.md) | [#196](https://github.com/isaacvarg/woolrus/issues/196) | done |
 | `returns` | M5 | — | [#31](https://github.com/isaacvarg/woolrus/issues/31) | not started |
-| `reporting` | M5 | [SPEC-reporting](docs/specs/SPEC-reporting.md) | [#32](https://github.com/isaacvarg/woolrus/issues/32) | in progress |
+| `reporting` | M5 | [SPEC-reporting](docs/specs/SPEC-reporting.md) | [#32](https://github.com/isaacvarg/woolrus/issues/32) | done |
 | `rate-history` | M5 | [SPEC-rate-history](docs/specs/SPEC-rate-history.md) | [#139](https://github.com/isaacvarg/woolrus/issues/139) | done |
 | `rate-lab` | M5 | [SPEC-rate-lab](docs/specs/SPEC-rate-lab.md) | [#140](https://github.com/isaacvarg/woolrus/issues/140) | done |
 
