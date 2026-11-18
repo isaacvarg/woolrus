@@ -1,8 +1,10 @@
 import { z } from "zod";
-import { TimeZone } from "./orders";
+import { IssueListInput } from "./issues";
+import { OrderListInput, TimeZone } from "./orders";
+import { VoidListInput } from "./voids";
 
-// The Reports area (SPEC-reporting "Shared input"): every report reads the same range, in local
-// calendar days of the viewer's time zone.
+// The Reports area and CSV exports (SPEC-reporting "Shared input", "CSV exports"): every report reads
+// the same range, in local calendar days of the viewer's time zone.
 
 /** The longest range a report reads on screen: `to` at most this many days after `from`. */
 export const REPORT_RANGE_MAX_DAYS = 92;
@@ -39,3 +41,22 @@ export const ReportRange = z
     { path: ["to"], message: "errors.field.reportRangeTooLong" },
   );
 export type ReportRange = z.infer<typeof ReportRange>;
+
+/** Every export writes times in the viewer's zone. */
+const InZone = { timeZone: TimeZone.default("UTC") };
+
+/** The All orders list's filters and sort, without paging. */
+export const OrdersExportInput = OrderListInput.omit({ page: true, pageSize: true }).extend(InZone);
+export type OrdersExportInput = z.input<typeof OrdersExportInput>;
+
+/** The Issues list's filters, without paging. */
+export const IssuesExportInput = IssueListInput.omit({ cursor: true, limit: true }).extend(InZone);
+export type IssuesExportInput = z.input<typeof IssuesExportInput>;
+
+/** The Voids list's tab and search, without paging. */
+export const VoidsExportInput = VoidListInput.omit({ cursor: true, limit: true }).extend(InZone);
+export type VoidsExportInput = z.input<typeof VoidsExportInput>;
+
+/** Order lines on orders imported in the range. */
+export const OrderItemsExportInput = ReportRange;
+export type OrderItemsExportInput = z.input<typeof OrderItemsExportInput>;

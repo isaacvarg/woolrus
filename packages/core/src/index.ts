@@ -100,6 +100,7 @@ export * from "./rate-lab/real-orders";
 export * from "./rate-lab/run-detail";
 export * from "./rate-lab/runs";
 export * from "./rate-lab/trends";
+export * from "./reporting/exports";
 export * from "./settings/crypto";
 export { encryptionKey } from "./settings/env";
 export * from "./settings/format";

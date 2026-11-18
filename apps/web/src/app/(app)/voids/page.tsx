@@ -16,6 +16,7 @@ export default async function VoidsPage({ searchParams }: PageProps<"/voids">) {
           <p className="text-base-content/70">{t("voids.page.intro")}</p>
           <VoidsManager
             canResolve={can(actor, "void.resolve")}
+            canExport={can(actor, "report.read")}
             initialTab={tab === "resolved" ? "resolved" : "unresolved"}
           />
         </>

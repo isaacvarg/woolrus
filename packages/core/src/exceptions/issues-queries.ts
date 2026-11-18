@@ -46,6 +46,27 @@ const issueStatusFilter = (status: IssueListInput["status"]): Prisma.Sql =>
       ? Prisma.sql`AND i.status <> 'OPEN'`
       : Prisma.empty;
 
+/** The Issues list's filters, over `quality_issues i JOIN orders o` (shared with its CSV export). */
+export function issueListWhere({
+  status = "all",
+  severity,
+  type,
+  orderId,
+  search,
+}: Pick<
+  Partial<IssueListInput>,
+  "status" | "severity" | "type" | "orderId" | "search"
+>): Prisma.Sql {
+  return Prisma.sql`WHERE TRUE ${issueStatusFilter(status)}
+    ${severity ? Prisma.sql`AND i.severity = ${severity}::quality_issue_severity` : Prisma.empty}
+    ${type ? Prisma.sql`AND i.type = ${type}::quality_issue_type` : Prisma.empty}
+    ${orderId ? Prisma.sql`AND i.order_id = ${orderId}::uuid` : Prisma.empty}
+    ${searchFilter(search)}`;
+}
+
+/** The Issues list's order: open Critical first, then newest. */
+export const issueListRank = Prisma.sql`(CASE WHEN i.status = 'OPEN' AND i.severity = 'CRITICAL' THEN 0 ELSE 1 END)`;
+
 export async function listIssues(
   db: DbTx,
   actor: Actor,
@@ -54,16 +75,12 @@ export async function listIssues(
   assertCan(actor, "order.read");
   const size = Math.min(Math.max(Math.trunc(limit), 1), 100);
   const after = cursor ? decodeIssueCursor(cursor) : null;
-  const rank = Prisma.sql`(CASE WHEN i.status = 'OPEN' AND i.severity = 'CRITICAL' THEN 0 ELSE 1 END)`;
+  const rank = issueListRank;
 
   const page = await db.$queryRaw<{ id: string; rank: number; at: Date }[]>`
     SELECT i.id, ${rank} AS rank, i.created_at AS at
     FROM quality_issues i JOIN orders o ON o.id = i.order_id
-    WHERE TRUE ${issueStatusFilter(status)}
-      ${severity ? Prisma.sql`AND i.severity = ${severity}::quality_issue_severity` : Prisma.empty}
-      ${type ? Prisma.sql`AND i.type = ${type}::quality_issue_type` : Prisma.empty}
-      ${orderId ? Prisma.sql`AND i.order_id = ${orderId}::uuid` : Prisma.empty}
-      ${searchFilter(search)}
+    ${issueListWhere({ status, severity, type, orderId, search })}
       ${
         after
           ? Prisma.sql`AND (${rank}, i.created_at, i.id) < (${after.rank}, ${after.at}, ${after.id}::uuid)`

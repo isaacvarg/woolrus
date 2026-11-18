@@ -5,6 +5,7 @@ import {
   csvStream,
   type UserActor,
 } from "@woolrus/core";
+import { defaultLocale, isLocale, type Locale } from "@woolrus/i18n";
 import { createLogger } from "@woolrus/logger";
 import { resolveActor } from "./actor";
 
@@ -33,20 +34,34 @@ async function* logged(rows: CsvExport["rows"], path: string): CsvExport["rows"]
   }
 }
 
+/** The query parameters in `names` that are set, as an input object; repeated ones as a list. */
+export function queryInput(
+  query: URLSearchParams,
+  names: readonly string[],
+  lists: readonly string[] = [],
+): Record<string, string | string[]> {
+  return Object.fromEntries([
+    ...names.flatMap((name) => (query.get(name) ? [[name, query.get(name) as string]] : [])),
+    ...lists.flatMap((name) => (query.getAll(name).length ? [[name, query.getAll(name)]] : [])),
+  ]);
+}
+
 /**
  * Streams a CSV export (FR-REP-04) as a download. `load` checks the permission and reads what it
  * needs before the response starts, so a refusal is a status code, never a broken file.
  */
 export async function serveCsv(
   request: Request,
-  load: (actor: UserActor) => Promise<CsvExport>,
+  load: (actor: UserActor, viewer: { locale: Locale }) => Promise<CsvExport>,
 ): Promise<Response> {
   const resolved = await resolveActor(request.headers);
   if (!resolved) return empty(401);
   const path = new URL(request.url).pathname;
   let csv: CsvExport;
   try {
-    csv = await load(resolved.actor);
+    csv = await load(resolved.actor, {
+      locale: isLocale(resolved.user.locale) ? resolved.user.locale : defaultLocale,
+    });
   } catch (error) {
     if (error instanceof AppError) return empty(STATUS[error.kind]);
     log.error({ err: error, path }, "csv export failed");

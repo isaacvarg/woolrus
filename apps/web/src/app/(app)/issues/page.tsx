@@ -19,6 +19,7 @@ export default async function IssuesPage({ searchParams }: PageProps<"/issues">)
           <IssuesManager
             canResolve={can(actor, "issue.resolve")}
             canDelete={can(actor, "issue.delete")}
+            canExport={can(actor, "report.read")}
             canWriteCustomer={can(actor, "note.customer")}
             userId={actor.userId}
             initialTab={tabs.find((x) => x === tab) ?? "all"}
