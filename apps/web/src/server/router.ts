@@ -1,3 +1,4 @@
+import { ORPCError } from "@orpc/server";
 import {
   acknowledgeCheck,
   addPackage,
@@ -204,6 +205,7 @@ import {
 import { db } from "@woolrus/db";
 import { createLogger } from "@woolrus/logger";
 import { preferenceCookie } from "@/lib/preferences";
+import { resolveStationDevice } from "./actor";
 import { appOrigin, auth } from "./auth";
 import { env } from "./env";
 import { api, type BaseContext, implementer, publicApi, stationApi } from "./orpc";
@@ -687,8 +689,14 @@ export const router = implementer.router({
     }),
     touch: api.station.touch.handler(({ context }) => touchStation(db, context.actor)),
     // Public: the device has no credential yet. Like Register, the token goes only into the
-    // cookie, and any personal session on the device ends so the station takes over.
+    // cookie, and any personal session on the device ends so the station takes over. A device
+    // that already is a station is refused before the code is used: revoke its station first.
     redeemSetupCode: publicApi.station.redeemSetupCode.handler(async ({ input, context }) => {
+      if ((await resolveStationDevice(context.headers)).kind === "station") {
+        throw new ORPCError("CONFLICT", {
+          data: { messageKey: "errors.stations.alreadyStation" },
+        });
+      }
       const { station, token } = await redeemStationSetupCode(db, {
         code: input.code,
         now: new Date(),

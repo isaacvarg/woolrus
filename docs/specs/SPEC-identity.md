@@ -370,8 +370,11 @@ first. It carries the station's name, so the device needs nothing else.
   unused.
 - **The web side** (`station.redeemSetupCode`, public, no `authed` middleware): sets the station cookie from the
   token, signs out any personal session on the device (as Register does), and the page goes to `/station`. A
-  device that already has an active station cookie never sees `/station/setup` (it redirects to `/station`); to
-  re-pair it, revoke its station first.
+  device that already has an active station cookie never sees `/station/setup` (it redirects to `/station`), and
+  the procedure refuses it too (`CONFLICT`, `errors.stations.alreadyStation`) before the code is used; to
+  re-pair it, revoke its station first. Having no cookie for `SameSite` to protect, the procedure accepts only
+  same-origin browser requests (`Sec-Fetch-Site`, else `Origin` against the app origin; review, 2026-11-19), so
+  a cross-site form can't pair a device.
 - **No auto-redeem from a link:** `GET /station/setup?code=…` only pre-fills the field. Redemption is the
   page's `POST`, so link scanners and prefetchers can't burn a code. The page sends `Referrer-Policy: no-referrer`
   and replaces its URL after loading, so the code doesn't sit in history or leak in a referrer.

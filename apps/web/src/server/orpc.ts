@@ -4,6 +4,7 @@ import { contract, toFieldErrors } from "@woolrus/contracts";
 import { AppError } from "@woolrus/core";
 import type { Logger } from "@woolrus/logger";
 import { resolveActor, resolveStationDevice } from "./actor";
+import { appOrigin } from "./auth";
 import { captureServerError } from "./error-reporting";
 import { type RequestTrace, requestIdOf } from "./request-trace";
 import { clearStationCookie } from "./station-cookie";
@@ -100,10 +101,27 @@ const stationDevice = os.middleware(async ({ next, context }) => {
 export const stationApi = os.use(mapErrors).use(stationDevice);
 
 /**
- * No caller needed: for the one thing a device does before it has any credential, redeeming a
- * station setup code. Errors are still mapped.
+ * Same-origin browsers only. Every other procedure is protected from cross-site requests by its
+ * `SameSite=Lax` cookie; a public one has no cookie to lean on, and oRPC also accepts form-encoded
+ * bodies, so a cross-site `<form>` could otherwise reach it. A browser says where a request came
+ * from with `Sec-Fetch-Site`, or else `Origin`; a request with neither isn't from a browser page,
+ * so it can't be a forged one.
  */
-export const publicApi = os.use(mapErrors);
+const sameOrigin = os.middleware(async ({ next, context }) => {
+  const site = context.headers.get("sec-fetch-site");
+  const origin = context.headers.get("origin");
+  const allowed = site
+    ? site === "same-origin" || site === "none"
+    : !origin || origin === appOrigin(context.headers);
+  if (!allowed) throw new ORPCError("FORBIDDEN", { data: { messageKey: "errors.forbidden" } });
+  return next();
+});
+
+/**
+ * No caller needed: for the one thing a device does before it has any credential, redeeming a
+ * station setup code. Errors are still mapped, and only same-origin pages may call it.
+ */
+export const publicApi = os.use(mapErrors).use(sameOrigin);
 
 /**
  * The top-level router adds no middleware: each procedure brings its own (`api` or `stationApi`).

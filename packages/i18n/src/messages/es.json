@@ -1583,7 +1583,8 @@
       "nameTooLong": "Usa como máximo 40 caracteres.",
       "personalOnly": "Registra una estación desde tu propia sesión, no desde una estación.",
       "badSetupCode": "Ese código no funciona. Pide uno nuevo a un administrador.",
-      "tooManySetupCodes": "Ya hay {max} códigos de configuración abiertos. Usa o cancela uno primero."
+      "tooManySetupCodes": "Ya hay {max} códigos de configuración abiertos. Usa o cancela uno primero.",
+      "alreadyStation": "Ese dispositivo ya es una estación. Revoca su estación primero y vuelve a configurarlo."
     },
     "station": {
       "locked": "Esta estación está bloqueada. Desbloquéala para continuar.",

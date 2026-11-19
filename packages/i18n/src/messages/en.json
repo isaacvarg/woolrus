@@ -1583,7 +1583,8 @@
       "nameTooLong": "Use at most 40 characters.",
       "personalOnly": "Register a station from your own sign-in, not from a station.",
       "badSetupCode": "That code doesn't work. Ask an admin for a new one.",
-      "tooManySetupCodes": "There are already {max} open setup codes. Use or cancel one first."
+      "tooManySetupCodes": "There are already {max} open setup codes. Use or cancel one first.",
+      "alreadyStation": "That device is already a station. Revoke its station first, then set it up again."
     },
     "station": {
       "locked": "This station is locked. Unlock it to continue.",
