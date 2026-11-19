@@ -1,7 +1,11 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { StationSetupCodeIssued, StationSummary } from "@woolrus/contracts";
+import type {
+  StationSetupCodeIssued,
+  StationSetupCodeSummary,
+  StationSummary,
+} from "@woolrus/contracts";
 import { useFormatter, useNow, useTranslations } from "next-intl";
 import { useState } from "react";
 import { Form } from "react-aria-components";
@@ -11,6 +15,7 @@ import { Menu, MenuItem } from "@/components/ui/menu";
 import { toast } from "@/components/ui/toast";
 import { useErrorMessage, useFieldErrors } from "@/lib/errors";
 import { client, orpc } from "@/lib/orpc";
+import { formatTimeLeft, SetupCode, useTimeLeft } from "./setup-code";
 
 function useInvalidate() {
   const queryClient = useQueryClient();
@@ -103,6 +108,7 @@ export function StationsManager({ canRegister }: { canRegister: boolean }) {
           </tbody>
         </table>
       </div>
+      <OpenSetupCodes />
       {registering && <RegisterDialog onClose={() => setRegistering(false)} />}
       {adding && <AddStationDialog onClose={() => setAdding(false)} />}
       {renaming && <RenameDialog station={renaming} onClose={() => setRenaming(null)} />}
@@ -165,32 +171,46 @@ function RegisterDialog({ onClose }: { onClose: () => void }) {
 
 /**
  * Add station (SPEC-identity A3): name it, then show the one-time setup code and its QR for the
- * tablet. The code exists only in this response, so closing the dialog loses it.
+ * tablet. The code exists only in this response, so closing the dialog loses it. Once a code has
+ * expired, **Get a new code** issues another for the same name.
  */
 function AddStationDialog({ onClose }: { onClose: () => void }) {
   const t = useTranslations();
   const errorMessage = useErrorMessage();
   const fieldErrors = useFieldErrors();
+  const invalidate = useInvalidate();
   const [name, setName] = useState("");
+  const [issued, setIssued] = useState<StationSetupCodeIssued | null>(null);
   const issue = useMutation({
     mutationFn: () => client.stations.setupCodes.issue({ name }),
+    onSuccess: setIssued,
+    onSettled: invalidate,
   });
   const errors = fieldErrors(issue.error);
+  const close = () => {
+    invalidate();
+    onClose();
+  };
 
   return (
     <Dialog
       title={
-        issue.data
-          ? t("stations.setupCodeTitle", { name: issue.data.name })
-          : t("stations.addStationTitle")
+        issued ? t("stations.setupCodeTitle", { name: issued.name }) : t("stations.addStationTitle")
       }
       isOpen
-      isDismissable={!issue.data}
-      onOpenChange={(open) => !open && onClose()}
+      isDismissable={!issued}
+      onOpenChange={(open) => !open && close()}
     >
-      {(close) =>
-        issue.data ? (
-          <SetupCode issued={issue.data} onDone={close} />
+      {(closeDialog) =>
+        issued ? (
+          <SetupCode
+            key={issued.id}
+            issued={issued}
+            onDone={closeDialog}
+            onRenew={() => issue.mutate()}
+            renewing={issue.isPending}
+            renewError={issue.error ? errorMessage(issue.error) : null}
+          />
         ) : (
           <Form
             validationErrors={errors}
@@ -215,7 +235,7 @@ function AddStationDialog({ onClose }: { onClose: () => void }) {
               </p>
             )}
             <div className="modal-action">
-              <Button className="btn-ghost" onPress={close}>
+              <Button className="btn-ghost" onPress={closeDialog}>
                 {t("common.cancel")}
               </Button>
               <Button type="submit" isPending={issue.isPending}>
@@ -229,28 +249,78 @@ function AddStationDialog({ onClose }: { onClose: () => void }) {
   );
 }
 
-function SetupCode({ issued, onDone }: { issued: StationSetupCodeIssued; onDone: () => void }) {
+/** Codes issued but not yet used, cancelled or expired (SPEC-identity A3), each with Cancel. */
+function OpenSetupCodes() {
   const t = useTranslations();
+  const errorMessage = useErrorMessage();
+  const codes = useQuery(orpc.stations.setupCodes.list.queryOptions());
+  if (codes.error) {
+    return (
+      <p role="alert" className="text-error">
+        {errorMessage(codes.error)}
+      </p>
+    );
+  }
+  if (!codes.data?.length) return null;
+
   return (
-    <>
-      <p>{t("stations.setupCodeBody")}</p>
-      <div className="flex flex-col items-center gap-2 rounded-box border border-base-300 p-4">
-        <div
-          role="img"
-          aria-label={t("stations.setupCodeQr", { name: issued.name })}
-          className="w-56 [&>svg]:h-auto [&>svg]:w-full"
-          // biome-ignore lint/security/noDangerouslySetInnerHtml: SVG made by `qrcode` on our server from a link we built; no user input.
-          dangerouslySetInnerHTML={{ __html: issued.qrSvg }}
-        />
-        <p className="text-sm opacity-70">{t("stations.setupCodeLabel")}</p>
-        <p data-testid="setup-code" className="font-mono text-4xl font-bold tracking-widest">
-          {issued.code}
-        </p>
+    <section aria-labelledby="open-setup-codes" className="space-y-2">
+      <h2 id="open-setup-codes" className="text-xl font-semibold">
+        {t("stations.openCodes")}
+      </h2>
+      <div className="overflow-x-auto rounded-box bg-base-100 shadow-sm">
+        <table className="table">
+          <thead>
+            <tr>
+              <th>{t("stations.name")}</th>
+              <th>{t("stations.timeLeft")}</th>
+              <th>{t("stations.issuedBy")}</th>
+              <th>
+                <span className="sr-only">{t("stations.actions")}</span>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {codes.data.map((code) => (
+              <OpenSetupCodeRow key={code.id} code={code} />
+            ))}
+          </tbody>
+        </table>
       </div>
-      <div className="modal-action">
-        <Button onPress={onDone}>{t("stations.done")}</Button>
-      </div>
-    </>
+    </section>
+  );
+}
+
+function OpenSetupCodeRow({ code }: { code: StationSetupCodeSummary }) {
+  const t = useTranslations();
+  const errorMessage = useErrorMessage();
+  const invalidate = useInvalidate();
+  const timeLeft = useTimeLeft(code.expiresAt);
+  const cancel = useMutation({
+    mutationFn: () => client.stations.setupCodes.cancel({ id: code.id }),
+    onSuccess: () => toast.success(t("stations.codeCancelled", { name: code.name })),
+    onError: (error) => toast.error(errorMessage(error)),
+    onSettled: invalidate,
+  });
+  // Expired while the page was open: it's no longer open, so it leaves the list.
+  if (timeLeft === 0) return null;
+
+  return (
+    <tr>
+      <td className="font-medium">{code.name}</td>
+      <td className="tabular-nums">{formatTimeLeft(timeLeft)}</td>
+      <td>{code.issuedByName}</td>
+      <td className="text-right">
+        <Button
+          className="btn-ghost btn-sm"
+          aria-label={t("stations.cancelCodeFor", { name: code.name })}
+          isPending={cancel.isPending}
+          onPress={() => cancel.mutate()}
+        >
+          {t("stations.cancelCode")}
+        </Button>
+      </td>
+    </tr>
   );
 }
 

@@ -14,7 +14,12 @@ import {
   unlockWithBadge,
   unlockWithPin,
 } from "./station-session";
-import { issueStationSetupCode, redeemStationSetupCode } from "./station-setup";
+import {
+  cancelStationSetupCode,
+  issueStationSetupCode,
+  listStationSetupCodes,
+  redeemStationSetupCode,
+} from "./station-setup";
 import { findStationByToken, listStations, registerStation } from "./stations";
 import { createStationUser, issueBadge, listUsers, setPin, updateUserRoles } from "./users";
 
@@ -111,6 +116,10 @@ describe("no secrets out", () => {
 
     // Amendment 3 (criterion 32): a setup code, issued by the admin and redeemed by a new tablet.
     const setupCode = await issueStationSetupCode(db, admin, { name: "Pack 3" });
+    const cancelled = await issueStationSetupCode(db, admin, { name: "Pack 4" });
+    responses.setupCodes = await listStationSetupCodes(db, admin);
+    expect(responses.setupCodes).toHaveLength(2);
+    await cancelStationSetupCode(db, admin, { id: cancelled.id });
     const redeemed = await redeemStationSetupCode(db, { code: setupCode.code, now: new Date() });
     responses.redeem = { id: redeemed.station.id, name: redeemed.station.name }; // What the route sends.
     responses.redeemStation = redeemed.station;
@@ -159,6 +168,9 @@ describe("no secrets out", () => {
       placeholder: stationUserRow.email,
       placeholderDomain: "station.invalid",
       setupCodeHash: setupCodeRow.codeHash,
+      cancelledCodeHash: (
+        await db.stationSetupCode.findUniqueOrThrow({ where: { id: cancelled.id } })
+      ).codeHash,
       redeemedToken: redeemed.token,
       redeemedTokenHash: redeemedRow.tokenHash,
     };
@@ -166,12 +178,15 @@ describe("no secrets out", () => {
     const setupCodes = {
       setupCode: setupCode.code,
       setupCodeChars: setupCode.code.replace("-", ""),
+      cancelledCode: cancelled.code,
+      cancelledCodeChars: cancelled.code.replace("-", ""),
     };
 
     const audit = await db.auditEvent.findMany();
     expect(audit.length).toBeGreaterThan(5);
     expect(audit.filter((row) => row.action === "approval.grant")).toHaveLength(2);
-    expect(audit.filter((row) => row.action === "station.setupCode.issue")).toHaveLength(1);
+    expect(audit.filter((row) => row.action === "station.setupCode.issue")).toHaveLength(2);
+    expect(audit.filter((row) => row.action === "station.setupCode.cancel")).toHaveLength(1);
     expect(leaks(audit, { ...secrets, ...setupCodes, badgeCode: badge.code })).toEqual([]);
     for (const [name, response] of Object.entries(responses)) {
       const all = { ...secrets, ...setupCodes, badgeCode: badge.code };

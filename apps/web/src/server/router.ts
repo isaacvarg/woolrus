@@ -7,6 +7,7 @@ import {
   archiveLabGroup,
   archiveLabParcel,
   cancelLabRun,
+  cancelStationSetupCode,
   clearPin,
   clearProviderCredentials,
   clearSecret,
@@ -83,6 +84,7 @@ import {
   listProviders,
   listQueue,
   listShippingConfig,
+  listStationSetupCodes,
   listStations,
   listSyncRunErrors,
   listSyncRuns,
@@ -616,6 +618,13 @@ export const router = implementer.router({
       revokeStation(db, context.actor, input),
     ),
     setupCodes: {
+      list: api.stations.setupCodes.list.handler(({ context }) =>
+        listStationSetupCodes(db, context.actor),
+      ),
+      cancel: api.stations.setupCodes.cancel.handler(async ({ input, context }) => {
+        await cancelStationSetupCode(db, context.actor, input);
+        return { ok: true as const };
+      }),
       // The code is in this response and its QR only; the QR holds the setup link.
       issue: api.stations.setupCodes.issue.handler(async ({ input, context }) => {
         const issued = await issueStationSetupCode(db, context.actor, input);

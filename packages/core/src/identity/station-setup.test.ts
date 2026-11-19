@@ -3,7 +3,9 @@ import type { Db, Role } from "@woolrus/db";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { createActor, resetDb, testDb } from "../../test/db";
 import {
+  cancelStationSetupCode,
   issueStationSetupCode,
+  listStationSetupCodes,
   MAX_OPEN_SETUP_CODES,
   normalizeSetupCode,
   redeemStationSetupCode,
@@ -253,5 +255,114 @@ describe("redeemStationSetupCode", () => {
     }
     expect(await db.station.count()).toBe(1);
     expect(await db.auditEvent.count({ where: { action: "station.register" } })).toBe(1);
+  });
+});
+
+describe("listStationSetupCodes", () => {
+  it("lists open codes newest first with name, expiry and issuer, never the code", async () => {
+    const admin = await createActor(db, ["ADMIN"]);
+    const used = await issueStationSetupCode(db, admin, { name: "Used" });
+    await redeemStationSetupCode(db, { code: used.code, now: new Date() });
+    const cancelled = await issueStationSetupCode(db, admin, { name: "Cancelled" });
+    await cancelStationSetupCode(db, admin, { id: cancelled.id });
+    const expired = await issueStationSetupCode(db, admin, { name: "Expired" });
+    await db.stationSetupCode.update({
+      where: { id: expired.id },
+      data: { expiresAt: new Date(Date.now() - 1) },
+    });
+    const older = await issueStationSetupCode(db, admin, { name: "Pack 3" });
+    const newer = await issueStationSetupCode(db, admin, { name: "Pack 4" });
+
+    const listed = await listStationSetupCodes(db, admin);
+
+    expect(listed).toEqual([
+      { id: newer.id, name: "Pack 4", expiresAt: newer.expiresAt, issuedByName: "Test User" },
+      { id: older.id, name: "Pack 3", expiresAt: older.expiresAt, issuedByName: "Test User" },
+    ]);
+    const json = JSON.stringify(listed);
+    for (const code of [older.code, newer.code]) {
+      expect(json).not.toContain(code);
+      expect(json).not.toContain(code.replace("-", ""));
+      expect(json).not.toContain(sha256(code.replace("-", "")));
+    }
+  });
+
+  it.each(nonAdmins)("is forbidden for %s", async (role) => {
+    await expect(listStationSetupCodes(db, await createActor(db, [role]))).rejects.toMatchObject({
+      kind: "FORBIDDEN",
+    });
+  });
+});
+
+describe("cancelStationSetupCode", () => {
+  it("cancels an open code, audits it, and the code then fails like a wrong one", async () => {
+    const admin = await createActor(db, ["ADMIN"]);
+    const issued = await issueStationSetupCode(db, admin, { name: "Pack 3" });
+
+    await cancelStationSetupCode(db, admin, { id: issued.id });
+
+    const row = await db.stationSetupCode.findUniqueOrThrow({ where: { id: issued.id } });
+    expect(row.cancelledAt).not.toBeNull();
+    const audits = await db.auditEvent.findMany({ where: { action: "station.setupCode.cancel" } });
+    expect(audits).toHaveLength(1);
+    expect(audits[0]).toMatchObject({
+      entityType: "StationSetupCode",
+      entityId: issued.id,
+      actorId: admin.userId,
+    });
+    expect(JSON.stringify(audits)).not.toContain(issued.code);
+    await expect(
+      redeemStationSetupCode(db, { code: issued.code, now: new Date() }),
+    ).rejects.toMatchObject(badSetupCode);
+    expect(await db.station.count()).toBe(0);
+    // The name is free again.
+    await expect(issueStationSetupCode(db, admin, { name: "Pack 3" })).resolves.toMatchObject({
+      name: "Pack 3",
+    });
+  });
+
+  it("changes nothing when cancelled twice, or once used or expired", async () => {
+    const admin = await createActor(db, ["ADMIN"]);
+    const twice = await issueStationSetupCode(db, admin, { name: "Twice" });
+    await cancelStationSetupCode(db, admin, { id: twice.id });
+    const cancelledAt = (await db.stationSetupCode.findUniqueOrThrow({ where: { id: twice.id } }))
+      .cancelledAt;
+    const used = await issueStationSetupCode(db, admin, { name: "Used" });
+    const { station } = await redeemStationSetupCode(db, { code: used.code, now: new Date() });
+    const expired = await issueStationSetupCode(db, admin, { name: "Expired" });
+    await db.stationSetupCode.update({
+      where: { id: expired.id },
+      data: { expiresAt: new Date(Date.now() - 1) },
+    });
+    const audits = await db.auditEvent.count();
+
+    for (const { id } of [twice, used, expired]) {
+      await cancelStationSetupCode(db, admin, { id });
+    }
+
+    expect(await db.auditEvent.count()).toBe(audits);
+    const rows = await db.stationSetupCode.findMany({ orderBy: { createdAt: "asc" } });
+    expect(rows.map((row) => row.cancelledAt)).toEqual([cancelledAt, null, null]);
+    expect(rows[1]).toMatchObject({ stationId: station.id });
+    expect(await db.station.findUniqueOrThrow({ where: { id: station.id } })).toMatchObject({
+      active: true,
+    });
+  });
+
+  it("is not found for an unknown id", async () => {
+    const admin = await createActor(db, ["ADMIN"]);
+    await expect(
+      cancelStationSetupCode(db, admin, { id: crypto.randomUUID() }),
+    ).rejects.toMatchObject({ kind: "NOT_FOUND" });
+  });
+
+  it.each(nonAdmins)("is forbidden for %s", async (role) => {
+    const admin = await createActor(db, ["ADMIN"]);
+    const issued = await issueStationSetupCode(db, admin, { name: "Pack 3" });
+    await expect(
+      cancelStationSetupCode(db, await createActor(db, [role]), { id: issued.id }),
+    ).rejects.toMatchObject({ kind: "FORBIDDEN" });
+    const row = await db.stationSetupCode.findUniqueOrThrow({ where: { id: issued.id } });
+    expect(row.cancelledAt).toBeNull();
   });
 });
