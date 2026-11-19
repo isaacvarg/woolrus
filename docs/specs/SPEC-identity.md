@@ -2,10 +2,12 @@
 
 **Milestone:** M2 · **Depends on:** `settings` · **Used by:** every module (the `Actor`), `picking`/`packing`/`qa`
 (station actors on the floor), `operations` (email health) · **State:** done; amendment 1 (station-only users,
-2026-11-10) is **done** (tickets #171–#174); amendment 2 (approvals, approved 2026-11-12) is **done** (tickets #179–#180) · **Issue:**
+2026-11-10) is **done** (tickets #171–#174); amendment 2 (approvals, approved 2026-11-12) is **done** (tickets #179–#180);
+amendment 3 (station setup codes, approved 2026-11-19) is **spec approved** · **Issue:**
 [#21](https://github.com/isaacvarg/woolrus/issues/21); amendment 1:
 [#170](https://github.com/isaacvarg/woolrus/issues/170); amendment 2:
-[#177](https://github.com/isaacvarg/woolrus/issues/177)
+[#177](https://github.com/isaacvarg/woolrus/issues/177); amendment 3:
+[#221](https://github.com/isaacvarg/woolrus/issues/221)
 
 > **Amendment 1 (approved 2026-11-10): station-only users.** Some floor staff have no email address, or shouldn't
 > need one to work. An admin can now create a user with just a name, roles and a PIN. That user can only unlock
@@ -17,6 +19,14 @@
 > asked. The approval travels with the action, is checked in its transaction and is stored as an `Approval` row.
 > It's a general mechanism: each kind of approval names its own permission. The first kind is `packing`
 > amendment 1's blocked packing checks. Everything marked *(A2)* below belongs to this amendment.
+
+> **Amendment 3 (approved 2026-11-19): station setup codes.** Today an admin makes a tablet a station by signing in
+> on it personally. With no Resend key, that means copying a magic link out of the server log onto the tablet, and
+> with Google it means putting the admin's account on a shared device. Now an admin issues a **one-time setup
+> code** from their own signed-in device (name the station, get a short code and a QR code), and the tablet
+> redeems it from the sign-in page without anyone signing in on it. The code is single use, expires after 10
+> minutes and is stored only as a hash. An admin still approves every station; there is no standing secret.
+> **Make this device a station** stays. Everything marked *(A3)* below belongs to this amendment.
 
 Project-wide commands, structure, code style, testing levels and boundaries are in [`../../SPEC.md`](../../SPEC.md);
 this spec only adds what is specific to `identity`.
@@ -85,6 +95,15 @@ or allow-listed users") intact: they can't sign in anywhere, only unlock.
     PINs on the lock screen. A wrong PIN never completes the action.
 14. *(A2)* As an admin at my desk, I can approve too, but only once I have a PIN or badge. Being signed in isn't
     enough.
+15. *(A3)* As an admin on my phone or desktop, I open **Stations**, choose **Add station**, and name it "Pack 3". I
+    get a code like `7KQ4M-XD2RA`, a QR code and a 10-minute countdown. On the new tablet I tap **Set up this
+    device as a station** on the sign-in page and type the code, or scan the QR code with the tablet's camera.
+    The tablet shows the "Pack 3" lock screen. Nobody signed in on the tablet, and my dialog says "Pack 3 is set
+    up".
+16. *(A3)* As an admin, a code I issued but haven't used is listed under the stations with its name and time left,
+    and I can cancel it. Once used, expired or cancelled, it does nothing.
+17. *(A3)* As someone who found or guessed a code, a wrong, used, expired or cancelled code all give the same
+    "That code doesn't work" message, so I can't tell which codes once existed.
 
 ## Scope
 
@@ -104,6 +123,8 @@ or allow-listed users") intact: they can't sign in anywhere, only unlock.
 - *(A1)* Adding an email to a station-only user, which makes them a regular user.
 - *(A2)* Approvals: checking an approver's PIN or badge against the shared lockout, the rules every approval
   follows, the `Approval` table, the approver tiles read, and a reusable approval dialog in `apps/web`.
+- *(A3)* Station setup codes: issue (name + code + QR), list open ones, cancel, and redeem on the device from a
+  `/station/setup` page linked from the sign-in page.
 
 **Out (owned elsewhere or later):**
 - *(A2)* Deciding which actions need an approval, and their permission. Each kind belongs to the module whose
@@ -111,6 +132,11 @@ or allow-listed users") intact: they can't sign in anywhere, only unlock.
 - *(A2)* Approvals that wait for someone, such as a request queue, notifications, or approving later from another
   device. An approval is only ever given in person, at the moment the action runs.
 - *(A2)* An approvals report or screen. Rows are written now; reading them waits for `reporting`.
+- *(A3)* A standing station secret, an env-var bootstrap, or any way to make a station that no admin approved
+  for that one device (decision 24).
+- *(A3)* Re-pairing a revoked station's row to a new device: issue a new code for a new station instead.
+- *(A3)* App-level rate limiting of redemption. The code's 50 bits make guessing pointless within 10 minutes;
+  per-IP limits stay the deploy concern listed below.
 - *(A1)* Going the other way: removing a regular user's email to make them station-only.
 - *(A1)* Bulk import of station users (CSV).
 - Native Android station auth (bearer device token). The design keeps it possible: the station token is opaque and
@@ -312,6 +338,44 @@ or gets a badge first, through the Users page like anyone else.
   station, so it clears the cookie and shows the personal sign-in page.
 - Every mutation by a station actor already records `stationId` in `AuditEvent` and `OrderStageEvent`.
 
+### Station setup codes (A3) (`packages/core/src/identity/station-setup.ts`)
+
+A setup code is an admin's approval for one future station, waiting to be redeemed by whichever device presents it
+first. It carries the station's name, so the device needs nothing else.
+
+- **Code format:** 10 random Crockford base32 characters (50 bits), shown as `XXXXX-XXXXX`. Only its SHA-256 is
+  stored, like badges and station tokens. Redemption normalizes what was typed: uppercase, drop spaces and dashes,
+  read `I`/`L` as `1` and `O` as `0` (Crockford), so a misread character still works.
+- **`issueStationSetupCode(db, actor, { name })`** (`station.manage`, **personal session only**:
+  `errors.stations.personalOnly` from a station actor, decision 26). The name follows the station name rules and
+  must not be taken by a station or by another open code (`errors.stations.nameTaken`). At most **5 open codes**
+  at once (`CONFLICT`, `errors.stations.tooManySetupCodes`). In one transaction: create the `StationSetupCode` row
+  with `expiresAt = now + 10 minutes` and audit `station.setupCode.issue` with `{ name, expiresAt }` (never the
+  code). Returns `{ id, name, code, expiresAt, qrSvg }` **once**. `qrSvg` is the QR of
+  `<app origin>/station/setup?code=<code>`, made by the same server-side `qrcode` helper as badges (level Q). The
+  origin is the one magic links use.
+- **`listStationSetupCodes(db, actor)`** (`station.manage`): open codes only (not used, cancelled or expired),
+  newest first: id, name, `expiresAt`, who issued it. Never the code or its hash.
+- **`cancelStationSetupCode(db, actor, { id })`** (`station.manage`): sets `cancelledAt`, audits
+  `station.setupCode.cancel`. Idempotent; cancelling a used or expired code is a no-op.
+- **`redeemStationSetupCode(db, { code, now })`** (no actor; the device has no session): normalize and hash the
+  code, then in one transaction claim the row with a conditional update (`usedAt IS NULL AND cancelledAt IS NULL
+  AND expiresAt > now`), so two devices racing on one code give one winner. Then create the `Station` exactly as
+  `registerStation` does (new 32-byte token, `registeredById` = the issuing admin), set `stationId` on the code row,
+  and audit `station.register` with the issuing admin as actor and `after: { name, via: "setupCode", setupCodeId }`.
+  Returns `{ station, token }`. Wrong, used, cancelled and expired codes all throw the same
+  `UNAUTHORIZED` / `errors.stations.badSetupCode`, with no other difference in the response. If the issuing admin
+  was deactivated after issuing, the code fails the same way (their approval no longer stands). If the name was
+  taken since (an admin registered a station by hand), it fails with `errors.stations.nameTaken` and the code stays
+  unused.
+- **The web side** (`station.redeemSetupCode`, public, no `authed` middleware): sets the station cookie from the
+  token, signs out any personal session on the device (as Register does), and the page goes to `/station`. A
+  device that already has an active station cookie never sees `/station/setup` (it redirects to `/station`); to
+  re-pair it, revoke its station first.
+- **No auto-redeem from a link:** `GET /station/setup?code=…` only pre-fills the field. Redemption is the
+  page's `POST`, so link scanners and prefetchers can't burn a code. The page sends `Referrer-Policy: no-referrer`
+  and replaces its URL after loading, so the code doesn't sit in history or leak in a referrer.
+
 ### PIN rules (contracts)
 
 Exactly 6 digits. Reject all-same (`000000`) and straight runs (`123456`, `654321`). The admin form can type one or
@@ -349,12 +413,15 @@ Exactly 6 digits. Reject all-same (`000000`) and straight runs (`123456`, `65432
 | `me.get` (adds `stationName`, `idleLockAt`) / `me.updatePreferences` | `GET /me`, `PATCH /me/preferences` |
 | `settings.sendTestEmail` | `POST /settings/email/test` |
 | *(A2)* `approvers.list` (input `permission`) | `GET /approvers?permission=…` |
+| *(A3)* `stations.setupCodes.list` / `issue` / `cancel` | `GET/POST /stations/setup-codes`, `DELETE /stations/setup-codes/{id}` |
+| *(A3)* `station.redeemSetupCode` (public) | `POST /station/setup` |
 
 *(A2)* No procedure approves on its own. Each action that takes an approval documents its `approval` field in its own module's
 spec.
 
 No output schema has a field for a PIN, a PIN hash, a badge hash or a station token. `issueBadge` returns the
-badge code once. `register` sets the cookie and never returns the token in the body.
+badge code once. `register` sets the cookie and never returns the token in the body. *(A3)* `setupCodes.issue`
+returns the setup code once; `redeemSetupCode` sets the cookie and never returns the token in the body.
 
 ### UI
 
@@ -367,6 +434,14 @@ badge code once. `register` sets the cookie and never returns the token in the b
   inline. Station-only rows get **Add email** in the row menu (address + confirm).
 - `/stations` (nav: **Stations**, `station.manage`): list with name, current user, last seen, active. Rename,
   Revoke, and **Make this device a station**.
+  *(A3)* **Add station** (name) opens a dialog with the QR code, the code in large monospace text, and a
+  countdown. The dialog refetches the stations list while open and switches to "<name> is set up" once a station
+  with that name appears; at zero it says the code expired and offers a new one. Open codes are listed under the
+  stations table (name, time left, issued by) with **Cancel**.
+- *(A3)* `/sign-in`: a quiet **Set up this device as a station** link under the sign-in options.
+- *(A3)* `/station/setup`: full-screen and touch-first like the lock screen. One large code field (pre-filled
+  from `?code=`, forgiving of case, spaces and dashes) and a **Set up** button. Shows
+  `errors.stations.badSetupCode` in place; on success goes to `/station`.
 - `/station`: full-screen, touch-first lock screen. Large name tiles (sorted by most recent use on this station),
   a PIN pad, and an always-focused badge input. Shows the station name. Tablet-sized targets (≥ 48 px).
 - Nav footer: current user, station name when on one, a preferences menu (language, theme), sidebar collapse, and
@@ -428,7 +503,35 @@ model Approval {
 The migration adds a hand-written `CHECK (requested_by_id <> approved_by_id)`, so self-approval is refused by
 the database as well as by core.
 
+*(A3)* One migration in `auth.prisma`, no dependency (`qrcode` is already in `apps/web`):
+
+```prisma
+/// An admin's one-time approval for one future station (SPEC-identity A3). Only the code's SHA-256 is stored.
+model StationSetupCode {
+  id          String    @id @default(uuid(7)) @db.Uuid
+  codeHash    String    @unique @map("code_hash")
+  name        String
+  createdById String    @map("created_by_id") @db.Uuid
+  expiresAt   DateTime  @map("expires_at") @db.Timestamptz(3)
+  usedAt      DateTime? @map("used_at") @db.Timestamptz(3)
+  cancelledAt DateTime? @map("cancelled_at") @db.Timestamptz(3)
+  /// The station it made, once used.
+  stationId   String?   @unique @map("station_id") @db.Uuid
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  // relations to User (createdBy, onDelete: Cascade) and Station (onDelete: SetNull)
+  @@map("station_setup_codes")
+}
+```
+
+Rows are kept after use for the audit trail; they're small and few.
+
 ### Files expected to change
+
+*(A3)* `packages/core/src/identity/{station-setup,stations}.ts` (+ tests, and the no-secrets test),
+`packages/core/src/index.ts`, `packages/contracts/src/stations.ts`, `apps/web/src/server/{router,badge}.ts` (the QR
+helper generalized), `apps/web/src/app/(app)/stations/**`, `apps/web/src/app/sign-in/**`,
+`apps/web/src/app/station/setup/**`, `packages/db/prisma/schema/auth.prisma` + one migration,
+`packages/i18n/src/messages/{en,es}.json`, `apps/web/e2e/stations.spec.ts`, `docs/decisions.md`.
 
 *(A2)* `packages/core/src/identity/{approvals,station-session}.ts` (+ tests), `packages/core/src/index.ts`,
 `packages/contracts/src/{approvals,index}.ts`, `apps/web/src/server/router.ts`,
@@ -531,6 +634,27 @@ Original scope: `packages/core/src/identity/**` (+ tests), `packages/core/src/ad
     with the credential and reason; the badge input is focused on open; a scan into the reason field approves
     with the badge and leaves the code out of the reason.
 
+*(A3)*
+
+29. **Issue and redeem:** an admin's `setupCodes.issue` returns a code once; `redeemSetupCode` with it (typed in
+    lowercase, with spaces, `O` for `0`) creates an active station with that name and `registeredById` = the admin,
+    sets the station cookie, and the device's next request resolves to that station. One `station.register` audit
+    with `via: "setupCode"`. Admin allowed; Picker, Packer, QA, Shipper `FORBIDDEN` on issue, list and cancel.
+30. **Single use, short-lived:** a second redeem of the same code, a redeem after 10 minutes (fake clock), and a
+    redeem after cancel all fail with `errors.stations.badSetupCode`, the same as a random code, and create
+    nothing. Two concurrent redeems of one code create exactly one station.
+31. **Admin approval required:** issuing from a station actor (even an unlocked Admin) fails with
+    `errors.stations.personalOnly`. A code whose issuer was deactivated fails like a wrong code. A sixth open code
+    fails with `errors.stations.tooManySetupCodes`. A name taken by a station or an open code fails with
+    `errors.stations.nameTaken`.
+32. **No secrets out:** the setup code appears only in the `issue` response (and its QR). It's never in `list`,
+    an audit row, a log line or the redeem response, and the station token never leaves the cookie. Added to the
+    no-secrets test.
+33. **No auto-redeem:** loading `/station/setup?code=<valid>` leaves the code unused until **Set up** is pressed.
+34. **E2E (tablet):** an admin in one browser context issues a code; a second, signed-out context goes from
+    `/sign-in` to **Set up this device as a station**, enters the code, lands on the lock screen, and a packer
+    unlocks with a PIN. The admin's dialog shows "<name> is set up".
+
 ## Decisions (2026-10-20)
 
 1. **Email provider:** Resend, through its HTTP API (no SDK). Recorded in `docs/decisions.md` when this ships.
@@ -588,6 +712,27 @@ Original scope: `packages/core/src/identity/**` (+ tests), `packages/core/src/ad
     hardcoded. The kind's module adds the permission.
 22. **A reason is always required** (1–200 characters), as for every other override in the app.
 23. Recorded in `docs/decisions.md` (data model) in the same PR as the code.
+
+### Amendment 3 (approved 2026-11-19)
+
+24. **A one-time code per device, not a standing secret.** A PIN is only 6 digits; it's acceptable because only
+    devices an admin set up can ask for one (the same argument that keeps station-only users within NFR-SEC-02). A
+    shared secret or hidden endpoint would let anyone who saw it once make stations anywhere, forever, and see
+    every user's tile. A code that one admin issues for one named station, usable once within 10 minutes, keeps
+    "an admin approves every station" true.
+25. **The admin issues, the device redeems** (not the device showing a code for the admin to approve). The device
+    then needs no polling, no pending state and no unauthenticated "create a request" endpoint, and the QR code
+    makes it one scan on a tablet with a camera.
+26. **Issuing needs a personal session.** A guessed or photographed admin PIN already gives admin powers on a
+    station (decision 4); it shouldn't also let someone mint stations to take off-site.
+27. **50 bits, 10 minutes, 5 open codes.** At a generous 100 guesses a second, five open codes give about a
+    1-in-4-billion chance of a hit over their whole life (300,000 guesses against 2^50), without any rate limiter. Ten characters is still quick
+    to type from the screen when there's no camera.
+28. **Same error for every failure.** Wrong, used, expired and cancelled codes are indistinguishable.
+29. Recorded in `docs/decisions.md` (data model, stations bullet) in the same PR as the code.
+
+30. **Codes last 10 minutes and Make this device a station stays** (open questions settled at approval,
+    2026-11-19). Several tablets get one code each, issued up front.
 
 ## Open questions
 
