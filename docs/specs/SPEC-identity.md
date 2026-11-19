@@ -3,7 +3,7 @@
 **Milestone:** M2 · **Depends on:** `settings` · **Used by:** every module (the `Actor`), `picking`/`packing`/`qa`
 (station actors on the floor), `operations` (email health) · **State:** done; amendment 1 (station-only users,
 2026-11-10) is **done** (tickets #171–#174); amendment 2 (approvals, approved 2026-11-12) is **done** (tickets #179–#180);
-amendment 3 (station setup codes, approved 2026-11-19) is **planned** (tickets #222–#223) · **Issue:**
+amendment 3 (station setup codes, approved 2026-11-19) is **in progress** (tickets #222–#223) · **Issue:**
 [#21](https://github.com/isaacvarg/woolrus/issues/21); amendment 1:
 [#170](https://github.com/isaacvarg/woolrus/issues/170); amendment 2:
 [#177](https://github.com/isaacvarg/woolrus/issues/177); amendment 3:
