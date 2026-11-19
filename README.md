@@ -96,9 +96,28 @@ The REST/OpenAPI version appears at `/api/v1` and `/api/openapi.json` automatica
 
 ## Deploying
 
-Pushes to `main` publish images to GHCR. On the host, with `docker/compose.prod.yml` and a filled-in
-`docker/.env.prod` (see `docker/.env.prod.example`):
+Pushes to `main` publish images to GHCR as `:main`; a `v*` tag publishes `:<version>` and `:latest`. The
+images are public, so the host needs no registry login. `docker/compose.prod.yml` is self-contained: on the host
+(or in Arcane) it needs only a `.env` beside it, filled in from `docker/.env.prod.example`:
 
 ```bash
 docker compose -f compose.prod.yml pull && docker compose -f compose.prod.yml up -d
 ```
+
+### HTTPS on the internal network
+
+Woolrus stays off the internet but still needs HTTPS: browsers only allow the microphone (voice memos) and
+secure sign-in cookies on HTTPS pages. Use Nginx Proxy Manager with a Let's Encrypt **DNS challenge**, which
+needs no inbound port:
+
+1. Add a DNS A record, e.g. `woolrus.<your domain>`, pointing at the host's **internal** IP. If the router
+   blocks public names that resolve to private addresses, add a local DNS override instead.
+2. **SSL Certificates → Add Let's Encrypt:** the domain, tick **Use a DNS Challenge**, pick the DNS provider and
+   give it an API token scoped to that zone.
+3. **Hosts → Proxy Hosts → Add:** the domain, scheme `http`, forward to the host's IP on `WEB_PORT` (3000), with
+   **Websockets** and **Block common exploits** on. On the SSL tab pick the certificate and turn on
+   **Force SSL** and **HTTP/2**.
+4. Set `BETTER_AUTH_URL=https://woolrus.<your domain>` in `.env` and use the same origin for the OAuth redirect
+   URIs. GlitchTip (port 8000) can get its own proxy host the same way, with `GLITCHTIP_DOMAIN` to match.
+
+Woo webhooks can't reach an internal-only host; the worker's scheduled sync picks up orders without them.

@@ -1,8 +1,9 @@
 # syntax=docker/dockerfile:1
-# One Dockerfile, three images:
+# One Dockerfile, four images:
 #   docker build -f docker/Dockerfile --target web .
 #   docker build -f docker/Dockerfile --target worker .
 #   docker build -f docker/Dockerfile --target migrate .
+#   docker build -f docker/Dockerfile --target backup .
 
 ARG NODE_VERSION=24
 FROM node:${NODE_VERSION}-alpine AS base
@@ -58,3 +59,11 @@ ENV NODE_ENV=production
 COPY --from=build --chown=node:node /out/db ./
 USER node
 CMD ["node_modules/.bin/prisma", "migrate", "deploy"]
+
+# --- Nightly Postgres backup (busybox crond running docker/backup/backup.sh) ---
+# Baked in so the prod compose file needs nothing beside it on the host.
+FROM postgres:17-alpine AS backup
+COPY docker/backup/backup.sh /usr/local/bin/woolrus-backup
+RUN chmod 0755 /usr/local/bin/woolrus-backup
+# busybox crond doesn't pass the container env to jobs, so snapshot the PG*/BACKUP_* settings for the job to source.
+CMD ["sh", "-c", "umask 077 && export -p | grep -E ' (PG|BACKUP_)' > /etc/backup.env && echo \"${BACKUP_SCHEDULE:-0 2 * * *} . /etc/backup.env; woolrus-backup > /proc/1/fd/1 2>&1\" > /etc/crontabs/root && exec crond -f -l 8"]

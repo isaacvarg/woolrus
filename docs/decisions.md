@@ -144,9 +144,14 @@ positive quantities and dimensions, single-row settings. **Keep them when editin
 
 ## Deployment
 
-- CI builds three images from `docker/Dockerfile` — `web`, `worker`, `migrate` — and pushes them to GHCR
-  (`ghcr.io/isaacvarg/woolrus-*`).
+- CI builds four images from `docker/Dockerfile` — `web`, `worker`, `migrate`, `backup` — and pushes them to
+  GHCR (`ghcr.io/isaacvarg/woolrus-*`, public, so the host pulls without a login).
 - The host runs `docker/compose.prod.yml`: `migrate` runs and exits, then `web` and `worker` start.
+- **Self-contained compose** (2026-11-19): the prod compose file plus a `.env` beside it is the whole deploy, so it
+  can be pasted into Arcane. No bind-mounted repo files: the backup script is baked into the `backup` image
+  (superseding "no new image" in `SPEC-operations.md`), the Postgres init SQL is an inline `configs:` entry, and
+  dumps go to a named volume unless `BACKUP_PATH` names a host folder. The env file is `.env`, not `.env.prod`,
+  because compose only reads `.env` for `${...}` substitution.
   Upgrade with `docker compose -f compose.prod.yml pull && docker compose -f compose.prod.yml up -d`.
 
 ## Open items
@@ -154,7 +159,8 @@ positive quantities and dimensions, single-row settings. **Keep them when editin
 - **WooCommerce plugins:** pull real orders from the production store and check `meta_data` for ACF fields and
   bundle/composite line items before modelling them (we don't know yet whether ACF matters for orders).
 - **Google / Discord OAuth apps** need creating; redirect URI `https://<host>/api/auth/callback/<provider>`.
-- **GHCR visibility:** if the repo is private, the host needs `docker login ghcr.io` with a read-only token.
+- **GHCR visibility:** the images are public. If the repo goes private, the host needs a GHCR login with a
+  `read:packages` token.
 - **Note upload memory** (notes review, 2026-10-21): a full note upload (10 photos at the 15 MB limit, 160 MB
   request cap) peaks around 300 MB in web: the parsed multipart body plus `preparePhotos`' copies, which are all
   checked before any is processed. Decoding one 40-megapixel photo with sharp adds about 160 MB. Three full uploads

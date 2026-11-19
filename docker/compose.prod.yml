@@ -1,10 +1,12 @@
-# Production stack for the on-prem host. Deploy/upgrade with:
+# Production stack for the on-prem host. Self-contained: this file plus a .env beside it is the whole deploy,
+# so it can be pasted into Arcane (or any compose UI) as-is. Deploy/upgrade with:
 #   docker compose -f compose.prod.yml pull && docker compose -f compose.prod.yml up -d
-# Configuration lives in .env.prod next to this file (see .env.prod.example).
+# Configuration lives in .env next to this file (copy .env.prod.example). It has to be named .env: compose
+# reads it both for the ${...} values below and, through env_file, as the apps' environment.
 name: woolrus
 
 x-app-env: &app-env
-  env_file: .env.prod
+  env_file: .env
   restart: unless-stopped
 
 services:
@@ -17,7 +19,9 @@ services:
       POSTGRES_DB: woolrus
     volumes:
       - postgres:/var/lib/postgresql/data
-      - ./postgres/init-prod.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    configs:
+      - source: postgres-init
+        target: /docker-entrypoint-initdb.d/init.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-woolrus}"]
       interval: 5s
@@ -35,7 +39,7 @@ services:
   # Applies pending migrations, then exits. web and worker wait for it to succeed.
   migrate:
     image: ghcr.io/isaacvarg/woolrus-migrate:${WOOLRUS_VERSION:-latest}
-    env_file: .env.prod
+    env_file: .env
     restart: "no"
     depends_on:
       postgres:
@@ -61,26 +65,18 @@ services:
       migrate:
         condition: service_completed_successfully
 
-  # Nightly pg_dump at 02:00 into ./backups (newest 14 kept). See docs/runbook-backup-restore.md.
+  # Nightly pg_dump at 02:00 UTC (BACKUP_SCHEDULE), newest 14 kept. See docs/runbook-backup-restore.md.
+  # Dumps go to the named volume `backups`, or to a host folder if BACKUP_PATH is an absolute path.
   backup:
-    image: postgres:17-alpine
+    image: ghcr.io/isaacvarg/woolrus-backup:${WOOLRUS_VERSION:-latest}
     restart: unless-stopped
     environment:
       PGHOST: postgres
       PGUSER: ${POSTGRES_USER:-woolrus}
       PGPASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
-    # busybox crond doesn't pass the container env to jobs, so snapshot it for the job to source.
-    command:
-      - sh
-      - -c
-      - |
-        umask 077
-        export -p | grep ' PG' > /etc/backup.env
-        echo '0 2 * * * . /etc/backup.env; sh /backup.sh > /proc/1/fd/1 2>&1' > /etc/crontabs/root
-        exec crond -f -l 8
+      BACKUP_SCHEDULE: ${BACKUP_SCHEDULE:-0 2 * * *}
     volumes:
-      - ./backup/backup.sh:/backup.sh:ro
-      - ./backups:/backups
+      - ${BACKUP_PATH:-backups}:/backups
     depends_on:
       postgres:
         condition: service_healthy
@@ -107,3 +103,10 @@ services:
 volumes:
   postgres:
   storage:
+  backups:
+
+configs:
+  # GlitchTip keeps its data in its own database on the same server. Runs only on Postgres' first start.
+  postgres-init:
+    content: |
+      CREATE DATABASE glitchtip;

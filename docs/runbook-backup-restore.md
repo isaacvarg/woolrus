@@ -2,10 +2,11 @@
 
 ## What is backed up
 
-- **Postgres `woolrus` database:** the `backup` service in `docker/compose.prod.yml` runs `docker/backup/backup.sh`
-  at 02:00 (container time, UTC). It writes `pg_dump -Fc` output to `docker/backups/woolrus-<UTC timestamp>.dump`
-  on the host (a bind mount), under a temp name that is renamed on success, and keeps the newest 14. The service
-  runs as root and dumps are mode `0600`, so reading them on the host needs `sudo` (or a `chown` you choose).
+- **Postgres `woolrus` database:** the `backup` service in `docker/compose.prod.yml` (the `woolrus-backup` image,
+  which bakes in `docker/backup/backup.sh`) runs at 02:00 UTC, or on `BACKUP_SCHEDULE`. It writes `pg_dump -Fc`
+  output to `/backups/woolrus-<UTC timestamp>.dump`, under a temp name that is renamed on success, and keeps the
+  newest 14. `/backups` is the named volume `backups`, or the host folder in `BACKUP_PATH` if that is an absolute
+  path. The service runs as root and dumps are mode `0600`, so reading them on the host needs `sudo`.
   Dumps hold customer data, so treat them like the database: a dump keeps personal data for up to 14 days after
   the PII purge removed it from the live database. A failed dump
   exits non-zero, logs to the container's stdout (`docker compose -f compose.prod.yml logs backup`) and leaves
@@ -19,23 +20,28 @@
 Dumps on the same disk don't survive a disk failure. Copy them off nightly (after 02:00), for example:
 
 ```bash
-sudo rsync -a --include='woolrus-*.dump' --exclude='*' /path/to/woolrus/docker/backups/ /offsite/woolrus/
+sudo rsync -a --include='woolrus-*.dump' --exclude='*' "$BACKUP_PATH/" /offsite/woolrus/
 ```
+
+With the default named volume, the folder is `docker volume inspect -f '{{ .Mountpoint }}' woolrus_backups`
+(prefix is the compose project name). An absolute `BACKUP_PATH` is easier to point a backup job at.
 
 Run it as root on the host (the dumps are root-only), and send them over an encrypted channel (SSH) to an
 encrypted or access-restricted destination: they are not encrypted themselves.
 
 ## Restore
 
-Run from `docker/` on the host. This replaces the current database contents.
+Run from the folder holding `compose.prod.yml` on the host (Arcane's project folder, or use its container
+shell for step 2). This replaces the current database contents.
 
-1. Stop the apps, keep Postgres: `docker compose -f compose.prod.yml stop web worker backup glitchtip`
-2. Restore the chosen dump (newest is last when sorted):
+1. Stop the apps, keep Postgres and the backup container (it can see the dumps and has `pg_restore`):
+   `docker compose -f compose.prod.yml stop web worker glitchtip`
+2. Pick a dump (newest is last), then restore it:
    ```bash
-   docker compose -f compose.prod.yml exec -T postgres \
-     pg_restore -U "${POSTGRES_USER:-woolrus}" -d woolrus --clean --if-exists --no-owner < backups/woolrus-<timestamp>.dump
+   docker compose -f compose.prod.yml exec backup ls /backups
+   docker compose -f compose.prod.yml exec backup \
+     pg_restore -d woolrus --clean --if-exists --no-owner /backups/woolrus-<timestamp>.dump
    ```
-   The dump is root-only, so run the redirect as root: `sudo sh -c 'docker compose ... < backups/woolrus-<timestamp>.dump'`.
 3. Run migrations (a no-op if the dump is current, applies pending ones if the dump is older than the running
    release): `docker compose -f compose.prod.yml up migrate`
 4. Start everything: `docker compose -f compose.prod.yml up -d`
