@@ -1865,7 +1865,18 @@
     "setupCodeBody": "On the tablet, tap Set up this device as a station on the sign-in page and enter this code, or scan the QR code. It works once, for 10 minutes.",
     "setupCodeLabel": "Setup code",
     "setupCodeQr": "QR code of the setup link for {name}",
-    "done": "Done"
+    "done": "Done",
+    "setupCodeTimeLeft": "Expires in {time}",
+    "setupCodeExpired": "This code has expired. Get a new one to set up {name}.",
+    "setupCodeRenew": "Get a new code",
+    "setupCodeSetUp": "{name} is set up",
+    "setupCodeSetUpBody": "The tablet shows the lock screen. Staff unlock it with their PIN or badge.",
+    "openCodes": "Open setup codes",
+    "timeLeft": "Time left",
+    "issuedBy": "Issued by",
+    "cancelCode": "Cancel",
+    "cancelCodeFor": "Cancel the setup code for {name}",
+    "codeCancelled": "Setup code for {name} cancelled."
   },
   "signIn": {
     "title": "Sign in",

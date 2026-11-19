@@ -41,6 +41,18 @@ export const StationSetupCodeIssued = z.object({
 });
 export type StationSetupCodeIssued = z.infer<typeof StationSetupCodeIssued>;
 
+/** An open setup code as admins see it in the list. Never the code or its hash. */
+export const StationSetupCodeSummary = z.object({
+  id: Id,
+  name: z.string(),
+  expiresAt: z.date(),
+  issuedByName: z.string(),
+});
+export type StationSetupCodeSummary = z.infer<typeof StationSetupCodeSummary>;
+
+export const CancelStationSetupCodeInput = z.object({ id: Id });
+export type CancelStationSetupCodeInput = z.infer<typeof CancelStationSetupCodeInput>;
+
 // Loose on purpose: a malformed code is just a wrong code (`errors.stations.badSetupCode`).
 export const RedeemStationSetupCodeInput = z.object({ code: z.string().max(64) });
 export type RedeemStationSetupCodeInput = z.infer<typeof RedeemStationSetupCodeInput>;
@@ -109,6 +121,15 @@ export const stations = {
     .output(StationSummary),
 
   setupCodes: {
+    list: base
+      .route({
+        method: "GET",
+        path: "/stations/setup-codes",
+        tags: ["Stations"],
+        summary: "List open setup codes (not used, cancelled or expired), newest first",
+      })
+      .output(z.array(StationSetupCodeSummary)),
+
     issue: base
       .route({
         method: "POST",
@@ -118,6 +139,16 @@ export const stations = {
       })
       .input(IssueStationSetupCodeInput)
       .output(StationSetupCodeIssued),
+
+    cancel: base
+      .route({
+        method: "DELETE",
+        path: "/stations/setup-codes/{id}",
+        tags: ["Stations"],
+        summary: "Cancel a setup code; a no-op once it's used, cancelled or expired",
+      })
+      .input(CancelStationSetupCodeInput)
+      .output(z.object({ ok: z.literal(true) })),
   },
 };
 

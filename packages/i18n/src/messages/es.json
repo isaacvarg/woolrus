@@ -1865,7 +1865,18 @@
     "setupCodeBody": "En la tableta, toca Configurar este dispositivo como estación en la página de inicio de sesión y escribe este código, o escanea el código QR. Funciona una vez, durante 10 minutos.",
     "setupCodeLabel": "Código de configuración",
     "setupCodeQr": "Código QR del enlace de configuración de {name}",
-    "done": "Listo"
+    "done": "Listo",
+    "setupCodeTimeLeft": "Caduca en {time}",
+    "setupCodeExpired": "Este código ha caducado. Pide uno nuevo para configurar {name}.",
+    "setupCodeRenew": "Obtener un código nuevo",
+    "setupCodeSetUp": "{name} está configurada",
+    "setupCodeSetUpBody": "La tableta muestra la pantalla de bloqueo. El personal la desbloquea con su PIN o su tarjeta.",
+    "openCodes": "Códigos de configuración abiertos",
+    "timeLeft": "Tiempo restante",
+    "issuedBy": "Emitido por",
+    "cancelCode": "Cancelar",
+    "cancelCodeFor": "Cancelar el código de configuración de {name}",
+    "codeCancelled": "Código de configuración de {name} cancelado."
   },
   "signIn": {
     "title": "Iniciar sesión",

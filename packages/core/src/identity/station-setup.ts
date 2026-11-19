@@ -1,8 +1,13 @@
 import { createHash, randomBytes } from "node:crypto";
-import type { IssueStationSetupCodeInput, StationSummary } from "@woolrus/contracts";
+import type {
+  CancelStationSetupCodeInput,
+  IssueStationSetupCodeInput,
+  StationSetupCodeSummary,
+  StationSummary,
+} from "@woolrus/contracts";
 import type { Db, DbTx, Prisma } from "@woolrus/db";
 import { recordAudit } from "../audit";
-import { AppError, forbidden } from "../errors";
+import { AppError, forbidden, notFound } from "../errors";
 import { type Actor, assertCan, can, type UserActor } from "../permissions";
 import { CROCKFORD } from "./credentials";
 import { createStation, parseStationName, rethrowNameTaken, stationNameTaken } from "./stations";
@@ -92,6 +97,52 @@ export async function issueStationSetupCode(
       after: { name, expiresAt: expiresAt.toISOString() },
     });
     return { id, name, code, expiresAt };
+  });
+}
+
+/** Open codes (not used, cancelled or expired), newest first. Never the code or its hash. */
+export async function listStationSetupCodes(
+  db: Db,
+  actor: Actor,
+  { now = new Date() }: { now?: Date } = {},
+): Promise<StationSetupCodeSummary[]> {
+  assertCan(actor, "station.manage");
+  const rows = await db.stationSetupCode.findMany({
+    where: openAt(now),
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    select: { id: true, name: true, expiresAt: true, createdBy: { select: { name: true } } },
+  });
+  return rows.map(({ createdBy, ...row }) => ({ ...row, issuedByName: createdBy.name }));
+}
+
+/**
+ * Cancels an open code so it redeems like a wrong one. Idempotent: a code already used, cancelled
+ * or expired is left as it is, with no audit. The conditional update means a redeem racing the
+ * cancel either wins (and the cancel is a no-op) or fails.
+ */
+export async function cancelStationSetupCode(
+  db: Db,
+  actor: Actor,
+  { id }: CancelStationSetupCodeInput,
+  { now = new Date() }: { now?: Date } = {},
+): Promise<void> {
+  assertCan(actor, "station.manage");
+  await db.$transaction(async (tx) => {
+    const cancelled = await tx.stationSetupCode.updateMany({
+      where: { id, ...openAt(now) },
+      data: { cancelledAt: now },
+    });
+    if (cancelled.count === 0) {
+      if (!(await tx.stationSetupCode.findUnique({ where: { id }, select: { id: true } }))) {
+        throw notFound();
+      }
+      return;
+    }
+    await recordAudit(tx, actor, {
+      entityType: "StationSetupCode",
+      entityId: id,
+      action: "station.setupCode.cancel",
+    });
   });
 }
 
