@@ -57,6 +57,7 @@ model User {
   accounts           Account[]
   invitationsSent    Invitation[]        @relation("InvitedBy")
   stationsRegistered Station[]           @relation("StationRegisteredBy")
+  stationSetupCodes  StationSetupCode[]
   stationActivations StationActivation[]
 
   claimedOrders      Order[]             @relation("OrderClaimedBy")
@@ -176,8 +177,29 @@ model Station {
   auditEvents  AuditEvent[]
   approvals    Approval[]
   scanMisses   ScanMiss[]
+  setupCode    StationSetupCode?
 
   @@map("stations")
+}
+
+/// An admin's one-time approval for one future station (SPEC-identity A3). Only the code's SHA-256
+/// is stored. Kept after use for the audit trail.
+model StationSetupCode {
+  id          String    @id @default(uuid(7)) @db.Uuid
+  codeHash    String    @unique @map("code_hash")
+  name        String
+  createdById String    @map("created_by_id") @db.Uuid
+  expiresAt   DateTime  @map("expires_at") @db.Timestamptz(3)
+  usedAt      DateTime? @map("used_at") @db.Timestamptz(3)
+  cancelledAt DateTime? @map("cancelled_at") @db.Timestamptz(3)
+  /// The station it made, once used.
+  stationId   String?   @unique @map("station_id") @db.Uuid
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  createdBy User     @relation(fields: [createdById], references: [id], onDelete: Cascade)
+  station   Station? @relation(fields: [stationId], references: [id], onDelete: SetNull)
+
+  @@map("station_setup_codes")
 }
 
 enum StationUnlockMethod {

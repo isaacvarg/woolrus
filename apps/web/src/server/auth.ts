@@ -52,6 +52,24 @@ function baseURL() {
   };
 }
 
+const devHostPatterns = lanDevHosts.map(
+  (pattern) => new RegExp(`^${pattern.replaceAll(".", "\\.").replaceAll("*", "[^.]+")}$`),
+);
+
+/**
+ * The origin links back to the app use, the same one magic links get: in development the host the
+ * request came to when it's the configured one or a LAN host (see `baseURL`), else BETTER_AUTH_URL.
+ */
+export function appOrigin(headers: Headers): string {
+  const configured = new URL(env().BETTER_AUTH_URL);
+  const host = headers.get("host");
+  if (env().NODE_ENV !== "development" || !host) return configured.origin;
+  const hostname = host.replace(/:\d+$/, "");
+  const known =
+    hostname === configured.hostname || devHostPatterns.some((pattern) => pattern.test(hostname));
+  return known ? `http://${host}` : configured.origin;
+}
+
 function createAuth() {
   return betterAuth({
     baseURL: baseURL(),

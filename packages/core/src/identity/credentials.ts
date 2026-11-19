@@ -27,7 +27,7 @@ export async function verifyPin(pin: string, stored: string): Promise<boolean> {
 }
 
 // Crockford base32: no I, L, O or U, so a code read off the printed badge can't be misread.
-const CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
+export const CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 
 /** `WRB-` + 20 Crockford base32 characters (100 random bits). Fits QR's alphanumeric mode. */
 export function newBadgeCode(): string {

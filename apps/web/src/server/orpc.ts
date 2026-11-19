@@ -100,6 +100,12 @@ const stationDevice = os.middleware(async ({ next, context }) => {
 export const stationApi = os.use(mapErrors).use(stationDevice);
 
 /**
+ * No caller needed: for the one thing a device does before it has any credential, redeeming a
+ * station setup code. Errors are still mapped.
+ */
+export const publicApi = os.use(mapErrors);
+
+/**
  * The top-level router adds no middleware: each procedure brings its own (`api` or `stationApi`).
  * `api.router` would put `authed` in front of the station procedures too.
  */

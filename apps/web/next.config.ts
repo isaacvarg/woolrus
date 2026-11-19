@@ -28,6 +28,12 @@ const config: NextConfig = {
   async rewrites() {
     return [{ source: "/api/label-prints/:id.pdf", destination: "/api/label-prints/:id" }];
   },
+  // The station setup page may carry a one-time code in its URL (SPEC-identity A3): never send it on.
+  async headers() {
+    return [
+      { source: "/station/setup", headers: [{ key: "Referrer-Policy", value: "no-referrer" }] },
+    ];
+  },
   // CLAUDE.md is the agent entry point; stop `next dev` from generating apps/web/AGENTS.md.
   agentRules: false,
 };

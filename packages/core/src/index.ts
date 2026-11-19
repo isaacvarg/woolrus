@@ -49,6 +49,7 @@ export * from "./identity/sign-in";
 // Not stationOnlyEmailFilter: only core searches by email.
 export { isStationOnly, publicEmail, stationOnlyPlaceholder } from "./identity/station-only";
 export * from "./identity/station-session";
+export * from "./identity/station-setup";
 export * from "./identity/stations";
 export * from "./identity/users";
 export * from "./install-jobs";
