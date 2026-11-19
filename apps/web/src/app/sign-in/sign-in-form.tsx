@@ -1,6 +1,7 @@
 "use client";
 
 import type { ErrorCode } from "@woolrus/i18n";
+import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { Form } from "react-aria-components";
@@ -80,6 +81,10 @@ export function SignInForm({
               </Button>
             </Form>
           )}
+          {/* SPEC-identity A3: a tablet redeems an admin's setup code; nobody signs in on it. */}
+          <Link href="/station/setup" className="link link-hover self-center text-sm opacity-70">
+            {t("signIn.setUpStation")}
+          </Link>
         </div>
       </div>
     </main>

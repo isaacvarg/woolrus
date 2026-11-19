@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { StationSummary } from "@woolrus/contracts";
+import type { StationSetupCodeIssued, StationSummary } from "@woolrus/contracts";
 import { useFormatter, useNow, useTranslations } from "next-intl";
 import { useState } from "react";
 import { Form } from "react-aria-components";
@@ -24,6 +24,7 @@ export function StationsManager({ canRegister }: { canRegister: boolean }) {
   const errorMessage = useErrorMessage();
   const stations = useQuery(orpc.stations.list.queryOptions());
   const [registering, setRegistering] = useState(false);
+  const [adding, setAdding] = useState(false);
   const [renaming, setRenaming] = useState<StationSummary | null>(null);
   const [revoking, setRevoking] = useState<StationSummary | null>(null);
   const columns = 5;
@@ -31,8 +32,11 @@ export function StationsManager({ canRegister }: { canRegister: boolean }) {
   return (
     <div className="space-y-4">
       {canRegister && (
-        <div className="flex justify-end">
-          <Button onPress={() => setRegistering(true)}>{t("stations.register")}</Button>
+        <div className="flex flex-wrap justify-end gap-2">
+          <Button className="btn-outline" onPress={() => setRegistering(true)}>
+            {t("stations.register")}
+          </Button>
+          <Button onPress={() => setAdding(true)}>{t("stations.addStation")}</Button>
         </div>
       )}
       <div className="overflow-x-auto rounded-box bg-base-100 shadow-sm">
@@ -100,6 +104,7 @@ export function StationsManager({ canRegister }: { canRegister: boolean }) {
         </table>
       </div>
       {registering && <RegisterDialog onClose={() => setRegistering(false)} />}
+      {adding && <AddStationDialog onClose={() => setAdding(false)} />}
       {renaming && <RenameDialog station={renaming} onClose={() => setRenaming(null)} />}
       {revoking && <RevokeDialog station={revoking} onClose={() => setRevoking(null)} />}
     </div>
@@ -155,6 +160,97 @@ function RegisterDialog({ onClose }: { onClose: () => void }) {
         </Form>
       )}
     </Dialog>
+  );
+}
+
+/**
+ * Add station (SPEC-identity A3): name it, then show the one-time setup code and its QR for the
+ * tablet. The code exists only in this response, so closing the dialog loses it.
+ */
+function AddStationDialog({ onClose }: { onClose: () => void }) {
+  const t = useTranslations();
+  const errorMessage = useErrorMessage();
+  const fieldErrors = useFieldErrors();
+  const [name, setName] = useState("");
+  const issue = useMutation({
+    mutationFn: () => client.stations.setupCodes.issue({ name }),
+  });
+  const errors = fieldErrors(issue.error);
+
+  return (
+    <Dialog
+      title={
+        issue.data
+          ? t("stations.setupCodeTitle", { name: issue.data.name })
+          : t("stations.addStationTitle")
+      }
+      isOpen
+      isDismissable={!issue.data}
+      onOpenChange={(open) => !open && onClose()}
+    >
+      {(close) =>
+        issue.data ? (
+          <SetupCode issued={issue.data} onDone={close} />
+        ) : (
+          <Form
+            validationErrors={errors}
+            onSubmit={(event) => {
+              event.preventDefault();
+              issue.mutate();
+            }}
+          >
+            <p className="mb-2">{t("stations.addStationBody")}</p>
+            <TextField
+              name="name"
+              label={t("stations.name")}
+              isRequired
+              autoFocus
+              maxLength={40}
+              value={name}
+              onChange={setName}
+            />
+            {issue.error && !errors.name && (
+              <p role="alert" className="text-error">
+                {errorMessage(issue.error)}
+              </p>
+            )}
+            <div className="modal-action">
+              <Button className="btn-ghost" onPress={close}>
+                {t("common.cancel")}
+              </Button>
+              <Button type="submit" isPending={issue.isPending}>
+                {t("stations.addStationSubmit")}
+              </Button>
+            </div>
+          </Form>
+        )
+      }
+    </Dialog>
+  );
+}
+
+function SetupCode({ issued, onDone }: { issued: StationSetupCodeIssued; onDone: () => void }) {
+  const t = useTranslations();
+  return (
+    <>
+      <p>{t("stations.setupCodeBody")}</p>
+      <div className="flex flex-col items-center gap-2 rounded-box border border-base-300 p-4">
+        <div
+          role="img"
+          aria-label={t("stations.setupCodeQr", { name: issued.name })}
+          className="w-56 [&>svg]:h-auto [&>svg]:w-full"
+          // biome-ignore lint/security/noDangerouslySetInnerHtml: SVG made by `qrcode` on our server from a link we built; no user input.
+          dangerouslySetInnerHTML={{ __html: issued.qrSvg }}
+        />
+        <p className="text-sm opacity-70">{t("stations.setupCodeLabel")}</p>
+        <p data-testid="setup-code" className="font-mono text-4xl font-bold tracking-widest">
+          {issued.code}
+        </p>
+      </div>
+      <div className="modal-action">
+        <Button onPress={onDone}>{t("stations.done")}</Button>
+      </div>
+    </>
   );
 }
 

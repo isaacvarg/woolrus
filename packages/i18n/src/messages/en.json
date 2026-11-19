@@ -1581,7 +1581,9 @@
     "stations": {
       "nameTaken": "There's already a station with that name.",
       "nameTooLong": "Use at most 40 characters.",
-      "personalOnly": "Register a station from your own sign-in, not from a station."
+      "personalOnly": "Register a station from your own sign-in, not from a station.",
+      "badSetupCode": "That code doesn't work. Ask an admin for a new one.",
+      "tooManySetupCodes": "There are already {max} open setup codes. Use or cancel one first."
     },
     "station": {
       "locked": "This station is locked. Unlock it to continue.",
@@ -1815,6 +1817,13 @@
     "activeUser": "{name} is on this station.",
     "keepWorking": "Keep working as {name}"
   },
+  "stationSetup": {
+    "title": "Set up this device as a station",
+    "prompt": "Enter the setup code an admin gave you.",
+    "code": "Setup code",
+    "submit": "Set up",
+    "back": "Back to sign-in"
+  },
   "approval": {
     "reason": "Reason",
     "reasonHelp": "Why this is OK, up to 200 characters. It is saved with the approval.",
@@ -1847,7 +1856,16 @@
     "revokeBody": "The device goes back to the sign-in page, and whoever is on it is locked out.",
     "none": "No stations yet.",
     "renamed": "Station renamed.",
-    "revokedToast": "{name} revoked."
+    "revokedToast": "{name} revoked.",
+    "addStation": "Add station",
+    "addStationTitle": "Add a station",
+    "addStationBody": "Name the new station. You'll get a one-time code to enter on the tablet, or a QR code to scan with its camera. Nobody signs in on the tablet.",
+    "addStationSubmit": "Get a setup code",
+    "setupCodeTitle": "Set up {name}",
+    "setupCodeBody": "On the tablet, tap Set up this device as a station on the sign-in page and enter this code, or scan the QR code. It works once, for 10 minutes.",
+    "setupCodeLabel": "Setup code",
+    "setupCodeQr": "QR code of the setup link for {name}",
+    "done": "Done"
   },
   "signIn": {
     "title": "Sign in",
@@ -1857,7 +1875,8 @@
     "email": "Email",
     "emailMe": "Email me a link",
     "checkEmail": "Check your email for a sign-in link.",
-    "useAnother": "Use another email"
+    "useAnother": "Use another email",
+    "setUpStation": "Set up this device as a station"
   },
   "jobs": {
     "title": "Failed jobs",
