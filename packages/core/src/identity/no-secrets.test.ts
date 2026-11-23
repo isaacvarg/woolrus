@@ -14,6 +14,12 @@ import {
   unlockWithBadge,
   unlockWithPin,
 } from "./station-session";
+import {
+  cancelStationSetupCode,
+  issueStationSetupCode,
+  listStationSetupCodes,
+  redeemStationSetupCode,
+} from "./station-setup";
 import { findStationByToken, listStations, registerStation } from "./stations";
 import { createStationUser, issueBadge, listUsers, setPin, updateUserRoles } from "./users";
 
@@ -23,7 +29,9 @@ import { createStationUser, issueBadge, listUsers, setPin, updateUserRoles } fro
 // ciphertext). The badge code may appear in the issueBadge response only: it's printed from there.
 // Amendment 1 (criterion 19): it also adds a station-only user, whose placeholder email must not
 // appear in any users.* output either. Amendment 2 (criterion 27): approvals by PIN and badge, their
-// Approval rows and approval.grant audits are swept too.
+// Approval rows and approval.grant audits are swept too. Amendment 3 (criterion 32): a setup code is
+// issued and redeemed; the code may appear in the issue response only, and the redeemed station's
+// token never anywhere.
 
 const db: Db = testDb();
 afterAll(() => db.$disconnect());
@@ -106,6 +114,17 @@ describe("no secrets out", () => {
     responses.lock = await lockStation(db, actor);
     responses.stationsAfter = await listStations(db, admin);
 
+    // Amendment 3 (criterion 32): a setup code, issued by the admin and redeemed by a new tablet.
+    const setupCode = await issueStationSetupCode(db, admin, { name: "Pack 3" });
+    const cancelled = await issueStationSetupCode(db, admin, { name: "Pack 4" });
+    responses.setupCodes = await listStationSetupCodes(db, admin);
+    expect(responses.setupCodes).toHaveLength(2);
+    await cancelStationSetupCode(db, admin, { id: cancelled.id });
+    const redeemed = await redeemStationSetupCode(db, { code: setupCode.code, now: new Date() });
+    responses.redeem = { id: redeemed.station.id, name: redeemed.station.name }; // What the route sends.
+    responses.redeemStation = redeemed.station;
+    responses.stationsWithRedeemed = await listStations(db, admin);
+
     // Amendment 2 (criterion 27): the approver tiles, then the worker approves the admin's
     // request by PIN, then by badge.
     responses.approvers = await listApprovers(db, admin, { permission: "order.pack" });
@@ -131,6 +150,10 @@ describe("no secrets out", () => {
     const userRow = await db.user.findUniqueOrThrow({ where: { id: worker.userId } });
     const stationRow = await db.station.findUniqueOrThrow({ where: { id: station.id } });
     const settingsRow = await db.settings.findFirstOrThrow();
+    const setupCodeRow = await db.stationSetupCode.findUniqueOrThrow({
+      where: { id: setupCode.id },
+    });
+    const redeemedRow = await db.station.findUniqueOrThrow({ where: { id: redeemed.station.id } });
     const stationUserRow = await db.user.findUniqueOrThrow({ where: { id: stationUser.id } });
     const secrets = {
       pin: PIN,
@@ -144,20 +167,39 @@ describe("no secrets out", () => {
       stationPinHash: stationUserRow.pinHash ?? fail(),
       placeholder: stationUserRow.email,
       placeholderDomain: "station.invalid",
+      setupCodeHash: setupCodeRow.codeHash,
+      cancelledCodeHash: (
+        await db.stationSetupCode.findUniqueOrThrow({ where: { id: cancelled.id } })
+      ).codeHash,
+      redeemedToken: redeemed.token,
+      redeemedTokenHash: redeemedRow.tokenHash,
+    };
+    // Shown with or without its dash; either form in an audit row or response is a leak.
+    const setupCodes = {
+      setupCode: setupCode.code,
+      setupCodeChars: setupCode.code.replace("-", ""),
+      cancelledCode: cancelled.code,
+      cancelledCodeChars: cancelled.code.replace("-", ""),
     };
 
     const audit = await db.auditEvent.findMany();
     expect(audit.length).toBeGreaterThan(5);
     expect(audit.filter((row) => row.action === "approval.grant")).toHaveLength(2);
-    expect(leaks(audit, { ...secrets, badgeCode: badge.code })).toEqual([]);
+    expect(audit.filter((row) => row.action === "station.setupCode.issue")).toHaveLength(2);
+    expect(audit.filter((row) => row.action === "station.setupCode.cancel")).toHaveLength(1);
+    expect(leaks(audit, { ...secrets, ...setupCodes, badgeCode: badge.code })).toEqual([]);
     for (const [name, response] of Object.entries(responses)) {
-      expect({ name, leaks: leaks(response, { ...secrets, badgeCode: badge.code }) }).toEqual({
+      const all = { ...secrets, ...setupCodes, badgeCode: badge.code };
+      expect({ name, leaks: leaks(response, all) }).toEqual({
         name,
         leaks: [],
       });
     }
     expect(leaks(badge, secrets)).toEqual([]);
     expect(JSON.stringify(badge)).toContain(badge.code);
+    expect(leaks(setupCode, secrets)).toEqual([]);
+    expect(JSON.stringify(setupCode)).toContain(setupCode.code);
+    expect(leaks(setupCodeRow, setupCodes)).toEqual([]); // Only the hash is stored.
     expect(leaks(sent, secrets)).toEqual([]);
   });
 });

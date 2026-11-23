@@ -1581,7 +1581,10 @@
     "stations": {
       "nameTaken": "Ya hay una estación con ese nombre.",
       "nameTooLong": "Usa como máximo 40 caracteres.",
-      "personalOnly": "Registra una estación desde tu propia sesión, no desde una estación."
+      "personalOnly": "Registra una estación desde tu propia sesión, no desde una estación.",
+      "badSetupCode": "Ese código no funciona. Pide uno nuevo a un administrador.",
+      "tooManySetupCodes": "Ya hay {max} códigos de configuración abiertos. Usa o cancela uno primero.",
+      "alreadyStation": "Ese dispositivo ya es una estación. Revoca su estación primero y vuelve a configurarlo."
     },
     "station": {
       "locked": "Esta estación está bloqueada. Desbloquéala para continuar.",
@@ -1815,6 +1818,13 @@
     "activeUser": "{name} está en esta estación.",
     "keepWorking": "Seguir como {name}"
   },
+  "stationSetup": {
+    "title": "Configurar este dispositivo como estación",
+    "prompt": "Escribe el código de configuración que te dio un administrador.",
+    "code": "Código de configuración",
+    "submit": "Configurar",
+    "back": "Volver a iniciar sesión"
+  },
   "approval": {
     "reason": "Motivo",
     "reasonHelp": "Por qué está bien, hasta 200 caracteres. Se guarda con la aprobación.",
@@ -1847,7 +1857,27 @@
     "revokeBody": "El dispositivo vuelve a la página de inicio de sesión y quien esté en él queda bloqueado.",
     "none": "Todavía no hay estaciones.",
     "renamed": "Estación renombrada.",
-    "revokedToast": "{name} revocada."
+    "revokedToast": "{name} revocada.",
+    "addStation": "Añadir estación",
+    "addStationTitle": "Añadir una estación",
+    "addStationBody": "Ponle nombre a la nueva estación. Recibirás un código de un solo uso para escribir en la tableta, o un código QR para escanear con su cámara. Nadie inicia sesión en la tableta.",
+    "addStationSubmit": "Obtener un código",
+    "setupCodeTitle": "Configurar {name}",
+    "setupCodeBody": "En la tableta, toca Configurar este dispositivo como estación en la página de inicio de sesión y escribe este código, o escanea el código QR. Funciona una vez, durante 10 minutos.",
+    "setupCodeLabel": "Código de configuración",
+    "setupCodeQr": "Código QR del enlace de configuración de {name}",
+    "done": "Listo",
+    "setupCodeTimeLeft": "Caduca en {time}",
+    "setupCodeExpired": "Este código ha caducado. Pide uno nuevo para configurar {name}.",
+    "setupCodeRenew": "Obtener un código nuevo",
+    "setupCodeSetUp": "{name} está configurada",
+    "setupCodeSetUpBody": "La tableta muestra la pantalla de bloqueo. El personal la desbloquea con su PIN o su tarjeta.",
+    "openCodes": "Códigos de configuración abiertos",
+    "timeLeft": "Tiempo restante",
+    "issuedBy": "Emitido por",
+    "cancelCode": "Cancelar",
+    "cancelCodeFor": "Cancelar el código de configuración de {name}",
+    "codeCancelled": "Código de configuración de {name} cancelado."
   },
   "signIn": {
     "title": "Iniciar sesión",
@@ -1857,7 +1887,8 @@
     "email": "Correo",
     "emailMe": "Enviarme un enlace",
     "checkEmail": "Revisa tu correo: te enviamos un enlace para iniciar sesión.",
-    "useAnother": "Usar otro correo"
+    "useAnother": "Usar otro correo",
+    "setUpStation": "Configurar este dispositivo como estación"
   },
   "jobs": {
     "title": "Trabajos fallidos",

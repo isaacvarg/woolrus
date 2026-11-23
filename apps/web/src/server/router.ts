@@ -1,3 +1,4 @@
+import { ORPCError } from "@orpc/server";
 import {
   acknowledgeCheck,
   addPackage,
@@ -7,6 +8,7 @@ import {
   archiveLabGroup,
   archiveLabParcel,
   cancelLabRun,
+  cancelStationSetupCode,
   clearPin,
   clearProviderCredentials,
   clearSecret,
@@ -58,6 +60,7 @@ import {
   issueAssignees,
   issueBadge,
   issueCounts,
+  issueStationSetupCode,
   keepOriginalAddress,
   labRunTrends,
   labTrendGrid,
@@ -82,6 +85,7 @@ import {
   listProviders,
   listQueue,
   listShippingConfig,
+  listStationSetupCodes,
   listStations,
   listSyncRunErrors,
   listSyncRuns,
@@ -114,6 +118,7 @@ import {
   realOrders,
   recheckAddress,
   recheckLabAddress,
+  redeemStationSetupCode,
   refreshRates,
   registerStation,
   removeFromBatch,
@@ -200,10 +205,11 @@ import {
 import { db } from "@woolrus/db";
 import { createLogger } from "@woolrus/logger";
 import { preferenceCookie } from "@/lib/preferences";
-import { auth } from "./auth";
-import { badgeQrSvg } from "./badge";
+import { resolveStationDevice } from "./actor";
+import { appOrigin, auth } from "./auth";
 import { env } from "./env";
-import { api, type BaseContext, implementer, stationApi } from "./orpc";
+import { api, type BaseContext, implementer, publicApi, stationApi } from "./orpc";
+import { qrSvg } from "./qr";
 import { stationCookie } from "./station-cookie";
 import { storage } from "./storage";
 
@@ -579,7 +585,7 @@ export const router = implementer.router({
     ),
     issueBadge: api.users.issueBadge.handler(async ({ input, context }) => {
       const badge = await issueBadge(db, context.actor, input);
-      return { ...badge, qrSvg: await badgeQrSvg(badge.code) };
+      return { ...badge, qrSvg: await qrSvg(badge.code) };
     }),
     revokeBadge: api.users.revokeBadge.handler(({ input, context }) =>
       revokeBadge(db, context.actor, input),
@@ -613,6 +619,22 @@ export const router = implementer.router({
     revoke: api.stations.revoke.handler(({ input, context }) =>
       revokeStation(db, context.actor, input),
     ),
+    setupCodes: {
+      list: api.stations.setupCodes.list.handler(({ context }) =>
+        listStationSetupCodes(db, context.actor),
+      ),
+      cancel: api.stations.setupCodes.cancel.handler(async ({ input, context }) => {
+        await cancelStationSetupCode(db, context.actor, input);
+        return { ok: true as const };
+      }),
+      // The code is in this response and its QR only; the QR holds the setup link.
+      issue: api.stations.setupCodes.issue.handler(async ({ input, context }) => {
+        const issued = await issueStationSetupCode(db, context.actor, input);
+        const link = new URL("/station/setup", appOrigin(context.headers));
+        link.searchParams.set("code", issued.code);
+        return { ...issued, qrSvg: await qrSvg(link.href) };
+      }),
+    },
   },
   voids: {
     void: api.voids.void.handler(({ input, context }) => voidItem(db, context.actor, input)),
@@ -666,6 +688,23 @@ export const router = implementer.router({
       return { ok: true as const };
     }),
     touch: api.station.touch.handler(({ context }) => touchStation(db, context.actor)),
+    // Public: the device has no credential yet. Like Register, the token goes only into the
+    // cookie, and any personal session on the device ends so the station takes over. A device
+    // that already is a station is refused before the code is used: revoke its station first.
+    redeemSetupCode: publicApi.station.redeemSetupCode.handler(async ({ input, context }) => {
+      if ((await resolveStationDevice(context.headers)).kind === "station") {
+        throw new ORPCError("CONFLICT", {
+          data: { messageKey: "errors.stations.alreadyStation" },
+        });
+      }
+      const { station, token } = await redeemStationSetupCode(db, {
+        code: input.code,
+        now: new Date(),
+      });
+      context.resHeaders?.append("Set-Cookie", stationCookie(token));
+      await endPersonalSession(context);
+      return { id: station.id, name: station.name };
+    }),
   },
   approvers: {
     list: api.approvers.list.handler(({ input, context }) =>

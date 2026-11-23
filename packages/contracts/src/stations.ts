@@ -25,6 +25,42 @@ export type RegisterStationInput = z.infer<typeof RegisterStationInput>;
 export const RenameStationInput = z.object({ id: Id, name: StationName });
 export type RenameStationInput = z.infer<typeof RenameStationInput>;
 
+/** SPEC-identity A3: a one-time code for one future station, called `name`. */
+export const IssueStationSetupCodeInput = z.object({ name: StationName });
+export type IssueStationSetupCodeInput = z.infer<typeof IssueStationSetupCodeInput>;
+
+/** Sent once, to the issuing admin: the only place the code ever appears, with its QR (SVG). */
+export const StationSetupCodeIssued = z.object({
+  id: Id,
+  name: z.string(),
+  /** `XXXXX-XXXXX`, Crockford base32. */
+  code: z.string(),
+  expiresAt: z.date(),
+  /** The QR code of the setup link (`/station/setup?code=…`). */
+  qrSvg: z.string(),
+});
+export type StationSetupCodeIssued = z.infer<typeof StationSetupCodeIssued>;
+
+/** An open setup code as admins see it in the list. Never the code or its hash. */
+export const StationSetupCodeSummary = z.object({
+  id: Id,
+  name: z.string(),
+  expiresAt: z.date(),
+  issuedByName: z.string(),
+});
+export type StationSetupCodeSummary = z.infer<typeof StationSetupCodeSummary>;
+
+export const CancelStationSetupCodeInput = z.object({ id: Id });
+export type CancelStationSetupCodeInput = z.infer<typeof CancelStationSetupCodeInput>;
+
+// Loose on purpose: a malformed code is just a wrong code (`errors.stations.badSetupCode`).
+export const RedeemStationSetupCodeInput = z.object({ code: z.string().max(64) });
+export type RedeemStationSetupCodeInput = z.infer<typeof RedeemStationSetupCodeInput>;
+
+/** What the device learns: which station it now is. Never the token (that's in the cookie). */
+export const StationSetUp = z.object({ id: Id, name: z.string() });
+export type StationSetUp = z.infer<typeof StationSetUp>;
+
 /** A name on the lock screen: just enough to find yourself, nothing to sign in with. */
 export const UnlockTile = z.object({ id: Id, name: z.string(), initials: z.string() });
 export type UnlockTile = z.infer<typeof UnlockTile>;
@@ -83,6 +119,37 @@ export const stations = {
     })
     .input(z.object({ id: Id }))
     .output(StationSummary),
+
+  setupCodes: {
+    list: base
+      .route({
+        method: "GET",
+        path: "/stations/setup-codes",
+        tags: ["Stations"],
+        summary: "List open setup codes (not used, cancelled or expired), newest first",
+      })
+      .output(z.array(StationSetupCodeSummary)),
+
+    issue: base
+      .route({
+        method: "POST",
+        path: "/stations/setup-codes",
+        tags: ["Stations"],
+        summary: "Issue a one-time setup code for a new station (shown once)",
+      })
+      .input(IssueStationSetupCodeInput)
+      .output(StationSetupCodeIssued),
+
+    cancel: base
+      .route({
+        method: "DELETE",
+        path: "/stations/setup-codes/{id}",
+        tags: ["Stations"],
+        summary: "Cancel a setup code; a no-op once it's used, cancelled or expired",
+      })
+      .input(CancelStationSetupCodeInput)
+      .output(z.object({ ok: z.literal(true) })),
+  },
 };
 
 /**
@@ -131,4 +198,15 @@ export const station = {
       summary: "Input on this station: pushes its idle lock out",
     })
     .output(z.object({ idleLockAt: z.date() })),
+
+  /** Public: the device has no session yet. Sets the station cookie; never returns the token. */
+  redeemSetupCode: base
+    .route({
+      method: "POST",
+      path: "/station/setup",
+      tags: ["Station"],
+      summary: "Make this device a station with an admin's setup code",
+    })
+    .input(RedeemStationSetupCodeInput)
+    .output(StationSetUp),
 };

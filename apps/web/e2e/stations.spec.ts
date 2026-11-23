@@ -311,3 +311,107 @@ test("unlock calls need a station cookie", async ({ request }) => {
     expect(await response.json()).toMatchObject({ data: { messageKey: "errors.station.unknown" } });
   }
 });
+
+// SPEC-identity A3, station setup codes: the admin's side (open codes, Cancel) and the whole
+// journey from Add station to a packer on the new tablet (criteria 30, 34).
+
+test("an admin adds a station, a signed-out tablet sets itself up, and a packer unlocks it", async ({
+  page,
+  browser,
+}) => {
+  await signInAs(page, ["ADMIN"]);
+  const packer = await worker(["PACKER"]);
+  const name = `E2E Pack ${unique()}`;
+
+  await page.goto("/stations");
+  await page.getByRole("button", { name: "Add station" }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByLabel("Name").fill(name);
+  await dialog.getByRole("button", { name: "Get a setup code" }).click();
+  await expect(dialog.getByText(/^Expires in (10:00|9:\d\d)$/)).toBeVisible();
+  const code = (await dialog.getByTestId("setup-code").textContent()) ?? "";
+
+  // The tablet: a second, signed-out context.
+  const tablet = await (await browser.newContext()).newPage();
+  await tablet.goto("/sign-in");
+  await tablet.getByRole("link", { name: "Set up this device as a station" }).click();
+  await tablet.getByLabel("Setup code").fill(code);
+  await tablet.getByRole("button", { name: "Set up" }).click();
+  await expect(tablet).toHaveURL(/\/station$/);
+  await expect(tablet.getByRole("heading", { name })).toBeVisible();
+  await chooseTile(tablet, packer.name);
+  await tablet.getByLabel(`PIN for ${packer.name}`).fill(packer.pin);
+  await expect(tablet).toHaveURL("/");
+  expect(await (await tablet.request.get("/api/v1/me")).json()).toMatchObject({
+    id: packer.id,
+    stationName: name,
+  });
+
+  // The admin's dialog has been watching for it.
+  await expect(dialog.getByText(`${name} is set up`)).toBeVisible();
+  await dialog.getByRole("button", { name: "Done" }).click();
+  // The station is listed with the packer on it, and its used code is no longer open.
+  await expect(page.getByRole("row", { name: new RegExp(`${name} ${packer.name}`) })).toBeVisible();
+  await expect(
+    page.getByRole("region", { name: "Open setup codes" }).getByRole("row", {
+      name: new RegExp(name),
+    }),
+  ).toHaveCount(0);
+});
+
+test("open setup codes are listed with time left and issuer, and Cancel retires one", async ({
+  page,
+  browser,
+}) => {
+  await signInAs(page, ["ADMIN"]);
+  const issue = async (name: string) =>
+    (await (
+      await page.request.post("/api/v1/stations/setup-codes", { data: { name } })
+    ).json()) as { id: string; code: string };
+  const kept = { name: `E2E Pack ${unique()}` };
+  const cancelled = { name: `E2E Pack ${unique()}` };
+  const keptCode = await issue(kept.name);
+  const cancelledCode = await issue(cancelled.name);
+
+  try {
+    await page.goto("/stations");
+    const open = page.getByRole("region", { name: "Open setup codes" });
+    const row = open.getByRole("row", { name: new RegExp(cancelled.name) });
+    await expect(row).toContainText(/(10:00|9:\d\d)/);
+    await expect(row).toContainText("E2E ADMIN");
+    await expect(open.getByRole("row", { name: new RegExp(kept.name) })).toBeVisible();
+    // The list never carries the code itself.
+    const listed = await (await page.request.get("/api/v1/stations/setup-codes")).text();
+    expect(listed).toContain(cancelled.name);
+    expect(listed).not.toContain(cancelledCode.code);
+    expect(listed).not.toContain(cancelledCode.code.replace("-", ""));
+
+    await row.getByRole("button", { name: `Cancel the setup code for ${cancelled.name}` }).click();
+    await expect(page.getByText(`Setup code for ${cancelled.name} cancelled.`)).toBeVisible();
+    await expect(row).toBeHidden();
+    await expect(open.getByRole("row", { name: new RegExp(kept.name) })).toBeVisible();
+
+    // A cancelled code fails like a wrong one; cancelling again changes nothing.
+    const device = await browser.newContext();
+    const redeem = await device.request.post("/api/v1/station/setup", {
+      data: { code: cancelledCode.code },
+    });
+    expect(redeem.status()).toBe(401);
+    expect(await redeem.json()).toMatchObject({
+      data: { messageKey: "errors.stations.badSetupCode" },
+    });
+    const again = await page.request.delete(`/api/v1/stations/setup-codes/${cancelledCode.id}`);
+    expect(again.status()).toBe(200);
+    expect(await db.station.count({ where: { name: cancelled.name } })).toBe(0);
+  } finally {
+    await page.request.delete(`/api/v1/stations/setup-codes/${keptCode.id}`);
+  }
+});
+
+test("only admins list and cancel setup codes", async ({ page }) => {
+  await signInAs(page, ["PACKER"]);
+  const list = await page.request.get("/api/v1/stations/setup-codes");
+  expect(list.status()).toBe(403);
+  const cancel = await page.request.delete(`/api/v1/stations/setup-codes/${crypto.randomUUID()}`);
+  expect(cancel.status()).toBe(403);
+});

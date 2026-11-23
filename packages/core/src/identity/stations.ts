@@ -48,7 +48,7 @@ async function summary(tx: DbTx, id: string): Promise<StationSummary> {
 }
 
 /** Validated here as well as in the contract: core is also called without one. */
-function parseName(name: string): string {
+export function parseStationName(name: string): string {
   const parsed = StationName.safeParse(name);
   if (parsed.success) return parsed.data;
   const key = parsed.error.issues[0]?.message;
@@ -57,13 +57,38 @@ function parseName(name: string): string {
   });
 }
 
-function nameTaken(error: unknown): never {
+export const stationNameTaken = () =>
+  new AppError("CONFLICT", "errors.stations.nameTaken", { name: "errors.stations.nameTaken" });
+
+/** Rethrows a unique-name violation as `errors.stations.nameTaken`, anything else as is. */
+export function rethrowNameTaken(error: unknown): never {
   if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-    throw new AppError("CONFLICT", "errors.stations.nameTaken", {
-      name: "errors.stations.nameTaken",
-    });
+    throw stationNameTaken();
   }
   throw error;
+}
+
+/**
+ * Creates the station with a new random 32-byte token (only its SHA-256 is stored) and audits
+ * `station.register` as `registeredBy`. Shared by Register and setup codes, so both make the same
+ * station. A taken name throws Prisma's P2002 (see `rethrowNameTaken`).
+ */
+export async function createStation(
+  tx: DbTx,
+  registeredBy: Actor,
+  { name, audit }: { name: string; audit?: Record<string, string> },
+): Promise<{ station: StationSummary; token: string }> {
+  const token = randomBytes(32).toString("base64url");
+  const { id } = await tx.station.create({
+    data: { name, tokenHash: hashStationToken(token), registeredById: registeredBy.userId },
+  });
+  await recordAudit(tx, registeredBy, {
+    entityType: "Station",
+    entityId: id,
+    action: "station.register",
+    after: { name, ...audit },
+  });
+  return { station: await summary(tx, id), token };
 }
 
 export async function listStations(db: Db, actor: Actor): Promise<StationSummary[]> {
@@ -87,23 +112,11 @@ export async function registerStation(
 ): Promise<{ station: StationSummary; token: string }> {
   assertCan(actor, "station.manage");
   if (actor.stationId !== null) throw new AppError("FORBIDDEN", "errors.stations.personalOnly");
-  const name = parseName(input.name);
-  const token = randomBytes(32).toString("base64url");
+  const name = parseStationName(input.name);
   try {
-    return await db.$transaction(async (tx) => {
-      const { id } = await tx.station.create({
-        data: { name, tokenHash: hashStationToken(token), registeredById: actor.userId },
-      });
-      await recordAudit(tx, actor, {
-        entityType: "Station",
-        entityId: id,
-        action: "station.register",
-        after: { name },
-      });
-      return { station: await summary(tx, id), token };
-    });
+    return await db.$transaction((tx) => createStation(tx, actor, { name }));
   } catch (error) {
-    nameTaken(error);
+    rethrowNameTaken(error);
   }
 }
 
@@ -113,7 +126,7 @@ export async function renameStation(
   input: RenameStationInput,
 ): Promise<StationSummary> {
   assertCan(actor, "station.manage");
-  const name = parseName(input.name);
+  const name = parseStationName(input.name);
   try {
     return await db.$transaction(async (tx) => {
       const existing = await tx.station.findUnique({ where: { id: input.id } });
@@ -129,7 +142,7 @@ export async function renameStation(
       return summary(tx, input.id);
     });
   } catch (error) {
-    nameTaken(error);
+    rethrowNameTaken(error);
   }
 }
 

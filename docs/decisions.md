@@ -84,6 +84,18 @@ Full model in `packages/db/prisma/schema/*.prisma`. Changes from the SRS's secti
   unverified user, because its lock row in `verifications` gets a base64url id unless `generateId` is `"uuid"`,
   and ours is `false` with uuid columns. A station-only user has no accounts or sessions for that step to revoke.
   `generateId` and the schema stay as they are.
+  **Station setup codes** (SPEC-identity amendment 3, 2026-11-19): an admin can also make a tablet a station
+  without signing in on it. From their own signed-in device they name the station and get a **one-time code**
+  (10 Crockford base32 characters, 50 bits, shown `XXXXX-XXXXX`, plus a QR of the setup link); the tablet
+  redeems it from `/station/setup`, linked from the sign-in page. Only its SHA-256 is stored
+  (`StationSetupCode`). It's a code per device, never a standing secret or env-var bootstrap, so "an admin
+  approves every station" stays true. The admin issues and the device redeems (not the reverse), so there's no
+  polling, no pending state and no public "create a request" endpoint. **Issuing needs a personal session**: a
+  guessed admin PIN on a station shouldn't also mint stations. **10 minutes, at most 5 open codes**, no app rate
+  limiter: 300,000 guesses at 100 a second against 2^50 is about a 1-in-4-billion chance. Wrong, used, expired,
+  cancelled codes and a code whose issuer was deactivated all give the **same error**. Opening the link only
+  pre-fills the code (prefetchers can't burn it); the page sends `Referrer-Policy: no-referrer` and drops the
+  code from its URL. **Make this device a station** stays alongside it.
 - **Approvals** (SPEC-identity amendment 2, 2026-11-12): some actions need a second person's say-so, given in
   person with their PIN or badge on the requester's screen; the station stays on the requester. It lives in
   `identity` (`core/src/identity/approvals.ts`, one `Approval` table), not a module of its own: it's identity's
