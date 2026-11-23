@@ -121,3 +121,10 @@ needs no inbound port:
    URIs. GlitchTip (port 8000) can get its own proxy host the same way, with `GLITCHTIP_DOMAIN` to match.
 
 Woo webhooks can't reach an internal-only host; the worker's scheduled sync picks up orders without them.
+
+## Floor stations
+
+Shared floor tablets are **stations**: staff unlock them with a PIN or badge, and nobody signs in on them. To
+set one up, an Admin opens **Stations → Add station** on their own device and gets a one-time code and QR code.
+On the tablet, they tap **Set up this device as a station** on the sign-in page and scan or type the code. See
+[docs/stations.md](docs/stations.md) for the full guide, managing and revoking stations, and troubleshooting.
