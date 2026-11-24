@@ -4,9 +4,11 @@
 `picking` (code matching, the finish options it hands over to packing), `notes` (package notes in the drawer) ·
 **Used by:** `carriers` (reads package box, dimensions and weight; adds the rate fetch on Packing → QA), `qa`
 (verifies `PackageItem`s), `exceptions` (packaging issues on a package), `lumexia` (lot per `PackageItem`) ·
-**State:** done; amendment 1 (packing checks, approved 2026-11-12) is **done** (tickets #181–#186) · **Issue:**
+**State:** done; amendment 1 (packing checks, approved 2026-11-12) is **done** (tickets #181–#186); amendment 2
+(box picker layout and groups, approved 2026-11-24) is **spec approved** · **Issue:**
 [#24](https://github.com/isaacvarg/woolrus/issues/24); amendment 1:
-[#178](https://github.com/isaacvarg/woolrus/issues/178)
+[#178](https://github.com/isaacvarg/woolrus/issues/178); amendment 2:
+[#225](https://github.com/isaacvarg/woolrus/issues/225)
 
 > **Amendment 1 (approved 2026-11-12): packing checks.** The team's concern: a packer physically uses one box but
 > selects another in the app, so the label declares the wrong size and UPS bills an adjustment.
@@ -25,6 +27,19 @@
 > **Dependencies.** This amendment depends on `identity` A2 and `settings`. It edits `workflow`'s gates and `qa`'s
 > screen and gate, the way the original spec edited the packed gate. Everything marked *(A1)* below belongs to this
 > amendment.
+
+> **Amendment 2 (approved 2026-11-24): box picker layout and groups.** The box picker is one long column sorted by
+> name, which gets slow to scan once there are more than a handful of boxes.
+>
+> - **Columns.** Each user picks 1 or 2 columns for the box picker in their account preferences. The default is 1.
+> - **Groups.** Admins put boxes into named groups (for example "Mailers", "Cartons", "Pails"). The picker shows
+>   each group under its heading, with a divider between groups, in an order the Admin sets. Boxes with no group
+>   come last, under "Other boxes".
+> - **Suggestion first.** The suggested box is shown once, at the top, above every group, full width and
+>   highlighted.
+>
+> **Dependencies.** None beyond what packing already has. It adds one field to `identity`'s user preferences, the
+> way A1 edited `qa`'s screen (decision 23). Everything marked *(A2)* below belongs to this amendment.
 
 Project-wide commands, structure, code style, testing levels and boundaries are in [`../../SPEC.md`](../../SPEC.md);
 this spec only adds what is specific to `packing`.
@@ -79,6 +94,13 @@ a reason (FR-PACK-09). Admins keep the box sizes the packers choose from.
     threshold, and whether QA confirms boxes. Next to each check I see its trips and approvals for the last 30 days,
     so I can tell when a check is ready to be set to block.
 14. *(A1)* As an admin, on **Boxes** I give a box a minimum weight and the barcode posted at its shelf.
+15. *(A2)* As an admin, on **Boxes** I create the groups "Mailers", "Cartons" and "Pails", put each box in one,
+    and use **Move up** / **Move down** to put Cartons first, because that's what we use most.
+16. *(A2)* As a packer, I open my account menu and set **Box picker columns** to 2. On the next tablet I sign in to,
+    it's still 2.
+17. *(A2)* As a packer, I tap **Add package**. At the top, full width and outlined, is "Medium carton · Suggested ·
+    fits everything, est. 2 lb 6 oz". Below it are the Cartons, then Mailers, then Pails, each under its heading
+    in two columns, then "Other boxes", then **Custom size**. Medium carton isn't repeated under Cartons.
 
 ## Scope
 
@@ -100,6 +122,11 @@ a reason (FR-PACK-09). Admins keep the box sizes the packers choose from.
 - *(A1)* QA: yellow package cards, acknowledging trips, box confirmation, two new **verified** gate conditions, and
   a trip badge in the QA queue.
 - *(A1)* Boxes gain a minimum weight and a barcode. Scanning a box barcode on the pack screen adds a package.
+- *(A2)* Box groups: create, rename, delete and reorder them, and assign a box to at most one group, on the Boxes
+  admin page.
+- *(A2)* The box picker (Add package and Change box) laid out as: the suggestion, then groups in order, then
+  ungrouped boxes, then Custom size, in 1 or 2 columns.
+- *(A2)* A per-user preference for the picker's columns (1 or 2, default 1), in the account menu.
 
 **Out (owned elsewhere or later):**
 - *(A1)* A "bigger box than suggested" check. It needs dimensions on every item to be trusted, and over-boxing is
@@ -115,6 +142,12 @@ a reason (FR-PACK-09). Admins keep the box sizes the packers choose from.
   quality issue: `exceptions`.
 - The two-step Verify → Pack wizard of FR-PACK-05. Scanning into the box replaces it (decision 2).
 - Packing more than one order at once (no pack batches).
+- *(A2)* Groups anywhere but the pack-screen picker: Rate Lab parcels, the Boxes table layout and order detail
+  stay as they are. Groups don't change the suggestion, the checks, box barcode scans, or anything `carriers` or
+  `qa` read (decision 27).
+- *(A2)* Per-user group order, a box in several groups, manual box order inside a group, and drag-and-drop
+  reordering (decisions 25, 26, 28).
+- *(A2)* More than 2 columns.
 
 ## Design
 
@@ -368,6 +401,42 @@ each mode.
 
 Both are always editable, and the DTO returns both.
 
+### Box groups *(A2)* (`packages/core/src/boxes/groups.ts`)
+
+A `BoxGroup` has a unique name (trimmed, 1–60 characters, compared case-insensitively) and a `position`. A box
+has at most one group (`Box.groupId`, nullable). Groups are for display in the picker only (decision 27).
+
+| Function | Rule |
+|---|---|
+| `listBoxGroups` | `box.read`. Every group, ordered by `position`, then name. Each returns its active box count for the admin page. |
+| `createBoxGroup` | `box.manage`. Appended at the end (`position` = current max + 1). Name unique (`errors.boxGroup.nameTaken`). Audited. |
+| `renameBoxGroup` | `box.manage`. Same name rule. Audited with before/after. |
+| `moveBoxGroup` | `box.manage`. `direction: "up" \| "down"` swaps `position` with the neighbour in one transaction. Moving the first group up or the last down is a no-op that returns the list unchanged. Audited. |
+| `deleteBoxGroup` | `box.manage`. Deletes the group, and its boxes become ungrouped (`ON DELETE SET NULL`) in the same transaction. Archived boxes in it are ungrouped too. Positions keep their gaps; order is all that matters. Audited, with the names of the boxes that were ungrouped. |
+
+`createBox` and `updateBox` take an optional `groupId` (nullable; an unknown id is `errors.boxGroup.notFound`).
+It's always editable, including on a box in use and on an archived box. The `Box` DTO returns `groupId`.
+
+### Box picker layout *(A2)* (`packages/core/src/packing/picker.ts`, pure)
+
+`arrangeBoxPicker(boxes, groups, suggestion)` returns
+`{ suggested: Box | null, sections: { group: BoxGroup | null, boxes: Box[] }[] }`:
+
+- `suggested` is the suggested box when `suggestion.kind === "box"`, otherwise null. It is left out of every
+  section, so it appears once (decision 30).
+- One section per group in `position` order, with its active boxes A–Z by name. A group with no box left after
+  that (empty, all archived, or only the suggested box) is left out (decision 33).
+- Then one section with `group: null` for the ungrouped boxes, A–Z, if there are any.
+- With no groups at all, there is only the `group: null` section, and the UI shows no heading. That's today's
+  picker (decision 29).
+
+The pack view (`getPackView`) returns `boxGroups` next to `boxes`, so the dialog needs no extra request.
+
+### Picker columns *(A2)* (`packages/core/src/identity/preferences.ts`)
+
+`Preferences` gains `boxPickerColumns: 1 | 2` (default 1), saved on the user like language and theme (FR-SET-03),
+so it follows them to every station. `me.updatePreferences` accepts it, and `me.get` returns it.
+
 ### API (oRPC, `packages/contracts/src/packing.ts`, `boxes.ts`)
 
 | Procedure | Route |
@@ -395,6 +464,19 @@ Package operations return the updated pack view's packages and lines (one round 
 | `qa.confirmBox` | `POST /packages/{packageId}/confirm-box` |
 | `packChecks.stats` | `GET /settings/packing-checks/stats` |
 | `settings.update` / `settings.get` | the new columns |
+
+*(A2)* (`packages/contracts/src/boxes.ts`, `me.ts`, `packing.ts`)
+
+| Procedure | Route / change |
+|---|---|
+| `boxGroups.list` | `GET /box-groups` |
+| `boxGroups.create` | `POST /box-groups` |
+| `boxGroups.rename` | `PATCH /box-groups/{id}` |
+| `boxGroups.move` | `POST /box-groups/{id}/move` (`{ direction }`), returns the ordered list |
+| `boxGroups.delete` | `DELETE /box-groups/{id}` |
+| `boxes.create` / `boxes.update` | input gains optional `groupId`; `Box` gains `groupId` |
+| `packing.view` | output gains `boxGroups` |
+| `me.get` / `me.updatePreferences` | `boxPickerColumns` |
 
 ### Schema additions (approved with this spec)
 
@@ -450,6 +532,38 @@ Hand-written constraints:
 
 New permission `packCheck.approve` (QA).
 
+*(A2)* One migration (ask-first, listed for approval):
+
+```prisma
+/// A named set of boxes, shown together in the pack screen's box picker (SPEC-packing A2).
+model BoxGroup {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  name      String
+  position  Int
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  boxes Box[]
+
+  @@map("box_groups")
+}
+
+// Box
+groupId String?   @map("group_id") @db.Uuid
+group   BoxGroup? @relation(fields: [groupId], references: [id], onDelete: SetNull)
+@@index([groupId])
+
+// User
+boxPickerColumns Int @default(1) @map("box_picker_columns")
+```
+
+Hand-written constraints:
+- `CREATE UNIQUE INDEX box_groups_name_lower ON box_groups (lower(name))`;
+- `CHECK (box_picker_columns IN (1, 2))` on users.
+
+No unique index on `position`: a swap would trip it mid-transaction, and ties fall back to the name. No new
+permissions (`box.read` and `box.manage` cover groups) and no new settings.
+
 ### UI (`apps/web/src/app/(app)/`)
 
 - **`pack/[orderId]`:** two columns on a tablet in landscape, stacked in portrait. **Items:** cards at least 160 px
@@ -487,6 +601,26 @@ New permission `packCheck.approve` (QA).
   - QA box confirmation;
   - a one-line explanation of each check.
 - *(A1)* **Boxes:** the form gains min weight (display unit) and barcode, and the table shows both.
+- *(A2)* **Box picker** (`pack/[orderId]/box-dialog.tsx`), from top to bottom:
+  - the split or unknown message, as today;
+  - the suggested box, full width in either layout, with a 2 px primary border, the **Suggested** badge and the
+    fit text (so it isn't marked by colour alone);
+  - each section from `arrangeBoxPicker`: an `h3` with the group name and a divider above it, then its boxes in
+    a `grid` of `boxPickerColumns` columns. The `group: null` section is headed "Other boxes", and only when at
+    least one group section is shown;
+  - **Custom size**, unchanged.
+
+  Two columns drop to one below 480 px wide (`grid-cols-1 min-[480px]:grid-cols-2`), so a phone in portrait
+  stays readable. Each box button stays at least 64 px tall, with its name and dimensions. Each section is a
+  `role="group"` labelled by its heading, so a screen reader announces the group.
+- *(A2)* **Account menu** (`nav-footer.tsx`): a **Box picker columns** choice (1 / 2) next to language and theme.
+  It saves the same way they do, and shows on every user's menu (it only affects the pack screen).
+- *(A2)* **Boxes:**
+  - a **Groups** panel above the table, listing groups in order with the box count, **Move up** / **Move down**
+    (disabled at the ends), Rename, Delete, and **Add group**. Delete confirms in a dialog: "3 boxes will move to
+    Other boxes";
+  - the box form gains a **Group** select ("No group" first, then groups in order);
+  - the table gains a Group column.
 
 ### Dev data
 
@@ -505,6 +639,13 @@ whose items need two boxes, and a line of 6. Seeded boxes gain tare and one gain
 and barcodes; dimensions on a demo pail), `packages/i18n/src/messages/{en,es}.json`,
 `apps/web/e2e/{packing,qa}.spec.ts` (or a new `packing-checks.spec.ts`), `docs/decisions.md`, `docs/specs/SPEC-qa.md`
 (a pointer to this amendment).
+
+*(A2)* `packages/core/src/boxes/{groups,service}.ts` (+ tests), `packages/core/src/packing/{picker,queries}.ts`
+(+ tests), `packages/core/src/identity/preferences.ts` (+ test), `packages/contracts/src/{boxes,me,packing,index}.ts`,
+`apps/web/src/server/router.ts`, `apps/web/src/app/(app)/{pack/[orderId]/box-dialog.tsx,pack/[orderId]/pack-screen.tsx,nav-footer.tsx,boxes/**}`,
+`packages/db/prisma/schema/{shipping,auth}.prisma` + one migration, `packages/db/prisma/seed.ts` (two demo groups,
+one box left ungrouped), `packages/i18n/src/messages/{en,es}.json`, `apps/web/e2e/boxes.spec.ts` and
+`apps/web/e2e/packing.spec.ts` (or a new `box-picker.spec.ts`), `docs/decisions.md`.
 
 Original scope: `packages/core/src/packing/{service,suggest,queries}.ts` (+ tests), `packages/core/src/boxes/service.ts` (+ test),
 `packages/core/src/workflow/{gates,detail}.ts` (overweight, packages on the detail), `packages/core/src/notes/service.ts`
@@ -619,6 +760,40 @@ Original scope: `packages/core/src/packing/{service,suggest,queries}.ts` (+ test
     - **QA:** the package card is yellow, and **Buy labels** lists the unacknowledged trip and the unconfirmed box.
       **Confirm box** clears both. The queue row showed "⚠ 1 check" before that.
 
+*(A2)*
+
+29. **Groups:**
+    - create appends at the end;
+    - a name that matches another after trimming and ignoring case is refused, by the service and by the unique
+      index;
+    - rename is audited with before/after;
+    - move up and down swap with the neighbour, and the ends are no-ops;
+    - delete ungroups its boxes, archived ones included, and deletes no box;
+    - every write records one audit event.
+30. **Box group field:** create and update take `groupId`; an unknown id is refused; it's editable on a box in use
+    and on an archived box; `null` ungroups.
+31. **Layout (pure, `arrangeBoxPicker`):**
+    - the suggested box is `suggested` and in no section;
+    - groups follow `position`, with boxes A–Z inside;
+    - ungrouped boxes come last in the `group: null` section;
+    - a group that is empty, all archived, or holds only the suggested box is left out;
+    - with no groups there is exactly one section, `group: null`;
+    - a `split` or `unknown` suggestion gives `suggested: null`;
+    - archived boxes never appear.
+32. **Preference:** `boxPickerColumns` defaults to 1, saves 2, and comes back from `me.get`. 3 is refused by the
+    contract and by the database CHECK. Another user's value is unchanged.
+33. **Permissions:** `boxGroups.list` is allowed for `box.read`. `create`, `rename`, `move` and `delete` are allowed
+    for `box.manage` and forbidden for a Packer.
+34. **Component (Vitest):** the picker renders the suggestion full width with the badge and border, then group
+    headings in order with a divider, then "Other boxes", then Custom size. It renders no headings when there are no
+    groups, and uses 2 columns only when the preference is 2.
+35. **E2E (tablet):**
+    - **Admin:** on Boxes, create two groups, assign boxes, leave one ungrouped, move the second group up, delete
+      a group and see its boxes in "Other boxes".
+    - **Packer:** set **Box picker columns** to 2. Open **Add package**: the suggested box is first, full width,
+      and not repeated in its group. The groups follow the admin's order, then "Other boxes". **Change box**
+      shows the same layout. At 375 px wide the grid is one column.
+
 ## Assumptions
 
 1. The weight typed in is the **gross** weight of the packed box (what the carrier bills); max weight is compared
@@ -635,6 +810,10 @@ Original scope: `packages/core/src/packing/{service,suggest,queries}.ts` (+ test
 8. *(A1)* The six boxes are visually distinct and kept in designated areas, each with one barcode posted there.
    Individual boxes aren't labelled, so a scan proves the packer was at that shelf, not which box they're holding.
 9. *(A1)* There is always a QA or Admin user on shift to approve, so blocking never strands an order.
+10. *(A2)* The warehouse has at most a few dozen boxes and a handful of groups, so the picker needs no search or
+    collapsing, and up/down buttons are quick enough to reorder.
+11. *(A2)* Group names are entered by the Admin in the language the floor reads, and aren't translated. Only "Other
+    boxes" and the UI strings are in `en` and `es`.
 
 ## Decisions (2026-10-26)
 
@@ -683,6 +862,26 @@ Original scope: `packages/core/src/packing/{service,suggest,queries}.ts` (+ test
     are entered). The 30-day counts show when a check trips rarely enough, and correctly enough, to set to block.
 21. **The estimate threshold is a setting** (5–100%, default 25), replacing `WEIGHT_WARNING_RATIO`.
 22. Recorded in `docs/decisions.md` in the same PR as the code.
+
+### Amendment 2 (approved 2026-11-24, from the box-picker grilling)
+
+23. **An amendment to packing, not a new module.** Groups only exist for the pack screen's picker. The new
+    preference is added to `identity`'s user preferences, the way A1 edited `qa`'s screen.
+24. **Columns are a per-user preference** in the account menu, saved on the user next to language and theme, so
+    they follow the person to any station. 1 or 2, default 1. It isn't a toggle inside the picker.
+25. **A box is in at most one group.** Being in several groups would show the same box twice.
+26. **One group order for everyone, set by an Admin with Move up / Move down.** That's everyone's shared mental
+    map of the shelves. Buttons work by keyboard and on a tablet without a drag-and-drop library.
+27. **Groups are display only.** The suggestion, checks, box barcodes, carriers and QA ignore them.
+28. **Boxes inside a group stay A–Z by name**, as the whole list is today. No manual order within a group.
+29. **Ungrouped boxes come last, under "Other boxes".** With no groups the picker has no headings and looks as it
+    does today.
+30. **The suggestion is shown once, first, full width and highlighted** with a border and the badge (not colour
+    alone). It isn't repeated in its group. The split and unknown messages stay at the top, as today.
+31. **Deleting a group ungroups its boxes.** Groups hold no history, so there's no archive for them.
+32. **Two columns drop to one below 480 px**, so names and dimensions don't wrap badly on a phone in portrait.
+    Tablets keep two in both orientations.
+33. **A group with nothing to show is hidden** in the picker, including one whose only box is the suggestion.
 
 ## Open questions
 
