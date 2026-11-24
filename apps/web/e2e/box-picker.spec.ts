@@ -93,6 +93,13 @@ test("Box picker columns: two columns with the suggestion first and full width; 
     .click();
   await expect(add).toBeHidden();
 
+  // Change box suggests from the package's own contents, so put the item in it first.
+  await page
+    .getByTestId("pack-item")
+    .getByRole("button", { name: /^Put one .+ in the selected package$/ })
+    .click();
+  await expect(page.getByTestId("pack-all-packed")).toBeVisible();
+
   await page.getByRole("button", { name: "Actions for package 1" }).click();
   await page.getByRole("menuitem", { name: "Change box" }).click();
   const change = page.getByRole("dialog", { name: "Change the box of package 1" });
