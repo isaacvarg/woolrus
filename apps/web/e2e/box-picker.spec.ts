@@ -21,7 +21,7 @@ const columnCount = (grid: Locator) =>
 async function expectPicker(dialog: Locator, columns: number) {
   const suggested = dialog
     .getByRole("button")
-    .filter({ has: dialog.getByTestId("box-suggestion") });
+    .filter({ has: dialog.page().getByTestId("box-suggestion") });
   const grid = dialog.getByTestId("box-grid");
   await expect(suggested).toContainText("E2E Picker tiny");
   await expect(suggested).toContainText("Suggested");
@@ -89,7 +89,7 @@ test("Box picker columns: two columns with the suggestion first and full width; 
   await expectPicker(add, 2);
   await add
     .getByRole("button")
-    .filter({ has: add.getByTestId("box-suggestion") })
+    .filter({ has: page.getByTestId("box-suggestion") })
     .click();
   await expect(add).toBeHidden();
 
