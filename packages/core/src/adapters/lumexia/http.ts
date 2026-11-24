@@ -181,6 +181,10 @@ export function createLumexiaClient(
     findLotsByNumber(lotNumber) {
       return list("/lots", "lots", [["lot_number", lotNumber]], parseLumexiaLot);
     },
+
+    listItemLots(itemId) {
+      return list("/lots", "lots", [["item_id", itemId]], parseLumexiaLot);
+    },
   };
 }
 
