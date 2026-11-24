@@ -100,7 +100,26 @@
     "deleteTitle": "Delete {name}?",
     "deleteHint": "This box isn't used by any package. Deleting it can't be undone.",
     "loading": "Loading…",
-    "empty": "No boxes yet."
+    "empty": "No boxes yet.",
+    "group": "Group",
+    "noGroup": "No group",
+    "groups": {
+      "title": "Groups",
+      "hint": "The pack screen's box picker shows boxes under their group, in this order. Boxes with no group come last, under Other boxes.",
+      "add": "Add group",
+      "name": "Group name",
+      "empty": "No groups yet. All boxes show together in the picker.",
+      "boxCount": "{count, plural, one {# box} other {# boxes}}",
+      "moveUp": "Move up",
+      "moveDown": "Move down",
+      "rename": "Rename",
+      "renameTitle": "Rename {name}",
+      "delete": "Delete",
+      "deleteTitle": "Delete the group {name}?",
+      "deleteHint": "{count, plural, =0 {No boxes are in this group.} one {# box will move to Other boxes.} other {# boxes will move to Other boxes.}} No box is deleted.",
+      "save": "Save",
+      "cancel": "Cancel"
+    }
   },
   "settings": {
     "title": "Settings",
@@ -1403,6 +1422,10 @@
       "barcodeTaken": "Another box already has this barcode.",
       "barcodeIsProduct": "This barcode belongs to a product or looks like a lot code, so a scan of it would be read as that.",
       "dimensionsLocked": "Resizing a box in use would change packages that already use it. Archive it and add a new box instead."
+    },
+    "boxGroup": {
+      "nameTaken": "A box group with this name already exists.",
+      "notFound": "This box group no longer exists."
     },
     "field": {
       "invalid": "This value isn't valid.",

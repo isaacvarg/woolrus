@@ -2,6 +2,7 @@ import type { Db } from "@woolrus/db";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { createActor, resetDb, testDb } from "../../test/db";
 import { createOrder } from "../../test/factories";
+import { createBoxGroup } from "./groups";
 import { archiveBox, createBox, deleteBox, listBoxes, restoreBox, updateBox } from "./service";
 
 const db: Db = testDb();
@@ -21,6 +22,7 @@ const input = {
   outerWidthIn: null,
   outerHeightIn: null,
   barcode: null,
+  groupId: null,
 };
 
 describe("box service", () => {
@@ -405,5 +407,58 @@ describe("box admin: guards and races", () => {
       messageKey: "errors.box.inUse",
     });
     expect(await db.box.count({ where: { id: box.id } })).toBe(1);
+  });
+});
+
+describe("box group field (SPEC-packing A2, criterion 30)", () => {
+  it("takes a groupId on create and update, refuses an unknown one, and null ungroups", async () => {
+    const admin = await createActor(db, ["ADMIN"]);
+    const group = await createBoxGroup(db, admin, {
+      idempotencyKey: "key-g0000001",
+      name: "Cartons",
+    });
+    const box = await createBox(db, admin, { ...input, groupId: group.id });
+    expect(box.groupId).toBe(group.id);
+    expect((await listBoxes(db, admin, { includeArchived: false }))[0]?.groupId).toBe(group.id);
+
+    const unknown = "019a0000-0000-7000-8000-000000000000";
+    const notFound = { kind: "BAD_REQUEST", messageKey: "errors.boxGroup.notFound" };
+    await expect(
+      createBox(db, admin, {
+        ...input,
+        idempotencyKey: "key-00000009",
+        name: "X",
+        groupId: unknown,
+      }),
+    ).rejects.toMatchObject(notFound);
+    await expect(updateBox(db, admin, { id: box.id, groupId: unknown })).rejects.toMatchObject(
+      notFound,
+    );
+
+    expect((await updateBox(db, admin, { id: box.id, groupId: null })).groupId).toBeNull();
+    // Leaving groupId out leaves it.
+    await updateBox(db, admin, { id: box.id, groupId: group.id });
+    expect((await updateBox(db, admin, { id: box.id, name: "Renamed" })).groupId).toBe(group.id);
+  });
+
+  it("is editable on a box in use and on an archived box", async () => {
+    const admin = await createActor(db, ["ADMIN"]);
+    const group = await createBoxGroup(db, admin, {
+      idempotencyKey: "key-g0000001",
+      name: "Cartons",
+    });
+    const { packages } = await createOrder(db, { status: "PACKING", packages: [{}] });
+    const used = packages[0]?.boxId as string;
+    expect(await updateBox(db, admin, { id: used, groupId: group.id })).toMatchObject({
+      groupId: group.id,
+      inUse: true,
+    });
+
+    const box = await createBox(db, admin, input);
+    await archiveBox(db, admin, { id: box.id });
+    expect(await updateBox(db, admin, { id: box.id, groupId: group.id })).toMatchObject({
+      groupId: group.id,
+      archived: true,
+    });
   });
 });

@@ -23,6 +23,7 @@ export * from "./adapters/woocommerce/errors";
 export { FakeStoreAdapter } from "./adapters/woocommerce/fake";
 export * from "./adapters/woocommerce/http";
 export * from "./audit";
+export * from "./boxes/groups";
 export * from "./boxes/service";
 export * from "./carriers/address";
 export * from "./carriers/carriers";
