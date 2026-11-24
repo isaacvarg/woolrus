@@ -2,7 +2,7 @@
 
 **Milestone:** M6 · **Depends on:** `zones` (freight-mode zones, pallets, the zone area), `workflow`, `packing`,
 `qa`, `shipping` (the Woo push), `notes` (customer notes), `identity` (the new role), `settings` · **Used by:**
-`rate-lab` (freight cost in Real orders spend) · **State:** spec draft · **Issue:** [#230](https://github.com/isaacvarg/woolrus/issues/230)
+`rate-lab` (freight cost in Real orders spend) · **State:** spec approved (2026-11-24) · **Issue:** [#230](https://github.com/isaacvarg/woolrus/issues/230)
 
 Project-wide commands, structure, code style, testing levels and boundaries are in [`../../SPEC.md`](../../SPEC.md);
 this spec only adds what is specific to `freight`.

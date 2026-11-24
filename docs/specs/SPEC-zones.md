@@ -2,7 +2,7 @@
 
 **Milestone:** M6 · **Depends on:** `workflow` (the state machine and gates it makes zone-aware), `identity` (users,
 roles), `store-sync` (import, where rules run), `picking`, `packing`, `qa` (their queues and next-order helpers) ·
-**Used by:** `freight` (freight-mode zones, the freight area) · **State:** spec draft · **Issue:** [#229](https://github.com/isaacvarg/woolrus/issues/229)
+**Used by:** `freight` (freight-mode zones, the freight area) · **State:** spec approved (2026-11-24) · **Issue:** [#229](https://github.com/isaacvarg/woolrus/issues/229)
 the spec issue is created)_
 
 Project-wide commands, structure, code style, testing levels and boundaries are in [`../../SPEC.md`](../../SPEC.md);
