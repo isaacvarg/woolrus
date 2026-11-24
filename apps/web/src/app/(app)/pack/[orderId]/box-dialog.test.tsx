@@ -21,6 +21,7 @@ const box = (id: string, name: string): Box => ({
   outerWidthIn: null,
   outerHeightIn: null,
   barcode: null,
+  groupId: null,
   inUse: false,
   archived: false,
 });
