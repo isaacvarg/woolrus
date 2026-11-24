@@ -22,7 +22,7 @@ Rebuild of v1 (kept at git tag `v1-legacy`; don't copy from it).
 
 Work is tracked on GitHub, mirroring `SPEC.md`:
 
-- **Milestones** `M1`…`M5` are the roadmap milestones.
+- **Milestones** `M1`…`M6` are the roadmap milestones.
 - **Spec issues** (`[spec] <module-id>: …`, labels `spec` + `module:<module-id>`): one per module, in its
   milestone. The body points at `docs/specs/SPEC-<module-id>.md`, which stays the source of truth; never copy the
   spec into the issue. Native "blocked by" links follow the roadmap order. Label `spec approved` once the spec is

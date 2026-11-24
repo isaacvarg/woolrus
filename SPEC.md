@@ -41,6 +41,8 @@ paid orders in, pick, pack, QA, buy labels and ship from one app, with every rul
 | `rate-lab` | Test addresses and parcels with groups, suite runs and one-off quotes across enabled providers, run insights, trends, the Real orders dashboard, CSV and print reports | FR-REP-03/04 (its reports) | rate-history, carriers, packing, shipping, settings |
 | `operations` | GlitchTip SDK, per-adapter health checks, PII purge, structured log coverage | NFR-OPS-\*, NFR-SEC-06 | — (runs alongside) |
 | `order-activity` | Order id on audit rows, records of blocked scans, the order's activity timeline with a stage time and people summary in the History tab, per-role visibility | FR-WF-04/05/08 | workflow, identity, settings, picking, packing, lumexia, exceptions, notes, carriers, qa, shipping, store-sync |
+| `zones` | Fulfillment zones: zone model with stage order and shipping mode, zone rules at import, moving orders, zone-aware state machine and gates, QA before packing, pallets, per-user zone access, per-zone queues | — (M6) | workflow, identity, store-sync, picking, packing, qa |
+| `freight` | Scheduler role, freight carriers and note templates, freight booking and board, picked up and Woo push, customer note approval, pallet paperwork (invoice, placards) | — (M6) | zones, workflow, packing, qa, shipping, notes, identity, settings |
 
 Module ids are permanent. If two modules turn out to need each other, merge them rather than adding a cycle.
 The contract between two modules belongs in the **provider's** spec.
@@ -54,6 +56,7 @@ The contract between two modules belongs in the **provider's** spec.
 | **M3 Problems** | `exceptions` | Voids and quality issues are recorded and resolved |
 | **M4 Ship — go-live** | `carriers` → `qa` ∥ `bridge-source` → `shipping`; `operations` done | Labels bought safely from every enabled provider, orders shipped and pushed to Woo. **First real labels bought in Woolrus** (v1 was never live; shipping is manual today). |
 | **M5 Beyond v1** | `lumexia` ∥ `returns` ∥ (`order-activity` → `reporting`) ∥ (`rate-history` → `rate-lab`) | Traceability, returns, insight; measured shipping prices |
+| **M6 Zones & freight** | `zones` → `freight` | Freight and pallet orders worked in their own area, booked by a scheduler and closed out in Woo at pickup |
 
 ### Status
 
@@ -82,6 +85,8 @@ States: `not started` → `spec draft` → `spec approved` → `planned` → `in
 | `reporting` | M5 | [SPEC-reporting](docs/specs/SPEC-reporting.md) | [#32](https://github.com/isaacvarg/woolrus/issues/32) | done |
 | `rate-history` | M5 | [SPEC-rate-history](docs/specs/SPEC-rate-history.md) | [#139](https://github.com/isaacvarg/woolrus/issues/139) | done |
 | `rate-lab` | M5 | [SPEC-rate-lab](docs/specs/SPEC-rate-lab.md) | [#140](https://github.com/isaacvarg/woolrus/issues/140) | done |
+| `zones` | M6 | [SPEC-zones](docs/specs/SPEC-zones.md) | [#229](https://github.com/isaacvarg/woolrus/issues/229) | spec draft |
+| `freight` | M6 | [SPEC-freight](docs/specs/SPEC-freight.md) | [#230](https://github.com/isaacvarg/woolrus/issues/230) | spec draft |
 
 **Next up:** pick the first module in roadmap order whose dependencies are `done` and whose own state isn't `done`.
 

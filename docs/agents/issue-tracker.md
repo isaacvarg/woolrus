@@ -26,7 +26,7 @@ Read it as in **Read an issue** above.
 
 Work tracking mirrors `SPEC.md` (see *Work tracking* in `CLAUDE.md`):
 
-- **Milestones** `M1`…`M5` are the roadmap milestones.
+- **Milestones** `M1`…`M6` are the roadmap milestones.
 - **Spec issues**, one per module: titled `[spec] <module-id>: …`, labelled `spec` + `module:<module-id>`, in
   their milestone, with native "blocked by" links in roadmap order. The body points at
   `docs/specs/SPEC-<module-id>.md`, which stays the source of truth: never copy the spec into an issue.
