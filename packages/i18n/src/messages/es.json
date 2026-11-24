@@ -716,6 +716,7 @@
     "deleteConfirm": "Eliminar",
     "chooseBox": "Elige una caja",
     "changeBoxTitle": "Cambiar la caja del paquete {number}",
+    "otherBoxes": "Otras cajas",
     "noBoxes": "No hay cajas configuradas. Usa un tamaño personalizado.",
     "customHint": "Tamaño exterior de la caja, en pulgadas.",
     "length": "Largo",

@@ -1,12 +1,12 @@
 // @vitest-environment jsdom
 import { cleanup, render, screen, within } from "@testing-library/react";
-import type { Box, BoxSuggestion } from "@woolrus/contracts";
+import type { Box, BoxGroup, BoxSuggestion } from "@woolrus/contracts";
 import { messages } from "@woolrus/i18n";
 import { NextIntlClientProvider } from "next-intl";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { BoxDialog } from "./box-dialog";
 
-// SPEC-packing A2, criterion 34 (columns and the suggestion; groups come with #228).
+// SPEC-packing A2, criterion 34: columns, the suggestion, and the group sections.
 
 const box = (id: string, name: string): Box => ({
   id,
@@ -33,12 +33,17 @@ const suggested: BoxSuggestion = { kind: "box", box: medium, estimatedWeightOz: 
 
 afterEach(cleanup);
 
-function open(columns: 1 | 2, suggestion: BoxSuggestion = suggested) {
+function open(
+  columns: 1 | 2,
+  suggestion: BoxSuggestion = suggested,
+  { boxes = [small, medium, large], groups = [] }: { boxes?: Box[]; groups?: BoxGroup[] } = {},
+) {
   render(
     <NextIntlClientProvider locale="en" messages={messages.en} timeZone="UTC">
       <BoxDialog
         title="Choose a box"
-        boxes={[small, medium, large]}
+        boxes={boxes}
+        boxGroups={groups}
         suggestion={suggestion}
         weightDisplay="LB_OZ"
         columns={columns}
@@ -50,6 +55,7 @@ function open(columns: 1 | 2, suggestion: BoxSuggestion = suggested) {
   );
 }
 
+// With no groups there is exactly one grid.
 const grid = () => screen.getByTestId("box-grid");
 const button = (name: string) => screen.getByRole("button", { name: new RegExp(name) });
 
@@ -89,5 +95,70 @@ describe("BoxDialog suggestion (criterion 34)", () => {
     open(2, { kind: "split" });
     expect(within(grid()).getAllByRole("button")).toHaveLength(3);
     expect(screen.queryByText("Suggested")).toBeNull();
+  });
+});
+
+describe("BoxDialog groups (criterion 34)", () => {
+  const group = (id: string, name: string, position: number): BoxGroup => ({
+    id,
+    name,
+    position,
+    boxCount: 0,
+  });
+  const mailers = group("01a1d1f5-315c-71fc-9db3-9772cb0dbc51", "Mailers", 1);
+  const cartons = group("01a1d1f5-315c-71fc-9db3-9772cb0dbc52", "Cartons", 0);
+  const pails = group("01a1d1f5-315c-71fc-9db3-9772cb0dbc53", "Pails", 2);
+  const flat = box("01a1d1f5-315c-71fc-9db3-9772cb0dbc44", "Flat pack");
+  const grouped = [
+    { ...small, groupId: mailers.id },
+    { ...medium, groupId: cartons.id },
+    { ...large, groupId: cartons.id },
+    flat,
+  ];
+
+  it("shows the suggestion, then the groups in order with a divider, then Other boxes, then Custom size", () => {
+    open(2, suggested, { boxes: grouped, groups: [mailers, cartons, pails] });
+
+    const headings = screen.getAllByRole("heading", { level: 3 }).map((h) => h.textContent);
+    // Pails has no boxes, so it isn't shown.
+    expect(headings).toEqual(["Cartons", "Mailers", "Other boxes", "Custom size"]);
+
+    const sections = screen.getAllByRole("group");
+    const [cartonSection, mailerSection, otherSection] = sections;
+    expect(
+      within(cartonSection as HTMLElement)
+        .getAllByRole("button")
+        .map((b) => b.textContent),
+    ).toEqual([expect.stringContaining("Large carton")]);
+    expect(within(mailerSection as HTMLElement).getByRole("button").textContent).toMatch(
+      /Small mailer/,
+    );
+    expect(within(otherSection as HTMLElement).getByRole("button").textContent).toMatch(
+      /Flat pack/,
+    );
+    for (const section of sections) expect(section.className).toMatch(/border-t/);
+    expect(screen.getByRole("group", { name: "Cartons" })).toBe(cartonSection);
+    expect(screen.getByRole("group", { name: "Other boxes" })).toBe(otherSection);
+
+    // Top to bottom: the suggested box, the sections, the custom size form.
+    const suggestedButton = button("Medium carton");
+    const custom = screen.getByRole("heading", { name: "Custom size" });
+    const follows = (a: Element, b: Element) =>
+      Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(follows(suggestedButton, cartonSection as HTMLElement)).toBe(true);
+    expect(follows(otherSection as HTMLElement, custom)).toBe(true);
+    // Each section uses the packer's columns.
+    for (const g of screen.getAllByTestId("box-grid")) {
+      expect(g.className).toMatch(/min-\[480px\]:grid-cols-2/);
+    }
+  });
+
+  it("renders no section headings when there are no groups", () => {
+    open(1, suggested, { boxes: grouped.map((b) => ({ ...b, groupId: null })) });
+    expect(screen.getAllByRole("heading", { level: 3 }).map((h) => h.textContent)).toEqual([
+      "Custom size",
+    ]);
+    expect(screen.queryByRole("group")).toBeNull();
+    expect(within(grid()).getAllByRole("button")).toHaveLength(3);
   });
 });

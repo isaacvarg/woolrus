@@ -639,6 +639,7 @@ function PackLayout({
         <BoxDialog
           title={t("pack.chooseBox")}
           boxes={view.boxes}
+          boxGroups={view.boxGroups}
           suggestion={view.suggestion}
           weightDisplay={weightDisplay}
           columns={boxPickerColumns}
@@ -651,6 +652,7 @@ function PackLayout({
         <BoxDialog
           title={t("pack.changeBoxTitle", { number: dialog.pkg.number })}
           boxes={view.boxes}
+          boxGroups={view.boxGroups}
           // The live package, so the suggestion follows its contents.
           suggestion={
             view.packages.find((p) => p.id === dialog.pkg.id)?.suggestion ?? dialog.pkg.suggestion

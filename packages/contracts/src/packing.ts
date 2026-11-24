@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { base, Id, IdempotencyKey, Inches, Ounces } from "./base";
-import { Box } from "./boxes";
+import { Box, BoxGroup } from "./boxes";
 import { LotDto } from "./lumexia";
 import { ExpectedVersion, LineAttribute, OrderDetail } from "./orders";
 import { PackApprovalInput, Trip } from "./pack-checks";
@@ -109,6 +109,8 @@ export const PackView = z.object({
   suggestion: BoxSuggestion,
   /** The active boxes a packer can choose from. */
   boxes: z.array(Box),
+  /** Every box group in the admin's order; the picker shows boxes under them (SPEC-packing A2). */
+  boxGroups: z.array(BoxGroup),
   /**
    * What the packed gate still needs besides approval; empty when the order can complete, or can
    * with an approval when `blocking`.

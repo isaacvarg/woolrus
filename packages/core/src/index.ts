@@ -68,6 +68,7 @@ export * from "./operations/anonymize";
 export * from "./operations/heartbeat";
 export * from "./operations/jobs";
 export * from "./packing/complete";
+export * from "./packing/picker";
 export * from "./packing/queries";
 export * from "./packing/service";
 export * from "./packing/trips";

@@ -716,6 +716,7 @@
     "deleteConfirm": "Delete",
     "chooseBox": "Choose a box",
     "changeBoxTitle": "Change the box of package {number}",
+    "otherBoxes": "Other boxes",
     "noBoxes": "No boxes are set up. Use a custom size.",
     "customHint": "Outer size of the box, in inches.",
     "length": "Length",

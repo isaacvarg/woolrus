@@ -58,14 +58,15 @@ function uniqueTaken(error: unknown): never {
   throw error;
 }
 
-async function list(tx: DbTx | Db): Promise<BoxGroupDto[]> {
+/** Every group in the picker's order, unchecked: callers have already checked a permission. */
+export async function readBoxGroups(tx: DbTx | Db): Promise<BoxGroupDto[]> {
   const groups = await tx.boxGroup.findMany({ orderBy: order, include: withCount });
   return groups.map(toDto);
 }
 
 export async function listBoxGroups(db: Db, actor: Actor): Promise<BoxGroupDto[]> {
   assertCan(actor, "box.read");
-  return list(db);
+  return readBoxGroups(db);
 }
 
 export async function createBoxGroup(
@@ -142,7 +143,7 @@ export async function moveBoxGroup(
   assertCan(actor, "box.manage");
   return db.$transaction(async (tx) => {
     await lockGroups(tx);
-    const groups = await list(tx);
+    const groups = await readBoxGroups(tx);
     const index = groups.findIndex((g) => g.id === id);
     if (index === -1) throw notFound();
     const neighbour = groups[direction === "up" ? index - 1 : index + 1];
@@ -162,7 +163,7 @@ export async function moveBoxGroup(
       before: { position: group.position },
       after: { position: mine, direction, swappedWith: neighbour.name },
     });
-    return list(tx);
+    return readBoxGroups(tx);
   });
 }
 

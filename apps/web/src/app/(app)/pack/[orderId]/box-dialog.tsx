@@ -2,21 +2,23 @@
 
 import type {
   Box,
+  BoxGroup,
   BoxPickerColumns,
   BoxSuggestion,
   PackageBoxInput,
   WeightDisplay,
 } from "@woolrus/contracts";
 import { formatWeight } from "@woolrus/core/format";
+import { arrangeBoxPicker } from "@woolrus/core/picker";
 import { useLocale, useTranslations } from "next-intl";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useId, useState } from "react";
 import { Form } from "react-aria-components";
 import { Dialog } from "@/components/ui/dialog";
 import { Button, NumberField } from "@/components/ui/fields";
 
-// The box picker (SPEC-packing "UI", A2): the suggested box full width on top, the other active
-// boxes in the packer's 1 or 2 columns, then a custom size. Used to add a package and to change a
-// package's box.
+// The box picker (SPEC-packing "UI", A2): the suggested box full width on top, then the boxes in
+// their groups in the admin's order (`arrangeBoxPicker`), each in the packer's 1 or 2 columns, then
+// a custom size. Used to add a package and to change a package's box.
 
 const dimensions = (t: ReturnType<typeof useTranslations>, box: Box) =>
   t("pack.dimensions", { length: box.lengthIn, width: box.widthIn, height: box.heightIn });
@@ -24,6 +26,7 @@ const dimensions = (t: ReturnType<typeof useTranslations>, box: Box) =>
 export function BoxDialog({
   title,
   boxes,
+  boxGroups,
   suggestion,
   weightDisplay,
   columns,
@@ -33,6 +36,7 @@ export function BoxDialog({
 }: {
   title: string;
   boxes: Box[];
+  boxGroups: BoxGroup[];
   suggestion: BoxSuggestion;
   weightDisplay: WeightDisplay;
   /** The user's `boxPickerColumns`; two drop to one below 480 px so a phone stays readable. */
@@ -43,10 +47,12 @@ export function BoxDialog({
 }) {
   const t = useTranslations();
   const locale = useLocale();
+  const headingId = useId();
   // The suggested box leads, once; nothing is chosen until the packer taps one.
-  const suggested =
-    suggestion.kind === "box" ? (boxes.find((box) => box.id === suggestion.box.id) ?? null) : null;
-  const rest = boxes.filter((box) => box !== suggested);
+  const { suggested, sections } = arrangeBoxPicker(boxes, boxGroups, suggestion);
+  // With no group shown, the ungrouped boxes need no "Other boxes" heading: today's picker.
+  const headed = sections.some((section) => section.group !== null);
+  const gridClass = `grid gap-2 ${columns === 2 ? "grid-cols-1 min-[480px]:grid-cols-2" : ""}`;
   const boxButton = (box: Box, className: string, extra?: ReactNode) => (
     <Button
       className={`btn-lg h-auto min-h-16 w-full justify-start py-2 text-start ${className}`}
@@ -93,14 +99,31 @@ export function BoxDialog({
                 })}
               </span>,
             )}
-          <ul
-            className={`grid gap-2 ${columns === 2 ? "grid-cols-1 min-[480px]:grid-cols-2" : ""}`}
-            data-testid="box-grid"
-          >
-            {rest.map((box) => (
-              <li key={box.id}>{boxButton(box, "btn-outline")}</li>
-            ))}
-          </ul>
+          {sections.map((section, i) => {
+            const grid = (
+              <ul className={gridClass} data-testid="box-grid">
+                {section.boxes.map((box) => (
+                  <li key={box.id}>{boxButton(box, "btn-outline")}</li>
+                ))}
+              </ul>
+            );
+            if (!headed) return <div key="other">{grid}</div>;
+            // Announced as a group by its heading; the divider separates it from what's above.
+            const id = `${headingId}-${i}`;
+            return (
+              // A fieldset is a group without the role attribute; its heading labels it.
+              <fieldset
+                key={section.group?.id ?? "other"}
+                aria-labelledby={id}
+                className="space-y-2 border-t border-base-300 pt-4"
+              >
+                <h3 id={id} className="font-bold">
+                  {section.group?.name ?? t("pack.otherBoxes")}
+                </h3>
+                {grid}
+              </fieldset>
+            );
+          })}
           <Form
             className="space-y-2 border-t border-base-300 pt-4"
             onSubmit={(event) => {
