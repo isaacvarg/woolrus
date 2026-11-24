@@ -1,5 +1,5 @@
 import { approvers } from "./approvals";
-import { boxes } from "./boxes";
+import { boxes, boxGroups } from "./boxes";
 import { carriers } from "./carriers";
 import { invitations } from "./invitations";
 import { issues } from "./issues";
@@ -58,6 +58,7 @@ export * from "./voids";
 export const contract = {
   me,
   boxes,
+  boxGroups,
   settings,
   orders,
   notes,

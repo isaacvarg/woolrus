@@ -10,6 +10,7 @@ import { Button, Checkbox } from "@/components/ui/fields";
 import { useErrorMessage } from "@/lib/errors";
 import { orpc } from "@/lib/orpc";
 import { BoxDialog } from "./box-dialog";
+import { BoxGroupsPanel } from "./box-groups-panel";
 
 const size = (a: number | null, b: number | null, c: number | null) =>
   a === null || b === null || c === null ? "—" : `${a} × ${b} × ${c}`;
@@ -23,6 +24,8 @@ export function BoxesManager({ canManage }: { canManage: boolean }) {
   const boxes = useQuery(
     orpc.boxes.list.queryOptions({ input: { includeArchived: showArchived } }),
   );
+  const groups = useQuery(orpc.boxGroups.list.queryOptions());
+  const groupName = new Map(groups.data?.map((g) => [g.id, g.name]));
   const settings = useQuery(orpc.settings.public.queryOptions());
   // Until settings load, use the schema default so the table isn't held back.
   const weightDisplay = settings.data?.weightDisplay ?? "LB_OZ";
@@ -44,10 +47,16 @@ export function BoxesManager({ canManage }: { canManage: boolean }) {
   const rowError = archive.error ?? restore.error;
   const weight = (oz: number | null) =>
     oz === null ? "—" : formatWeight(oz, weightDisplay, locale);
-  const columns = canManage ? 10 : 9;
+  const columns = canManage ? 11 : 10;
 
   return (
     <div className="space-y-4">
+      {groups.error && (
+        <p role="alert" className="text-error">
+          {errorMessage(groups.error)}
+        </p>
+      )}
+      {groups.data && <BoxGroupsPanel groups={groups.data} canManage={canManage} />}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <Checkbox isSelected={showArchived} onChange={setShowArchived}>
           {t("showArchived")}
@@ -64,6 +73,7 @@ export function BoxesManager({ canManage }: { canManage: boolean }) {
           <thead>
             <tr>
               <th>{t("name")}</th>
+              <th>{t("group")}</th>
               <th>{t("dimensions")}</th>
               <th>{t("outerDimensions")}</th>
               <th>{t("tare")}</th>
@@ -99,6 +109,7 @@ export function BoxesManager({ canManage }: { canManage: boolean }) {
             {boxes.data?.map((box) => (
               <tr key={box.id} data-testid="box-row" className={box.archived ? "opacity-60" : ""}>
                 <td>{box.name}</td>
+                <td>{(box.groupId && groupName.get(box.groupId)) ?? "—"}</td>
                 <td>{size(box.lengthIn, box.widthIn, box.heightIn)}</td>
                 <td>{size(box.outerLengthIn, box.outerWidthIn, box.outerHeightIn)}</td>
                 <td>{weight(box.tareWeightOz)}</td>
@@ -151,6 +162,7 @@ export function BoxesManager({ canManage }: { canManage: boolean }) {
         <BoxDialog
           key={editing?.id ?? "new"}
           box={editing}
+          groups={groups.data ?? []}
           weightDisplay={weightDisplay}
           onClose={() => setEditing(false)}
         />
