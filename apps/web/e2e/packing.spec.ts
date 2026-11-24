@@ -224,11 +224,12 @@ test("the suggested box is listed first and adding it works; a weight far off th
 
   await page.getByRole("button", { name: "Add package" }).click();
   const dialog = page.getByRole("dialog", { name: "Choose a box" });
-  const first = dialog.getByRole("listitem").first();
+  // The suggestion leads, full width above the other boxes (SPEC-packing A2).
+  const first = dialog.getByRole("button").filter({ has: page.getByTestId("box-suggestion") });
   // Another project's Tiny box is the same size, and ties go by name.
   await expect(first).toContainText("E2E Tiny");
   await expect(first.getByTestId("box-suggestion")).toContainText("Fits everything · est. 10 oz");
-  await first.getByRole("button").click();
+  await first.click();
   await expect(dialog).toBeHidden();
 
   const pkg = page.getByTestId("pack-package");

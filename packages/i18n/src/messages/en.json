@@ -57,6 +57,8 @@
       "DARK": "Dark",
       "HIGH_CONTRAST": "High contrast"
     },
+    "boxPickerColumns": "Box picker columns",
+    "columns": "{count, plural, one {# column} other {# columns}}",
     "collapseSidebar": "Collapse sidebar",
     "expandSidebar": "Expand sidebar",
     "logOut": "Log out",

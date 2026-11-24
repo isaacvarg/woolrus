@@ -42,6 +42,8 @@ model User {
   locale           Locale   @default(en)
   theme            Theme    @default(SYSTEM)
   sidebarCollapsed Boolean  @default(false) @map("sidebar_collapsed")
+  /// The pack screen's box picker: 1 or 2 columns (SPEC-packing A2). CHECK in the migration.
+  boxPickerColumns Int      @default(1) @map("box_picker_columns")
   createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 

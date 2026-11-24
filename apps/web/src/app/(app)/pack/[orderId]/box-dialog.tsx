@@ -1,15 +1,22 @@
 "use client";
 
-import type { Box, BoxSuggestion, PackageBoxInput, WeightDisplay } from "@woolrus/contracts";
+import type {
+  Box,
+  BoxPickerColumns,
+  BoxSuggestion,
+  PackageBoxInput,
+  WeightDisplay,
+} from "@woolrus/contracts";
 import { formatWeight } from "@woolrus/core/format";
 import { useLocale, useTranslations } from "next-intl";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 import { Form } from "react-aria-components";
 import { Dialog } from "@/components/ui/dialog";
 import { Button, NumberField } from "@/components/ui/fields";
 
-// The box picker (SPEC-packing "UI"): the active boxes, then a custom size. Used to add a package
-// and to change a package's box.
+// The box picker (SPEC-packing "UI", A2): the suggested box full width on top, the other active
+// boxes in the packer's 1 or 2 columns, then a custom size. Used to add a package and to change a
+// package's box.
 
 const dimensions = (t: ReturnType<typeof useTranslations>, box: Box) =>
   t("pack.dimensions", { length: box.lengthIn, width: box.widthIn, height: box.heightIn });
@@ -19,6 +26,7 @@ export function BoxDialog({
   boxes,
   suggestion,
   weightDisplay,
+  columns,
   isPending,
   onChoose,
   onClose,
@@ -27,16 +35,30 @@ export function BoxDialog({
   boxes: Box[];
   suggestion: BoxSuggestion;
   weightDisplay: WeightDisplay;
+  /** The user's `boxPickerColumns`; two drop to one below 480 px so a phone stays readable. */
+  columns: BoxPickerColumns;
   isPending: boolean;
   onChoose: (box: PackageBoxInput) => void;
   onClose: () => void;
 }) {
   const t = useTranslations();
   const locale = useLocale();
-  // The suggested box leads the list; nothing is chosen until the packer taps one.
-  const suggestedId = suggestion.kind === "box" ? suggestion.box.id : null;
-  const ordered = [...boxes].sort(
-    (a, b) => Number(b.id === suggestedId) - Number(a.id === suggestedId),
+  // The suggested box leads, once; nothing is chosen until the packer taps one.
+  const suggested =
+    suggestion.kind === "box" ? (boxes.find((box) => box.id === suggestion.box.id) ?? null) : null;
+  const rest = boxes.filter((box) => box !== suggested);
+  const boxButton = (box: Box, className: string, extra?: ReactNode) => (
+    <Button
+      className={`btn-lg h-auto min-h-16 w-full justify-start py-2 text-start ${className}`}
+      isDisabled={isPending}
+      onPress={() => onChoose({ boxId: box.id })}
+    >
+      <span>
+        <span className="block font-bold">{box.name}</span>
+        <span className="block text-sm font-normal">{dimensions(t, box)}</span>
+        {extra}
+      </span>
+    </Button>
   );
   const [size, setSize] = useState({ lengthIn: 0, widthIn: 0, heightIn: 0 });
   const set = (key: keyof typeof size) => (value: number) =>
@@ -58,28 +80,25 @@ export function BoxDialog({
               {t("pack.suggestUnknown", { names: suggestion.missing.join(", ") })}
             </p>
           )}
-          <ul className="grid gap-2">
-            {ordered.map((box) => (
-              <li key={box.id}>
-                <Button
-                  className="btn-outline btn-lg h-auto min-h-16 w-full justify-start py-2 text-start"
-                  isDisabled={isPending}
-                  onPress={() => onChoose({ boxId: box.id })}
-                >
-                  <span>
-                    <span className="block font-bold">{box.name}</span>
-                    <span className="block text-sm font-normal">{dimensions(t, box)}</span>
-                    {suggestion.kind === "box" && box.id === suggestion.box.id && (
-                      <span className="block text-sm font-normal" data-testid="box-suggestion">
-                        <span className="badge badge-primary me-2">{t("pack.suggested")}</span>
-                        {t("pack.suggestFits", {
-                          weight: formatWeight(suggestion.estimatedWeightOz, weightDisplay, locale),
-                        })}
-                      </span>
-                    )}
-                  </span>
-                </Button>
-              </li>
+          {suggested &&
+            suggestion.kind === "box" &&
+            // Outlined in the primary colour and labelled, so it isn't marked by colour alone.
+            boxButton(
+              suggested,
+              "btn-outline border-2 border-primary",
+              <span className="block text-sm font-normal" data-testid="box-suggestion">
+                <span className="badge badge-primary me-2">{t("pack.suggested")}</span>
+                {t("pack.suggestFits", {
+                  weight: formatWeight(suggestion.estimatedWeightOz, weightDisplay, locale),
+                })}
+              </span>,
+            )}
+          <ul
+            className={`grid gap-2 ${columns === 2 ? "grid-cols-1 min-[480px]:grid-cols-2" : ""}`}
+            data-testid="box-grid"
+          >
+            {rest.map((box) => (
+              <li key={box.id}>{boxButton(box, "btn-outline")}</li>
             ))}
           </ul>
           <Form
