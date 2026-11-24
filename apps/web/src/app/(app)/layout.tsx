@@ -1,4 +1,4 @@
-import { can, publicEmail } from "@woolrus/core";
+import { boxPickerColumns, can, publicEmail } from "@woolrus/core";
 import type { MessageKey } from "@woolrus/i18n";
 import type { Route } from "next";
 import { headers } from "next/headers";
@@ -130,6 +130,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
                   locale: user.locale,
                   theme: user.theme,
                   sidebarCollapsed: user.sidebarCollapsed,
+                  boxPickerColumns: boxPickerColumns(user.boxPickerColumns),
                 }}
               />
             )}

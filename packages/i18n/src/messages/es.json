@@ -57,6 +57,8 @@
       "DARK": "Oscuro",
       "HIGH_CONTRAST": "Alto contraste"
     },
+    "boxPickerColumns": "Columnas del selector de cajas",
+    "columns": "{count, plural, one {# columna} other {# columnas}}",
     "collapseSidebar": "Contraer barra lateral",
     "expandSidebar": "Expandir barra lateral",
     "logOut": "Cerrar sesión",
