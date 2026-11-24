@@ -5,7 +5,7 @@
 **Used by:** `carriers` (reads package box, dimensions and weight; adds the rate fetch on Packing → QA), `qa`
 (verifies `PackageItem`s), `exceptions` (packaging issues on a package), `lumexia` (lot per `PackageItem`) ·
 **State:** done; amendment 1 (packing checks, approved 2026-11-12) is **done** (tickets #181–#186); amendment 2
-(box picker layout and groups, approved 2026-11-24) is **spec approved** · **Issue:**
+(box picker layout and groups, approved 2026-11-24) is **planned** (tickets #226–#228) · **Issue:**
 [#24](https://github.com/isaacvarg/woolrus/issues/24); amendment 1:
 [#178](https://github.com/isaacvarg/woolrus/issues/178); amendment 2:
 [#225](https://github.com/isaacvarg/woolrus/issues/225)
