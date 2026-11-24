@@ -36,7 +36,7 @@ import { playScanSound, useScanner } from "@/lib/scanner";
 import { randomUUID } from "@/lib/uuid";
 import { ScanBanner, type ScanOutcome } from "../../pick/[orderId]/pick-screen";
 import { BoxDialog } from "./box-dialog";
-import { type LineCandidate, LotDialog, WhichLineDialog } from "./lot-dialogs";
+import { type LineCandidate, LotDialog, LotPickerDialog, WhichLineDialog } from "./lot-dialogs";
 import { OrderDrawer, PackageNoteDialog } from "./order-drawer";
 import { TripList, TripMessage } from "./trips";
 import { OverweightDialog, overweightMax, WeightField } from "./weight-field";
@@ -133,6 +133,7 @@ type Dialogs =
   | { kind: "overweight"; pkg: PackPackage; weightOz: number; maxOz: number }
   | { kind: "approve"; after: After }
   | { kind: "lot"; pkgId: string; orderItemId: string; lotId: string }
+  | { kind: "chooseLot"; pkgId: string; orderItemId: string }
   | {
       kind: "whichLine";
       pkg: PackPackage;
@@ -267,7 +268,7 @@ function PackLayout({
       client.packing.scanLot({ packageId: pkg.id, code, scanId, packageItemId }),
     onSuccess: (result, { pkg, code }) => {
       accept(result);
-      setDialog((d) => (d?.kind === "whichLine" ? null : d));
+      setDialog((d) => (d?.kind === "whichLine" || d?.kind === "chooseLot" ? null : d));
       playScanSound(true);
       // The box line whose lots changed is the one this scan went on.
       const lotsOf = (p: PackPackage | undefined, id: string) =>
@@ -297,7 +298,7 @@ function PackLayout({
         setDialog({ kind: "whichLine", pkg, code, scanId, candidates });
         return;
       }
-      setDialog((d) => (d?.kind === "whichLine" ? null : d));
+      setDialog((d) => (d?.kind === "whichLine" || d?.kind === "chooseLot" ? null : d));
       playScanSound(false);
       setScanned({ ok: false, at: Date.now(), message: errorMessage(error) });
     },
@@ -592,6 +593,9 @@ function PackLayout({
                     onDelete={() => setDialog({ kind: "delete", pkg })}
                     onAddNote={() => setDialog({ kind: "note", pkg })}
                     onOpenLot={(lot) => setDialog({ kind: "lot", pkgId: pkg.id, ...lot })}
+                    onChooseLot={(orderItemId) =>
+                      setDialog({ kind: "chooseLot", pkgId: pkg.id, orderItemId })
+                    }
                     onReport={mayReport ? () => setReporting({ packageId: pkg.id }) : undefined}
                     weightDisplay={weightDisplay}
                     weighing={weigh.isPending && weigh.variables?.pkg.id === pkg.id}
@@ -760,6 +764,24 @@ function PackLayout({
               isPending={editLot.isPending}
               onSetQuantity={(quantity) => editLot.mutate({ lotId: lot.id, quantity })}
               onRemove={() => editLot.mutate({ lotId: lot.id })}
+              onClose={closeDialog}
+            />
+          );
+        })()}
+      {dialog?.kind === "chooseLot" &&
+        (() => {
+          const pkg = view.packages.find((p) => p.id === dialog.pkgId);
+          const item = pkg?.items.find((it) => it.orderItemId === dialog.orderItemId);
+          if (!pkg || !item) return null;
+          return (
+            <LotPickerDialog
+              packageId={pkg.id}
+              packageNumber={pkg.number}
+              item={item}
+              isPending={scanLot.isPending}
+              onChoose={({ lotNumber, packageItemId }) =>
+                scanLot.mutate({ pkg, code: lotNumber, scanId: randomUUID(), packageItemId })
+              }
               onClose={closeDialog}
             />
           );
@@ -1009,6 +1031,7 @@ function PackageCard({
   onDelete,
   onAddNote,
   onOpenLot,
+  onChooseLot,
   onReport,
   weightDisplay,
   weighing,
@@ -1030,6 +1053,7 @@ function PackageCard({
   onDelete: () => void;
   onAddNote: () => void;
   onOpenLot: (lot: { orderItemId: string; lotId: string }) => void;
+  onChooseLot: (orderItemId: string) => void;
 }) {
   const t = useTranslations();
   const size = pkg.box ?? pkg.dimensions;
@@ -1167,6 +1191,7 @@ function PackageCard({
                     ? undefined
                     : (item, lot) => onOpenLot({ orderItemId: item.orderItemId, lotId: lot.id })
                 }
+                onChoose={disabled ? undefined : (item) => onChooseLot(item.orderItemId)}
               />
             </div>
           )}
@@ -1178,16 +1203,19 @@ function PackageCard({
 
 /**
  * Each lot-needing box line: **Lot needed**, or its lots as chips ("2 × A12A0124"). Scanning a lot
- * label with the package selected fills them in; tapping a chip opens its dialog (SPEC-lumexia
- * "Reads and UI").
+ * label with the package selected fills them in, as does tapping **Lot needed** and choosing one
+ * of Lumexia's lots; tapping a chip opens its dialog (SPEC-lumexia "Reads and UI").
  */
 function LotRows({
   items,
   onOpen,
+  onChoose,
 }: {
   items: PackageItemView[];
   /** Unset while the packer can't edit (no claim): the chips are only shown. */
   onOpen?: (item: PackageItemView, lot: LotDto) => void;
+  /** Unset while the packer can't edit: **Lot needed** is only a badge. */
+  onChoose?: (item: PackageItemView) => void;
 }) {
   const t = useTranslations();
   const lotText = useLotText();
@@ -1199,9 +1227,20 @@ function LotRows({
         <li key={item.orderItemId} className="flex flex-wrap items-center gap-2">
           <span className="text-sm font-semibold">{item.name}</span>
           {item.lots.length === 0 ? (
-            <span className="badge badge-warning" data-testid="pack-lot-needed">
-              {t("pack.lotNeeded")}
-            </span>
+            onChoose ? (
+              <Button
+                className="btn-warning btn-sm min-h-10"
+                data-testid="pack-lot-needed"
+                aria-label={t("pack.lotChoose", { name: item.name })}
+                onPress={() => onChoose(item)}
+              >
+                {t("pack.lotNeeded")}
+              </Button>
+            ) : (
+              <span className="badge badge-warning" data-testid="pack-lot-needed">
+                {t("pack.lotNeeded")}
+              </span>
+            )
           ) : (
             <ul className="flex flex-wrap gap-2" aria-label={t("pack.lotsOf", { name: item.name })}>
               {item.lots.map((lot) => {

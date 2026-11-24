@@ -184,6 +184,11 @@ export class FakeLumexiaClient implements LumexiaClient {
     return matchLots(this.#lots, { lotNumber }).map(parseLumexiaLot);
   }
 
+  async listItemLots(itemId: string): Promise<LumexiaLot[]> {
+    this.#enter("listItemLots", [itemId]);
+    return matchLots(this.#lots, { itemId }).map(parseLumexiaLot);
+  }
+
   #enter(method: Method, args: unknown[]): void {
     this.calls.push({ method, args });
     if (this.#down) throw new LumexiaUnavailable("fake Lumexia: down (unavailable)");

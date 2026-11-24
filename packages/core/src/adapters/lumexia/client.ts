@@ -28,4 +28,6 @@ export interface LumexiaClient {
   getLot(id: string): Promise<LumexiaLot | null>;
   /** Every lot with this number (case-insensitive), on any item: one number can exist on several. */
   findLotsByNumber(lotNumber: string): Promise<LumexiaLot[]>;
+  /** Every lot of one item, all pages, in Lumexia's order (by id: sort them yourself). */
+  listItemLots(itemId: string): Promise<LumexiaLot[]>;
 }

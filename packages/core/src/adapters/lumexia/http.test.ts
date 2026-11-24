@@ -353,7 +353,10 @@ function serve(world: LumexiaWorld, apiKey: string, pageSize = 2) {
     if (route === "/lots") {
       return page(
         "lots",
-        matchLots(world.lots, { lotNumber: params.get("lot_number") ?? undefined }),
+        matchLots(world.lots, {
+          lotNumber: params.get("lot_number") ?? undefined,
+          itemId: params.get("item_id") ?? undefined,
+        }),
         url,
       );
     }

@@ -69,6 +69,26 @@ export const LotDto = z.object({
 });
 export type LotDto = z.infer<typeof LotDto>;
 
+/** One of a Lumexia item's lots, offered by the pack screen's lot picker. */
+export const LotChoice = z.object({
+  id: z.string(),
+  lotNumber: z.string(),
+  createdAt: z.coerce.date(),
+});
+export type LotChoice = z.infer<typeof LotChoice>;
+
+/**
+ * The lot picker for one box line: its item's lots, newest first. `status` says why `lots` is
+ * empty when it isn't `ok`: the product has no Lumexia link, Lumexia isn't set up, or it can't be
+ * reached (scanning the label still works then).
+ */
+export const LotChoices = z.object({
+  packageItemId: z.string(),
+  status: z.enum(["ok", "notLinked", "unconfigured", "unavailable"]),
+  lots: z.array(LotChoice),
+});
+export type LotChoices = z.infer<typeof LotChoices>;
+
 // Lumexia items: product ↔ item links (SPEC-lumexia "Lot rules and linking").
 
 /** A Lumexia item, as search and Match by SKU show it. */
