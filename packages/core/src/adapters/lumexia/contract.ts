@@ -152,6 +152,17 @@ export function describeLumexiaClient(
       expect(await client.findLotsByNumber("BASE1234.Z99L3199")).toEqual([]);
     });
 
+    it("lists every lot of one item", async () => {
+      const { client } = fixture();
+      const found = await client.listItemLots(LAVENDER);
+      expect(found.map((l) => l.lotNumber).sort()).toEqual([
+        "BASE1234.A12A0124",
+        "BASE1234.B07C1124",
+      ]);
+      expect(found.every((l) => l.itemId === LAVENDER)).toBe(true);
+      expect(await client.listItemLots(UNKNOWN)).toEqual([]);
+    });
+
     describe("failures", () => {
       for (const [failure, type] of expectedFailures) {
         it(`maps ${failure} to ${(type as { name: string }).name}, without the key`, async () => {

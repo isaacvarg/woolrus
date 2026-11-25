@@ -1,15 +1,18 @@
 "use client";
 
+import { useQuery } from "@tanstack/react-query";
 import type { AppErrorData, LotDto, PackageItemView } from "@woolrus/contracts";
-import { useTranslations } from "next-intl";
+import { useFormatter, useTranslations } from "next-intl";
 import { useState } from "react";
 import { Form } from "react-aria-components";
 import { useLotText } from "@/components/lots/lot-status";
 import { Dialog } from "@/components/ui/dialog";
 import { Button, NumberField } from "@/components/ui/fields";
+import { orpc } from "@/lib/orpc";
 
-// The pack screen's lot dialogs (SPEC-lumexia "Reads and UI"): a chip's count and removal, and
-// **Which line?** for a lot scan that fits more than one box line.
+// The pack screen's lot dialogs (SPEC-lumexia "Reads and UI"): a chip's count and removal,
+// **Which line?** for a lot scan that fits more than one box line, and the lot picker behind
+// **Lot needed** for when there's no scanner to hand.
 
 export type LineCandidate = NonNullable<AppErrorData["candidates"]>[number];
 
@@ -121,6 +124,102 @@ export function WhichLineDialog({
               </li>
             ))}
           </ul>
+          <div className="modal-action">
+            <Button className="btn-ghost" onPress={close}>
+              {t("order.back")}
+            </Button>
+          </div>
+        </div>
+      )}
+    </Dialog>
+  );
+}
+
+/**
+ * Tapping **Lot needed**: the line's Lumexia lots, newest first. Choosing one does what scanning
+ * its printed number would; scanning still works, and is the way in when Lumexia can't list them.
+ */
+export function LotPickerDialog({
+  packageId,
+  packageNumber,
+  item,
+  isPending,
+  onChoose,
+  onClose,
+}: {
+  packageId: string;
+  packageNumber: number;
+  item: PackageItemView;
+  isPending: boolean;
+  onChoose: (choice: { lotNumber: string; packageItemId: string }) => void;
+  onClose: () => void;
+}) {
+  const t = useTranslations();
+  const format = useFormatter();
+  const choices = useQuery(
+    orpc.packing.lotChoices.queryOptions({
+      input: { packageId, orderItemId: item.orderItemId },
+    }),
+  );
+  const data = choices.data;
+  const why =
+    data?.status === "notLinked"
+      ? "pack.lotPickNotLinked"
+      : data?.status === "unconfigured"
+        ? "pack.lotPickUnconfigured"
+        : data?.status === "unavailable" || choices.isError
+          ? "pack.lotPickUnavailable"
+          : data?.status === "ok" && data.lots.length === 0
+            ? "pack.lotPickNone"
+            : null;
+
+  return (
+    <Dialog
+      title={t("pack.lotPickTitle", { name: item.name })}
+      isOpen
+      onOpenChange={(open) => !open && onClose()}
+    >
+      {(close) => (
+        <div className="space-y-4" data-testid="lot-picker">
+          <p>{t("pack.lotPickIntro", { count: item.quantity, number: packageNumber })}</p>
+          {choices.isPending ? (
+            <p className="flex items-center gap-2" role="status">
+              <span className="loading loading-spinner loading-sm" aria-hidden />
+              {t("pack.lotPickLoading")}
+            </p>
+          ) : why ? (
+            <p className="alert alert-warning" role="status">
+              {t(why)}
+            </p>
+          ) : (
+            <>
+              <p className="text-sm font-semibold">{t("pack.lotPickNewest")}</p>
+              <ul
+                className="grid max-h-[50vh] gap-2 overflow-y-auto"
+                aria-label={t("pack.lotPickNewest")}
+              >
+                {data?.lots.map((lot) => {
+                  const date = format.dateTime(lot.createdAt, { dateStyle: "medium" });
+                  return (
+                    <li key={lot.id}>
+                      <Button
+                        className="btn-outline btn-lg h-auto min-h-16 w-full justify-between py-2 text-start"
+                        aria-label={t("pack.lotPickOption", { lot: lot.lotNumber, date })}
+                        isDisabled={isPending}
+                        onPress={() =>
+                          data &&
+                          onChoose({ lotNumber: lot.lotNumber, packageItemId: data.packageItemId })
+                        }
+                      >
+                        <span className="font-mono tabular-nums">{lot.lotNumber}</span>
+                        <span className="text-sm font-normal">{date}</span>
+                      </Button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </>
+          )}
           <div className="modal-action">
             <Button className="btn-ghost" onPress={close}>
               {t("order.back")}

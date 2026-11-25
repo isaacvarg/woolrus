@@ -95,6 +95,7 @@ repo for this module; the as-built contract is [`../lumexia-api.md`](../lumexia-
 | `GET /api/v1/items/{id}` | Linking one product |
 | `GET /api/v1/lots/{id}` | Resolving a QR scan (the QR holds the lot's UUID) |
 | `GET /api/v1/lots?lot_number=` | Validating a typed or printed lot number (may return several items' lots) |
+| `GET /api/v1/lots?item_id=` | The pack screen's lot picker: one item's lots |
 
 `Item = { id, referenceCode, name, aliases, itemTypeId, procurementTypeId, inventoryTypeId, archived, updatedAt }`,
 `Lot = { id, itemId, lotNumber, archived, createdAt }`, `LumexiaType = { id, name, archived }`; inventory types
@@ -130,6 +131,7 @@ export interface LumexiaClient {
   getItem(id: string): Promise<LumexiaItem | null>;
   getLot(id: string): Promise<LumexiaLot | null>;
   findLotsByNumber(lotNumber: string): Promise<LumexiaLot[]>;
+  listItemLots(itemId: string): Promise<LumexiaLot[]>; // follows nextCursor; the lot picker sorts them
 }
 ```
 
@@ -309,6 +311,12 @@ note) and deletes the old row; remove gives the units to the default lot, as at 
 - **Pack screen:** a lot-needing card shows **Lot needed**, or its lots as chips ("2 × A12A0124"), each with a
   status icon + word. Tapping a chip opens a small dialog to change the count or remove it. A refused scan shows
   its message in the scan banner, like product scans. A **Which line?** dialog handles `chooseLine`.
+- **Lot picker (no scanner needed):** while the packer can edit, **Lot needed** is a button. It opens a dialog
+  listing the line's Lumexia lots, newest first (at most 50), from `packing.lotChoices({ packageId, orderItemId })`
+  → `{ packageItemId, status, lots: { id, lotNumber, createdAt }[] }`, which reads `GET /lots?item_id=` through
+  `LumexiaClient.listItemLots` and sorts by `createdAt` (Lumexia lists by id). Choosing a lot is a `scanLot` of
+  its number with that `packageItemId`, so the split rule, the item check and the audit are a scan's. `status`
+  is `notLinked`, `unconfigured` or `unavailable` when there's no list; the dialog then says to scan the label.
 - **QA screen:** lots under each row; a `WRONG_ITEM` lot is marked as blocking with **Replace lot** / **Remove**;
   `NOT_FOUND` and `UNVERIFIED` show as warnings.
 - **Order detail and pack drawer:** lots per package item, with status.

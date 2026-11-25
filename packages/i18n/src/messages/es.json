@@ -791,7 +791,17 @@
     "whichLineIntro": "Este lote puede ir en más de una línea del paquete {number}. Elige una.",
     "whichLineOption": "{name} ({count} en este paquete)",
     "lotsOf": "Lotes de {name}",
-    "lotScanned": "Lote {lot} en {name} del paquete {number}."
+    "lotScanned": "Lote {lot} en {name} del paquete {number}.",
+    "lotChoose": "Elegir un lote para {name}",
+    "lotPickTitle": "Lote de {name}",
+    "lotPickIntro": "{count} en el paquete {number}. Elige el lote de la etiqueta o escanéalo.",
+    "lotPickOption": "Lote {lot}, hecho el {date}",
+    "lotPickLoading": "Cargando lotes de Lumexia…",
+    "lotPickNone": "Lumexia no tiene lotes de este artículo. Escanea la etiqueta.",
+    "lotPickNotLinked": "Este producto no está vinculado a un artículo de Lumexia, así que no hay lista. Escanea la etiqueta.",
+    "lotPickUnconfigured": "Lumexia no está configurado, así que no hay lista. Escanea la etiqueta.",
+    "lotPickUnavailable": "No se puede conectar con Lumexia ahora. Escanea la etiqueta.",
+    "lotPickNewest": "Los más nuevos primero"
   },
   "qa": {
     "title": "Control de calidad #{number}",

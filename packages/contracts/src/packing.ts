@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { base, Id, IdempotencyKey, Inches, Ounces } from "./base";
 import { Box, BoxGroup } from "./boxes";
-import { LotDto } from "./lumexia";
+import { LotChoices, LotDto } from "./lumexia";
 import { ExpectedVersion, LineAttribute, OrderDetail } from "./orders";
 import { PackApprovalInput, Trip } from "./pack-checks";
 
@@ -201,6 +201,9 @@ export const ScanLotInput = z.object({
 });
 export type ScanLotInput = z.infer<typeof ScanLotInput>;
 
+export const LotChoicesInput = z.object({ packageId: Id, orderItemId: Id });
+export type LotChoicesInput = z.infer<typeof LotChoicesInput>;
+
 export const SetLotQuantityInput = z.object({
   lotId: Id,
   /** The lot's new count; the default lot gives or takes the difference. */
@@ -318,6 +321,15 @@ export const packing = {
     })
     .input(ScanLotInput)
     .output(PackResult),
+  lotChoices: base
+    .route({
+      method: "GET",
+      path: "/packages/{packageId}/lines/{orderItemId}/lot-choices",
+      tags,
+      summary: "A box line's Lumexia lots, newest first, for picking one instead of scanning",
+    })
+    .input(LotChoicesInput)
+    .output(LotChoices),
   setLotQuantity: base
     .route({
       method: "PUT",

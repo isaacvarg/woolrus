@@ -791,7 +791,17 @@
     "whichLineIntro": "This lot could go on more than one line in package {number}. Choose one.",
     "whichLineOption": "{name} ({count} in this package)",
     "lotsOf": "Lots of {name}",
-    "lotScanned": "Lot {lot} on {name} in package {number}."
+    "lotScanned": "Lot {lot} on {name} in package {number}.",
+    "lotChoose": "Choose a lot for {name}",
+    "lotPickTitle": "Lot for {name}",
+    "lotPickIntro": "{count} in package {number}. Choose the lot on the label, or scan it.",
+    "lotPickOption": "Lot {lot}, made {date}",
+    "lotPickLoading": "Loading lots from Lumexia…",
+    "lotPickNone": "Lumexia has no lots for this item. Scan the label instead.",
+    "lotPickNotLinked": "This product isn't linked to a Lumexia item, so there's no list. Scan the label instead.",
+    "lotPickUnconfigured": "Lumexia isn't set up, so there's no list. Scan the label instead.",
+    "lotPickUnavailable": "Lumexia can't be reached right now. Scan the label instead.",
+    "lotPickNewest": "Newest first"
   },
   "qa": {
     "title": "QA #{number}",

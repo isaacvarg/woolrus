@@ -97,6 +97,7 @@ import {
   listVoids,
   lockStation,
   lookupLot,
+  lotChoices,
   lumexiaProducts,
   manifestCandidates,
   markLabelNotBought,
@@ -499,6 +500,9 @@ export const router = implementer.router({
       scanIntoPackage(db, context.actor, input),
     ),
     scanLot: api.packing.scanLot.handler(({ input, context }) => scanLot(db, context.actor, input)),
+    lotChoices: api.packing.lotChoices.handler(({ input, context }) =>
+      lotChoices(db, context.actor, input),
+    ),
     setLotQuantity: api.packing.setLotQuantity.handler(({ input, context }) =>
       setLotQuantity(db, context.actor, input),
     ),
