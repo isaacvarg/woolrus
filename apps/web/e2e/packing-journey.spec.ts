@@ -106,10 +106,11 @@ test("pick, pack into two boxes, weigh, confirm a re-weigh and finish to the nex
   // The suggested box first; add it, scan two units into it.
   await page.getByRole("button", { name: "Add package" }).click();
   const dialog = page.getByRole("dialog", { name: "Choose a box" });
-  const first = dialog.getByRole("listitem").first();
+  // The suggested box leads, above the groups (SPEC-packing A2).
+  const first = dialog.getByRole("button").filter({ has: page.getByTestId("box-suggestion") });
   // Any journey box will do: they are the same size when runs overlap, and ties go by name.
   await expect(first).toContainText("E2E Journey");
-  await first.getByRole("button").click();
+  await first.click();
   await expect(dialog).toBeHidden();
   await scanCode(page, "E2E-SKU");
   await scanCode(page, "E2E-SKU");
