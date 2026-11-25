@@ -65,6 +65,10 @@ agent-skills, so don't use `/implement`, `/to-spec`, `/triage`, or Matt's `tdd` 
   over HTTP). Magic-link sign-in prints the link in the web server log; `ADMIN_EMAILS` users become Admin.
 - Prisma 7 generates the client into `packages/db/src/generated` (`pnpm db:generate`). The init migration ends
   with hand-written constraints that must survive any migration edits.
+- `packages/core` tests run files in parallel, one database per worker: global setup clones `TEST_DATABASE_URL`'s
+  database into `<name>_w1`…`_wN` and drops them afterwards, so give each worktree its own `TEST_DATABASE_URL`
+  name. Timing benchmarks (`*bench.test.ts`) run afterwards, one file at a time. When other sessions are testing
+  on the same machine, run `pnpm test -- --maxWorkers=3`.
 - Turborepo runs in strict env mode: a task only sees env vars declared in `turbo.json`.
 - Next.js 16 differs from most training data. Before writing Next code, read the matching guide in
   `apps/web/node_modules/next/dist/docs/`. `agentRules: false` in `next.config.ts` stops `next dev` from
