@@ -1,12 +1,12 @@
 "use client";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import type { Box, WeightDisplay } from "@woolrus/contracts";
+import type { Box, BoxGroup, WeightDisplay } from "@woolrus/contracts";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { Form } from "react-aria-components";
 import { Dialog } from "@/components/ui/dialog";
-import { Button, NumberField, TextField } from "@/components/ui/fields";
+import { Button, NumberField, SelectField, TextField } from "@/components/ui/fields";
 import { useErrorMessage } from "@/lib/errors";
 import { orpc } from "@/lib/orpc";
 import { randomUUID } from "@/lib/uuid";
@@ -14,14 +14,19 @@ import { WeightInput } from "./weight-input";
 
 const nan = (value: number | null | undefined) => value ?? Number.NaN;
 const orNull = (value: number) => (Number.isNaN(value) ? null : value);
+/** The Group select's key for "No group" (a group id is a UUID, so it can't clash). */
+const NO_GROUP = "none";
 
 /** Adds a box, or edits `box`: its dimensions are locked while any package uses it. */
 export function BoxDialog({
   box,
+  groups,
   weightDisplay,
   onClose,
 }: {
   box: Box | null;
+  /** In order, for the Group select. */
+  groups: BoxGroup[];
   weightDisplay: WeightDisplay;
   onClose: () => void;
 }) {
@@ -42,6 +47,7 @@ export function BoxDialog({
   const [maxWeightOz, setMaxWeightOz] = useState(box?.maxWeightOz ?? null);
   const [tareWeightOz, setTareWeightOz] = useState(box?.tareWeightOz ?? null);
   const [barcode, setBarcode] = useState(box?.barcode ?? "");
+  const [groupId, setGroupId] = useState<string>(box?.groupId ?? NO_GROUP);
   // One key per dialog: a retried submit can't create two boxes.
   const [idempotencyKey] = useState(() => randomUUID());
 
@@ -59,6 +65,8 @@ export function BoxDialog({
         tareWeightOz,
         // Blank clears it; the server stores it normalized.
         barcode: barcode.trim() || null,
+        // Editable on a box in use or archived: groups are display only.
+        groupId: groupId === NO_GROUP ? null : groupId,
         ...outer,
       };
       if (box) {
@@ -83,7 +91,11 @@ export function BoxDialog({
       });
     },
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: orpc.boxes.key() });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: orpc.boxes.key() }),
+        // The groups' box counts.
+        queryClient.invalidateQueries({ queryKey: orpc.boxGroups.key() }),
+      ]);
       onClose();
     },
   });
@@ -116,6 +128,15 @@ export function BoxDialog({
             isRequired
             value={form.name}
             onChange={(name) => setForm({ ...form, name })}
+          />
+          <SelectField
+            label={t("group")}
+            selectedKey={groupId}
+            onSelectionChange={(key) => setGroupId(String(key ?? NO_GROUP))}
+            options={[
+              { id: NO_GROUP, label: t("noGroup") },
+              ...groups.map((g) => ({ id: g.id, label: g.name })),
+            ]}
           />
           {locked && (
             <p role="note" className="text-sm" data-testid="box-locked">

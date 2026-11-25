@@ -108,6 +108,19 @@ Full model in `packages/db/prisma/schema/*.prisma`. Changes from the SRS's secti
   kind; a hand-written `CHECK (requested_by_id <> approved_by_id)` enforces it in the database too. Each
   `ApprovalKind` names a permission (`permissions.ts`), never hardcoded names, and the kind's module adds it.
   A reason (1–200 characters) is always required.
+- **Box picker groups** (SPEC-packing amendment 2, 2026-11-24, decisions 23–33): an amendment to packing, not
+  a module; the columns preference is added to `identity`'s user preferences. **Columns are per user** (1 or 2,
+  default 1), saved on the user next to language and theme so they follow the person to any station, and set in
+  the account menu rather than toggled in the picker. Two drop to one below 480 px; tablets keep two. **A box
+  is in at most one group** (`Box.groupId`), so no box shows twice. **One group order for everyone**, set by an
+  Admin with Move up / Move down (keyboard- and tablet-friendly, no drag-and-drop library): it's the floor's
+  shared map of the shelves. **Groups are display only**: the suggestion, checks, box barcodes, carriers and QA
+  ignore them. Boxes inside a group stay A–Z, with no manual order. **Deleting a group ungroups its boxes**
+  (groups hold no history, so no archive). The picker (`arrangeBoxPicker` in `core/src/packing/picker.ts`) shows
+  the split/unknown message, then **the suggestion once**, full width with a border and the badge (not colour
+  alone) and not repeated in its group, then the groups in order, then the ungrouped boxes under **"Other
+  boxes"**. A group with nothing to show (empty, all archived, or only the suggestion) is hidden, and with no
+  groups at all the picker has no headings, as before.
 - **WooCommerce payloads** are stored raw (`rawPayload` jsonb) so fields can be promoted to columns later.
 - **Settings** is a single row; secrets are stored AES-GCM-encrypted with `SETTINGS_ENCRYPTION_KEY`.
 - **Returns** (`ReturnRequest`, `ReturnItem`), **manifests**, **priority rules**, **webhook inbox** and

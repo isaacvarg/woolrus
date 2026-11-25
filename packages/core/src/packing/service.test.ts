@@ -406,6 +406,23 @@ describe("boxes in the pack view", () => {
     ]);
     expect(view.packages[0]?.box).toMatchObject({ name: "Used", inUse: true });
   });
+
+  it("come with the box groups in the admin's order, for the picker (SPEC-packing A2)", async () => {
+    const { packer, order } = await packing();
+    const second = await db.boxGroup.create({ data: { name: "Mailers", position: 1 } });
+    const first = await db.boxGroup.create({ data: { name: "Cartons", position: 0 } });
+    await db.box.create({
+      data: { name: "Carton", lengthIn: 12, widthIn: 10, heightIn: 8, groupId: first.id },
+    });
+
+    const view = await getPackView(db, packer, { orderId: order.id });
+
+    expect(view.boxGroups.map((g) => [g.id, g.name, g.position, g.boxCount])).toEqual([
+      [first.id, "Cartons", 0, 1],
+      [second.id, "Mailers", 1, 0],
+    ]);
+    expect(view.boxes[0]?.groupId).toBe(first.id);
+  });
 });
 
 describe("setPackageBox", () => {

@@ -41,6 +41,29 @@ const boxes = [
   },
 ];
 
+/**
+ * Two demo groups for the pack screen's picker (SPEC-packing A2), with "Large box" left ungrouped
+ * so "Other boxes" shows. A box someone already grouped keeps its group.
+ */
+const boxGroups = [
+  { name: "Mailers", position: 1, boxes: ["Small mailer"] },
+  { name: "Cartons", position: 2, boxes: ["Medium box"] },
+];
+
+async function seedBoxGroups() {
+  for (const { boxes: names, ...group } of boxGroups) {
+    const existing = await db.boxGroup.findFirst({
+      where: { name: { equals: group.name, mode: "insensitive" } },
+    });
+    const { id } = existing ?? (await db.boxGroup.create({ data: group }));
+    await db.box.updateMany({
+      where: { name: { in: names }, groupId: null },
+      data: { groupId: id },
+    });
+  }
+  console.log(`Seeded ${boxGroups.length} box groups`);
+}
+
 async function main() {
   await db.settings.upsert({ where: { id: 1 }, create: { id: 1 }, update: {} });
   for (const box of boxes) {
@@ -53,6 +76,7 @@ async function main() {
   // (SPEC-rate-lab "Dev data").
   if (process.env.NODE_ENV !== "production") {
     const fakeShipping = process.env.SHIPPING_PROVIDERS === "fake";
+    await seedBoxGroups();
     console.log(`Seeded ${await seedDemoOrders(db, { fakeShipping })} demo orders`);
     console.log(`Seeded Rate Lab data and ${await seedRateLab(db, { fakeShipping })} lab runs`);
     // 30 days of shipped orders, so every report has something to show (SPEC-reporting "Dev data").

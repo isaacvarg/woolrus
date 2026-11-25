@@ -57,6 +57,8 @@
       "DARK": "Oscuro",
       "HIGH_CONTRAST": "Alto contraste"
     },
+    "boxPickerColumns": "Columnas del selector de cajas",
+    "columns": "{count, plural, one {# columna} other {# columnas}}",
     "collapseSidebar": "Contraer barra lateral",
     "expandSidebar": "Expandir barra lateral",
     "logOut": "Cerrar sesión",
@@ -98,7 +100,26 @@
     "deleteTitle": "¿Eliminar {name}?",
     "deleteHint": "Ningún paquete usa esta caja. Eliminarla no se puede deshacer.",
     "loading": "Cargando…",
-    "empty": "Aún no hay cajas."
+    "empty": "Aún no hay cajas.",
+    "group": "Grupo",
+    "noGroup": "Sin grupo",
+    "groups": {
+      "title": "Grupos",
+      "hint": "El selector de cajas de la pantalla de empaque muestra las cajas bajo su grupo, en este orden. Las cajas sin grupo van al final, en Otras cajas.",
+      "add": "Agregar grupo",
+      "name": "Nombre del grupo",
+      "empty": "Aún no hay grupos. Todas las cajas se muestran juntas en el selector.",
+      "boxCount": "{count, plural, one {# caja} other {# cajas}}",
+      "moveUp": "Subir",
+      "moveDown": "Bajar",
+      "rename": "Renombrar",
+      "renameTitle": "Renombrar {name}",
+      "delete": "Eliminar",
+      "deleteTitle": "¿Eliminar el grupo {name}?",
+      "deleteHint": "{count, plural, =0 {Este grupo no tiene cajas.} one {# caja pasará a Otras cajas.} other {# cajas pasarán a Otras cajas.}} No se elimina ninguna caja.",
+      "save": "Guardar",
+      "cancel": "Cancelar"
+    }
   },
   "settings": {
     "title": "Configuración",
@@ -695,6 +716,7 @@
     "deleteConfirm": "Eliminar",
     "chooseBox": "Elige una caja",
     "changeBoxTitle": "Cambiar la caja del paquete {number}",
+    "otherBoxes": "Otras cajas",
     "noBoxes": "No hay cajas configuradas. Usa un tamaño personalizado.",
     "customHint": "Tamaño exterior de la caja, en pulgadas.",
     "length": "Largo",
@@ -1411,6 +1433,10 @@
       "barcodeTaken": "Otra caja ya tiene este código de barras.",
       "barcodeIsProduct": "Este código pertenece a un producto o parece un código de lote, así que un escaneo se leería como eso.",
       "dimensionsLocked": "Cambiar el tamaño de una caja en uso afectaría los paquetes que ya la usan. Archívala y agrega una caja nueva."
+    },
+    "boxGroup": {
+      "nameTaken": "Ya existe un grupo de cajas con este nombre.",
+      "notFound": "Este grupo de cajas ya no existe."
     },
     "field": {
       "invalid": "Este valor no es válido.",

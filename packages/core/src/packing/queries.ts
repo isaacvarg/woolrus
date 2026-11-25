@@ -6,6 +6,7 @@ import type {
   PackView,
 } from "@woolrus/contracts";
 import type { DbTx, Prisma } from "@woolrus/db";
+import { readBoxGroups } from "../boxes/groups";
 import { type BoxWithUse, toBoxDto, toBoxDtoWithUse, withUse } from "../boxes/service";
 import { notFound } from "../errors";
 import { lotOrder, toLotDtos } from "../lumexia/lot-store";
@@ -195,10 +196,12 @@ export async function getPackView(
   const order = await db.order.findUnique({ where: { id: orderId } });
   if (!order) throw notFound();
 
-  const [[detail], result] = await Promise.all([
+  const [[detail], result, boxGroups] = await Promise.all([
     toOrderDetails(db, [order], { now }),
     readPack(db, orderId, { boxCounts: true }),
+    // The picker's sections (SPEC-packing A2), so the dialog needs no extra request.
+    readBoxGroups(db),
   ]);
   if (!detail) throw notFound();
-  return { order: detail, customerNote: order.customerNote, ...result };
+  return { order: detail, customerNote: order.customerNote, ...result, boxGroups };
 }

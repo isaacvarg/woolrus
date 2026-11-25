@@ -8,6 +8,7 @@ import { type Actor, assertCan } from "../permissions";
 import { normalizeCode } from "../picking/codes";
 import { findCodeOwner } from "../picking/link-barcode";
 import { toNumber } from "../units";
+import { checkGroupExists } from "./groups";
 
 /** `inUse` is only known by callers that counted packages; the pack view doesn't need it. */
 export function toBoxDto(box: Box, inUse = false): BoxDto {
@@ -24,6 +25,7 @@ export function toBoxDto(box: Box, inUse = false): BoxDto {
     outerWidthIn: toNumber(box.outerWidthIn),
     outerHeightIn: toNumber(box.outerHeightIn),
     barcode: box.barcode,
+    groupId: box.groupId,
     inUse,
     archived: box.archivedAt !== null,
   };
@@ -130,6 +132,7 @@ export async function createBox(db: Db, actor: Actor, input: CreateBoxInput): Pr
     return await db.$transaction((tx) =>
       withIdempotency(tx, idempotencyKey, "boxes.create", actor, async () => {
         await checkBarcode(tx, data.barcode);
+        await checkGroupExists(tx, data.groupId);
         const box = toBoxDto(await tx.box.create({ data }));
         await recordAudit(tx, actor, {
           entityType: "Box",
@@ -210,6 +213,7 @@ export async function updateBox(db: Db, actor: Actor, input: UpdateBoxInput): Pr
       // Only a new barcode is checked: one already on the box stays editable around it even if a
       // product synced later claims the same code (SPEC-packing A1 open question 1).
       if (changes.barcode !== before.barcode) await checkBarcode(tx, changes.barcode, id);
+      await checkGroupExists(tx, changes.groupId);
 
       const box = toBoxDtoWithUse(
         await tx.box.update({ where: { id }, data: changes, include: withUse }),

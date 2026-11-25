@@ -8,6 +8,7 @@
     "./activity-summary": "./src/activity/summary.ts",
     "./format": "./src/settings/format.ts",
     "./lot-codes": "./src/lumexia/codes.ts",
+    "./picker": "./src/packing/picker.ts",
     "./units": "./src/units.ts"
   },
   "scripts": {

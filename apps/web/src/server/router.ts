@@ -7,6 +7,7 @@ import {
   archiveLabAddress,
   archiveLabGroup,
   archiveLabParcel,
+  boxPickerColumns,
   cancelLabRun,
   cancelStationSetupCode,
   clearPin,
@@ -19,6 +20,7 @@ import {
   confirmBox,
   createBatch,
   createBox,
+  createBoxGroup,
   createInvitation,
   createLabAddress,
   createLabelPrint,
@@ -34,6 +36,7 @@ import {
   dailyOrderActivity,
   deactivateUser,
   deleteBox,
+  deleteBoxGroup,
   deleteIssue,
   deleteNote,
   deletePackage,
@@ -71,6 +74,7 @@ import {
   linkProducts,
   listApprovers,
   listBoxes,
+  listBoxGroups,
   listFailedJobs,
   listInvitations,
   listIssues,
@@ -98,6 +102,7 @@ import {
   manifestCandidates,
   markLabelNotBought,
   markOutOfStock,
+  moveBoxGroup,
   myPicks,
   orderCustoms,
   orderMutations,
@@ -124,6 +129,7 @@ import {
   registerStation,
   removeFromBatch,
   removeLot,
+  renameBoxGroup,
   renameLabGroup,
   renameStation,
   reopenIssue,
@@ -238,6 +244,7 @@ export const router = implementer.router({
       locale: user.locale,
       theme: user.theme,
       sidebarCollapsed: user.sidebarCollapsed,
+      boxPickerColumns: boxPickerColumns(user.boxPickerColumns),
       stationId: actor.stationId,
       stationName: station?.name ?? null,
       idleLockAt,
@@ -260,6 +267,21 @@ export const router = implementer.router({
       restoreBox(db, context.actor, input),
     ),
     delete: api.boxes.delete.handler(({ input, context }) => deleteBox(db, context.actor, input)),
+  },
+  boxGroups: {
+    list: api.boxGroups.list.handler(({ context }) => listBoxGroups(db, context.actor)),
+    create: api.boxGroups.create.handler(({ input, context }) =>
+      createBoxGroup(db, context.actor, input),
+    ),
+    rename: api.boxGroups.rename.handler(({ input, context }) =>
+      renameBoxGroup(db, context.actor, input),
+    ),
+    move: api.boxGroups.move.handler(({ input, context }) =>
+      moveBoxGroup(db, context.actor, input),
+    ),
+    delete: api.boxGroups.delete.handler(({ input, context }) =>
+      deleteBoxGroup(db, context.actor, input),
+    ),
   },
   shipping: {
     shipOrders: api.shipping.shipOrders.handler(({ input, context }) =>

@@ -53,6 +53,9 @@ model Box {
   /// The barcode posted at the box's shelf area, stored normalized (trimmed, upper-cased). Scanning it on
   /// the pack screen adds a package with this box (SPEC-packing A1).
   barcode       String?   @unique
+  /// At most one group, for the pack screen's box picker (SPEC-packing A2). Deleting the group ungroups the box.
+  groupId       String?   @map("group_id") @db.Uuid
+  group         BoxGroup? @relation(fields: [groupId], references: [id], onDelete: SetNull)
   archivedAt    DateTime? @map("archived_at") @db.Timestamptz(3)
   createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
@@ -61,7 +64,23 @@ model Box {
   rateFetches RateFetch[]
   labParcels  RateLabParcel[]
 
+  @@index([groupId])
   @@map("boxes")
+}
+
+/// A named set of boxes, shown together in the pack screen's box picker (SPEC-packing A2). The name is
+/// unique ignoring case (hand-written index on `lower(name)`); `position` has no unique index, so a swap
+/// can't trip it mid-transaction, and ties fall back to the name.
+model BoxGroup {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  name      String
+  position  Int
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  boxes Box[]
+
+  @@map("box_groups")
 }
 
 /// One physical box being shipped.

@@ -4,6 +4,7 @@ import { ORPCError } from "@orpc/client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   AppErrorData,
+  BoxPickerColumns,
   LotDto,
   PackApprovalInput,
   PackageBoxInput,
@@ -94,12 +95,14 @@ export function PackScreen({
   canVoid,
   canReport,
   canWriteCustomer,
+  boxPickerColumns,
 }: {
   orderId: string;
   userId: string | null;
   canVoid: boolean;
   canReport: boolean;
   canWriteCustomer: boolean;
+  boxPickerColumns: BoxPickerColumns;
 }) {
   const t = useTranslations();
   const errorMessage = useErrorMessage();
@@ -120,6 +123,7 @@ export function PackScreen({
       canVoid={canVoid}
       canReport={canReport}
       canWriteCustomer={canWriteCustomer}
+      boxPickerColumns={boxPickerColumns}
     />
   );
 }
@@ -170,12 +174,14 @@ function PackLayout({
   canVoid,
   canReport,
   canWriteCustomer,
+  boxPickerColumns,
 }: {
   view: PackView;
   userId: string | null;
   canVoid: boolean;
   canReport: boolean;
   canWriteCustomer: boolean;
+  boxPickerColumns: BoxPickerColumns;
 }) {
   const t = useTranslations();
   const errorMessage = useErrorMessage();
@@ -637,8 +643,10 @@ function PackLayout({
         <BoxDialog
           title={t("pack.chooseBox")}
           boxes={view.boxes}
+          boxGroups={view.boxGroups}
           suggestion={view.suggestion}
           weightDisplay={weightDisplay}
+          columns={boxPickerColumns}
           isPending={add.isPending}
           onChoose={(box) => add.mutate({ box, idempotencyKey: randomUUID() })}
           onClose={closeDialog}
@@ -648,11 +656,13 @@ function PackLayout({
         <BoxDialog
           title={t("pack.changeBoxTitle", { number: dialog.pkg.number })}
           boxes={view.boxes}
+          boxGroups={view.boxGroups}
           // The live package, so the suggestion follows its contents.
           suggestion={
             view.packages.find((p) => p.id === dialog.pkg.id)?.suggestion ?? dialog.pkg.suggestion
           }
           weightDisplay={weightDisplay}
+          columns={boxPickerColumns}
           isPending={change.isPending}
           onChoose={(box) => change.mutate({ pkg: dialog.pkg, box })}
           onClose={closeDialog}

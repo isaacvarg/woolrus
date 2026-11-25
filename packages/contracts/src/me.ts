@@ -6,12 +6,16 @@ export type Role = z.infer<typeof Role>;
 
 export const Locale = z.enum(["en", "es"]);
 export const Theme = z.enum(["SYSTEM", "LIGHT", "DARK", "HIGH_CONTRAST"]);
+/** The pack screen's box picker columns (SPEC-packing A2). */
+export const BoxPickerColumns = z.union([z.literal(1), z.literal(2)]);
+export type BoxPickerColumns = z.infer<typeof BoxPickerColumns>;
 
 /** FR-SET-03: saved on the user, so they follow them to every device and station. */
 export const Preferences = z.object({
   locale: Locale,
   theme: Theme,
   sidebarCollapsed: z.boolean(),
+  boxPickerColumns: BoxPickerColumns,
 });
 export type Preferences = z.infer<typeof Preferences>;
 
@@ -29,6 +33,7 @@ export const Me = z.object({
   locale: Locale,
   theme: Theme,
   sidebarCollapsed: z.boolean(),
+  boxPickerColumns: BoxPickerColumns,
   stationId: Id.nullable(),
   /** The station this request acts from, if any: the nav shows it, and Lock instead of Log out. */
   stationName: z.string().nullable(),
@@ -47,7 +52,7 @@ export const me = {
       method: "PATCH",
       path: "/me/preferences",
       tags: ["Me"],
-      summary: "Change the signed-in user's language, theme or sidebar",
+      summary: "Change the signed-in user's language, theme, sidebar or box picker columns",
     })
     .input(UpdatePreferencesInput)
     .output(Preferences),

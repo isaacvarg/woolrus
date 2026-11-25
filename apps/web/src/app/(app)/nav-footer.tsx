@@ -16,6 +16,7 @@ import { preferenceCookie } from "@/lib/preferences";
 
 const locales = { en: "English", es: "Español" } as const;
 const themes = ["SYSTEM", "LIGHT", "DARK", "HIGH_CONTRAST"] as const;
+const columns = [1, 2] as const;
 
 /**
  * Who is signed in, their preferences (FR-SET-03), sidebar collapse and Log out. Preferences save
@@ -109,6 +110,22 @@ export function NavFooter({
           {themes.map((id) => (
             <MenuItem key={id} id={id}>
               {t(`themes.${id}`)}
+            </MenuItem>
+          ))}
+        </MenuSection>
+        {/* Only the pack screen uses it, but anyone may pack on a shared station (SPEC-packing A2). */}
+        <MenuSection
+          title={t("boxPickerColumns")}
+          selectionMode="single"
+          selectedKeys={[String(preferences.boxPickerColumns)]}
+          onSelectionChange={(keys) => {
+            const boxPickerColumns = columns.find((n) => keys !== "all" && keys.has(String(n)));
+            if (boxPickerColumns) save({ boxPickerColumns });
+          }}
+        >
+          {columns.map((n) => (
+            <MenuItem key={n} id={String(n)}>
+              {t("columns", { count: n })}
             </MenuItem>
           ))}
         </MenuSection>

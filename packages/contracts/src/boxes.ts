@@ -17,6 +17,8 @@ export const Box = z.object({
   outerHeightIn: z.number().nullable(),
   /** The barcode posted at the box's shelf area, normalized; scanning it adds a package (SPEC-packing A1). */
   barcode: z.string().nullable(),
+  /** The box's group in the pack screen's picker, or none (SPEC-packing A2). */
+  groupId: Id.nullable(),
   /** A package references this box: its dimensions are locked and it can only be archived. */
   inUse: z.boolean(),
   archived: z.boolean(),
@@ -39,6 +41,7 @@ export const CreateBoxInput = z.object({
   outerWidthIn: Inches.nullable().default(null),
   outerHeightIn: Inches.nullable().default(null),
   barcode: BoxBarcode.nullable().default(null),
+  groupId: Id.nullable().default(null),
 });
 export type CreateBoxInput = z.infer<typeof CreateBoxInput>;
 
@@ -56,6 +59,8 @@ export const UpdateBoxInput = z.object({
   outerWidthIn: Inches.nullable().optional(),
   outerHeightIn: Inches.nullable().optional(),
   barcode: BoxBarcode.nullable().optional(),
+  /** `null` ungroups the box. Editable on a box in use and on an archived one. */
+  groupId: Id.nullable().optional(),
 });
 export type UpdateBoxInput = z.infer<typeof UpdateBoxInput>;
 
@@ -101,6 +106,82 @@ export const boxes = {
       path: "/boxes/{id}",
       tags: ["Boxes"],
       summary: "Delete an unused box size",
+    })
+    .input(z.object({ id: Id }))
+    .output(z.object({ id: Id })),
+};
+
+/** A named set of boxes shown together in the pack screen's box picker (SPEC-packing A2). */
+export const BoxGroup = z.object({
+  id: Id,
+  name: z.string(),
+  position: z.number().int(),
+  /** Active (unarchived) boxes in the group, for the Boxes page. */
+  boxCount: z.number().int(),
+});
+export type BoxGroup = z.infer<typeof BoxGroup>;
+
+/** Trimmed, 1–60 characters; unique ignoring case. */
+const BoxGroupName = z.string().trim().min(1).max(60);
+
+export const CreateBoxGroupInput = z.object({
+  idempotencyKey: IdempotencyKey,
+  name: BoxGroupName,
+});
+export type CreateBoxGroupInput = z.infer<typeof CreateBoxGroupInput>;
+
+export const RenameBoxGroupInput = z.object({ id: Id, name: BoxGroupName });
+export type RenameBoxGroupInput = z.infer<typeof RenameBoxGroupInput>;
+
+export const MoveBoxGroupInput = z.object({ id: Id, direction: z.enum(["up", "down"]) });
+export type MoveBoxGroupInput = z.infer<typeof MoveBoxGroupInput>;
+
+export const boxGroups = {
+  list: base
+    .route({
+      method: "GET",
+      path: "/box-groups",
+      tags: ["Boxes"],
+      summary: "List box groups in order",
+    })
+    .output(z.array(BoxGroup)),
+
+  create: base
+    .route({
+      method: "POST",
+      path: "/box-groups",
+      tags: ["Boxes"],
+      summary: "Add a box group at the end",
+    })
+    .input(CreateBoxGroupInput)
+    .output(BoxGroup),
+
+  rename: base
+    .route({
+      method: "PATCH",
+      path: "/box-groups/{id}",
+      tags: ["Boxes"],
+      summary: "Rename a box group",
+    })
+    .input(RenameBoxGroupInput)
+    .output(BoxGroup),
+
+  move: base
+    .route({
+      method: "POST",
+      path: "/box-groups/{id}/move",
+      tags: ["Boxes"],
+      summary: "Move a box group up or down; returns the ordered list",
+    })
+    .input(MoveBoxGroupInput)
+    .output(z.array(BoxGroup)),
+
+  delete: base
+    .route({
+      method: "DELETE",
+      path: "/box-groups/{id}",
+      tags: ["Boxes"],
+      summary: "Delete a box group; its boxes become ungrouped",
     })
     .input(z.object({ id: Id }))
     .output(z.object({ id: Id })),

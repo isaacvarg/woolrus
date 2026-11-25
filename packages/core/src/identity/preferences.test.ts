@@ -15,6 +15,7 @@ describe("updatePreferences", () => {
       locale: "es",
       theme: "SYSTEM",
       sidebarCollapsed: false,
+      boxPickerColumns: 1,
     });
     await updatePreferences(db, actor, { theme: "HIGH_CONTRAST", sidebarCollapsed: true });
 
@@ -23,6 +24,7 @@ describe("updatePreferences", () => {
       locale: "es",
       theme: "HIGH_CONTRAST",
       sidebarCollapsed: true,
+      boxPickerColumns: 1,
     });
   });
 
@@ -35,5 +37,29 @@ describe("updatePreferences", () => {
       });
     }
     expect((await getPreferences(db, other)).theme).toBe("SYSTEM");
+  });
+});
+
+describe("boxPickerColumns (SPEC-packing A2, criterion 32)", () => {
+  it("defaults to 1, saves 2 for the actor only, and reads back on a fresh read", async () => {
+    const other = await createActor(db, ["PACKER"]);
+    const actor = await createActor(db, ["PACKER"]);
+    expect((await getPreferences(db, actor)).boxPickerColumns).toBe(1);
+
+    await expect(updatePreferences(db, actor, { boxPickerColumns: 2 })).resolves.toMatchObject({
+      boxPickerColumns: 2,
+    });
+    expect((await getPreferences(db, actor)).boxPickerColumns).toBe(2);
+    expect((await getPreferences(db, other)).boxPickerColumns).toBe(1);
+  });
+
+  it("is refused by the database CHECK when it isn't 1 or 2", async () => {
+    const actor = await createActor(db, ["PACKER"]);
+    for (const value of [0, 3]) {
+      await expect(
+        db.user.update({ where: { id: actor.userId }, data: { boxPickerColumns: value } }),
+      ).rejects.toThrow(/users_box_picker_columns_check/);
+    }
+    expect((await getPreferences(db, actor)).boxPickerColumns).toBe(1);
   });
 });
