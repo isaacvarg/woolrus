@@ -5,12 +5,30 @@ export function testDb(): Db {
   return createDb(process.env.TEST_DATABASE_URL);
 }
 
-/** Empties every table except Prisma's migration log. */
+/**
+ * Empties every table except Prisma's migration log, and restarts the sequences. Only the tables
+ * that hold rows are truncated: TRUNCATE gives each table new files, and doing that to all of them
+ * before every test is what made the suite disk-bound once files ran in parallel.
+ */
 export async function resetDb(db: Db): Promise<void> {
-  const rows = await db.$queryRaw<{ tablename: string }[]>`
+  const tables = await db.$queryRaw<{ tablename: string }[]>`
     SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename <> '_prisma_migrations'`;
-  const tables = rows.map((r) => `"public"."${r.tablename}"`).join(", ");
-  if (tables) await db.$executeRawUnsafe(`TRUNCATE ${tables} RESTART IDENTITY CASCADE`);
+  if (tables.length > 0) {
+    // Table names come from the catalog, never from input.
+    const probe = tables
+      .map(
+        ({ tablename }) =>
+          `SELECT '${tablename}' AS tablename WHERE EXISTS (SELECT 1 FROM "public"."${tablename}")`,
+      )
+      .join(" UNION ALL ");
+    const full = await db.$queryRawUnsafe<{ tablename: string }[]>(probe);
+    const names = full.map((r) => `"public"."${r.tablename}"`).join(", ");
+    if (names) await db.$executeRawUnsafe(`TRUNCATE ${names} CASCADE`);
+  }
+  // Like RESTART IDENTITY, and also for tables that are empty but used a number (a rolled-back insert).
+  await db.$queryRaw`
+    SELECT setval(format('%I.%I', schemaname, sequencename)::regclass, start_value, false)
+    FROM pg_sequences WHERE schemaname = 'public'`;
 }
 
 export async function createActor(db: Db, roles: Actor["roles"]): Promise<UserActor> {

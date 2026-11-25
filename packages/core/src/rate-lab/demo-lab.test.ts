@@ -93,7 +93,8 @@ async function logged(runId: string) {
   );
 }
 
-describe("seedRateLab", () => {
+// Each test seeds three full runs: a few seconds alone, more while other files run alongside.
+describe("seedRateLab", { timeout: 30_000 }, () => {
   it("adds the addresses, parcels, groups and three runs, and re-running adds nothing", async () => {
     expect(await seedRateLab(db, { now, fakeShipping: true })).toBe(3);
 
