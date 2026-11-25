@@ -111,7 +111,11 @@ export function BoxGroupsPanel({ groups, canManage }: { groups: BoxGroup[]; canM
                   <Button
                     className="btn-ghost btn-sm text-error"
                     aria-describedby={`box-group-${group.id}`}
-                    onPress={() => setDeleting(group)}
+                    onPress={() => {
+                      // The mutation is the panel's: clear a failed delete of another group.
+                      remove.reset();
+                      setDeleting(group);
+                    }}
                   >
                     {t("delete")}
                   </Button>
