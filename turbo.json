@@ -29,7 +29,8 @@
         "S3_BUCKET",
         "STORAGE_LIVE",
         "SHIPPING_PROVIDERS",
-        "SHIPSTATION_LIVE_API_KEY"
+        "SHIPSTATION_LIVE_API_KEY",
+        "WAREHOUSE_TIME_ZONE"
       ]
     },
     "dev": {
@@ -45,7 +46,8 @@
         "SHIPPING_PROVIDERS",
         "SENTRY_DSN",
         "SENTRY_ENVIRONMENT",
-        "WOOLRUS_VERSION"
+        "WOOLRUS_VERSION",
+        "WAREHOUSE_TIME_ZONE"
       ]
     }
   }

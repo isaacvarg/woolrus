@@ -33,6 +33,7 @@ jobs:
       DATABASE_URL: postgresql://woolrus:woolrus@localhost:5432/woolrus
       TEST_DATABASE_URL: postgresql://woolrus:woolrus@localhost:5432/woolrus_test
       BETTER_AUTH_URL: http://localhost:3000
+      WAREHOUSE_TIME_ZONE: America/Los_Angeles
       BETTER_AUTH_SECRET: ci-only-secret-ci-only-secret-ci-only
       # Throwaway key for CI's ephemeral database only; it never protects a real secret.
       SETTINGS_ENCRYPTION_KEY: Y2ktb25seS1rZXktY2ktb25seS1rZXktY2ktb25seSE=
